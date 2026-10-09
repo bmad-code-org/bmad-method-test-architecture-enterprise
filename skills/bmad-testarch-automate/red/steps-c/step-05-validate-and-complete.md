@@ -41,7 +41,8 @@ Set `test_operation = create` and preserve the selected `test_mode`.
 Read `{skill-root}/resources/run-and-heal.md` completely and execute it before validation and completion.
 Use the aggregated generated-file list and this run's existing `{outputFile}` for results.
 For a 2.0.0 Resume, recover that list from the checkpoint body and its generated files before execution; preserve original scope and acceptance criteria.
-Record execution status and any defaulted mode in the completion summary.
+Before execution and before each repair edit, persist the resolved values in this checkpoint's YAML frontmatter using the exact keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used`. Retain these typed values when saving completion; recover legacy body-only values as the shared resource specifies.
+Record execution status in the completion summary. When `test_mode_defaulted = true`, include the exact line `Mode selection: entry default ({test_mode})` and explain that the invocation supplied no clear mode signal. Otherwise report the selected mode and its explicit task or saved-checkpoint basis.
 A product defect or unavailable environment is reported honestly; a completed generation workflow does not imply all tests pass.
 
 ## 1. Validation
@@ -64,7 +65,7 @@ Use `{skill-root}/red/checklist.md` to validate:
 - [ ] CLI sessions cleaned up (no orphaned browsers)
 - [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
 
-Correct documentation or structural gaps before completion.
+Correct documentation and summary metadata gaps before completion. Any generated test/support edit belongs to the shared loop's frozen manifest and retained repair budget; this validation stage grants no additional repairs. Keep existing tests and production source unchanged.
 Execution failures follow the shared bounded loop; retain its intended red failures, unresolved failures and blockers without further repair.
 
 ---
@@ -95,6 +96,7 @@ Report:
 ## 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used` in either save branch below. Save their current values; the first-save identity template never resets settings or spent rounds.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 
@@ -124,6 +126,7 @@ Report:
   - Set `lastSaved: '{date}'`
   - Ensure `storyId`, `storyKey`, `storyFile`, and `atddChecklistPath` are present and populated
   - Ensure `generatedTestFiles` remains populated with the deterministic list of present generated test paths
+  - Retain the resolved frontmatter settings and `healing_rounds_used` saved by the loop; completion never resets the budget.
   - Append this step's output to the appropriate section.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:

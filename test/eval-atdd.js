@@ -672,7 +672,7 @@ function buildPrompt(groundTruth, { storyRelativePath } = {}) {
     ? `nothing outside that directory is relevant to this story, except \`{story_file}\` itself, named above.`
     : `nothing outside that directory is relevant to this story.`;
   return [
-    `You are running the TEA workflow \`bmad-testarch-atdd\` against the project in \`${root}/\`.`,
+    `You are running the TEA Automation red-mode step files against the project in \`${root}/\`.`,
     '',
     'The canonical workflow is in `skill/`. Select red mode. Read `skill/red/instructions.md` first, then execute every step file it',
     'names in order, in full, without skipping or reordering. The red-mode step files are under `skill/red/steps-c/`.',

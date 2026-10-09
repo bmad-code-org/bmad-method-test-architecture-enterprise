@@ -34,7 +34,7 @@ If using Cypress, commands and syntax will differ.
 - **Codex:** `$bmad-testarch-automate`
 - **Inside a `/bmad-tea` chat:** `TA`
 
-Ask for `expand` when adding coverage to existing code, or `red` when writing acceptance tests before implementation. An unattended request with unclear mode defaults to expand and states that choice in its summary. The existing ATDD command and `AT` menu code default to red. Existing customization files and interrupted progress keep working.
+Ask for `expand` when adding coverage to existing code, or `red` when writing acceptance tests before implementation. Interactive and unattended requests with unclear mode default to expand; unattended runs state that choice in the summary. The existing ATDD command and `AT` menu code default to red. Existing customization files and interrupted progress keep working.
 
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 

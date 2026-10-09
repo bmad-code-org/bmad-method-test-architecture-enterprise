@@ -1,6 +1,6 @@
 # ATDD Workflow Validation Checklist
 
-Use this checklist to validate that the ATDD workflow has been executed correctly and all deliverables meet quality standards.
+Use this checklist to assess red-mode deliverables and verification evidence. Create runs `{skill-root}/resources/run-and-heal.md` after generation and aggregation; that resource is authoritative for execution, repair scope and stopping conditions. Validate assesses available evidence without repair or requiring a passing suite. Edit checks the requested changes and never runs the healing loop. A completed generation workflow records unresolved, blocked or disabled red verification honestly.
 
 ## Prerequisites
 
@@ -116,7 +116,7 @@ Before starting this workflow, verify:
 ### Data Factories Created
 
 - [ ] Factory files created in `tests/support/factories/`
-- [ ] All factories use `@faker-js/faker` for random data generation (no hardcoded values)
+- [ ] Factories use `@faker-js/faker` for unconstrained random fields and retain exact criterion-defined business inputs and boundary overrides
 - [ ] Factories support overrides for specific test scenarios
 - [ ] Factories generate complete valid objects matching API contracts
 - [ ] Helper functions for bulk creation provided (e.g., `createUsers(count)`)
@@ -163,7 +163,7 @@ Before starting this workflow, verify:
   - [ ] Test execution command
   - [ ] Completion checkbox
 - [ ] Red-Green-Refactor workflow documented in checklist
-- [ ] RED phase marked as complete (TEA responsibility)
+- [ ] RED phase marked verified only when every criterion executes and fails for its intended missing behavior; blocked, failed or disabled verification recorded explicitly
 - [ ] GREEN phase tasks listed for DEV team
 - [ ] REFACTOR phase guidance provided
 - [ ] Execution commands provided:
@@ -203,9 +203,10 @@ Before starting this workflow, verify:
 
 - [ ] All generated acceptance test scaffolds are marked with `test.skip()`
 - [ ] No scaffold was emitted as an active passing test before implementation
-- [ ] Activation guidance is documented: remove `test.skip()` for the current task, then confirm RED before implementing
+- [ ] Create verification activates only generated leaf skips in a disposable copy; permanent scaffolds and all other skips remain unchanged
+- [ ] Implementation activation guidance is documented: remove the current task's leaf `test.skip()` when development begins, then confirm RED before implementing
 - [ ] Any assumptions or expected failure reasons are documented in ATDD checklist
-- [ ] Test run output captured for reference
+- [ ] Fresh execution evidence captured for every generated leaf, including actual assertion/load status, criterion mapping, verification route and any native-runner fallback reason
 
 ### Summary Provided
 
@@ -231,7 +232,7 @@ Before starting this workflow, verify:
 ### Test Design Quality
 
 - [ ] Tests are readable (clear Given-When-Then structure)
-- [ ] Tests are maintainable (use factories and fixtures, not hardcoded data)
+- [ ] Tests are maintainable (use factories and fixtures with exact scenario-defined inputs and expectations)
 - [ ] Tests are isolated (no shared state between tests)
 - [ ] Tests are deterministic (no race conditions or flaky patterns)
 - [ ] Tests are atomic (one assertion per test)
@@ -323,14 +324,14 @@ Test-design documents live in `{test_artifacts}/test-design/` (`test-design-epic
 
 ## Completion Criteria
 
-All of the following must be true before marking this workflow as complete:
+Check the generation deliverables below and record the shared loop's actual red verification status before marking Create complete. Validate reports unmet criteria; Edit checks the changed outputs. Generation completion cannot claim verified red when execution is wrong-reason, unavailable or disabled.
 
 - [ ] **Story acceptance criteria analyzed** and mapped to appropriate test levels
 - [ ] **Red-phase test scaffolds created** at all appropriate levels (E2E, API, Component)
 - [ ] **Given-When-Then format** used consistently across all tests
-- [ ] **RED phase verified** by scaffold generation plus task-by-task activation guidance
+- [ ] **RED verification status recorded** from fresh criterion-mapped execution evidence, or explicitly reported as failed, could not measure or disabled; scaffold generation and activation guidance alone cannot prove RED
 - [ ] **Network-first pattern** applied to E2E tests with network requests
-- [ ] **Data factories created** using faker (no hardcoded test data)
+- [ ] **Data factories created** using faker for unconstrained fields and exact scenario overrides for criterion-defined inputs
 - [ ] **Fixtures created** with auto-cleanup in teardown
 - [ ] **Mock requirements documented** for external services
 - [ ] **data-testid attributes listed** for DEV team
@@ -340,7 +341,7 @@ All of the following must be true before marking this workflow as complete:
 - [ ] **ATDD checklist document created** and saved to correct location
 - [ ] **Output file formatted correctly** using template structure
 - [ ] **Knowledge base references applied** and documented in summary
-- [ ] **No test quality issues** (flaky patterns, race conditions, hardcoded data)
+- [ ] **No unreported test quality issues** (flaky patterns, race conditions, uncontrolled fixture data)
 
 ---
 
@@ -355,7 +356,7 @@ All of the following must be true before marking this workflow as complete:
 - Review test to ensure it's testing actual behavior, not mocked/stubbed behavior
 - Check if test is accidentally using existing functionality
 - Verify test assertions are correct and meaningful
-- Rewrite test to fail until implementation is complete
+- Report the observed passing behavior and reassess the requested scope from the unchanged criterion; preserve the original business assertion and product implementation
 
 ### Issue: Network-first pattern not applied
 
@@ -369,12 +370,12 @@ All of the following must be true before marking this workflow as complete:
 
 ### Issue: Hardcoded test data in tests
 
-**Problem:** Tests use hardcoded strings/numbers instead of factories.
+**Problem:** Generated setup invents identities or shares fixture data across tests.
 
 **Resolution:**
 
-- Replace all hardcoded data with factory function calls
-- Use `faker` for all random data generation
+- Move generated setup identities and random input data into factories while preserving criterion-defined exact expected values
+- Use `faker` for unconstrained random fields; preserve exact criterion-defined business inputs, boundary cases and expected outcomes
 - Update data-factories to support all required test scenarios
 
 ### Issue: Fixtures missing auto-cleanup
@@ -413,7 +414,7 @@ All of the following must be true before marking this workflow as complete:
 ## Notes for TEA Agent
 
 - **Preflight halt is critical:** Do not proceed if story has no acceptance criteria or framework is missing
-- **RED phase verification is mandatory:** Tests must fail before sharing with DEV team
+- **RED phase verification:** Run the shared Create loop by default and report verified red only from intended assertion failures; the DEV handoff identifies disabled, blocked or wrong-reason verification
 - **Network-first pattern:** Route interception BEFORE navigation prevents race conditions
 - **One assertion per test:** Atomic tests provide clear failure diagnosis
 - **Auto-cleanup is non-negotiable:** Every fixture must clean up data in teardown
@@ -422,14 +423,24 @@ All of the following must be true before marking this workflow as complete:
 
 ## Create Terminal: Red Execution and Healing
 
-- [ ] Run-and-heal settings resolved with execution and healing enabled by default
-- [ ] All generated scaffolds executed in a disposable copy; permanent skip scaffolds preserved
-- [ ] Each criterion fails for its intended missing behavior with no load/setup error
-- [ ] Wrong-reason test failures diagnosed and repaired within at most three rounds
-- [ ] Passing, skipped, unmapped or unavailable executions reported honestly
-- [ ] Criteria, assertion intent and production source preserved
-- [ ] Correct red failures preserved without repair
-- [ ] Commands, rounds, healed files, evidence and remaining failures recorded in this story's checklist
+Only Create runs `{skill-root}/resources/run-and-heal.md`; its execution and stopping rules govern conflicting repair advice elsewhere in this checklist.
+
+- [ ] `auto_validate = true`, `auto_heal_failures = true`, `max_healing_iterations = 3` and `use_mcp_healing = true` defaults resolved from explicit instructions and `modules.tea`
+- [ ] Validation disabled explicitly means no execution/healing; healing disabled or zero rounds means execution without repairs
+- [ ] On Resume, retained settings and `healing_rounds_used` loaded before any write; zero initialized at first loop entry, including legacy Resume with no counter and no prior repair evidence; otherwise saved count retained
+- [ ] Original generated scope, criterion registry, assertions and source baseline retained
+- [ ] All generated scaffolds executed in a disposable copy; every permanent scaffold skip call and business assertion preserved byte for byte
+- [ ] Compatible available `tea-atdd-red-check` used for browserless loopback tests with project-derived process budget; otherwise project-native runner uses original config/environment
+- [ ] Fresh per-file results capture load errors, every selected project/attempt's actual statuses and full assertion messages
+- [ ] Every criterion's verified red result reaches its intended missing behavior with genuine assertion provenance and no setup/load error
+- [ ] Selector, timing, data, network, hard wait and syntax/import/setup failures classified from runtime/source evidence
+- [ ] Only confirmed wrong-reason defects in this run's permanent generated tests/support repaired, preserving skips and exact business expectations; re-copy and re-activate before each re-run
+- [ ] Incremented round count saved before repair; at most three total repair rounds including pre-interruption work
+- [ ] No added skip, `test.fixme()`, expected-failure annotation, relaxed assertion, larger test timeout or SUT mock hides a failure
+- [ ] Correct red failures and real product defects preserved without repair; production/config unchanged
+- [ ] Passing, skipped, empty, unmapped, interrupted, wrong-reason or unavailable executions reported honestly
+- [ ] Commands, runner/fallback reason, process budget, settings, rounds, counts, healed files, evidence and remaining failures recorded in this story's checklist
+- [ ] Generation completion distinguished from verified red; unresolved failures or disabled execution cannot claim RED
 
 Validate inspects these results without repair or requiring a passing suite.
 Edit checks only the requested changes and never invokes run-and-heal.

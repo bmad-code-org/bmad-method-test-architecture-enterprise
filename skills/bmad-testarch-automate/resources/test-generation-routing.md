@@ -12,13 +12,28 @@ Resolve explicit Create, Resume, Validate or Edit wording first.
 A request to generate tests means Create.
 In a headless or autonomous invocation, an unspecified operation defaults to Create without a menu.
 
-An explicit `red mode` or `expand mode` is authoritative.
-Otherwise acceptance tests before implementation, ATDD, or the TDD red phase selects red; coverage expansion, tests for existing code, or automation selects expand.
+Start with `test_mode_defaulted = false`.
+A single explicit `red mode` or `expand mode` is authoritative.
+Otherwise acceptance tests before implementation, `write acceptance tests`, `acceptance test scaffolds`, ATDD, or the TDD red phase selects red; coverage expansion, tests for existing code, or automation selects expand.
 Treat the invoked command name as an entry default, separate from the user's task wording: mentioning `/bmad-testarch-automate` in an acceptance-test request cannot count as an expand signal.
-If both task signals conflict or neither resolves a mode, an interactive run asks once which mode to use.
-A headless or autonomous run defaults to red through `bmad-testarch-atdd` and expand through the canonical entry.
-Set `test_mode_defaulted = true` and state the selected default in the final summary.
+When no task mode signal is present, every run mode defaults to red through `bmad-testarch-atdd` and expand through the canonical entry.
+Interactive AT, TA and slash-command invocations with no task wording use those entry defaults without a mode question.
+Ask once which mode to use only when explicit task mode signals conflict in an interactive run, including a request that names both `red mode` and `expand mode`.
+A headless or autonomous run with conflicting signals uses the same historical entry default without a question.
+For either entry-default fallback, set `test_mode_defaulted = true` and state the selected default in the final summary.
 An explicit mode in the user's request overrides the entry default.
+
+The following routing examples apply before customization activation:
+
+| Invocation                      | Task signal                 | Run mode                | Selected mode          | Mode question |
+| ------------------------------- | --------------------------- | ----------------------- | ---------------------- | ------------- |
+| AT or `/bmad-testarch-atdd`     | none                        | interactive             | red (entry default)    | no            |
+| TA or `/bmad-testarch-automate` | none                        | interactive             | expand (entry default) | no            |
+| `/bmad-testarch-automate`       | lets write acceptance tests | interactive or headless | red                    | no            |
+| `/bmad-testarch-automate`       | acceptance test scaffolds   | interactive or headless | red                    | no            |
+| either entry                    | red and expand task signals | interactive             | unresolved             | ask once      |
+| AT or `/bmad-testarch-atdd`     | red and expand task signals | headless                | red (entry default)    | no            |
+| TA or `/bmad-testarch-automate` | red and expand task signals | headless                | expand (entry default) | no            |
 
 For Resume with an exact checkpoint path, resolve it against the project root, verify that it exists and is readable, and retain it as `resume_checkpoint_path`. A missing supplied file stops before activation; do not search for a replacement. The checkpoint path itself is not a new target scope.
 Infer the original mode from that supplied checkpoint's `testMode` or its owning artifact folder: `atdd/` is red and `automate/` is expand; legacy `atdd-checklist-*.md` is red and `automation-summary.md` is expand.

@@ -39,7 +39,7 @@
     "confirmRedBeforeGreen": {
       "file": "skills/bmad-testarch-automate/red/checklist.md",
       "section": "Red-Phase Scaffolds Verified",
-      "requiredPhrase": "Activation guidance is documented: remove `test.skip()` for the current task, then confirm RED before implementing"
+      "requiredPhrase": "Implementation activation guidance is documented: remove the current task's leaf `test.skip()` when development begins, then confirm RED before implementing"
     },
     "workflowDoesNotRunTests": {
       "file": "skills/bmad-testarch-automate/red/steps-c/step-04a-subagent-api-failing.md",

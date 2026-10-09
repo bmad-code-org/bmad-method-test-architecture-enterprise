@@ -33,7 +33,7 @@ Adapt the commands and selectors for Cypress.
 - **Codex:** `$bmad-testarch-atdd`
 - **Inside a `/bmad-tea` chat:** `AT`
 
-Your prompt can explicitly request `red` or `expand`. In an unattended run with unclear mode, the ATDD entry defaults to red and the automate entry defaults to expand. TEA states the selected default in the summary. Existing customization files and interrupted ATDD progress keep working.
+Your prompt can explicitly request `red` or `expand`. In interactive and unattended runs with unclear mode, the ATDD entry defaults to red and the automate entry defaults to expand. Unattended runs state the selected default in the summary. Existing customization files and interrupted ATDD progress keep working.
 
 Create runs verify the generated tests in a disposable copy with their scaffold skips activated. TEA uses `tea-atdd-red-check` for compatible browserless loopback tests when the command is installed. Browser tests and projects needing their own environment or services use the installed project test runner with the original configuration and environment. Execution respects the project's existing test budgets, and the summary names the runner and any fallback reason. Tests must fail for the acceptance behavior that implementation will add. TEA repairs syntax, imports, selectors, data, timing, network, hard waits, and setup that cause the wrong failure, for up to three rounds. The implementation handoff retains its deliberate skipped scaffolds. The summary records repairs, intended red failures, and unresolved problems. Validate reports findings and Edit checks the changes you requested; neither operation repairs tests.
 

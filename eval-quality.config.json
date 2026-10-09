@@ -848,7 +848,7 @@
         "file": "README.md",
         "claim": "the preserved command entries and their canonical workflows",
         "pattern": {
-          "match": "The table preserves all ([a-z-]+) command entries across the ([a-z-]+) workflows"
+          "match": "([A-Za-z-]+) commands start the ([a-z-]+) workflows"
         },
         "counts": ["workflowCommandCount", "canonicalWorkflowCount"]
       },

@@ -48,7 +48,7 @@ npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-en
 
 ## Start with one workflow
 
-The table preserves all ten command entries across the eight workflows. Framework includes CI setup; automation includes red and expand modes.
+Ten commands start the eight workflows: Framework includes CI setup; Automation includes red and expand modes.
 
 In Claude Code, Cursor, and Windsurf, type `/bmad-testarch-test-design` in chat.
 In Codex, type `$bmad-testarch-test-design`.
@@ -73,6 +73,8 @@ Ask for framework only, CI only, or both; TEA infers the scope from your prompt 
 `/bmad-testarch-ci` and the `CI` menu code still work and start the same skill's CI setup, with your existing CI customizations.
 Create, Resume, Validate, and Edit remain available for the selected setup scope.
 
+Automation uses `red` mode before implementation and `expand` mode for existing code. Your prompt selects the mode. `/bmad-testarch-atdd` and `AT` default to red; `/bmad-testarch-automate` and `TA` default to expand. Existing commands and customization files keep working. Create runs execute the generated tests and repair test issues for up to three rounds. Red confirms the intended missing behavior; expand aims for passing coverage and reports product defects.
+
 For Codex, replace the leading `/` in the table with `$`.
 The agent menu also accepts `GATE` to route you through test review, NFR evidence audit, and trace Phase 2.
 
@@ -82,8 +84,6 @@ Choose a starting path:
 - [TEA Academy](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/learn-testing-tea-academy/) to learn testing.
 - [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/) for the lifecycle and workflow order.
 - [Evaluate Your First Skill](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/) for a runnable evaluation tutorial.
-
-Automation uses `red` mode before implementation and `expand` mode for existing code. Your prompt selects the mode. `/bmad-testarch-atdd` and `AT` default to red; `/bmad-testarch-automate` and `TA` default to expand. Existing commands and customization files keep working. Create runs execute the generated tests and repair test issues for up to three rounds. Red confirms the intended missing behavior; expand aims for passing coverage and reports product defects.
 
 ## How it works
 

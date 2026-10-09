@@ -1,6 +1,6 @@
 # Automate Workflow Validation Checklist
 
-Use this checklist to validate that the automate workflow has been executed correctly and all deliverables meet quality standards.
+Use this checklist to assess expand-mode deliverables and execution evidence. Create runs the shared `{skill-root}/resources/run-and-heal.md` after generation and aggregation; that resource is authoritative for execution, repair scope and stopping conditions. Validate assesses available evidence without repair or requiring a passing suite. Edit checks the requested changes and never runs the healing loop. A completed generation workflow records failing, blocked or disabled execution honestly.
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ Before starting this workflow, verify:
 
 - [ ] Existing factories checked in `tests/support/factories/`
 - [ ] Factory architecture created/enhanced (if `{generate_factories}` true)
-- [ ] All factories use `@faker-js/faker` for random data (no hardcoded values)
+- [ ] Factories use `@faker-js/faker` for unconstrained random fields and support exact criterion-defined business inputs and boundary overrides
 - [ ] All factories support overrides for specific scenarios
 - [ ] Common factories created/enhanced:
   - [ ] User factory (email, password, name, role)
@@ -249,7 +249,7 @@ Before starting this workflow, verify:
 - [ ] No hard waits: `await page.waitForTimeout()` (forbidden)
 - [ ] No conditional flow: `if (await element.isVisible())` (forbidden)
 - [ ] No try-catch for test logic (only for cleanup)
-- [ ] No hardcoded test data (use factories with faker)
+- [ ] Factories isolate generated input data; fixed business values and boundary inputs required by the criterion remain exact
 - [ ] No page object classes (tests are direct and simple)
 - [ ] No shared state between tests
 
@@ -297,64 +297,59 @@ Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seon
 
 ## Create Terminal: Test Validation and Healing
 
-Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects execution evidence and Edit checks requested changes; neither repairs nor requires a passing full suite.
+Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects execution evidence and Edit checks requested changes; neither repairs nor requires a passing full suite. The shared resource governs conflicting execution or repair advice elsewhere in this checklist. Generation and aggregation finish before this loop; structural validation after the loop cannot start more repair rounds.
 
-### Healing Configuration
+### Healing Configuration and Resume
 
-- [ ] Healing configuration checked:
+- [ ] Settings resolved from explicit run instructions, then `modules.tea`, then defaults:
   - [ ] `{auto_validate}` setting noted (default: true)
   - [ ] `{auto_heal_failures}` setting noted (default: true)
-  - [ ] `{max_healing_iterations}` setting noted (default: 3)
-  - [ ] `{use_mcp_healing}` setting noted (default: true)
+  - [ ] `{max_healing_iterations}` setting noted (default: 3; capped at three)
+  - [ ] `{use_mcp_healing}` setting noted (default: true; available diagnosis tools only)
+- [ ] `auto_validate = false` recorded as execution disabled; healing also disabled
+- [ ] `auto_heal_failures = false` or zero repair rounds executes once and reports without repairs
+- [ ] On Resume, retained settings and `healing_rounds_used` loaded before any progress write
+- [ ] Round count initialized to zero at first loop entry, including legacy Resume with no counter and no prior repair evidence; otherwise retained
+- [ ] Original generated scope, acceptance criteria, assertions and production baseline retained
 
-### Healing Knowledge Fragments Loaded (If Healing Enabled)
+### Healing Knowledge Fragments
 
-- [ ] `test-healing-patterns.md` loaded (common failure patterns and fixes)
-- [ ] `selector-resilience.md` loaded (selector refactoring guide)
-- [ ] `timing-debugging.md` loaded (race condition fixes)
+- [ ] `test-healing-patterns.md`, `selector-resilience.md` and `timing-debugging.md` loaded completely before diagnosing failures
+- [ ] Playwright Utils and Pact.js Utils mandates retained when applicable
+- [ ] Source, runner reports and traces used when optional browser tools are unavailable
 
-### Test Execution and Validation
+### Test Execution and Classification
 
-- [ ] Generated tests executed (if `{auto_validate}` true)
-- [ ] Test results captured:
-  - [ ] Total tests run
-  - [ ] Passing tests count
-  - [ ] Failing tests count
-  - [ ] Error messages and stack traces captured
+- [ ] Every generated test executed with the project's configured runner, services and existing timeout/retry settings when validation is enabled and available
+- [ ] Fresh scoped reports capture command, exit status, total/passed/failed/skipped counts, load errors, full error messages and stack traces
+- [ ] Missing, skipped or empty execution evidence cannot count as passing coverage
+- [ ] Each failure classified with runtime/source evidence: selector, timing, data, network, hard wait, syntax/import/setup, real product defect or unknown/environment
+- [ ] Product defects and unavailable environments preserved and reported before considering any test repair
 
-### Healing Loop (If Enabled and Tests Failed)
+### Bounded Healing Loop
 
-- [ ] Healing loop entered (if `{auto_heal_failures}` true AND tests failed)
-- [ ] For each failing test:
-  - [ ] Failure pattern identified (selector, timing, data, network, hard wait)
-  - [ ] Appropriate healing strategy applied:
-    - [ ] Stale selector → Replaced with data-testid or ARIA role
-    - [ ] Race condition → Added network-first interception or state waits
-    - [ ] Dynamic data → Replaced hardcoded values with regex/dynamic generation
-    - [ ] Network error → Correct the known service/URL or existing declared external double
-    - [ ] Hard wait → Replaced with event-based wait
-  - [ ] Healed test re-run to validate fix
-  - [ ] Iteration count tracked (max 3 attempts)
+- [ ] Only confirmed defects in this run's generated tests/support files repaired when healing is enabled
+- [ ] Stale selector corrected only after observing the same intended element and its existing test ID, role/name or scoped locator
+- [ ] Timing or hard-wait defect corrected by awaiting the actual effect or registering its event/state wait before the trigger
+- [ ] Data/setup defect corrected from authoritative factory or setup evidence while retaining exact expected business outcomes
+- [ ] Network defect corrected only within the known service/URL or existing declared external double; real SUT failure preserved
+- [ ] Syntax/import/setup defect corrected using actual project conventions and exports
+- [ ] Criteria, assertion operators/expected values, coverage and production source unchanged
+- [ ] No added skip, `test.fixme()`, expected-failure annotation, relaxed matcher, larger test timeout, arbitrary sleep or SUT mock hides a failure
+- [ ] Incremented `healing_rounds_used` persisted before edits; Resume retains this budget
+- [ ] Repaired tests and tests sharing changed support executed again, with fresh final execution of the complete generated scope
+- [ ] Stopped when generated coverage passes, only preserved/blocked failures remain, or the configured maximum of three repair rounds is used
 
-### Remaining Failures
+### Execution and Healing Report
 
-- [ ] Confirmed product defects recorded with unchanged failing assertions and reproduction evidence
-- [ ] Unresolved generated test failures remain active with the repair attempts and next action documented
-- [ ] No added skip, fixme, relaxed assertion, larger timeout or SUT mock hides a failure
-- [ ] Unknown or unavailable environment recorded honestly
-
-### Healing Report Generated
-
-- [ ] Healing report generated (if healing attempted)
-- [ ] Report includes:
-  - [ ] Auto-heal enabled status
-  - [ ] Healing mode (MCP-assisted or Pattern-based)
-  - [ ] Iterations allowed (max_healing_iterations)
-  - [ ] Validation results (total, passing, failing)
-  - [ ] Successfully healed tests (count, file:line, fix applied)
-  - [ ] Unable to heal tests (count, file:line, reason)
-  - [ ] Healing patterns applied (selector fixes, timing fixes, data fixes)
-  - [ ] Knowledge base references used
+- [ ] Report written in this scope's existing automation summary even when healing is disabled or execution is blocked
+- [ ] Resolved settings, diagnosis tools, rounds used, commands and report/trace paths recorded
+- [ ] Initial and final execution counts and status (`passed`, `failed`, `could not measure` or `disabled`) recorded
+- [ ] Each healed file:line includes failure class, evidence and exact change
+- [ ] Confirmed product defects retain unchanged assertions and reproduction evidence
+- [ ] Unresolved generated test failures remain active with attempts and next action documented
+- [ ] Environment blockers or unknown causes recorded without speculative repairs
+- [ ] Generation completion distinguished from passing execution; no green claim for unresolved results
 
 ---
 
@@ -382,13 +377,12 @@ Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects
 - [ ] `test:component` script for component tests
 - [ ] `test:unit` script for unit tests (if applicable)
 
-### Test Suite Executed
+### Generated-Scope Execution Recorded
 
-- [ ] Test suite run locally (if `{run_tests_after_generation}` true)
-- [ ] Test results captured (passing/failing counts)
-- [ ] No flaky patterns detected (tests are deterministic)
-- [ ] Setup requirements documented (if any)
-- [ ] Known issues documented (if any)
+- [ ] Create's shared loop execution evidence reused in the summary; no second repair loop started
+- [ ] `{auto_validate}` controls generated-scope execution, enabled by default
+- [ ] A legacy `{run_tests_after_generation}` preference for an additional suite run does not override `auto_validate`; broader execution requires an explicit requested scope and is never a completion gate
+- [ ] Test results, determinism concerns, setup requirements and known issues documented
 
 ---
 
@@ -432,7 +426,7 @@ Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects
 ### Test Design Quality
 
 - [ ] Tests are readable (clear Given-When-Then structure)
-- [ ] Tests are maintainable (use factories/fixtures, not hardcoded data)
+- [ ] Tests are maintainable (use factories/fixtures with exact scenario-defined inputs and expectations)
 - [ ] Tests are isolated (no shared state between tests)
 - [ ] Tests are deterministic (no race conditions or flaky patterns)
 - [ ] Tests are atomic (one assertion per test)
@@ -501,7 +495,7 @@ Only Create executes `{skill-root}/resources/run-and-heal.md`. Validate inspects
 
 ## Completion Criteria
 
-All of the following must be true before marking this workflow as complete:
+Check the generation deliverables below and record the shared loop's actual execution status before marking Create complete. Validate reports unmet criteria; Edit checks the changed outputs. Passing execution is reported separately from workflow completion.
 
 - [ ] **Execution mode determined** (BMad-Integrated, Standalone, or Auto-discover)
 - [ ] **Framework configuration loaded** and validated
@@ -511,7 +505,7 @@ All of the following must be true before marking this workflow as complete:
 - [ ] **Duplicate coverage avoided** (same behavior not tested at multiple levels)
 - [ ] **Test priorities assigned** (P0, P1, P2, P3)
 - [ ] **Fixture architecture created/enhanced** with auto-cleanup
-- [ ] **Data factories created/enhanced** using faker (no hardcoded data)
+- [ ] **Data factories created/enhanced** using faker for unconstrained fields and exact scenario overrides for criterion-defined inputs
 - [ ] **Helper utilities created/enhanced** (if needed)
 - [ ] **Test files generated** at appropriate levels (E2E, API, Component, Unit)
 - [ ] **Given-When-Then format used** consistently across all tests
@@ -521,15 +515,14 @@ All of the following must be true before marking this workflow as complete:
 - [ ] **Quality standards enforced** (no hard waits, no flaky patterns, self-cleaning, deterministic)
 - [ ] **Test README updated** with execution instructions and patterns
 - [ ] **package.json scripts updated** with test execution commands
-- [ ] **Test suite run locally** (if run_tests_after_generation true)
-- [ ] **Tests validated** (if auto_validate enabled)
-- [ ] **Failures healed** (if auto_heal_failures enabled and tests failed)
-- [ ] **Healing report generated** (if healing attempted)
+- [ ] **Generated-scope execution recorded** with resolved settings and passed, failed, blocked or disabled status
+- [ ] **Confirmed test repairs attempted within the retained budget** when enabled; no requirement to heal real product defects or every unresolved failure
+- [ ] **Execution and healing report generated** with commands, counts, changes and remaining issues
 - [ ] **Remaining failures reported** with unchanged assertions and reproduction evidence
 - [ ] **Automation summary created** and saved to correct location
 - [ ] **Output file formatted correctly**
 - [ ] **Knowledge base references applied** and documented (including healing fragments if used)
-- [ ] **No test quality issues** (flaky patterns, race conditions, hardcoded data, page objects)
+- [ ] **No unreported test quality issues** (flaky patterns, race conditions, uncontrolled fixture data, page objects)
 - [ ] **Provider scrutiny completed or gracefully degraded** for all CDC interactions — each interaction either has scrutiny evidence or a TODO marker (if `use_pactjs_utils` enabled)
 - [ ] **Provider endpoint comments present** on every Pact interaction (if `use_pactjs_utils` enabled)
 
@@ -583,12 +576,12 @@ All of the following must be true before marking this workflow as complete:
 
 ### Issue: Tests have hardcoded data
 
-**Problem:** Tests use hardcoded email addresses, passwords, or other data.
+**Problem:** Generated setup invents identities or shares fixture data across tests.
 
 **Resolution:**
 
-- Replace all hardcoded data with factory function calls
-- Use faker for all random data generation
+- Move generated setup identities and random input data into factories while preserving criterion-defined exact expected values
+- Use faker for unconstrained random fields; preserve exact criterion-defined business inputs, boundary cases and expected outcomes
 - Update data-factories to support all required test scenarios
 - Example: `createUser({ email: faker.internet.email() })`
 
@@ -599,11 +592,11 @@ All of the following must be true before marking this workflow as complete:
 **Resolution:**
 
 - Remove all hard waits (`page.waitForTimeout()`)
-- Use explicit waits (`page.waitForSelector()`)
+- Use the project's mandated event/state wait helpers, including `recurse` when Playwright Utils requires it
 - Apply network-first pattern (route interception before navigation)
 - Remove conditional flow (`if (await element.isVisible())`)
 - Ensure tests are deterministic (no race conditions)
-- Run burn-in loop (10 iterations) to detect flakiness
+- Record repeated-run evidence when explicitly requested through a separate burn-in scope; it cannot extend the shared loop's three repair rounds or become a completion gate
 
 ### Issue: Fixtures don't clean up data
 
@@ -624,9 +617,9 @@ All of the following must be true before marking this workflow as complete:
 
 - Remove unnecessary waits and delays
 - Use parallel execution where possible
-- Mock external services (don't make real API calls)
-- Use API tests instead of E2E for business logic
-- Optimize test data creation (use in-memory database, etc.)
+- Retain the scenario's declared external doubles and real SUT boundary; report slow real behavior without inventing a success mock
+- Select API coverage for business logic during coverage planning while preserving every scenario and assertion during healing
+- Optimize generated fixture setup within the existing project environment; preserve the required service/database boundary
 
 ---
 
@@ -642,6 +635,6 @@ All of the following must be true before marking this workflow as complete:
 - **No page objects:** Keep tests simple, direct, and maintainable
 - **Use knowledge base:** Load relevant fragments (test-levels, test-priorities, fixture-architecture, data-factories, healing patterns) for guidance
 - **Deterministic tests only:** No hard waits, no conditional flow, no flaky patterns allowed
-- **Default healing:** Create executes generated tests and heals confirmed test defects for up to three rounds
-- **Graceful degradation:** Healing works without Playwright MCP (pattern-based fallback)
+- **Default healing:** Create executes generated tests through the shared resource and repairs confirmed test defects within at most three rounds, with the retained Resume count
+- **Graceful degradation:** Source and execution evidence support diagnosis without Playwright MCP; unavailable execution remains a reported blocker
 - **Remaining failures:** Keep assertions and report product defects, environment blockers and unresolved test defects

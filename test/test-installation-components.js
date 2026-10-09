@@ -1145,7 +1145,42 @@ async function runTests() {
       router.includes('defaults to red through `bmad-testarch-atdd` and expand through the canonical entry') &&
         router.includes('An explicit mode in the user') &&
         router.includes('test_mode_defaulted = true'),
-      'headless generation preserves historical entry defaults and explicit mode precedence',
+      'generation preserves historical entry defaults in every run mode and explicit mode precedence',
+    );
+    assert(
+      router.includes('When no task mode signal is present, every run mode defaults') &&
+        router.includes('with no task wording use those entry defaults without a mode question') &&
+        router.includes('only when explicit task mode signals conflict in an interactive run') &&
+        router.includes('with conflicting signals uses the same historical entry default without a question') &&
+        !router.includes('or neither resolves a mode'),
+      'interactive AT, TA and slash commands retain no-signal defaults; only conflicting task signals ask',
+    );
+    const routingExamples = router
+      .split('\n')
+      .filter((line) => line.startsWith('| '))
+      .map((line) =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim()),
+      );
+    for (const example of [
+      ['AT or `/bmad-testarch-atdd`', 'none', 'interactive', 'red (entry default)', 'no'],
+      ['TA or `/bmad-testarch-automate`', 'none', 'interactive', 'expand (entry default)', 'no'],
+      ['`/bmad-testarch-automate`', 'lets write acceptance tests', 'interactive or headless', 'red', 'no'],
+      ['`/bmad-testarch-automate`', 'acceptance test scaffolds', 'interactive or headless', 'red', 'no'],
+      ['either entry', 'red and expand task signals', 'interactive', 'unresolved', 'ask once'],
+      ['AT or `/bmad-testarch-atdd`', 'red and expand task signals', 'headless', 'red (entry default)', 'no'],
+      ['TA or `/bmad-testarch-automate`', 'red and expand task signals', 'headless', 'expand (entry default)', 'no'],
+    ]) {
+      assert(
+        routingExamples.some((row) => row.length === example.length && row.every((value, index) => value === example[index])),
+        `generation routing example: ${example[0]}, ${example[1]}, ${example[2]} selects ${example[3]} (${example[4]})`,
+      );
+    }
+    assert(
+      router.includes('`write acceptance tests`') && router.includes('`acceptance test scaffolds`'),
+      'canonical acceptance-test trigger phrases explicitly select red mode',
     );
     assert(
       router.includes('resume_checkpoint_path') &&

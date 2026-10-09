@@ -82,7 +82,7 @@ flowchart TD
 | `automate` red mode    | test-quality, component-tdd, network-first, data-factories    | TDD patterns            |
 | `automate` expand mode | test-quality, test-levels-framework, selector-resilience      | Test generation         |
 | `test-review`          | All quality, resilience, and debugging fragments              | Full audit patterns     |
-| `ci`                   | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization      |
+| `framework` CI phase   | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization      |
 
 ## Anatomy of a Fragment
 

@@ -41,6 +41,7 @@ function extract(destination) {
     );
     return { relative, target };
   });
+  fs.mkdirSync(path.dirname(root), { recursive: true });
   // Atomic creation establishes ownership before any cleanup can remove it.
   fs.mkdirSync(root);
   try {

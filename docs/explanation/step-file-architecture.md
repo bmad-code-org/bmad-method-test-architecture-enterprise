@@ -124,16 +124,16 @@ The setup, design, and trace workflows resolve execution mode inside a step and 
 `teach-me-testing` is a sequential, session-based learning flow.
 `evaluate` uses its own authoring stages and the `tea-evaluate` runtime.
 
-| Workflow            | Shape                          | Workers                                                                   | Aggregation                                                 |
-| ------------------- | ------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `automate`          | Parallel generation            | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
-| `automate` red mode | Parallel generation            | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
-| `test-review`       | Parallel validation            | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
-| `nfr-assess`        | Parallel validation            | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
-| `framework`         | Sequential or parallel with CI | Scaffold work units; framework and CI generation for both scope           | Validates outputs against the agreed setup contract         |
-| `ci`                | Sequential + probe             | Pipeline generation                                                       | One deterministic pipeline artifact                         |
-| `test-design`       | Sequential + probe             | Output generation                                                         | One deterministic design artifact                           |
-| `trace`             | Two-phase, ordered             | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
+| Workflow             | Shape                          | Workers                                                                   | Aggregation                                                 |
+| -------------------- | ------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `automate`           | Parallel generation            | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
+| `automate` red mode  | Parallel generation            | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
+| `test-review`        | Parallel validation            | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
+| `nfr-assess`         | Parallel validation            | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
+| `framework`          | Sequential or parallel with CI | Scaffold work units; framework and CI generation for both scope           | Validates outputs against the agreed setup contract         |
+| `framework` CI phase | Sequential + probe             | Pipeline generation                                                       | One deterministic pipeline artifact                         |
+| `test-design`        | Sequential + probe             | Output generation                                                         | One deterministic design artifact                           |
+| `trace`              | Two-phase, ordered             | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
 
 For both setup scopes, framework and CI workers can run in parallel after the stack, framework, and test commands are agreed.
 

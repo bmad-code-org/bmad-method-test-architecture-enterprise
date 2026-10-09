@@ -325,7 +325,7 @@ Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `
 | `test-review`              | quality-dimension workers                      | Dispatch style only   |
 | `nfr-assess`               | domain assessment workers                      | Dispatch style only   |
 | `framework`                | scaffold work units                            | Dispatch style only   |
-| `ci`                       | orchestration-capable pipeline generation step | Orchestration policy  |
+| `framework` CI phase       | orchestration-capable pipeline generation step | Orchestration policy  |
 | `test-design`              | orchestration-capable output generation step   | Orchestration policy  |
 | `trace`                    | phase/work-unit separation with dependencies   | Orchestration policy  |
 
@@ -417,6 +417,79 @@ test_framework = "playwright"
 
 ---
 
+### auto_validate
+
+Execute generated tests during Create.
+
+**Type:** `boolean` · **Default:** `true`
+
+**Setup question:** `Run generated tests during Create? true (recommended) or false to report generation without execution.`
+
+**Affects workflows:** `automate` in red and expand modes, including the ATDD entry.
+
+Set `"false"` to generate tests without executing them, matching the generation-only behavior of version 2.0.0.
+Repair requires execution, so this also disables repairs for the run.
+
+```toml
+auto_validate = "true"
+```
+
+---
+
+### auto_heal_failures
+
+Repair confirmed defects in generated tests after execution while preserving acceptance criteria and real product defects.
+
+**Type:** `boolean` · **Default:** `true`
+
+**Setup question:** `Repair confirmed defects in generated tests after running them? true (recommended) or false to report failures without repairs. Acceptance criteria and real product defects are preserved.`
+
+**Affects workflows:** `automate` Create in red and expand modes, including the ATDD entry.
+
+Requires `auto_validate` to be enabled. Set `"false"` to execute tests and report failures without repairs.
+
+```toml
+auto_heal_failures = "true"
+```
+
+---
+
+### max_healing_iterations
+
+Maximum repair and rerun rounds after the initial execution, from 0 to 3.
+
+**Type:** `integer` · **Default:** `3`
+
+**Setup question:** `How many repair rounds may generated tests use? 0 to 3, with 3 recommended.`
+
+**Affects workflows:** `automate` Create and Resume in red and expand modes, including the ATDD entry.
+
+Set `"0"` to execute tests once and report failures without repairs. Resume retains rounds already used.
+
+```toml
+max_healing_iterations = "3"
+```
+
+---
+
+### use_mcp_healing
+
+Use available browser evidence tools to diagnose generated browser test failures when the browser automation setting permits MCP.
+
+**Type:** `boolean` · **Default:** `true`
+
+**Setup question:** `Use available browser evidence tools to diagnose generated browser test failures? true (recommended) or false to use source, runner reports and traces.`
+
+**Affects workflows:** `automate` Create in red and expand modes, including the ATDD entry.
+
+Test execution and repairs also work without MCP. Set `"false"` to diagnose failures from source, runner reports, and traces.
+
+```toml
+use_mcp_healing = "true"
+```
+
+---
+
 ## Per-Workflow Settings
 
 Each setting below is read by one workflow and lives in its customization file under `[workflow]`.
@@ -469,7 +542,7 @@ ci_platform = "github-actions"
 
 ## Automation Run and Heal
 
-`bmad-testarch-automate` supports `red` and `expand` modes selected by your prompt. The existing ATDD command and `AT` menu code default to red; automate and `TA` default to expand. Unattended runs use the invoked command's default when mode is unclear and state it in the summary. Resume continues interrupted ATDD or automate progress. A new unattended run starts over by default.
+`bmad-testarch-automate` supports `red` and `expand` modes selected by your prompt. The existing ATDD command and `AT` menu code default to red; automate and `TA` default to expand in interactive and unattended runs. Unattended runs state the selected mode in the summary. Resume continues interrupted ATDD or automate progress. A new unattended run starts over by default.
 
 Each mode keeps its existing customization file: `_bmad/custom/bmad-testarch-atdd.toml` for red and `_bmad/custom/bmad-testarch-automate.toml` for expand, including their `.user.toml` layers. Only the selected mode's activation hooks, persistent facts, and completion hook run. No customization migration is required.
 
@@ -607,30 +680,30 @@ A file that exists once per project keeps a plain name: `test-design-architectur
 Paths are relative to `{test_artifacts}` unless noted.
 Deliverables are declared in the workflow's `workflow.yaml`; resume progress files are declared in the steps or setup resources that write them.
 
-| Workflow           | Output                                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `test-design`      | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)        |
-| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
-| `test-design`      | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                       |
-| `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
-| `test-design`      | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                        |
-| `framework`        | `{project-root}/tests/README.md`                                                                                |
-| `framework`        | `framework/setup-run-progress.md` (shared setup progress for Create, Edit, and Validate)                        |
-| `framework`        | `framework/framework-setup-progress.md` (Create progress checkpoint)                                            |
-| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
-| `ci`               | `ci/ci-pipeline-progress.md` (Create progress checkpoint)                                                       |
-| `atdd`             | `atdd/atdd-checklist-{story_key}.md`                                                                            |
-| `automate`         | `automate/automation-summary-{run_key}.md`                                                                      |
-| `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
-| `test-review`      | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
-| `nfr-assess`       | `nfr/nfr-assessment-{run_key}.md`                                                                               |
-| `nfr-assess`       | `nfr/perf-{run_key}-<page>.png` (browser evidence screenshots)                                                  |
-| `trace`            | `trace/traceability-matrix-{run_key}.md`                                                                        |
-| `trace`            | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                     |
-| `trace`            | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                        |
-| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                               |
-| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                                  |
-| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                             |
+| Workflow             | Output                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `test-design`        | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)        |
+| `test-design`        | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
+| `test-design`        | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                       |
+| `test-design`        | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
+| `test-design`        | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                        |
+| `framework`          | `{project-root}/tests/README.md`                                                                                |
+| `framework`          | `framework/setup-run-progress.md` (shared setup progress for Create, Edit, and Validate)                        |
+| `framework`          | `framework/framework-setup-progress.md` (Create progress checkpoint)                                            |
+| `framework` CI phase | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
+| `framework` CI phase | `ci/ci-pipeline-progress.md` (Create progress checkpoint)                                                       |
+| `atdd`               | `atdd/atdd-checklist-{story_key}.md`                                                                            |
+| `automate`           | `automate/automation-summary-{run_key}.md`                                                                      |
+| `test-review`        | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
+| `test-review`        | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
+| `nfr-assess`         | `nfr/nfr-assessment-{run_key}.md`                                                                               |
+| `nfr-assess`         | `nfr/perf-{run_key}-<page>.png` (browser evidence screenshots)                                                  |
+| `trace`              | `trace/traceability-matrix-{run_key}.md`                                                                        |
+| `trace`              | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                     |
+| `trace`              | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                        |
+| `teach-me-testing`   | `teaching-progress/{user_name}-tea-progress.yaml`                                                               |
+| `teach-me-testing`   | `tea-academy/{user_name}/session-{N}-notes.md`                                                                  |
+| `teach-me-testing`   | `tea-academy/{user_name}/tea-completion-summary.md`                                                             |
 
 `trace` also reads two optional inputs it never writes, and both stay at the root of `{test_artifacts}` because other tools and people produce them: `live-verification-results.json` and `gate-waivers.md`.
 Any producer may write `live-verification-results.json` (an agent, a shell script, a CI job, or a person recording an outcome by hand).

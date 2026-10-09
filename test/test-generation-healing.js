@@ -133,6 +133,12 @@ function guardInstructions() {
   for (const terminal of ['steps-c/step-04-validate-and-summarize.md', 'red/steps-c/step-05-validate-and-complete.md']) {
     const source = read(path.join(SKILL, terminal));
     check(source.includes('{skill-root}/resources/run-and-heal.md'), `${terminal} loads the shared Create loop`);
+    check(
+      source.includes(
+        'YAML frontmatter keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used`',
+      ),
+      `${terminal} saves stable resolved settings and round keys`,
+    );
   }
   for (const directory of ['steps-v', 'steps-e', 'red/steps-v', 'red/steps-e']) {
     const files = fs.readdirSync(path.join(SKILL, directory)).filter((file) => file.endsWith('.md'));
@@ -141,6 +147,19 @@ function guardInstructions() {
       check(!/load[^\n]*resources\/run-and-heal\.md/i.test(source), `${directory}/${file} never loads the healing loop`);
     }
   }
+  for (const rel of ['checklist.md', 'red/checklist.md']) {
+    const checklist = read(path.join(SKILL, rel));
+    check(
+      !/Replaced hardcoded values with regex|Mock ALL external|mark_unhealable_as_fixme|auto_heal_failures[^\n]*default: false/i.test(
+        checklist,
+      ),
+      `${rel} rejects unsafe or stale healing instructions`,
+    );
+  }
+  check(
+    resource.includes('apply confirmed repairs to the permanent owned scaffold') && resource.includes('make a fresh disposable copy'),
+    'red repairs reach the delivered skipped scaffold before disposable reactivation',
+  );
   const knowledge = read(path.join(ROOT, 'skills', 'bmod-tea', 'knowledge', 'test-healing-patterns.md'));
   check(
     !/Mock ALL external|Use `test\.fixme\(\)` if healing fails|Replace.*regex.*hardcoding/i.test(knowledge),
@@ -659,6 +678,346 @@ function replayNativeBrowser() {
   );
 }
 
+/** Current-source witnesses use neutral stdin and private controller evidence. */
+function replayCurrentCaptures() {
+  const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const manifest = JSON.parse(captureText(path.join(LIVE_CAPTURE, 'current', 'manifest.json')));
+  assert.deepEqual(manifest.criticalSourcePaths, [
+    'skills/bmad-testarch-atdd/SKILL.md',
+    'skills/bmad-testarch-automate/SKILL.md',
+    'skills/bmad-testarch-automate/resources/run-and-heal.md',
+    'skills/bmad-testarch-automate/resources/test-generation-routing.md',
+    'skills/bmad-testarch-automate/steps-c/step-04-validate-and-summarize.md',
+    'skills/bmad-testarch-automate/red/steps-c/step-05-validate-and-complete.md',
+    'skills/bmad-testarch-automate/checklist.md',
+    'skills/bmad-testarch-automate/red/checklist.md',
+    'skills/bmad-testarch-automate/instructions.md',
+    'skills/bmad-testarch-automate/red/instructions.md',
+    'skills/bmod-tea/knowledge/test-healing-patterns.md',
+  ]);
+  const payload = JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(LIVE_CAPTURE, 'evidence.json.gz'))));
+  for (const [relative, expected] of Object.entries(manifest.historical.encodedValueSha256)) {
+    assert.equal(digest(payload.files[relative]), expected, `historical base64 value changed: ${relative}`);
+  }
+  check(manifest.historical.fileCount === 812, 'current append retains all 812 original base64 values byte for byte');
+  check(Object.keys(manifest.captures).length === 13, 'current evidence contains six entry and seven controlled runtime captures');
+  const bytes = (record) => captureBytes(path.join(LIVE_CAPTURE, record.archivePath));
+  const text = (record) => bytes(record).toString('utf8');
+  const frontmatter = (source) => yaml.parse(source.match(/^---\r?\n([\s\S]*?)\r?\n---/)[1]);
+  const hashes = (value) => (typeof value === 'string' ? value : value.sha256);
+  const mode = (value) => (typeof value === 'string' ? Number(value) : value);
+  const loaded = {};
+  for (const [name, capture] of Object.entries(manifest.captures)) {
+    for (const record of [...Object.values(capture.files), ...Object.values(capture.stagedSources)]) {
+      const actual = bytes(record);
+      assert.equal(actual.length, record.bytes, `${name}: original byte count`);
+      assert.equal(digest(actual), record.sha256, `${name}: raw file digest`);
+    }
+    const expectedCritical = manifest.criticalSourcePaths.filter(
+      (relative) => name !== 'entry/canonical-only-red' || relative !== 'skills/bmad-testarch-atdd/SKILL.md',
+    );
+    assert.deepEqual(Object.keys(capture.criticalSources).sort(), [...expectedCritical].sort());
+    for (const [relative, record] of Object.entries(capture.criticalSources)) {
+      const current = fs.readFileSync(path.join(ROOT, relative));
+      assert.ok(bytes(record).equals(current), `${name}: captured critical source differs from current: ${relative}`);
+      assert.equal(digest(current), record.sha256, `${name}: current source changed: ${relative}`);
+      assert.deepEqual(capture.stagedSources[relative], record, `${name}: critical source is not the archived staged source`);
+    }
+    check(true, `${name} pins all ${expectedCritical.length} applicable critical sources to current repository bytes`);
+    const data = (relative) => text(capture.files[relative]);
+    const provenance = JSON.parse(data('controller/provenance.json'));
+    const baseline = JSON.parse(data('controller/baseline.json'));
+    const stagedHashes = JSON.parse(data('controller/staged-critical.json'));
+    assert.deepEqual(Object.keys(provenance.sourceSnapshots).sort(), [...expectedCritical].sort());
+    assert.deepEqual(Object.keys(stagedHashes).sort(), [...expectedCritical].sort());
+    for (const [relative, record] of Object.entries(capture.criticalSources)) {
+      assert.equal(hashes(provenance.sourceSnapshots[relative]), record.sha256, `${name}: original provenance source digest`);
+      assert.equal(hashes(stagedHashes[relative]), record.sha256, `${name}: original pre-run staged source digest`);
+    }
+    assert.equal(provenance.exitStatus, 0);
+    assert.equal(provenance.stagedSourceUnchanged, true);
+    const outside = path.relative(capture.projectCwd, capture.controllerDirectory);
+    assert.ok(outside === '..' || outside.startsWith(`..${path.sep}`), `${name}: controller evidence must be outside agent cwd`);
+    for (const relative of ['prompt.txt', 'baseline.json', 'provenance.json', 'staged-critical.json', 'capture.txt', 'invocation.json']) {
+      assert.equal(capture.files[`project/${relative}`], undefined, `${name}: strategy/control file in agent cwd`);
+    }
+    assert.ok(!Object.keys(capture.files).some((relative) => relative.startsWith('project/.skills/')));
+    if (capture.files['project/criteria.json']) {
+      assert.ok(!/"(?:classification|repair|initialOutcome|finalOutcome)"\s*:/.test(data('project/criteria.json')));
+    }
+    const red = /(?:bare-red|red-private|canonical-only-red|red-import|native-browser)$/.test(name);
+    const entry = red && name !== 'entry/canonical-only-red' ? 'bmad-testarch-atdd' : 'bmad-testarch-automate';
+    const [node, runner, ...args] = provenance.argv;
+    assert.equal(node, 'node');
+    assert.ok(runner.endsWith('/cli/skill-runner.js'));
+    assert.deepEqual(args, [
+      '--skill-root',
+      `skills/${entry}`,
+      '--agent',
+      'claude',
+      '--capability',
+      'command-execution',
+      '--timeout-ms',
+      '600000',
+      ...(name === 'runtime/native-browser' ? ['--env-pass', 'TEA_NATIVE_WITNESS'] : []),
+    ]);
+    assert.equal(provenance.cwd, capture.projectCwd);
+    assert.ok(data('controller/capture.stdout').length > 0);
+    check(true, `${name} records actual default-Claude full-entry invocation and private neutral inputs`);
+    for (const [relative, expected] of Object.entries(baseline.protected)) {
+      const record = capture.files[`project/${relative}`];
+      assert.equal(hashes(provenance.protectedBefore[relative]), hashes(expected));
+      assert.equal(record.sha256, hashes(provenance.protectedAfter[relative]));
+      const beforeMode = typeof expected === 'object' ? mode(expected.mode) : baseline.protectedPermissions[relative];
+      const after = provenance.protectedAfter[relative];
+      const afterMode = typeof after === 'object' ? mode(after.mode) : provenance.protectedAfterPermissions[relative];
+      assert.equal(record.mode, beforeMode, `${name}: protected permission changed: ${relative}`);
+      assert.equal(record.mode, afterMode, `${name}: recorded permission differs: ${relative}`);
+      if (relative === capture.allowedProtectedAppend?.projectPath) {
+        const before = bytes(capture.allowedProtectedAppend.before);
+        const afterBytes = bytes(record);
+        assert.equal(digest(before), hashes(expected));
+        assert.ok(afterBytes.subarray(0, before.length).equals(before));
+        assert.equal(
+          afterBytes.subarray(before.length).toString('utf8'),
+          '\nATDD checklist: test-artifacts/atdd/atdd-checklist-1-3.md (red scaffold: tests/generated/confirm.spec.ts)\n',
+        );
+        assert.equal(provenance.protectedUnchanged, false, 'raw story handoff mutation remains honestly recorded');
+      } else assert.equal(record.sha256, hashes(expected), `${name}: protected content changed: ${relative}`);
+    }
+    check(true, `${name} preserves protected bytes and modes, allowing only the browser story's exact artifact-link suffix`);
+    const selected = red ? 'ATDD' : 'AUTOMATE';
+    if (name === 'runtime/native-browser') {
+      assert.equal(capture.files['project/_bmad/custom/bmad-testarch-atdd.toml'], undefined);
+      const defaults = parseToml(text(capture.stagedSources['skills/bmad-testarch-atdd/customize.toml'])).workflow;
+      assert.deepEqual(defaults.activation_steps_prepend, []);
+      assert.deepEqual(defaults.activation_steps_append, []);
+      assert.equal(defaults.on_complete, '');
+      assert.equal(data('project/hooks.log'), 'BEFORE-FINAL\n');
+      check(true, 'current browser fixture has empty customization hooks and executes no physical marker');
+    } else {
+      assert.equal(data('project/hooks.log'), `BEFORE-FINAL\n${selected}-PREPEND\n${selected}-APPEND\n${selected}-COMPLETE\n`);
+      check(true, `${name} physically runs only its selected prepend, append and completion hooks once`);
+    }
+    const reports = [];
+    for (const [relative, record] of Object.entries(capture.files)) {
+      if (!relative.startsWith('project/') || !relative.endsWith('.json')) continue;
+      const parsed = JSON.parse(text(record));
+      if (parsed.suites && parsed.stats) reports.push({ relative, report: parsed });
+    }
+    const calls = data('project/test-artifacts/witness/runner-calls.jsonl').trim().split('\n').filter(Boolean).map(JSON.parse);
+    const configLoads = data('project/test-artifacts/witness/config-loads.jsonl').trim().split('\n').filter(Boolean).map(JSON.parse);
+    for (const call of calls) {
+      assert.ok(call.argv.includes('playwright') && call.argv.includes('test'));
+      const relative = call.report.slice(capture.projectCwd.length + 1);
+      assert.ok(capture.files[`project/${relative}`], `${name}: independent wrapper report is missing`);
+    }
+    assert.ok(configLoads.every((event) => event.event === 'config-load' && Number.isFinite(event.at)));
+    const generated = Object.keys(baseline.generatedBefore ?? {});
+    const reportFiles = (report) => {
+      const files = (report.errors ?? []).map((error) => error.location?.file).filter(Boolean);
+      function walk(suite) {
+        if (suite.file) files.push(suite.file);
+        for (const child of suite.suites ?? []) walk(child);
+      }
+      for (const suite of report.suites ?? []) walk(suite);
+      return files;
+    };
+    const forFile = (relative) =>
+      reports.filter(({ report }) =>
+        reportFiles(report).some((file) => file.endsWith(relative) || file.endsWith(relative.replace(/^tests\//, ''))),
+      );
+    const checkpointPath = baseline.checkpointPath
+      ? `project/${baseline.checkpointPath}`
+      : Object.keys(capture.files).find((relative) =>
+          /^project\/test-artifacts\/(?:automate\/automation-summary-|atdd\/atdd-checklist-).*\.md$/.test(relative),
+        );
+    const checkpoint = checkpointPath ? data(checkpointPath) : undefined;
+    const progress = checkpoint ? frontmatter(checkpoint) : undefined;
+    if (progress) {
+      assert.equal(progress.workflowStatus, 'completed');
+      assert.equal(progress.test_operation, 'create');
+      assert.equal(progress.test_mode, red ? 'red' : 'expand');
+      for (const key of ['auto_validate', 'auto_heal_failures', 'use_mcp_healing']) assert.equal(typeof progress[key], 'boolean');
+      assert.ok(
+        Number.isInteger(progress.max_healing_iterations) && progress.max_healing_iterations >= 0 && progress.max_healing_iterations <= 3,
+      );
+      assert.ok(Number.isInteger(progress.healing_rounds_used) && progress.healing_rounds_used >= 0);
+      assert.ok(progress.healing_rounds_used <= 3);
+    }
+    loaded[name] = { capture, data, provenance, baseline, reports, calls, configLoads, generated, forFile, checkpoint, progress };
+  }
+
+  const expand = loaded['entry/bare-expand'];
+  const expandReport = expand.reports.find(({ report }) => leaves(report).length === 6).report;
+  check(
+    expand.data('controller/prompt.txt') === 'Create.' &&
+      /entry default \(expand\)/i.test(expand.data('project/test-artifacts/automate/automation-summary-target-totalcents.md')) &&
+      expandReport.errors.length === 0 &&
+      leaves(expandReport).every((test) => test.status === 'passed') &&
+      expandReport.stats.skipped === 0 &&
+      expand.calls.length === 1 &&
+      expand.configLoads.length > 0,
+    'strict neutral canonical Create selects its entry default and independently executes six passing generated tests',
+  );
+  for (const name of ['entry/bare-red', 'entry/red-private']) {
+    const run = loaded[name];
+    const report = run.reports.find(({ report }) => leaves(report).length === 1).report;
+    const actual = leaves(report)[0];
+    const message = stripAnsi(actual.error.message);
+    check(
+      report.errors.length === 0 &&
+        actual.status === 'failed' &&
+        report.stats.skipped === 0 &&
+        /Expected: "confirmed"/.test(message) &&
+        /Received: "pending"/.test(message) &&
+        run.configLoads.length > 0,
+      `${name} independently reaches its real missing-behavior assertion without a skipped or load-error result`,
+    );
+    if (name.endsWith('bare-red')) {
+      assert.equal(run.data('controller/prompt.txt'), 'Create.');
+      check(
+        /entry default.*red mode/i.test(run.data('controller/capture.stdout')),
+        'strict neutral ATDD Create reports its historical red default',
+      );
+    }
+    const scaffold = name.endsWith('bare-red') ? 'tests/api/order-confirmation.spec.ts' : 'tests/generated/order-confirmation.spec.ts';
+    check(run.data(`project/${scaffold}`).includes('test.skip('), `${name} retains its permanent acceptance scaffold skip`);
+  }
+  const comparisons = JSON.parse(captureText(path.join(LIVE_CAPTURE, 'current/controller-tools/entry-post-capture-audit.raw')));
+  for (const name of ['validate', 'edit', 'canonical-only-red']) {
+    const run = loaded[`entry/${name}`];
+    const comparison = comparisons.derivedGeneratedFiles[name];
+    if (name !== 'edit') {
+      for (const [relative, original] of Object.entries(run.baseline.artifactBefore)) {
+        assert.equal(run.data(`project/${relative}`), original, `current ${name} changed its validated input: ${relative}`);
+      }
+    }
+    for (const [relative, record] of Object.entries(comparison.beforeFromImmutableParentCreateCapture)) {
+      assert.equal(run.capture.files[`project/${relative}`].sha256, record.sha256);
+      assert.equal(run.capture.files[`project/${relative}`].mode, Number(record.mode));
+      assert.deepEqual(comparison.afterFromDerivedCapture[relative], record);
+    }
+    check(run.calls.length === 0 && run.configLoads.length === 0, `current ${name} makes no new runner call or independent config load`);
+    check(true, `current ${name} preserves every actual generated input, including original-style output folders`);
+  }
+  check(
+    !Object.keys(loaded['entry/canonical-only-red'].capture.stagedSources).some((relative) =>
+      relative.startsWith('skills/bmad-testarch-atdd/'),
+    ) && loaded['entry/canonical-only-red'].data('controller/capture.stdout').includes('ATDD-FACT'),
+    'current standalone canonical red Validate resolves ATDD customizations with the compatibility entry absent',
+  );
+  const edited = loaded['entry/edit'];
+  const summary = 'test-artifacts/automate/automation-summary-target-totalcents.md';
+  const beforeSummary = JSON.parse(edited.data('controller/baseline.json')).artifactBefore[summary];
+  const added =
+    '\n> **Scope note:** This run covers `totalCents` for valid integer `unitPriceCents` and `quantity`, including zero and positive boundaries.\n';
+  check(
+    edited.data(`project/${summary}`).replace(added, '') === beforeSummary,
+    'current Edit changes only the requested summary scope note',
+  );
+
+  const heal = loaded['runtime/expand-heal-product'];
+  const owned = heal.generated[0];
+  check(
+    heal.data(`project/${owned}`) === heal.baseline.generatedBefore[owned].replace("from '../../src/order'", "from '../../src/orders'") &&
+      heal.progress.healing_rounds_used === 1 &&
+      heal.progress.max_healing_iterations === 3,
+    'current controlled expand replay repairs only the owned import and persists exactly one of three rounds',
+  );
+  const initial = heal.forFile(owned).find(({ report }) => report.errors.length > 0).report;
+  const final = heal.forFile(owned).find(({ report }) => leaves(report).length === 6).report;
+  check(
+    leaves(initial).length === 0 &&
+      initial.errors.some((error) => /Cannot find module.*src\/order/.test(error.message)) &&
+      final.errors.length === 0 &&
+      leaves(final).filter((test) => test.status === 'passed').length === 3 &&
+      leaves(final).filter((test) => test.status === 'failed').length === 3 &&
+      final.stats.skipped === 0 &&
+      heal.configLoads.length > 0,
+    'current agent healing converts the owned load error into three passes and three preserved real product failures',
+  );
+  check(
+    leaves(final).some(
+      (test) => /Expected: 2100/.test(stripAnsi(test.error?.message)) && /Received: 2099/.test(stripAnsi(test.error?.message)),
+    ) &&
+      heal.data('project/tests/expand/total.spec.ts').includes("from '../../src/order'") &&
+      /real product defect/i.test(heal.checkpoint),
+    'current agent retains exact product assertions and leaves the unrelated broken existing test untouched',
+  );
+  for (const name of ['validation-disabled', 'healing-disabled', 'zero-rounds', 'spent-budget']) {
+    const run = loaded[`runtime/${name}`];
+    const file = run.generated[0];
+    assert.equal(run.data(`project/${file}`), run.baseline.generatedBefore[file]);
+    assert.equal(run.progress.healing_rounds_used, name === 'spent-budget' ? 3 : 0);
+    assert.ok(run.capture.controlledInjections.length > 0, 'controlled settings inputs remain labeled');
+    if (name === 'validation-disabled') {
+      check(
+        run.progress.auto_validate === false &&
+          run.calls.length === 0 &&
+          run.configLoads.length === 0 &&
+          run.reports.length === 0 &&
+          /did not execute|execution.*disabled/i.test(run.data('controller/capture.stdout')),
+        'current disabled validation preserves generated bytes with zero independent config loads, runner calls or reports',
+      );
+    } else {
+      const scoped = run.forFile(file);
+      check(
+        run.configLoads.length > 0 &&
+          scoped.length > 0 &&
+          scoped.every(
+            ({ report }) =>
+              leaves(report).length === 0 && report.errors.some((error) => /Cannot find module.*src\/order/.test(error.message)),
+          ),
+        `current ${name} actually measures the unchanged owned import failure without granting another repair`,
+      );
+      if (name === 'healing-disabled') assert.equal(run.progress.auto_heal_failures, false);
+      if (name === 'zero-rounds') assert.equal(run.progress.max_healing_iterations, 0);
+      if (name === 'spent-budget') assert.equal(frontmatter(run.baseline.checkpointText).healing_rounds_used, 3);
+    }
+  }
+  const red = loaded['runtime/red-import'];
+  const redFile = red.generated[0];
+  check(
+    /Controlled red terminal replay/.test(red.capture.controlledInjections[0].kind) &&
+      red.data(`project/${redFile}`) === red.baseline.expectedRepairedBytes[redFile] &&
+      red.data(`project/${redFile}`).includes('test.skip(') &&
+      red.progress.healing_rounds_used === 1,
+    'current controlled red terminal replay applies the exact permanent import repair and retains every skip/assertion byte',
+  );
+  const redInitial = red.forFile(redFile).find(({ report }) => report.errors.length > 0).report;
+  const redFinal = red.forFile(redFile).find(({ report }) => leaves(report).length === 1).report;
+  check(
+    leaves(redInitial).length === 0 &&
+      redInitial.errors.some((error) => /Cannot find module.*src\/order/.test(error.message)) &&
+      redFinal.errors.length === 0 &&
+      leaves(redFinal)[0].status === 'failed' &&
+      redFinal.stats.skipped === 0 &&
+      /Expected: "confirmed"/.test(stripAnsi(leaves(redFinal)[0].error.message)) &&
+      /Received: "pending"/.test(stripAnsi(leaves(redFinal)[0].error.message)) &&
+      red.configLoads.length > 0,
+    'current actual red agent repair reaches the intended assertion in a fresh disposable run',
+  );
+  const browser = loaded['runtime/native-browser'];
+  const browserFile = browser.generated[0];
+  const browserReport = browser.forFile(browserFile).find(({ report }) => leaves(report).length === 1).report;
+  const browserResult = leaves(browserReport)[0];
+  const browserMessage = stripAnsi(browserResult.error.message);
+  check(
+    browser.data(`project/${browserFile}`) === browser.baseline.generatedBefore[browserFile] &&
+      browserResult.status === 'failed' &&
+      browserReport.errors.length === 0 &&
+      browserReport.stats.skipped === 0 &&
+      browserReport.config.projects[0].timeout === 30_000 &&
+      /Expected: "Confirmed"/.test(browserMessage) &&
+      /Received: "Pending"/.test(browserMessage) &&
+      browserResult.error.snippet.includes('TEA_NATIVE_WITNESS') &&
+      browser.progress.healing_rounds_used === 0 &&
+      browser.configLoads.length > 0,
+    'current real Chromium fallback preserves the skipped scaffold, environment/helper setup and original project budget before intended red failure',
+  );
+}
+
 try {
   const interrupted = path.join(scratch, 'interrupted-evidence');
   const faultPreload = path.join(scratch, 'extraction-fault.cjs');
@@ -683,6 +1042,8 @@ fs.writeFileSync = (...args) => {
     'actual extraction CLI cleans partial output after a filesystem write failure',
   );
   check(extract(interrupted) > 0, 'extraction can retry the cleaned destination successfully');
+  const nestedDestination = path.join(scratch, 'new-parent', 'nested', 'evidence');
+  check(extract(nestedDestination) > 0, 'evidence extraction supports a destination whose parent folders do not exist');
   const extracted = path.join(scratch, 'evidence');
   check(
     extract(extracted) === JSON.parse(read(path.join(LIVE_CAPTURE, 'index.json'))).fileCount,
@@ -700,6 +1061,7 @@ fs.writeFileSync = (...args) => {
   replayNativeBrowser();
   replayLegacyTerminal();
   replayResumeAndSettings();
+  replayCurrentCaptures();
   console.log(`\n${checks} generated-test healing checks passed.`);
 } finally {
   fs.rmSync(scratch, { recursive: true, force: true });
