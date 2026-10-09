@@ -1,18 +1,18 @@
 ---
 title: TEA Step-File and Orchestration Architecture
-description: How TEA splits workflows into granular step files, how those steps dispatch to parallel workers, and how execution mode is resolved
+description: How TEA splits skills into granular step files, how those steps dispatch to parallel workers, and how execution mode is resolved
 ---
 
 # TEA Step-File and Orchestration Architecture
 
-TEA workflows load one step file at a time.
+TEA skills load one step file at a time.
 Some steps dispatch isolated workers, then merge their structured outputs.
 
 ## Why Step Files
 
 Step files give the model a bounded task, the context it needs, and an exit condition.
 
-Step files break the workflow into self-contained units that each do one thing:
+Step files break the skill into self-contained units that each do one thing:
 
 - **One step, one action.** Each file contains exactly one task.
 - **Explicit exit conditions.** The step states what "finished" means.
@@ -22,7 +22,7 @@ Step files break the workflow into self-contained units that each do one thing:
 
 These boundaries let independent workers produce outputs the aggregation step can validate.
 
-Layout in the repository, per workflow skill:
+Layout in the repository, per skill:
 
 ```text
 bmad-testarch-automate/
@@ -97,7 +97,7 @@ A worker step is the same shape with two differences: its exit condition ends th
 ### Loading knowledge fragments from a step
 
 Step frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`.
-`{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside the workflow, and the step body names the fragments it wants:
+`{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill installed beside the skill, and the step body names the fragments it wants:
 
 ```markdown
 Use `{knowledgeIndex}` to load:
@@ -117,14 +117,16 @@ Generated tests MUST follow these patterns:
 
 See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how fragments are selected and maintained.
 
-## How Workflows Split Into Workers
+<a id="how-workflows-split-into-workers"></a>
 
-Three workflows ship dedicated worker step files.
-The setup, design, and trace workflows resolve execution mode inside a step and run their work in order.
+## How Skills Split Into Workers
+
+Three skills ship dedicated worker step files.
+The setup, design, and trace skills resolve execution mode inside a step and run their work in order.
 `teach-me-testing` is a sequential, session-based learning flow.
 `evaluate` uses its own authoring stages and the `tea-evaluate` runtime.
 
-| Workflow             | Shape                          | Workers                                                                   | Aggregation                                                 |
+| Skill                | Shape                          | Workers                                                                   | Aggregation                                                 |
 | -------------------- | ------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `automate`           | Parallel generation            | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
 | `automate` red mode  | Parallel generation            | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
@@ -189,7 +191,7 @@ A missing or invalid worker output fails validation.
 
 Parallel workers can shorten a run when their tasks are independent.
 Actual duration depends on the runtime, model, input size, and worker count.
-Workflow progress reports the current step and active workers:
+Skill progress reports the current step and active workers:
 
 ```text
 ✓ Step 1: Setup complete
@@ -203,7 +205,7 @@ Workflow progress reports the current step and active workers:
 
 ## Validation
 
-Every workflow is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it.
+Every skill is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the skill supports it.
 Validation reports describe the working tree at the time of the run and are not committed.
 Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
@@ -222,20 +224,20 @@ Re-run BMad Builder validation after edits.
 
 ## Troubleshooting
 
-| Symptom                                 | Likely cause                                           | Fix                                                                      |
-| --------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Model still improvising                 | Step instructions too vague                            | Add explicit requirements and forbidden actions                          |
-| Worker output not aggregating           | Temp file path mismatch or malformed JSON              | Check the temp file naming convention and validate the JSON shape        |
-| Knowledge fragments not applied         | Fragment loading instructions unclear                  | Name the fragments and state the patterns they must produce              |
-| Slow despite subagents                  | Not enough parallelization                             | Identify further independent steps to split into workers                 |
-| Workflow ran in an unexpected mode      | Run-level override took precedence over config         | Check the resolved mode in the workflow execution report                 |
-| Requested mode did not run              | Runtime lacked support and fallback changed the mode   | Check the resolved mode; disable probing only if you want a hard failure |
-| Workflow failed instead of falling back | `tea_capability_probe: false` with an unsupported mode | Set the probe to `true`, or pick a mode the runtime supports             |
+| Symptom                              | Likely cause                                           | Fix                                                                      |
+| ------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Model still improvising              | Step instructions too vague                            | Add explicit requirements and forbidden actions                          |
+| Worker output not aggregating        | Temp file path mismatch or malformed JSON              | Check the temp file naming convention and validate the JSON shape        |
+| Knowledge fragments not applied      | Fragment loading instructions unclear                  | Name the fragments and state the patterns they must produce              |
+| Slow despite subagents               | Not enough parallelization                             | Identify further independent steps to split into workers                 |
+| Skill ran in an unexpected mode      | Run-level override took precedence over config         | Check the resolved mode in the skill execution report                    |
+| Requested mode did not run           | Runtime lacked support and fallback changed the mode   | Check the resolved mode; disable probing only if you want a hard failure |
+| Skill failed instead of falling back | `tea_capability_probe: false` with an unsupported mode | Set the probe to `true`, or pick a mode the runtime supports             |
 
 ## Related
 
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md): how steps select and load fragments
-- [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md): running one of these workflows headless
+- [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md): running one of these skills headless
 - [TEA Configuration](/docs/reference/configuration.md): `tea_execution_mode` and `tea_capability_probe`
-- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md): authoring your own steps
-- [TEA Overview](/docs/explanation/tea-overview.md): the eight workflows in the lifecycle
+- [Extend TEA with Custom Skills](/docs/how-to/customization/extend-tea-with-custom-workflows.md): authoring your own steps
+- [TEA Overview](/docs/explanation/tea-overview.md): the eight skills in the lifecycle

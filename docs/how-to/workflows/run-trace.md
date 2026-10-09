@@ -1,14 +1,14 @@
 ---
 title: 'How to Run Trace with TEA'
-description: Map requirements, specs, or inferred journeys to tests and make quality gate decisions using TEA's trace workflow
+description: Map requirements, specs, or inferred journeys to tests and make quality gate decisions using TEA's trace skill
 ---
 
 # How to Run Trace with TEA
 
-Use TEA's `trace` workflow for coverage traceability and quality gate decisions.
-This is a two-phase workflow: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
+Use TEA's `trace` skill for coverage traceability and quality gate decisions.
+This is a two-phase skill: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
 
-The workflow resolves the best available coverage oracle automatically: formal requirements first, contract/spec artifacts second, resolvable external pointers third, and synthetic journeys inferred from source as the brownfield fallback.
+The skill resolves the best available coverage oracle automatically: formal requirements first, contract/spec artifacts second, resolvable external pointers third, and synthetic journeys inferred from source as the brownfield fallback.
 
 ## When to Use This
 
@@ -34,13 +34,15 @@ The workflow resolves the best available coverage oracle automatically: formal r
 
 ## Steps
 
-### 1. Run the Trace Workflow
+<a id="1-run-the-trace-workflow"></a>
+
+### 1. Run the Trace Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-trace`
 - **Codex:** `$bmad-testarch-trace`
 - **Inside a `/bmad-tea` chat:** `TR`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### 2. Specify Phase
 
@@ -293,7 +295,7 @@ TEA still writes the trace summary for these runs, with no `gate_status` or `gat
 
 ### 7. Run Phase 2
 
-Invoke the workflow again with the same command as step 1:
+Invoke the skill again with the same command as step 1:
 
 ```text
 /bmad-testarch-trace

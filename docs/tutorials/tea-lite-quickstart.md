@@ -25,13 +25,13 @@ It runs in the browser and keeps todos in React state.
 
 :::tip[Quick Path]
 Set up TEA → scaffold with `framework` → plan with `test-design` → generate with `automate` → run `npx playwright test`.
-Use `/bmad-testarch-<workflow>` in Claude Code, Cursor, or Windsurf, and `$bmad-testarch-<workflow>` in Codex.
+Use `/bmad-testarch-<skill>` in Claude Code, Cursor, or Windsurf, and `$bmad-testarch-<skill>` in Codex.
 :::
 
 ## TEA Approaches Explained
 
 TEA Lite covers existing features.
-TEA Solo lets you choose individual workflows with your own requirements.
+TEA Solo lets you choose individual skills with your own requirements.
 TEA Integrated follows the BMad development phases.
 See [Engagement Models](/docs/explanation/engagement-models.md) for all five models.
 
@@ -67,12 +67,12 @@ Setup creates `_bmad/config.toml` with your answers.
 
 ### Load TEA Agent
 
-Load the agent to use its workflow menu:
+Load the agent to use its skill menu:
 
 - Claude Code / Cursor / Windsurf: `/bmad-tea`
 - Codex: `$bmad-tea`
 
-You can also invoke each workflow directly.
+You can also invoke each skill directly.
 
 ### Scaffold Test Framework
 
@@ -231,21 +231,21 @@ Use risk to prioritize scenarios, review the plan before generation, and assert 
 ## Understanding ATDD vs Automate
 
 Use `automate` when the feature already exists.
-Use `atdd` to create acceptance test scaffolds before implementation, then complete the red → green → refactor cycle.
-See [Run ATDD](/docs/how-to/workflows/run-atdd.md).
+Use Automate red mode to create acceptance test scaffolds before implementation, then complete the red → green → refactor cycle.
+See [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode).
 
 ## Next Steps
 
 ### Level Up Your TEA Skills
 
-- [Set Up CI Pipeline](/docs/how-to/workflows/setup-ci.md) to run tests on pull requests
+- [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#ci-setup) to run tests on pull requests
 - [Review Test Quality](/docs/how-to/workflows/run-test-review.md) to audit the generated suite
 - [TEA Configuration](/docs/reference/configuration.md) for setup options
-- [TEA Command Reference](/docs/reference/commands.md) for all eight workflows
+- [TEA Command Reference](/docs/reference/commands.md) for all eight skills
 
 ### Try TEA Solo
 
-Bring your own requirements and run the workflows you need on any project.
+Bring your own requirements and run the skills you need on any project.
 See [TEA Solo](/docs/explanation/engagement-models.md#model-2-tea-solo).
 
 ### Go Full TEA Integrated

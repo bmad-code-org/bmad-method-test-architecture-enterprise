@@ -327,7 +327,7 @@ A numeric score alone does not establish that the test exercises the right behav
 
 ## How TEA Enforces Standards
 
-`atdd` and `automate` generate tests that already meet the standard: response waits registered before actions, accessible selectors, explicit assertions, and a size and runtime inside budget.
+Automate red and expand modes generate tests that already meet the standard: response waits registered before actions, accessible selectors, explicit assertions, and a size and runtime inside budget.
 
 `test-review` audits existing tests and reports violations with the deduction attached:
 

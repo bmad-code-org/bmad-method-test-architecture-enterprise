@@ -1,6 +1,6 @@
 ---
 title: 'Configure Browser Automation'
-description: Set up Playwright CLI and MCP for browser automation in TEA workflows
+description: Set up Playwright CLI and MCP for browser automation in TEA skills
 ---
 
 # Configure Browser Automation
@@ -72,7 +72,7 @@ Add these MCP server entries to your tool's configuration file:
 ```
 
 The `smartbear` server is optional.
-Add it only if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing workflows.
+Add it only if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing skills.
 See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact--contract-testing-integration) for details.
 
 #### Where to put the config
@@ -143,15 +143,17 @@ If only one tool is installed it uses that one; with neither it behaves as `none
 
 Full selection rules: [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp).
 
-## Which Workflows Benefit
+<a id="which-workflows-benefit"></a>
 
-| Workflow      | Default Tool (auto) | Use Case                                               |
-| ------------- | ------------------- | ------------------------------------------------------ |
-| `test-design` | CLI                 | Page discovery, snapshots (stateless)                  |
-| `atdd`        | CLI + MCP           | CLI for baseline capture, MCP for complex interactions |
-| `automate`    | CLI + MCP           | CLI for selector verification, MCP for healing         |
-| `test-review` | CLI                 | Traces, screenshots, network (stateless evidence)      |
-| `nfr-assess`  | CLI                 | Network monitoring, timing (stateless)                 |
+## Which Skills Benefit
+
+| Skill                  | Default Tool (auto) | Use Case                                               |
+| ---------------------- | ------------------- | ------------------------------------------------------ |
+| `test-design`          | CLI                 | Page discovery, snapshots (stateless)                  |
+| `automate` red mode    | CLI + MCP           | CLI for baseline capture, MCP for complex interactions |
+| `automate` expand mode | CLI + MCP           | CLI for selector verification, MCP for healing         |
+| `test-review`          | CLI                 | Traces, screenshots, network (stateless evidence)      |
+| `nfr-assess`           | CLI                 | Network monitoring, timing (stateless)                 |
 
 ## Overriding Per Request
 
@@ -202,7 +204,7 @@ Auto mode logs its decisions:
 - "Using CLI for snapshot (stateless discovery)"
 - "Using MCP for multi-step recording (stateful flow)"
 
-Check the workflow output for these messages.
+Check the skill output for these messages.
 
 ### Session Cleanup Issues
 

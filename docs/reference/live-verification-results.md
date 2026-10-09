@@ -29,7 +29,7 @@ live_results_input: '{test_artifacts}/live-verification-results.json'
 ```
 
 The file sits at the root of `{test_artifacts}`, outside the `trace/` folder where `trace` writes its own outputs, because other tools and people produce it.
-Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere.
+Set a different path in the `trace` skill's `workflow.yaml` if you produce the file elsewhere.
 When the file is absent, `trace` uses static test discovery only.
 
 ## File schema
@@ -52,7 +52,7 @@ When the file is absent, `trace` uses static test discovery only.
 }
 ```
 
-A longer example covering a passing record, a blocked one, and one recorded against an older commit ships with the workflow at `skills/bmad-testarch-trace/resources/live-verification-results.example.json`.
+A longer example covering a passing record, a blocked one, and one recorded against an older commit ships with the skill at `skills/bmad-testarch-trace/resources/live-verification-results.example.json`.
 
 **Enforced** fields determine whether a record or the whole file counts.
 **Recorded** fields add context to the report.
@@ -139,7 +139,7 @@ To reach PASS, add a re-runnable test at any level for the requirements the matr
 
 ## Turning the level off
 
-Remove `live` from `coverage_levels` in the `trace` workflow's `workflow.yaml`:
+Remove `live` from `coverage_levels` in the `trace` skill's `workflow.yaml`:
 
 ```yaml
 coverage_levels: 'e2e,api,component,unit'
@@ -208,6 +208,6 @@ Counted results also appear under `coverage.by_level.live`, so a dashboard can s
 
 ## Related
 
-- [How to Run Trace with TEA](/docs/how-to/workflows/run-trace.md): the workflow that reads this file
+- [How to Run Trace with TEA](/docs/how-to/workflows/run-trace.md): the skill that reads this file
 - [Verification Architecture](/docs/explanation/verification-architecture.md): why evidence is recorded independently of the tool that produced it
 - [TEA Configuration](/docs/reference/configuration.md): where TEA artifacts are written

@@ -30,6 +30,7 @@
   "test:doc-counts": 0.5,
   "test:doc-invocation-entry": 0.2,
   "test:doc-invocations": 353.1,
+  "test:doc-link-anchors": 0.5,
   "test:docs-build-names": 0.2,
   "test:docs-evaluate-sidebar": 0.2,
   "test:docs-gap-reader": 0.3,

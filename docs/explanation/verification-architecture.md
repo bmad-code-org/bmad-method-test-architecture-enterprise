@@ -63,7 +63,7 @@ TEA Core supplies:
 - **Architecture testability review.** An 8-category, 29-criteria audit applied at design time, before any test exists.
 - **Confidence gate.** A stop rule for the agent itself: below its threshold it stops and requests the missing evidence.
 
-Two of TEA's eight workflows, `nfr-assess` and `trace`, contain no stack-conditional logic at any step.
+Two of TEA's eight skills, `nfr-assess` and `trace`, contain no stack-conditional logic at any step.
 They run identically whether the system under test is a React app, a Go service, or a payment terminal.
 The risk and priority knowledge fragments reference no test framework at all.
 
@@ -88,7 +88,7 @@ It lists a format with no applicable criteria as unscorable and excludes it from
 
 | Tier           | What it means                                                                                         | Targets                                                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Full**       | Workflow branching, scaffolding, knowledge fragments, and review criteria                             | Web browser (Playwright, Cypress), mobile native (Maestro), HTTP and service tests, contract testing (Pact), component tests |
+| **Full**       | Skill branching, scaffolding, knowledge fragments, and review criteria                                | Web browser (Playwright, Cypress), mobile native (Maestro), HTTP and service tests, contract testing (Pact), component tests |
 | **Generation** | Detection, scaffolding, and test generation, with no dedicated knowledge fragments or review criteria | pytest, JUnit 5 / TestNG, Go test, xUnit / NUnit / MSTest, RSpec / Minitest                                                  |
 | **Evidence**   | TEA plans, requires, and audits the evidence; execution is your tooling                               | Performance (k6, JMeter, Gatling), security scanning (ZAP, Burp, Snyk), message contracts                                    |
 | **Core only**  | Risk, design, NFR, and traceability apply; execution is unassisted                                    | Desktop, embedded, data pipelines, mainframe                                                                                 |
@@ -100,7 +100,7 @@ Three cover mobile.
 None covers a backend test framework, and the knowledge index has no row tagged for pytest, JUnit, Go test, xUnit, or RSpec.
 
 Web and mobile generation use curated knowledge fragments.
-Backend scaffolding uses the conventions in workflow steps and the project's existing code.
+Backend scaffolding uses the conventions in skill steps and the project's existing code.
 Dedicated backend knowledge fragments and review criteria remain a gap.
 
 ## What this means for your project
@@ -127,10 +127,10 @@ Extension happens through the surfaces TEA already exposes:
 
 - **Configuration.** Set `test_framework` and `test_stack_type` explicitly.
   See [Configuration](/docs/reference/configuration.md).
-- **Knowledge fragments.** Add fragments for your stack and register them in the knowledge index so workflows load them by tier and tag.
+- **Knowledge fragments.** Add fragments for your stack and register them in the knowledge index so skills load them by tier and tag.
   See [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
-- **Custom workflows.** Add stack-specific steps alongside the shipped ones.
-  See [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md).
+- **Custom skills.** Add stack-specific steps alongside the shipped ones.
+  See [Extend TEA with Custom Skills](/docs/how-to/customization/extend-tea-with-custom-workflows.md).
 
 Use the existing risk, NFR, traceability, and gate rules for the new target.
 
@@ -150,6 +150,6 @@ The second layer stays whatever each team already runs.
 ## Related
 
 - [Execution Targets](/docs/reference/execution-targets.md): per-target support detail
-- [TEA Overview](/docs/explanation/tea-overview.md): the full workflow map
+- [TEA Overview](/docs/explanation/tea-overview.md): the full skill map
 - [Risk-Based Testing](/docs/explanation/risk-based-testing.md): the scoring model in Core
 - [Use TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md): compliance evidence and audit trails

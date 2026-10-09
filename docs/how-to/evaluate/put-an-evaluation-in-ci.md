@@ -1,6 +1,6 @@
 ---
 title: 'How to Put an Evaluation in CI with TEA'
-description: Let Evaluate write the CI plan, run its pull request tier, read the evidence and render the plan into your pipeline with the CI workflow
+description: Let Evaluate write the CI plan, run its pull request tier, read the evidence and render the plan into your pipeline with the Framework skill's CI phase
 ---
 
 # How to Put an Evaluation in CI with TEA
@@ -125,7 +125,7 @@ Run the evaluation again, read what changed with `compare`, and accept the new b
 Run `bmad-testarch-framework` with CI scope in Create or Edit. The `bmad-testarch-ci` command also works with the same operation.
 It finds the plan and writes one job per tier, each running `tea-evaluate ci --tier <tier>` and uploading the evaluation folder's `runs/` directory whatever the result.
 It also waits a publish or deploy job on the tier's evaluation job when the plan lists that job in `gates`.
-[Evaluation Plans in the CI guide](/docs/how-to/workflows/setup-ci.md#evaluation-plans) describes the rendered jobs.
+[Evaluation Plans in the CI guide](/docs/how-to/workflows/setup-test-framework.md#evaluation-plans) describes the rendered jobs.
 
 ## How You Know It Worked
 
@@ -138,5 +138,5 @@ It also waits a publish or deploy job on the tier's evaluation job when the plan
 
 - [Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md)
 - [The `ci` command reference](/docs/reference/tea-evaluate-cli.md#ci)
-- [Set Up CI Pipeline](/docs/how-to/workflows/setup-ci.md)
+- [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#ci-setup)
 - [How Evaluate Works](/docs/explanation/how-evaluate-works.md)

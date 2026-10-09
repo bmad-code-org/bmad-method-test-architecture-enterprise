@@ -557,3 +557,19 @@ footer {
   flex-shrink: 0;
   max-width: none;
 }
+
+/* Reserve the full table-of-contents column beside full-width content. */
+@media (min-width: 72rem) {
+  .right-sidebar-container {
+    width: var(--sl-sidebar-width);
+    flex-shrink: 0;
+  }
+
+  .right-sidebar {
+    width: var(--sl-sidebar-width);
+  }
+
+  [data-has-sidebar][data-has-toc] .main-pane {
+    width: calc(100% - var(--sl-sidebar-width));
+  }
+}

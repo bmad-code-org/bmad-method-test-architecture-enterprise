@@ -43,8 +43,8 @@ if (!validated.success) {
 }
 const manifest = validated.data;
 
-// Public workflow counts follow the module's installed entries. The routing
-// agent has no workflow, and the two compatibility commands name their owner
+// Public skill counts follow the module's installed entries. The routing
+// agent is separate from the capabilities, and the two compatibility commands name their owner
 // through required_skills so their modes do not inflate the count.
 const TOML = require('smol-toml');
 const skillsRoot = path.join(__dirname, '..', '..', 'skills');
@@ -60,7 +60,7 @@ for (const name of registeredSkills.filter((skill) => skill !== 'bmad-tea')) {
   }
   const requiredSkills = TOML.parse(fs.readFileSync(path.join(skillsRoot, name, 'bmod.toml'), 'utf8')).skill.required_skills;
   if (!Array.isArray(requiredSkills) || requiredSkills.length !== 1 || !registeredSkills.includes(requiredSkills[0])) {
-    refuse(`${name} must require one registered canonical workflow`);
+    refuse(`${name} must require one registered canonical skill`);
   }
   workflowOwners.add(requiredSkills[0]);
 }

@@ -12,7 +12,7 @@ TEA integrates with it through the `tea_use_pactjs_utils` config flag, which is 
 
 When the flag is enabled and the package is installed, TEA uses Pact.js Utils for the Pact artifacts it writes.
 
-The rule lives in the `pactjs-utils-mandate` knowledge fragment, which every generating and reviewing workflow loads first.
+The rule lives in the `pactjs-utils-mandate` knowledge fragment, which every generating and reviewing skill loads first.
 The shared integration rules are documented in `library-integration-mandate`.
 
 ### Two gates
@@ -179,9 +179,11 @@ Provider suites with an explicit breaking-change tolerance policy should use `is
 It recognizes only `main`, `master`, and `release/**`.
 Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH` before applying that tolerance, so a typo cannot turn an unexecuted cross-branch verification green.
 
-## Which Workflows Change
+<a id="which-workflows-change"></a>
 
-| Workflow                   | What the flag changes                                                                                                                                                              |
+## Which Skills Change
+
+| Skill                      | What the flag changes                                                                                                                                                              |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `framework`                | Installs `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`, then scaffolds directories, Vitest configs, scripts, CI workflow, and samples when the relevance gate opens |
 | `automate` red mode (ATDD) | Red-phase contract scaffolds generated in the mandated style. A scaffold is the file the developer un-skips and keeps                                                              |

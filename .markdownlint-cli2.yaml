@@ -46,6 +46,7 @@ config:
   MD033:
     allowed_elements:
       - frozen-after-approval
+      - a
 
   # MD025 (single H1 per document) treats a YAML frontmatter `title:` field as
   # an implicit H1 by default. Every Astro Starlight doc under docs/ carries a

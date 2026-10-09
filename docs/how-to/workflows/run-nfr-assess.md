@@ -5,7 +5,7 @@ description: Audit non-functional requirement evidence for security, performance
 
 # How to Run NFR Evidence Audit with TEA
 
-Use TEA's `nfr-assess` workflow to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability.
+Use TEA's `nfr-assess` skill to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability.
 
 Use `test-design` before implementation to define NFR thresholds, planned validation, and expected evidence.
 Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL, or N/A for findings that do not apply.
@@ -27,13 +27,15 @@ TEA will mark categories as CONCERNS where evidence is missing and document what
 
 ## Steps
 
-### 1. Run the NFR Evidence Audit Workflow
+<a id="1-run-the-nfr-evidence-audit-workflow"></a>
+
+### 1. Run the NFR Evidence Audit Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-nfr`
 - **Codex:** `$bmad-testarch-nfr`
 - **Inside a `/bmad-tea` chat:** `NR`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### 2. Specify NFR Categories
 
@@ -430,7 +432,7 @@ Record mitigations and release approval separately; they leave the audit verdict
 
 - [How to Run Trace](/docs/how-to/workflows/run-trace.md): Gate decision complements NFR
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Quality complements NFR
-- [Run TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md): Enterprise workflow
+- [Run TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md): Enterprise skill
 
 ## Understanding the Concepts
 

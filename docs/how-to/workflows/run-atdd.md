@@ -1,456 +1,98 @@
 ---
-title: 'How to Run ATDD with TEA'
-description: Generate red-phase acceptance test scaffolds before implementation using TEA's ATDD workflow
+title: ATDD Compatibility Entry
+description: Use the ATDD command to start Automate in red mode
 ---
 
-# How to Run ATDD with TEA
+# ATDD Compatibility Entry
 
-Use the automation skill's `red` mode to generate acceptance test scaffolds before implementation. The existing `atdd` command and `AT` menu code select red by default; you can also ask `/bmad-testarch-automate` for red mode.
-TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
+ATDD starts the [Automate skill in red mode](/docs/how-to/workflows/run-automate.md#red-mode). Use `/bmad-testarch-atdd` in Claude Code, Cursor, or Windsurf, `$bmad-testarch-atdd` in Codex, or `AT` in a TEA agent chat. This entry defaults to red; your prompt can select either mode. Existing ATDD customizations and interrupted progress keep working.
 
-## When to Use This
+See [Automate red mode](/docs/how-to/workflows/run-automate.md#red-mode) for acceptance scaffolds, verification, and the implementation handoff.
 
-- You are about to implement a feature
-- You want to follow TDD workflow (red → green → refactor)
-- You want tests to guide your implementation
-- You're practicing acceptance test-driven development
+## Earlier Links
 
-For tests of implemented features, use [Automate](/docs/how-to/workflows/run-automate.md).
+These anchors keep links from earlier versions usable. Open the linked section for the full guidance.
 
-## Prerequisites
+<a id="how-to-run-atdd-with-tea"></a>
+[How to Run ATDD with TEA](/docs/how-to/workflows/run-automate.md#red-mode)
 
-- Test framework setup complete (run `framework` if needed)
-- Story or feature defined with acceptance criteria
+<a id="when-to-use-this"></a>
+[When to Use This](/docs/how-to/workflows/run-automate.md#red-when-to-use-this)
 
-The examples use Playwright.
-Adapt the commands and selectors for Cypress.
+<a id="prerequisites"></a>
+[Prerequisites](/docs/how-to/workflows/run-automate.md#red-prerequisites)
 
-## Steps
+<a id="steps"></a>
+[Steps](/docs/how-to/workflows/run-automate.md#red-steps)
 
-### 1. Run the ATDD Workflow
+<a id="1-run-the-atdd-workflow"></a>
+[1. Run Automate in Red Mode](/docs/how-to/workflows/run-automate.md#red-1-run-automate-in-red-mode)
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-atdd`
-- **Codex:** `$bmad-testarch-atdd`
-- **Inside a `/bmad-tea` chat:** `AT`
+<a id="2-provide-context"></a>
+[2. Provide Context](/docs/how-to/workflows/run-automate.md#red-2-provide-context)
 
-Your prompt can explicitly request `red` or `expand`. In interactive and unattended runs with unclear mode, the ATDD entry defaults to red and the automate entry defaults to expand. Unattended runs state the selected default in the summary. Existing customization files and interrupted ATDD progress keep working.
+<a id="3-specify-test-levels"></a>
+[3. Specify Test Levels](/docs/how-to/workflows/run-automate.md#red-3-specify-test-levels)
 
-Create runs verify the generated tests in a disposable copy with their scaffold skips activated. TEA uses `tea-atdd-red-check` for compatible browserless loopback tests when the command is installed. Browser tests and projects needing their own environment or services use the installed project test runner with the original configuration and environment. Execution respects the project's existing test budgets, and the summary names the runner and any fallback reason. Tests must fail for the acceptance behavior that implementation will add. TEA repairs syntax, imports, selectors, data, timing, network, hard waits, and setup that cause the wrong failure, for up to three rounds. The implementation handoff retains its deliberate skipped scaffolds. The summary records repairs, intended red failures, and unresolved problems. Validate reports findings and Edit checks the changes you requested; neither operation repairs tests.
+<a id="component-testing-by-framework"></a>
+[Component Testing by Framework](/docs/how-to/workflows/run-automate.md#red-component-testing-by-framework)
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+<a id="4-review-generated-tests"></a>
+[4. Review Generated Tests](/docs/how-to/workflows/run-automate.md#red-4-review-generated-tests)
 
-### 2. Provide Context
+<a id="api-tests-testsapiprofilespects"></a>
+[API Tests (`tests/api/profile.spec.ts`):](/docs/how-to/workflows/run-automate.md#red-api-tests-testsapiprofilespects)
 
-TEA will ask for:
+<a id="e2e-tests-testse2eprofilespects"></a>
+[E2E Tests (`tests/e2e/profile.spec.ts`):](/docs/how-to/workflows/run-automate.md#red-e2e-tests-testse2eprofilespects)
 
-**Story/Feature Details:**
+<a id="implementation-checklist"></a>
+[Implementation Checklist](/docs/how-to/workflows/run-automate.md#red-implementation-checklist)
 
-```text
-We're adding a user profile page where users can:
-- View their profile information
-- Edit their name and email
-- Upload a profile picture
-- Save changes with validation
-```
+<a id="5-verify-red-phase-scaffolds"></a>
+[5. Verify Red-Phase Scaffolds](/docs/how-to/workflows/run-automate.md#red-5-verify-red-phase-scaffolds)
 
-**Acceptance Criteria:**
+<a id="6-implement-the-feature"></a>
+[6. Implement the Feature](/docs/how-to/workflows/run-automate.md#red-6-implement-the-feature)
 
-```text
-Given I'm logged in
-When I navigate to /profile
-Then I see my current name and email
+<a id="7-verify-tests-pass"></a>
+[7. Verify Tests Pass](/docs/how-to/workflows/run-automate.md#red-7-verify-tests-pass)
 
-Given I'm on the profile page
-When I click "Edit Profile"
-Then I can modify my name and email
+<a id="what-you-get"></a>
+[What You Get](/docs/how-to/workflows/run-automate.md#red-what-you-get)
 
-Given I've edited my profile
-When I click "Save"
-Then my changes are persisted
-And I see a success message
+<a id="red-phase-test-scaffolds"></a>
+[Red-Phase Test Scaffolds](/docs/how-to/workflows/run-automate.md#red-red-phase-test-scaffolds)
 
-Given I upload an invalid file type
-When I try to save
-Then I see an error message
-And changes are not saved
-```
+<a id="implementation-guidance"></a>
+[Implementation Guidance](/docs/how-to/workflows/run-automate.md#red-implementation-guidance)
 
-TEA builds a criterion registry before it generates tests.
-Existing `AC-<n>` ids remain unchanged.
-For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id.
-Every executable test title carries exactly one id from that registry.
+<a id="tdd-workflow-support"></a>
+[TDD Workflow Support](/docs/how-to/workflows/run-automate.md#red-tdd-workflow-support)
 
-TEA emits exactly one red-phase leaf scaffold per declared criterion.
-Secondary branches and journeys remain implementation-checklist work until green-phase automation.
-Each scaffold puts one direct criterion assertion first.
-That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks.
-API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs.
-E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
+<a id="tips"></a>
+[Tips](/docs/how-to/workflows/run-automate.md#red-tips)
 
-**Reference Documents** (optional):
+<a id="start-with-test-design"></a>
+[Start with Test Design](/docs/how-to/workflows/run-automate.md#red-start-with-test-design)
 
-- Point to your story file
-- Reference PRD or tech spec
-- Link to test design (if you ran `test-design` first)
+<a id="browser-automation-optional"></a>
+[Browser Automation (Optional)](/docs/how-to/workflows/run-automate.md#red-browser-automation-optional)
 
-### 3. Specify Test Levels
+<a id="focus-on-p0p1-scenarios"></a>
+[Focus on P0/P1 Scenarios](/docs/how-to/workflows/run-automate.md#red-focus-on-p0p1-scenarios)
 
-TEA will ask what test levels to generate:
+<a id="api-tests-first-e2e-later"></a>
+[API Tests First, E2E Later](/docs/how-to/workflows/run-automate.md#red-api-tests-first-e2e-later)
 
-**Options:**
+<a id="keep-tests-deterministic"></a>
+[Keep Tests Deterministic](/docs/how-to/workflows/run-automate.md#red-keep-tests-deterministic)
 
-- E2E tests (browser-based, full user journey)
-- API tests (backend only, faster)
-- Component tests (UI components in isolation)
-- Mix of levels (see [API Tests First, E2E Later](#api-tests-first-e2e-later) tip)
+<a id="related-guides"></a>
+[Related Guides](/docs/how-to/workflows/run-automate.md#red-related-guides)
 
-### Component Testing by Framework
-
-TEA generates component tests using framework-appropriate tools:
-
-| Your Framework | Component Testing Tool                       |
-| -------------- | -------------------------------------------- |
-| **Cypress**    | Cypress Component Testing (\*.cy.tsx)        |
-| **Playwright** | Vitest + React Testing Library (\*.test.tsx) |
-
-**Example response:**
-
-```text
-Generate:
-- API tests for profile CRUD operations
-- E2E tests for the complete profile editing flow
-- Component tests for ProfileForm validation (if using Cypress or Vitest)
-- Focus on P0 and P1 scenarios
-```
-
-### 4. Review Generated Tests
-
-TEA generates **red-phase test scaffolds** in appropriate directories:
-
-#### API Tests (`tests/api/profile.spec.ts`):
-
-**Vanilla Playwright:**
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test.describe('Profile API', () => {
-  test.skip('[P0] AC-1 should fetch user profile', async ({ request }) => {
-    const response = await request.get('/api/profile');
-
-    expect(response.status()).toBe(200);
-    const profile = await response.json();
-    expect(profile).toHaveProperty('name');
-    expect(profile).toHaveProperty('email');
-    expect(profile).toHaveProperty('avatarUrl');
-  });
-
-  test.skip('[P0] AC-2 should update user profile', async ({ request }) => {
-    const response = await request.patch('/api/profile', {
-      data: {
-        name: 'Updated Name',
-        email: 'updated@example.com',
-      },
-    });
-
-    expect(response.status()).toBe(200);
-    const updated = await response.json();
-    expect(updated.name).toBe('Updated Name');
-    expect(updated.email).toBe('updated@example.com');
-  });
-
-  test.skip('[P1] AC-4 should validate email format', async ({ request }) => {
-    const response = await request.patch('/api/profile', {
-      data: {
-        email: 'invalid-email',
-      },
-    });
-
-    expect(response.status()).toBe(400);
-    const error = await response.json();
-    expect(error.message).toContain('Invalid email format');
-  });
-});
-```
-
-**With Playwright Utils:**
-
-```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
-import { z } from 'zod';
-
-const ProfileSchema = z.object({
-  name: z.string(),
-  email: z.string().email(),
-  avatarUrl: z.string().url(),
-});
-
-test.describe('Profile API', () => {
-  test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest }) => {
-    const { status, body } = await apiRequest({
-      method: 'GET',
-      path: '/api/profile',
-    });
-
-    expect(status).toBe(200);
-    const profile = ProfileSchema.parse(body);
-    expect(profile.name).toBeDefined();
-    expect(profile.email).toContain('@');
-  });
-
-  test.skip('[P0] AC-2 should update user profile', async ({ apiRequest }) => {
-    const { status, body } = await apiRequest({
-      method: 'PATCH',
-      path: '/api/profile',
-      body: {
-        name: 'Updated Name',
-        email: 'updated@example.com',
-      },
-    });
-
-    expect(status).toBe(200);
-    const updated = ProfileSchema.parse(body);
-    expect(updated.name).toBe('Updated Name');
-    expect(updated.email).toBe('updated@example.com');
-  });
-
-  test.skip('[P1] AC-4 should validate email format', async ({ apiRequest }) => {
-    const { status, body } = await apiRequest({
-      method: 'PATCH',
-      path: '/api/profile',
-      body: { email: 'invalid-email' },
-    });
-
-    expect(status).toBe(400);
-    expect(body.message).toContain('Invalid email format');
-  });
-});
-```
-
-`apiRequest` returns `{ status, body }` and supports chained Zod validation.
-Disable retries with `retryConfig: { maxRetries: 0 }` for tests that assert a 5xx response.
-
-#### E2E Tests (`tests/e2e/profile.spec.ts`):
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test.skip('[P0] AC-3 should edit and save profile', async ({ page }) => {
-  // This assertion is the first potentially failing operation. Every browser
-  // failure in the journey retains AC-3 provenance.
-  await expect(
-    (async () => {
-      await page.goto('/login');
-      await page.getByLabel('Email').fill('test@example.com');
-      await page.getByLabel('Password').fill('password123');
-      await page.getByRole('button', { name: 'Sign in' }).click();
-      await page.goto('/profile');
-      await page.getByRole('button', { name: 'Edit Profile' }).click();
-      await page.getByLabel('Name').fill('Updated Name');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByText('Profile updated')).toBeVisible();
-    })(),
-  ).resolves.toBeUndefined();
-});
-```
-
-TEA records additional display, validation-error, and other secondary E2E journeys in the implementation checklist for green-phase automation.
-
-#### Implementation Checklist
-
-TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` (for example `atdd-checklist-1-2-user-authentication.md`):
-
-```markdown
-## Implementation Checklist
+<a id="understanding-the-concepts"></a>
+[Understanding the Concepts](/docs/how-to/workflows/run-automate.md#red-understanding-the-concepts)
 
-### Backend
-
-- [ ] Create `GET /api/profile` endpoint
-- [ ] Create `PATCH /api/profile` endpoint
-- [ ] Add email validation middleware
-- [ ] Add profile picture upload handling
-- [ ] Write API unit tests
-
-### Frontend
-
-- [ ] Create ProfilePage component
-- [ ] Implement profile form with validation
-- [ ] Add file upload for avatar
-- [ ] Handle API errors gracefully
-- [ ] Add loading states
-
-### Tests
-
-- [x] API test scaffolds generated (`test.skip()`)
-- [x] E2E test scaffolds generated (`test.skip()`)
-- [ ] Activate and run tests during implementation (should fail before code changes, then pass)
-```
-
-### 5. Verify Red-Phase Scaffolds
-
-TEA verifies the TDD red phase using an isolated, un-skipped copy. The saved scaffolds keep `test.skip()` until you're ready to work on a task.
-Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
-
-**For Playwright:**
-
-```bash
-npx playwright test
-```
-
-**For Cypress:**
-
-```bash
-npx cypress run
-```
-
-Initial output with scaffolds still skipped:
-
-```text
-Running 4 tests using 1 worker
-
-  - tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile
-  - tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile
-  - tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format
-  - tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile
-
-  4 skipped
-```
-
-After you remove `test.skip()`, confirm the test fails at the assertion for the promised behavior.
-A setup failure needs repair before implementation starts.
-
-### 6. Implement the Feature
-
-Now implement the feature following the test guidance:
-
-1. Start with API tests (backend first)
-2. Remove `test.skip()` from the first API test and confirm RED
-3. Implement until that test passes
-4. Move to the next API or E2E test and repeat
-5. Refactor with confidence (tests protect you)
-
-### 7. Verify Tests Pass
-
-After implementation, run your test suite.
-
-**For Playwright:**
-
-```bash
-npx playwright test
-```
-
-**For Cypress:**
-
-```bash
-npx cypress run
-```
-
-Expected output:
-
-```text
-Running 4 tests using 1 worker
-
-  ✓ tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile (850ms)
-  ✓ tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile (1.2s)
-  ✓ tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format (650ms)
-  ✓ tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile (3.2s)
-
-  4 passed (5.9s)
-```
-
-That completes the red → green → refactor cycle for the generated scaffolds.
-
-## What You Get
-
-### Red-Phase Test Scaffolds
-
-- API tests for backend endpoints
-- E2E tests for user workflows
-- Component tests (if requested)
-- Generated with `test.skip()` until you activate them task-by-task
-
-### Implementation Guidance
-
-- Clear checklist of what to build
-- Acceptance criteria translated to assertions
-- Edge cases and error scenarios identified
-
-### TDD Workflow Support
-
-- Activated tests guide implementation
-- Confidence to refactor
-- Living documentation of features
-
-## Tips
-
-### Start with Test Design
-
-Run `test-design` before `atdd` for better results:
-
-```text
-/bmad-testarch-test-design   # risk assessment and priorities
-/bmad-testarch-atdd          # generate tests based on that design
-```
-
-### Browser Automation (Optional)
-
-If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"` or `"mcp"`), TEA can verify selectors against live browsers during `atdd`.
-
-- **CLI mode:** Takes snapshots to verify element names and roles before generating selectors
-- **MCP mode:** Full browser automation for complex UI interactions
-- **Auto mode:** Uses CLI for simple verification, MCP for complex flows
-
-ATDD is for features that don't exist yet, so browser verification only applies if you have skeleton/mockup UI already implemented.
-For typical ATDD (no UI yet), TEA infers selectors from best practices.
-
-See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
-
-### Focus on P0/P1 Scenarios
-
-Don't generate tests for everything at once:
-
-```text
-Generate tests for:
-- P0: Critical path (happy path)
-- P1: High value (validation, errors)
-
-Skip P2/P3 for now - add later with automate
-```
-
-### API Tests First, E2E Later
-
-Recommended order:
-
-1. Generate API tests with `atdd`
-2. Implement backend (make API tests pass)
-3. Generate E2E tests with `atdd` (or `automate`)
-4. Implement frontend (make E2E tests pass)
-
-### Keep Tests Deterministic
-
-TEA generates deterministic tests by default:
-
-- No hard waits (`waitForTimeout`)
-- Network-first patterns (wait for responses)
-- Explicit assertions (no conditionals)
-
-Preserve response waits and explicit assertions when editing the generated tests.
-
-## Related Guides
-
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Plan before generating
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md): Tests for existing features
-- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Initial setup
-
-## Understanding the Concepts
-
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): **Why TEA generates quality tests** (foundational)
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why P0 vs P3 matters
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md): Avoiding flakiness
-
-## Reference
-
-- [Command: atdd](/docs/reference/commands.md#atdd): Full command reference
-- [TEA Configuration](/docs/reference/configuration.md): MCP and Playwright Utils options
+<a id="reference"></a>
+[Reference](/docs/how-to/workflows/run-automate.md#red-reference)

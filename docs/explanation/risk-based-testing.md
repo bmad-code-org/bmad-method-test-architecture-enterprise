@@ -83,7 +83,7 @@ flowchart TD
 
 An open score-9 risk blocks release.
 A mitigation plan records the work needed to resolve it; writing the plan alone leaves the gate at FAIL.
-The trace workflow reports human waivers separately and keeps its derived gate decision.
+The trace skill reports human waivers separately and keeps its derived gate decision.
 
 Every score at 6 or above needs a written mitigation with an owner and a date:
 

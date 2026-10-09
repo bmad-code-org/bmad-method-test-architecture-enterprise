@@ -1,24 +1,30 @@
 ---
 title: 'How to Run Automate with TEA'
-description: Expand test automation coverage after implementation using TEA's automate workflow
+description: Generate red acceptance scaffolds or expand coverage with the Automate skill
+tableOfContents:
+  maxHeadingLevel: 4
 ---
 
 # How to Run Automate with TEA
 
-Use the automation skill's `expand` mode to add tests for implemented features. It also supports `red` mode for acceptance scaffolds before implementation. Your prompt selects the mode; the automate command and `TA` menu code default to expand.
+Use the Automate skill's `expand` mode to add tests for implemented features. It also supports `red` mode for acceptance scaffolds before implementation. Your prompt selects the mode; the automate command and `TA` menu code default to expand.
 
 Create runs execute the generated tests and repair test issues by default, for up to three rounds. The summary records the repairs and any remaining failures. Real product defects keep their failing assertions and appear as findings.
 
-## When to Use This
+Choose [red mode](#red-mode) before implementation or [expand mode](#expand-mode) for existing code. Both modes support Create, Resume, Validate, and Edit. Each keeps its customization files and saved progress.
+
+## Expand Mode
+
+### When to Use This
 
 - Feature already exists and works
 - Want to add test coverage to existing code
 - Expanding existing test suite
 - Adding tests to legacy code
 
-For acceptance tests before implementation, use [ATDD](/docs/how-to/workflows/run-atdd.md).
+For acceptance tests before implementation, use [red mode](/docs/how-to/workflows/run-automate.md#red-mode).
 
-## Prerequisites
+### Prerequisites
 
 - Test framework setup complete (run `framework` if needed)
 - Feature implemented and working
@@ -26,23 +32,25 @@ For acceptance tests before implementation, use [ATDD](/docs/how-to/workflows/ru
 This guide uses Playwright examples.
 If using Cypress, commands and syntax will differ.
 
-## Steps
+### Steps
 
-### 1. Run the Automate Workflow
+<a id="1-run-the-automate-workflow"></a>
+
+#### 1. Run the Automate Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate`
 - **Codex:** `$bmad-testarch-automate`
 - **Inside a `/bmad-tea` chat:** `TA`
 
-Ask for `expand` when adding coverage to existing code, or `red` when writing acceptance tests before implementation. Interactive and unattended requests with unclear mode default to expand; unattended runs state that choice in the summary. The existing ATDD command and `AT` menu code default to red. Existing customization files and interrupted progress keep working.
+Acceptance scaffolds before implementation select red; coverage for existing code selects expand. A single explicit mode overrides the command default. With no task mode signal, the ATDD entry and `AT` default to red, while the Automate entry and `TA` default to expand. Conflicting task mode signals prompt one mode question in an interactive run; an unattended run uses its entry default. Every entry-default fallback states the selected mode in the final summary. Existing customization files and interrupted progress keep working.
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
-### 2. Provide Context
+#### 2. Provide Context
 
 TEA will ask for context about what you're testing.
 
-#### Option A: BMad-Integrated Mode (Recommended)
+##### Option A: BMad-Integrated Mode (Recommended)
 
 If you have BMad artifacts (stories, test designs, PRDs):
 
@@ -75,7 +83,7 @@ TEA will analyze your artifacts and generate tests that:
 - Avoid duplicating existing tests
 - Include edge cases and error scenarios
 
-#### Option B: Standalone Mode
+##### Option B: Standalone Mode
 
 If you're using TEA Solo or don't have BMad artifacts:
 
@@ -98,7 +106,7 @@ Features: Create todos, mark as complete, filter by status, delete todos
 
 TEA will analyze the application and generate tests based on your description.
 
-### 3. Specify Test Levels
+#### 3. Specify Test Levels
 
 TEA will ask which test levels to generate:
 
@@ -119,11 +127,11 @@ Generate:
 - Skip P3 (low priority edge cases)
 ```
 
-### 4. Review Generated Tests
+#### 4. Review Generated Tests
 
 TEA generates a test suite with multiple test levels.
 
-#### API Tests (`tests/api/profile.spec.ts`):
+##### API Tests (`tests/api/profile.spec.ts`):
 
 **Vanilla Playwright:**
 
@@ -250,7 +258,7 @@ testWithAuth.describe('Profile API', () => {
 `apiRequest` returns `{ status, body }`, supports chained Zod validation, and retries 5xx responses.
 Use `retryConfig: { maxRetries: 0 }` when testing a server-error response.
 
-#### E2E Tests (`tests/e2e/profile.spec.ts`):
+##### E2E Tests (`tests/e2e/profile.spec.ts`):
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -270,12 +278,15 @@ test('should edit profile', async ({ page }) => {
 
   // Verify success
   await expect(page.getByText('Profile updated')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit Profile' }).click();
+  await expect(page.getByLabel('Name')).toHaveValue('Updated Name');
 });
 ```
 
 TEA generates validation and edge-case tests according to the priorities you supplied.
 
-#### Fixtures (`tests/support/fixtures/profile.ts`):
+##### Fixtures (`tests/support/fixtures/profile.ts`):
 
 **Vanilla Playwright:**
 
@@ -369,11 +380,11 @@ The merged fixture exposes an auth token and generates profile data for each tes
 Configure the auth provider and browser session separately before visiting an authenticated page.
 Add cleanup if the test creates persistent records.
 
-### 5. Review Additional Artifacts
+#### 5. Review Additional Artifacts
 
 TEA also generates:
 
-#### Updated README (`tests/README.md`):
+##### Updated README (`tests/README.md`):
 
 ```markdown
 # Test Suite
@@ -412,7 +423,7 @@ Follow the patterns in existing tests:
 - Self-cleaning tests
 ```
 
-#### Definition of Done Summary:
+##### Definition of Done Summary:
 
 The checklist is part of the automation summary at `{test_artifacts}/automate/automation-summary-{run_key}.md`.
 The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you name a story or epic, `target-{slug}` for a feature or path with neither, and `system` for a run across the whole codebase.
@@ -430,7 +441,7 @@ The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you
 ✅ Test files ≤ 1000 lines
 ```
 
-### 6. Run the Tests
+#### 6. Run the Tests
 
 Run the generated tests against the implemented feature:
 
@@ -459,7 +470,7 @@ Running 6 tests using 4 workers
 
 Investigate each failure: it can reveal a product defect, an incorrect assertion, or missing test setup.
 
-### 7. Review Test Coverage
+#### 7. Review Test Coverage
 
 Check which scenarios are covered:
 
@@ -468,7 +479,7 @@ npx playwright show-report
 ```
 
 For code coverage, use whatever your project already has.
-TEA's `framework` workflow does not add a coverage script.
+TEA's `framework` skill does not add a coverage script.
 
 Compare against:
 
@@ -476,16 +487,16 @@ Compare against:
 - Test priorities from test design
 - Edge cases and error scenarios
 
-## What You Get
+### What You Get
 
-### Test Suite
+#### Test Suite
 
 - **API tests**: Fast, reliable backend testing
 - **E2E tests**: Critical user workflows
 - **Component tests**: UI component testing (if requested)
 - **Fixtures**: Shared utilities and setup
 
-### Component Testing by Framework
+#### Component Testing by Framework
 
 TEA supports component testing using framework-appropriate tools:
 
@@ -499,22 +510,22 @@ Component tests use separate tooling from E2E tests:
 - Cypress users: TEA generates Cypress Component Tests
 - Playwright users: TEA generates Vitest + React Testing Library tests
 
-### Quality Features
+#### Quality Features
 
 - **Network-first patterns**: Wait for the response a user action triggers
 - **Deterministic tests**: Explicit assertions and controlled setup
 - **Self-cleaning**: Tests don't leave test data behind
 - **Parallel-safe setup**: Isolated data for concurrent runs
 
-### Documentation
+#### Documentation
 
 - **Updated README**: How to run tests
 - **Test structure explanation**: Where tests live
 - **Definition of Done**: Quality standards
 
-## Tips
+### Tips
 
-### Start with Test Design
+#### Start with Test Design
 
 Run `test-design` before `automate` for better results:
 
@@ -525,7 +536,7 @@ Run `test-design` before `automate` for better results:
 
 TEA will focus on P0/P1 scenarios and skip low-value tests.
 
-### Prioritize Test Levels
+#### Prioritize Test Levels
 
 Not everything needs E2E tests:
 
@@ -538,7 +549,7 @@ Not everything needs E2E tests:
 - P3 scenarios: Skip or add later
 ```
 
-### Avoid Duplicate Coverage
+#### Avoid Duplicate Coverage
 
 Tell TEA about existing tests:
 
@@ -552,15 +563,15 @@ Don't duplicate that coverage
 
 TEA will analyze existing tests and only generate new scenarios.
 
-### Run and Heal
+#### Run and Heal
 
 Create runs execute the generated tests, classify failures, apply the matching test fixes, and rerun up to three rounds. Selector failures use resilient locators; timing and hard-wait failures use observable readiness; data and network failures use controlled fixtures and request handling. A real product defect remains a finding with the assertion intact. The run reports blocked execution when its environment cannot run the tests.
 
 Validate checks the selected outputs and reports execution evidence. Edit checks the requested changes. These operations never run test repairs or require the full suite to pass.
 
-Run and heal is enabled by default. Customize `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, and `use_mcp_healing` in the [automation settings](/docs/reference/configuration.md#automation-run-and-heal).
+Run and heal is enabled by default. Customize `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, and `use_mcp_healing` in the [automation settings](/docs/reference/configuration.md#automate-run-and-heal).
 
-### Browser Automation (Optional)
+#### Browser Automation (Optional)
 
 If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"` or `"mcp"`), TEA can use browser tools during `automate` for:
 
@@ -572,7 +583,7 @@ TEA uses browser tools automatically when available and appropriate; it does not
 
 See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
 
-### Generate Tests Incrementally
+#### Generate Tests Incrementally
 
 Don't generate all tests at once:
 
@@ -600,9 +611,9 @@ Run: automate
 
 Run and review each batch before generating the next one.
 
-## Common Issues
+### Common Issues
 
-### Tests Pass But Coverage Is Incomplete
+#### Tests Pass But Coverage Is Incomplete
 
 Tests pass but don't cover all scenarios.
 
@@ -617,7 +628,7 @@ Generate tests for:
 - Edge cases (empty fields, long inputs)
 ```
 
-### Too Many Tests Generated
+#### Too Many Tests Generated
 
 TEA generated 50 tests for a simple feature.
 
@@ -633,7 +644,7 @@ Generate ONLY:
 - Skip P2/P3 for now
 ```
 
-### Tests Duplicate Existing Coverage
+#### Tests Duplicate Existing Coverage
 
 New tests cover the same scenarios as existing tests.
 
@@ -649,7 +660,7 @@ We already have these tests:
 Generate tests for scenarios NOT covered by those files
 ```
 
-### Browser Automation for Better Selectors
+#### Browser Automation for Better Selectors
 
 If browser automation is configured (`tea_browser_automation: "auto"`, `"cli"`, or `"mcp"`), TEA verifies selectors against live browser using CLI snapshots or MCP.
 Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
@@ -657,20 +668,537 @@ Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by def
 Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or configure MCP servers.
 See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md).
 
-## Related Guides
+### Related Guides
 
 - [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Plan before generating
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md): Failing tests before implementation
+- [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode): Failing tests before implementation
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Audit generated quality
 
-## Understanding the Concepts
+### Understanding the Concepts
 
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md): **Why TEA generates quality tests** (foundational)
 - [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why prioritize P0 over P3
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
 - [Fixture Architecture](/docs/explanation/fixture-architecture.md): Reusable test patterns
 
-## Reference
+### Reference
 
 - [Command: automate](/docs/reference/commands.md#automate): Full command reference
+- [TEA Configuration](/docs/reference/configuration.md): MCP and Playwright Utils options
+
+## Red Mode
+
+Use the Automate skill's `red` mode to generate acceptance test scaffolds before implementation. The existing `atdd` command and `AT` menu code select red by default; you can also ask `/bmad-testarch-automate` for red mode.
+TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
+
+<a id="red-when-to-use-this"></a>
+
+### When to Use This
+
+- You are about to implement a feature
+- You want to follow TDD workflow (red → green → refactor)
+- You want tests to guide your implementation
+- You're practicing acceptance test-driven development
+
+For tests of implemented features, use [Automate](/docs/how-to/workflows/run-automate.md).
+
+<a id="red-prerequisites"></a>
+
+### Prerequisites
+
+- Test framework setup complete (run `framework` if needed)
+- Story or feature defined with acceptance criteria
+
+The examples use Playwright.
+Adapt the commands and selectors for Cypress.
+
+<a id="red-steps"></a>
+
+### Steps
+
+<a id="red-1-run-automate-in-red-mode"></a>
+
+#### 1. Run Automate in Red Mode
+
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate`
+- **Codex:** `$bmad-testarch-automate`
+- **Inside a `/bmad-tea` chat:** `TA`
+
+Request red mode explicitly:
+
+```text
+Generate red acceptance scaffolds for this story before implementation.
+```
+
+The compatibility entries `/bmad-testarch-atdd`, `$bmad-testarch-atdd`, and `AT` default to red mode.
+
+Acceptance scaffolds before implementation select red; coverage for existing code selects expand. A single explicit mode overrides the command default. With no task mode signal, the ATDD entry and `AT` default to red, while the Automate entry and `TA` default to expand. Conflicting task mode signals prompt one mode question in an interactive run; an unattended run uses its entry default. Every entry-default fallback states the selected mode in the final summary. Existing customization files and interrupted ATDD progress keep working.
+
+Create runs verify the generated tests in a disposable copy with their scaffold skips activated. TEA uses `tea-atdd-red-check` for compatible browserless loopback tests when the command is installed. Browser tests and projects needing their own environment or services use the installed project test runner with the original configuration and environment. Execution respects the project's existing test budgets, and the summary names the runner and any fallback reason. Tests must fail for the acceptance behavior that implementation will add. TEA repairs syntax, imports, selectors, data, timing, network, hard waits, and setup that cause the wrong failure, for up to three rounds. The implementation handoff retains its deliberate skipped scaffolds. The summary records repairs, intended red failures, and unresolved problems. Validate reports findings and Edit checks the changes you requested; neither operation repairs tests.
+
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
+
+<a id="red-2-provide-context"></a>
+
+#### 2. Provide Context
+
+TEA will ask for:
+
+**Story/Feature Details:**
+
+```text
+We're adding a user profile page where users can:
+- View their profile information
+- Edit their name and email
+- Upload a profile picture
+- Save changes with validation
+```
+
+**Acceptance Criteria:**
+
+```text
+Given I'm logged in
+When I navigate to /profile
+Then I see my current name and email
+
+Given I'm on the profile page
+When I click "Edit Profile"
+Then I can modify my name and email
+
+Given I've edited my profile
+When I click "Save"
+Then my changes are persisted
+And I see a success message
+
+Given I enter an invalid email address
+When I try to save
+Then the update returns status 400
+And the error message contains "Invalid email format"
+```
+
+TEA builds a criterion registry before it generates tests.
+Existing `AC-<n>` ids remain unchanged.
+For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id.
+Every executable test title carries exactly one id from that registry.
+
+TEA emits exactly one red-phase leaf scaffold per declared criterion.
+Secondary branches and journeys remain implementation-checklist work until green-phase automation.
+Each scaffold puts one direct criterion assertion first.
+That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks.
+API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs.
+E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
+
+**Reference Documents** (optional):
+
+- Point to your story file
+- Reference PRD or tech spec
+- Link to test design (if you ran `test-design` first)
+
+<a id="red-3-specify-test-levels"></a>
+
+#### 3. Specify Test Levels
+
+TEA will ask what test levels to generate:
+
+**Options:**
+
+- E2E tests (browser-based, full user journey)
+- API tests (backend only, faster)
+- Component tests (UI components in isolation)
+- Mix of levels (see [API Tests First, E2E Later](#red-api-tests-first-e2e-later) tip)
+
+<a id="red-component-testing-by-framework"></a>
+
+#### Component Testing by Framework
+
+TEA generates component tests using framework-appropriate tools:
+
+| Your Framework | Component Testing Tool                       |
+| -------------- | -------------------------------------------- |
+| **Cypress**    | Cypress Component Testing (\*.cy.tsx)        |
+| **Playwright** | Vitest + React Testing Library (\*.test.tsx) |
+
+**Example response:**
+
+```text
+Generate:
+- API tests for profile CRUD operations
+- E2E tests for the complete profile editing flow
+- Component tests for ProfileForm validation (if using Cypress or Vitest)
+- Focus on P0 and P1 scenarios
+```
+
+<a id="red-4-review-generated-tests"></a>
+
+#### 4. Review Generated Tests
+
+TEA generates **red-phase test scaffolds** in appropriate directories:
+
+<a id="red-api-tests-testsapiprofilespects"></a>
+
+##### API Tests (`tests/api/profile.spec.ts`):
+
+**Vanilla Playwright:**
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('Profile API', () => {
+  test.skip('[P0] AC-1 should fetch user profile', async ({ request }) => {
+    const response = await request.get('/api/profile');
+
+    expect(response.status()).toBe(200);
+    const profile = await response.json();
+    expect(profile).toHaveProperty('name');
+    expect(profile).toHaveProperty('email');
+    expect(profile).toHaveProperty('avatarUrl');
+  });
+
+  test.skip('[P0] AC-2 should update user profile', async ({ request }) => {
+    const response = await request.patch('/api/profile', {
+      data: {
+        name: 'Updated Name',
+        email: 'updated@example.com',
+      },
+    });
+
+    expect(response.status()).toBe(200);
+    const updated = await response.json();
+    expect(updated.name).toBe('Updated Name');
+    expect(updated.email).toBe('updated@example.com');
+  });
+
+  test.skip('[P1] AC-4 should validate email format', async ({ request }) => {
+    const response = await request.patch('/api/profile', {
+      data: {
+        email: 'invalid-email',
+      },
+    });
+
+    expect(response.status()).toBe(400);
+    const error = await response.json();
+    expect(error.message).toContain('Invalid email format');
+  });
+});
+```
+
+**With Playwright Utils:**
+
+```typescript
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect } from '@playwright/test';
+import { z } from 'zod';
+
+const ProfileSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  avatarUrl: z.string().url(),
+});
+
+test.describe('Profile API', () => {
+  test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest }) => {
+    const { status, body } = await apiRequest({
+      method: 'GET',
+      path: '/api/profile',
+    });
+
+    expect(status).toBe(200);
+    const profile = ProfileSchema.parse(body);
+    expect(profile.name).toBeDefined();
+    expect(profile.email).toContain('@');
+  });
+
+  test.skip('[P0] AC-2 should update user profile', async ({ apiRequest }) => {
+    const { status, body } = await apiRequest({
+      method: 'PATCH',
+      path: '/api/profile',
+      body: {
+        name: 'Updated Name',
+        email: 'updated@example.com',
+      },
+    });
+
+    expect(status).toBe(200);
+    const updated = ProfileSchema.parse(body);
+    expect(updated.name).toBe('Updated Name');
+    expect(updated.email).toBe('updated@example.com');
+  });
+
+  test.skip('[P1] AC-4 should validate email format', async ({ apiRequest }) => {
+    const { status, body } = await apiRequest({
+      method: 'PATCH',
+      path: '/api/profile',
+      body: { email: 'invalid-email' },
+    });
+
+    expect(status).toBe(400);
+    expect(body.message).toContain('Invalid email format');
+  });
+});
+```
+
+`apiRequest` returns `{ status, body }` and supports chained Zod validation.
+Disable retries with `retryConfig: { maxRetries: 0 }` for tests that assert a 5xx response.
+
+<a id="red-e2e-tests-testse2eprofilespects"></a>
+
+##### E2E Tests (`tests/e2e/profile.spec.ts`):
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.skip('[P0] AC-3 should edit and save profile', async ({ page }) => {
+  // This assertion is the first potentially failing operation. Every browser
+  // failure in the journey retains AC-3 provenance.
+  await expect(
+    (async () => {
+      await page.goto('/login');
+      await page.getByLabel('Email').fill('test@example.com');
+      await page.getByLabel('Password').fill('password123');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.goto('/profile');
+      await page.getByRole('button', { name: 'Edit Profile' }).click();
+      await page.getByLabel('Name').fill('Updated Name');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByText('Profile updated')).toBeVisible();
+      await page.reload();
+      await page.getByRole('button', { name: 'Edit Profile' }).click();
+      await expect(page.getByLabel('Name')).toHaveValue('Updated Name');
+    })(),
+  ).resolves.toBeUndefined();
+});
+```
+
+TEA records additional display, validation-error, and other secondary E2E journeys in the implementation checklist for green-phase automation.
+
+<a id="red-implementation-checklist"></a>
+
+##### Implementation Checklist
+
+TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` (for example `atdd-checklist-1-2-user-authentication.md`):
+
+```markdown
+## Implementation Checklist
+
+### Backend
+
+- [ ] Create `GET /api/profile` endpoint
+- [ ] Create `PATCH /api/profile` endpoint
+- [ ] Add email validation middleware
+- [ ] Add profile picture upload handling
+- [ ] Write API unit tests
+
+### Frontend
+
+- [ ] Create ProfilePage component
+- [ ] Implement profile form with validation
+- [ ] Add file upload for avatar
+- [ ] Handle API errors gracefully
+- [ ] Add loading states
+
+### Tests
+
+- [x] API test scaffolds generated (`test.skip()`)
+- [x] E2E test scaffolds generated (`test.skip()`)
+- [ ] Activate and run tests during implementation (should fail before code changes, then pass)
+```
+
+<a id="red-5-verify-red-phase-scaffolds"></a>
+
+#### 5. Verify Red-Phase Scaffolds
+
+TEA verifies the TDD red phase using an isolated, un-skipped copy. The saved scaffolds keep `test.skip()` until you're ready to work on a task.
+Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
+
+**For Playwright:**
+
+```bash
+npx playwright test
+```
+
+**For Cypress:**
+
+```bash
+npx cypress run
+```
+
+Initial output with scaffolds still skipped:
+
+```text
+Running 4 tests using 1 worker
+
+  - tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile
+  - tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile
+  - tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format
+  - tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile
+
+  4 skipped
+```
+
+After you remove `test.skip()`, confirm the test fails at the assertion for the promised behavior.
+A setup failure needs repair before implementation starts.
+
+<a id="red-6-implement-the-feature"></a>
+
+#### 6. Implement the Feature
+
+Now implement the feature following the test guidance:
+
+1. Start with API tests (backend first)
+2. Remove `test.skip()` from the first API test and confirm RED
+3. Implement until that test passes
+4. Move to the next API or E2E test and repeat
+5. Refactor with confidence (tests protect you)
+
+<a id="red-7-verify-tests-pass"></a>
+
+#### 7. Verify Tests Pass
+
+After implementation, run your test suite.
+
+**For Playwright:**
+
+```bash
+npx playwright test
+```
+
+**For Cypress:**
+
+```bash
+npx cypress run
+```
+
+Expected output:
+
+```text
+Running 4 tests using 1 worker
+
+  ✓ tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile (850ms)
+  ✓ tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile (1.2s)
+  ✓ tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format (650ms)
+  ✓ tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile (3.2s)
+
+  4 passed (5.9s)
+```
+
+That completes the red → green → refactor cycle for the generated scaffolds.
+
+<a id="red-what-you-get"></a>
+
+### What You Get
+
+<a id="red-red-phase-test-scaffolds"></a>
+
+#### Red-Phase Test Scaffolds
+
+- API tests for backend endpoints
+- E2E tests for user workflows
+- Component tests (if requested)
+- Generated with `test.skip()` until you activate them task-by-task
+
+<a id="red-implementation-guidance"></a>
+
+#### Implementation Guidance
+
+- Clear checklist of what to build
+- Acceptance criteria translated to assertions
+- Edge cases and error scenarios identified
+
+<a id="red-tdd-workflow-support"></a>
+
+#### TDD Workflow Support
+
+- Activated tests guide implementation
+- Confidence to refactor
+- Living documentation of features
+
+<a id="red-tips"></a>
+
+### Tips
+
+<a id="red-start-with-test-design"></a>
+
+#### Start with Test Design
+
+Run `test-design` before Automate red mode for better results:
+
+```text
+/bmad-testarch-test-design   # risk assessment and priorities
+/bmad-testarch-atdd          # generate tests based on that design
+```
+
+<a id="red-browser-automation-optional"></a>
+
+#### Browser Automation (Optional)
+
+If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"` or `"mcp"`), TEA can verify selectors against live browsers during Automate red mode.
+
+- **CLI mode:** Takes snapshots to verify element names and roles before generating selectors
+- **MCP mode:** Full browser automation for complex UI interactions
+- **Auto mode:** Uses CLI for simple verification, MCP for complex flows
+
+Red mode is for features that don't exist yet, so browser verification only applies if you have skeleton/mockup UI already implemented.
+For red mode with no UI yet, TEA infers selectors from best practices.
+
+See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
+
+<a id="red-focus-on-p0p1-scenarios"></a>
+
+#### Focus on P0/P1 Scenarios
+
+Don't generate tests for everything at once:
+
+```text
+Generate tests for:
+- P0: Critical path (happy path)
+- P1: High value (validation, errors)
+
+Skip P2/P3 for now; add them later with Automate expand mode.
+```
+
+<a id="red-api-tests-first-e2e-later"></a>
+
+#### API Tests First, E2E Later
+
+Recommended order:
+
+1. Generate API tests with Automate red mode
+2. Implement backend (make API tests pass)
+3. Generate E2E tests with Automate red mode for missing behavior or expand mode for implemented behavior
+4. Implement frontend (make E2E tests pass)
+
+<a id="red-keep-tests-deterministic"></a>
+
+#### Keep Tests Deterministic
+
+TEA generates deterministic tests by default:
+
+- No hard waits (`waitForTimeout`)
+- Network-first patterns (wait for responses)
+- Explicit assertions (no conditionals)
+
+Preserve response waits and explicit assertions when editing the generated tests.
+
+<a id="red-related-guides"></a>
+
+### Related Guides
+
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md): Plan before generating
+- [How to Run Automate](/docs/how-to/workflows/run-automate.md): Tests for existing features
+- [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Initial setup
+
+<a id="red-understanding-the-concepts"></a>
+
+### Understanding the Concepts
+
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md): **Why TEA generates quality tests** (foundational)
+- [Risk-Based Testing](/docs/explanation/risk-based-testing.md): Why P0 vs P3 matters
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md): What makes tests good
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md): Avoiding flakiness
+
+<a id="red-reference"></a>
+
+### Reference
+
+- [Command: atdd](/docs/reference/commands.md#atdd): Full command reference
 - [TEA Configuration](/docs/reference/configuration.md): MCP and Playwright Utils options

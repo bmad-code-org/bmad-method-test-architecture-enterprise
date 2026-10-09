@@ -31,7 +31,7 @@ A server reached over HTTP follows [How to Evaluate an HTTP API with TEA](/docs/
 - **Codex:** `$bmad-testarch-evaluate`
 - **Inside a `/bmad-tea` chat:** `EV`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 Tell the skill what to evaluate:
 

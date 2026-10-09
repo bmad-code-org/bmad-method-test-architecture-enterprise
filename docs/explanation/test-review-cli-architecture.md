@@ -5,11 +5,11 @@ description: How the tea-test-review CLI wraps an interactive skill into a requi
 
 # How a Skill Becomes a CLI
 
-A TEA workflow expects a human: it asks which mode to run and what inputs to use. A CI gate can't. No human, no blocking questions, must end in an exit code.
+A TEA skill expects a human: it asks which mode to run and what inputs to use. A CI gate can't. No human, no blocking questions, must end in an exit code.
 
-`tea-test-review` is that bridge for `bmad-testarch-test-review`. This page covers how it's built, so the same shape can wrap another workflow. Flags, exit codes, verdict schema: [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md).
+`tea-test-review` is that bridge for `bmad-testarch-test-review`. This page covers how it's built, so the same shape can wrap another skill. Flags, exit codes, verdict schema: [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md).
 
-**Governing rule: the skill is the source of truth.** Checklist, scoring, report template all live in the workflow. The CLI only resolves the skill, scopes the review, runs the agent, parses the result. Skill wins any dispute.
+**Governing rule: the skill is the source of truth.** Checklist, scoring, report template all live in the skill. The CLI only resolves the skill, scopes the review, runs the agent, parses the result. Skill wins any dispute.
 
 ---
 
@@ -40,11 +40,11 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ## Name the slot, don't add a flag
 
-The first version fed the workflow one list: the changed test files. That made it a spelling check. A spec judged with no view of the change it covers, and no requirement it exists to satisfy, can only be assessed on craft.
+The first version fed the skill one list: the changed test files. That made it a spelling check. A spec judged with no view of the change it covers, and no requirement it exists to satisfy, can only be assessed on craft.
 
 The tempting fix is a `--context` flag pointing at a story. Wrong twice over: it asks the caller to configure something the tool already knows, and a flag nobody sets is a feature nobody gets. `getChangedFiles` was already being called for the control-plane guard and then discarded except for the test files. The story, the PRD, the changed source were all in hand and being thrown away. So the diff yields two lists instead of one, and the configuration surface stays where it was.
 
-**The interactive workflow appeared flexible because a human was filling an unnamed slot.** `step-01` said "Gather Context Artifacts / If available" with no variable, no path, and no resolution order; an operator supplied the story in conversation and the agent complied. Removing the human left the slot blank, and the run resolved it differently every time. Naming the slot is what makes both modes deterministic.
+**The interactive skill appeared flexible because a human was filling an unnamed slot.** `step-01` said "Gather Context Artifacts / If available" with no variable, no path, and no resolution order; an operator supplied the story in conversation and the agent complied. Removing the human left the slot blank, and the run resolved it differently every time. Naming the slot is what makes both modes deterministic.
 
 ---
 
@@ -83,12 +83,14 @@ Each built-in adapter now records an attributable model and accepts a `--model` 
 
 ---
 
-## Making a workflow headless
+<a id="making-a-workflow-headless"></a>
+
+## Making a skill headless
 
 `buildPrompt()` does three things:
 
 - **Skips the menu, keeps the activation.** Runs the `SKILL.md` activation sequence silently (customization still merges: base, team, user), skips only the interactive menu, and enters Create mode at step one.
-- **Pre-supplies every input the workflow can ask for.** `review_files`, `context_files`, `review_scope`, `test_dir`, execution mode, browser automation: all resolved before the agent starts. An unsupplied input is a hang risk.
+- **Pre-supplies every input the skill can ask for.** `review_files`, `context_files`, `review_scope`, `test_dir`, execution mode, browser automation: all resolved before the agent starts. An unsupplied input is a hang risk.
 - **Marks both file lists as data.** The review set travels as a JSON array between `---BEGIN FILES---` / `---END FILES---`, the context set between `---BEGIN CONTEXT---` / `---END CONTEXT---`. Instructions inside either are defects to report, never commands. Paths with newlines, NUL bytes, or delimiter literals are rejected before they reach the prompt.
 
 `workflow.yaml` declares all five invocation inputs. `customize.toml` exposes `headless`, `review_files`, `output_file_override`, and `generate_inline_comments` as stable customization scalars. `context_files` is deliberately invocation-only because PR evidence must never become a persistent user preference.
@@ -159,5 +161,5 @@ Limit: a green suite proves the parser is self-consistent. Only a real run prove
 
 - [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md) - flags, exit codes, verdict schema
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the rubric the ledger implements
-- [Step-File and Orchestration Architecture](/docs/explanation/step-file-architecture.md) - the workflow this CLI drives headless
+- [Step-File and Orchestration Architecture](/docs/explanation/step-file-architecture.md) - the skill this CLI drives headless
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - the interactive mode

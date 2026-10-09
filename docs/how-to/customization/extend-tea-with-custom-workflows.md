@@ -1,21 +1,25 @@
 ---
-title: 'Extend TEA with Custom Workflows'
-description: Add your own workflows to bmad-tea without patching TEA core
+title: 'Extend TEA with Custom Skills'
+description: Add your own skills to bmad-tea without patching TEA core
 ---
 
-# Extend TEA with Custom Workflows
+# Extend TEA with Custom Skills
 
-Install custom workflows as separate skills and add them to the TEA menu through agent customization.
+<a id="extend-tea-with-custom-workflows"></a>
+
+Install custom skills as separate skills and add them to the TEA menu through agent customization.
 
 ## The Supported Model
 
-1. Build the workflow as its own skill, outside TEA.
+1. Build a separate skill outside TEA.
 2. Install it into the project with `npx skills add`.
 3. Add a menu entry to `bmad-tea` through agent customization.
 
 ## Recommended Approach
 
-### 1. Create the workflow as a skill
+<a id="1-create-the-workflow-as-a-skill"></a>
+
+### 1. Create the Skill
 
 Build a skill that lives outside TEA.
 BMad Builder is the recommended path for creating reusable custom agents and workflows, and a workflow used across projects can ship as its own module.
@@ -33,7 +37,9 @@ Add it to the project the same way TEA's skills are added:
 npx skills add <your-repo-or-path>
 ```
 
-### 3. Attach the workflow to `bmad-tea`
+<a id="3-attach-the-workflow-to-bmad-tea"></a>
+
+### 3. Attach the skill to `bmad-tea`
 
 Add a menu item in `_bmad/custom/bmad-tea.toml` (team) or `_bmad/custom/bmad-tea.user.toml` (personal).
 Entries are keyed by `code`: a new code is appended to Murat's menu, and an existing code replaces that item.
@@ -50,16 +56,16 @@ Start a fresh chat so `bmad-tea` picks up the new menu.
 
 ## What Not to Do
 
-- Do not patch TEA core files directly if the workflow is project-specific.
+- Do not patch TEA core files directly if the skill is project-specific.
 - Do not rely on old embedded-TEA behavior where local workflows appeared to be attached automatically.
-- Do not keep custom workflow logic only in chat instructions. Put it in a real workflow or module so it survives updates.
+- Do not keep custom skill logic only in chat instructions. Put it in a real skill or module so it survives updates.
 
 ## Path-Safe Authoring for GitHub Copilot and Other Workspace-Root Runtimes
 
 Some IDE skill runners, including GitHub Copilot slash commands in VS Code, execute commands from the workspace root.
 Anchor package paths explicitly.
 
-Author custom TEA skills and workflows with that constraint in mind:
+Author custom TEA skills with that constraint in mind:
 
 - Use `{skill-root}` for files that live inside the installed skill package.
 - Use `{project-root}` for files that live in the target repository.
@@ -86,9 +92,9 @@ This keeps the same skill portable across Codex, Claude Code, GitHub Copilot, an
 
 ## When to Use Which Approach
 
-- **Project-specific workflow**: install it as a skill and attach it to `bmad-tea`
-- **Reusable internal workflow**: package it as a custom module
-- **Reusable public workflow**: consider publishing a standalone BMAD module
+- **Project-specific skill**: install it as a skill and attach it to `bmad-tea`
+- **Reusable internal skill**: package it as a custom module
+- **Reusable public skill**: consider publishing a standalone BMAD module
 
 ## Related Docs
 

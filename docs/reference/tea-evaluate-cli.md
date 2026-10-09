@@ -5,7 +5,7 @@ description: 'Commands, manifest fields, evaluator settings, confinement, and ex
 
 # tea-evaluate CLI
 
-`tea-evaluate` is the runtime behind the Evaluate workflow (`bmad-testarch-evaluate`).
+`tea-evaluate` is the runtime behind the Evaluate skill (`bmad-testarch-evaluate`).
 It validates an evaluation folder, qualifies each seeded probe in a disposable workspace, runs every arm a probe needs as sealed trial sets, scores them through `eval-quality score`, compares the result with a committed baseline and runs the checks of one CI tier from the evaluation's own plan.
 Seven subcommands cover those jobs.
 TEA also ships `tea-skill-runner`, the command an evaluation registers to run a skill.
@@ -27,7 +27,7 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 - Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-testarch-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin.
   The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
 - `eval-quality` 8.0.0 or later, a devDependency of the same private `package.json`.
-  TEA declares it as an optional peer dependency, so a project that installs TEA only for its other workflows never receives it.
+  TEA declares it as an optional peer dependency, so a project that installs TEA only for its other skills never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
 `tea-evaluate` reads no BMAD configuration.
@@ -394,7 +394,7 @@ A command entry:
 - `environmentKeys`: the keys a request may carry into the process; `PATH` is refused.
 - `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
-  TEA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
+  TEA's own per-skill runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
 - `egress`: the hosts a confined target's processes may reach, each `{ "host", "port", "addresses" }`, on a command, tool-server or HTTP entry that starts a process; see [File-system confinement](#file-system-confinement).
   A Linux skill or agent target lists its model provider's host and port.
 - `login`: `"claude"` on a command entry whose target runs Claude Code on your subscription, so a confined target authenticates with the login you hold; see [A subscription login under confinement](#a-subscription-login-under-confinement).
@@ -2021,7 +2021,7 @@ What the engine said about the held-out or both view stays in that view's `engin
 A view that cannot be derived, because the held-out plan or `contract.json` is absent, does not parse or is off its shape, is a finding that names the view (exit 10); its stage does not run and the other views still run.
 A folder with no `partitionPlan`, and one whose `evaluation.json` cannot be read, runs each stage once over `contract.json` and writes the one `engine.json` and the one artifact.
 Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result.
-`bmad-testarch-framework`'s CI setup renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
+`bmad-testarch-framework`'s CI setup renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#evaluation-plans)).
 
 Accepted baselines hold the neutral path forms of [Paths in the records](#paths-in-the-records), so they name no workspace, repository, staging directory or home directory.
 A baseline accepted before those forms existed holds absolute paths in its call records, so its replay reports drift until `compare --accept` records it again.

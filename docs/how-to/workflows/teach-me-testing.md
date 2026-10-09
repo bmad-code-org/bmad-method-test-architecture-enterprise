@@ -6,7 +6,7 @@ description: Multi-session learning companion that teaches testing fundamentals 
 # How to Learn Testing with TEA Academy
 
 Learn testing through seven self-paced TEA Academy sessions.
-The workflow saves your progress so you can pause and resume.
+The skill saves your progress so you can pause and resume.
 
 ## When to Use This
 
@@ -23,7 +23,7 @@ The workflow saves your progress so you can pause and resume.
 1. **Quick Start (30 min)**: TEA Lite intro, understand engagement models
 2. **Core Concepts (45 min)**: Risk-based testing (P0-P3), Definition of Done
 3. **Architecture & Patterns (60 min)**: Fixtures, network-first patterns, data factories
-4. **Test Design (60 min)**: Risk assessment and coverage planning workflow
+4. **Test Design (60 min)**: Risk assessment and coverage planning skill
 5. **ATDD & Automate (60 min)**: TDD red-green approach, test generation
 6. **Quality & Trace (45 min)**: Test review (rubric 5.0 criteria and severity scoring), coverage traceability
 7. **Advanced Patterns (ongoing)**: Explore 59 knowledge fragments on-demand
@@ -45,11 +45,11 @@ The completion summary records your scores and the topics covered.
 - **Codex:** `$bmad-teach-me-testing`
 - **Inside a `/bmad-tea` chat:** `TMT`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### Initial Assessment
 
-The workflow will ask about:
+The skill will ask about:
 
 - **Your role:** QA, Dev, Lead, or VP (customizes examples)
 - **Experience level:** Beginner, intermediate, or experienced
@@ -88,7 +88,7 @@ Your progress is automatically saved:
 
 ### Resuming Later
 
-Run the workflow again to resume from your saved progress.
+Run the skill again to resume from your saved progress.
 
 ## Learning Paths by Experience
 
@@ -116,7 +116,7 @@ You might breeze through Sessions 1-2 and focus on 3-6.
 Skip fundamentals, focus on:
 
 - Session 3: TEA architecture patterns
-- Session 4: Test Design workflow
+- Session 4: Test Design skill
 - Session 7: Advanced patterns (59 knowledge fragments)
 
 **Time commitment:** 3-4 hours (highly targeted)
@@ -130,9 +130,9 @@ Skip fundamentals, focus on:
 - What is TEA and why it exists
 - TEA Lite approach (30-minute value)
 - Engagement models (Lite/Solo/Integrated/Enterprise/Brownfield)
-- Automate workflow overview
+- Automate skill overview
 
-**Resources:** TEA Overview, TEA Lite Quickstart, Automate Workflow docs
+**Resources:** TEA Overview, TEA Lite Quickstart, Automate Skill docs
 
 ### Session 2: Core Concepts (45 min)
 
@@ -160,34 +160,34 @@ Skip fundamentals, focus on:
 
 **Topics:**
 
-- Test Design workflow
+- Test Design skill
 - Risk/testability assessment
 - Coverage planning (unit/integration/E2E)
 - Test priorities matrix (P0-P3 coverage targets)
 
-**Resources:** Test Design workflow docs **Knowledge Fragments:** test-levels-framework.md, test-priorities-matrix.md
+**Resources:** Test Design skill docs **Knowledge Fragments:** test-levels-framework.md, test-priorities-matrix.md
 
 ### Session 5: ATDD & Automate (60 min)
 
 **Topics:**
 
-- ATDD workflow (failing tests first)
+- Automate red mode (acceptance scaffolds before implementation)
 - TDD red-green-refactor loop
-- Automate workflow (coverage expansion)
+- Automate expand mode (coverage for existing code)
 - API testing patterns
 
-**Resources:** ATDD, Automate workflow docs **Knowledge Fragments:** component-tdd.md, api-testing-patterns.md, api-request.md
+**Resources:** Automate red and expand mode docs **Knowledge Fragments:** component-tdd.md, api-testing-patterns.md, api-request.md
 
 ### Session 6: Quality & Trace (45 min)
 
 **Topics:**
 
-- Test Review workflow: rubric 5.0 criteria, deductions, severity caps (69/79/89/99), and a bonus cap of 25
-- Trace workflow (coverage traceability)
+- Test Review skill: rubric 5.0 criteria, deductions, severity caps (69/79/89/99), and a bonus cap of 25
+- Trace skill (coverage traceability)
 - Quality metrics that matter (P0/P1 coverage vs vanity metrics)
 - Release gate decisions
 
-**Resources:** Test Review, Trace workflow docs
+**Resources:** Test Review, Trace skill docs
 
 ### Session 7: Advanced Patterns (Ongoing)
 
@@ -213,22 +213,22 @@ Complete all 7 sessions to receive your TEA Academy completion summary with:
 ## Tips for Success
 
 Practice each topic on your project before moving on.
-Pause whenever needed; the workflow saves progress after each quiz.
+Pause whenever needed; the skill saves progress after each quiz.
 
 ## Role-Based Customization
 
-The workflow adapts examples based on your role:
+The skill adapts examples based on your role:
 
-**QA Engineers:** Practical testing focus, workflow usage, coverage expansion **Developers:** Integration perspective, TDD approach, API testing **Tech Leads:** Architecture decisions, team patterns, code review standards **VPs/Managers:** Strategy, ROI, quality metrics, team scaling
+**QA Engineers:** Practical testing focus, skill usage, coverage expansion **Developers:** Integration perspective, TDD approach, API testing **Tech Leads:** Architecture decisions, team patterns, code review standards **VPs/Managers:** Strategy, ROI, quality metrics, team scaling
 
 ## Troubleshooting
 
 ### Progress file not found
 
-If you've run the workflow before but it doesn't detect your progress:
+If you've run the skill before but it doesn't detect your progress:
 
 - Check: `{test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml`
-- Workflow auto-creates on first run
+- Skill auto-creates on first run
 
 ### Quiz failing repeatedly
 
@@ -247,13 +247,15 @@ With those defaults and the name `alex`:
 rm _bmad-output/test-artifacts/teaching-progress/alex-tea-progress.yaml
 ```
 
-## Related Workflows
+<a id="related-workflows"></a>
 
-Use these workflows to practice:
+## Related Skills
+
+Use these skills to practice:
 
 - [Framework](/docs/how-to/workflows/setup-test-framework.md): Set up test framework
 - [Test Design](/docs/how-to/workflows/run-test-design.md): Plan test coverage
-- Automation [red mode (ATDD)](/docs/how-to/workflows/run-atdd.md): Generate and verify failing acceptance tests first
+- Automation [red mode (ATDD)](/docs/how-to/workflows/run-automate.md#red-mode): Generate and verify failing acceptance tests first
 - Automation [expand mode](/docs/how-to/workflows/run-automate.md): Add coverage, run generated tests, and repair test issues
 - [Test Review](/docs/how-to/workflows/run-test-review.md): Audit test quality
 - [Trace](/docs/how-to/workflows/run-trace.md): Requirements traceability

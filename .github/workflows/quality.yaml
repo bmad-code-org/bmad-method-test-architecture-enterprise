@@ -169,6 +169,12 @@ jobs:
       - name: Build documentation
         run: npm run docs:build
 
+      - name: Install Chromium for documentation layout checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Check documentation layout
+        run: npm run test:docs-layout
+
   # The whole `npm test` chain, split across twenty-one runners. tools/test-shards.js
   # picks this shard's scripts from the chain and the committed weights, runs
   # them one at a time in chain order (several bind fixed ports or write fixed
