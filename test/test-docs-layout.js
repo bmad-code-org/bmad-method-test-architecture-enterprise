@@ -18,8 +18,14 @@ const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/ja
 
 async function main() {
   assert.ok(fs.existsSync(path.join(root, 'index.html')), 'Run npm run docs:build before checking layout.');
-  const { getSiteUrl } = await import('../website/src/lib/site-url.js');
-  const sitePath = new URL(getSiteUrl()).pathname;
+  const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const canonicalTag = indexHtml.match(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i)?.[0];
+  const canonicalHref = canonicalTag?.match(/\bhref=["']([^"']+)["']/i)?.[1];
+  assert.ok(canonicalHref, 'Built root index must contain a canonical URL.');
+  assert.ok(URL.canParse(canonicalHref), 'Built root canonical must be a valid absolute URL.');
+  const canonical = new URL(canonicalHref);
+  assert.ok(['http:', 'https:'].includes(canonical.protocol), 'Built root canonical must be an absolute HTTP(S) URL.');
+  const sitePath = canonical.pathname;
   const basePath = sitePath.endsWith('/') ? sitePath : sitePath + '/';
   const server = http.createServer((request, response) => {
     const requestPath = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
