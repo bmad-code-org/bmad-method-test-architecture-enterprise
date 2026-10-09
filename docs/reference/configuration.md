@@ -439,19 +439,25 @@ evaluations_folder = "quality/evals"
 
 CI/CD platform for pipeline generation.
 
-**Type:** `string` · **Default:** `"auto"` · **File:** `_bmad/custom/bmad-testarch-ci.toml`
+**Type:** `string` · **Default:** `"auto"` · **File:** `_bmad/custom/bmad-testarch-framework.toml`
 
 **Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
 
-Controls which CI template the `ci` workflow uses and where it writes.
+Controls which CI template the framework skill's CI phase uses and where it writes.
 With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, and `.circleci/config.yml`, then falls back to inferring from the git remote.
 Any other value skips detection.
 Earlier releases stored this key with the module config; a value there is no longer read.
 
-**Affects workflows:** `ci` only.
+**Affects workflows:** `framework` when CI is included, and `ci`.
+
+An explicit `ci_platform` override in `_bmad/custom/bmad-testarch-framework.toml` or its `.user.toml` wins, including an explicit `"auto"`.
+Otherwise, existing `_bmad/custom/bmad-testarch-ci.toml` and `.user.toml` values supply the CI setting. The default remains `"auto"`.
+
+Framework customizations apply when framework setup is included. CI-only runs use your CI customizations. Both includes each phase's customizations once; Resume skips hooks that already finished.
+`bmad setup tea` and `bmad migrate` keep the existing invocation entries and customization files.
 
 ```toml
-# _bmad/custom/bmad-testarch-ci.toml
+# _bmad/custom/bmad-testarch-framework.toml
 [workflow]
 ci_platform = "github-actions"
 ```
@@ -552,7 +558,10 @@ Every workflow now writes to a fixed folder of its own, described in [Output Lay
 
 ## Output Layout
 
-Outputs land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+Outputs use fixed folders under `{test_artifacts}`: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+Framework and CI setup save progress in `framework/setup-run-progress.md`. Resume picks up any interrupted setup run where it stopped, including Edit and Validate.
+The existing `framework/framework-setup-progress.md` and `ci/ci-pipeline-progress.md` files remain Create progress checkpoints. Edit and Validate leave that earlier progress intact.
+Previous setup history and validation reports are kept when a new run begins.
 The folder names are fixed, and no configuration key moves them.
 `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`evaluations_folder`](#evaluations_folder).
 
@@ -565,7 +574,7 @@ A file that exists once per project keeps a plain name: `test-design-architectur
 ### TEA Output Files
 
 Paths are relative to `{test_artifacts}` unless noted.
-Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints are declared in the step files that write them.
+Deliverables are declared in the workflow's `workflow.yaml`; resume progress files are declared in the steps or setup resources that write them.
 
 | Workflow           | Output                                                                                                          |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- |
@@ -575,9 +584,10 @@ Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints 
 | `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
 | `test-design`      | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                        |
 | `framework`        | `{project-root}/tests/README.md`                                                                                |
-| `framework`        | `framework/framework-setup-progress.md` (resume checkpoint)                                                     |
+| `framework`        | `framework/setup-run-progress.md` (shared setup progress for Create, Edit, and Validate)                        |
+| `framework`        | `framework/framework-setup-progress.md` (Create progress checkpoint)                                            |
 | `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
-| `ci`               | `ci/ci-pipeline-progress.md` (resume checkpoint)                                                                |
+| `ci`               | `ci/ci-pipeline-progress.md` (Create progress checkpoint)                                                       |
 | `atdd`             | `atdd/atdd-checklist-{story_key}.md`                                                                            |
 | `automate`         | `automate/automation-summary-{run_key}.md`                                                                      |
 | `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
@@ -641,8 +651,8 @@ A file grows only while the run that created it is still adding its later sectio
 To keep an earlier result for the same scope, commit or copy it before you re-run.
 A `trace` run that evaluates no gate also removes an earlier `gate-decision-{run_key}.json` for the same `run_key`, so the folder never pairs a new summary with a stale decision.
 
-`ci` and `framework` scaffold once per project, so each keeps one fixed checkpoint in its folder with no `run_key` in its name.
-The same three cases apply to that checkpoint, and a new run never merges into it.
+Framework and CI setup use fixed progress filenames. Resume continues the saved setup scope and operation.
+A new unattended Create, Edit, or Validate request starts over when earlier progress is unfinished; an explicit Resume request continues it. An uncertain customization action still needs your confirmation.
 
 ### Files From Earlier TEA Versions
 
@@ -658,7 +668,7 @@ Upgrading leaves those files where they are:
   `atdd` recovers the story from the checklist's `storyKey`, a `test-design` checkpoint that already carries a `runKey` (`test-design-progress-{run_key}.md` at the root) keeps it, and for any other old file Resume asks which scope it covers.
   It then writes the file into the workflow's folder under its scoped name with `runScope` and `runKey` added, deletes the old copy, and continues.
   It never writes over a scoped file that already exists for the same scope.
-  `ci` and `framework` have no scope to resolve, so they move their root checkpoint into their folder under the same rules.
+  Framework and CI checkpoints have no story, epic, or release scope to resolve, so they move their root checkpoint into their folder under the same rules.
 
 Once nothing you run still reads an old file, archive or delete it.
 

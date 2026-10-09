@@ -39,6 +39,10 @@ Generate the test directory structure, configuration files, fixtures, factories,
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+## Both-Mode Coordinator Entry
+
+If `setup_scope = both`, this is Create, framework generation is needed, and no saved `setup_parallel_started` is true, load `{skill-root}/resources/setup-parallel.md` completely before generation. Agree the contract and dependency consent, then use this step's execution-mode resolution to choose concurrent workers or sequential fallback. Restore saved parallel state before this check. An interrupted parallel run recovers only incomplete workers through `resources/setup-parallel.md`; it retains generated phase outputs and completes framework generation before CI terminal validation. A worker with `setup_worker = framework` continues this step without launching another both-mode coordinator. All worker outputs follow the same agreed contract.
+
 ## 0. Resolve Execution Mode (User Override First)
 
 ```javascript
@@ -264,7 +268,7 @@ Contract testing is relevant only when repository facts show existing Pact artif
     npm install -D @seontechnologies/playwright-utils
     ```
 
-    Skip the ask only when the package is already in `package.json`, or when the user asked for playwright-utils by name in this run.
+    Skip the ask when the contract records the Playwright Utils decision, the package is already in `package.json`, or the user asked for playwright-utils by name in this run. Honor a recorded decline through the disabled fallback; honor an accepted decision through its planned install without asking again.
 
   - The install is not optional decoration once accepted: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. **If the user declines, record it and fall through to the disabled branch for the whole scaffold.** Do not scaffold imports against a package the project does not have.
 
@@ -286,7 +290,7 @@ Contract testing is relevant only when repository facts show existing Pact artif
   npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
   ```
 
-  Skip the ask only when they are already in `package.json`, or when the user asked for contract testing by name in this run.
+  Skip the ask when the contract records the Pact dependency decision, they are already in `package.json`, or the user asked for contract testing by name in this run. Honor a recorded decline through the documented fallback; honor an accepted decision through its planned install without asking again.
 
 - Every Pact artifact generated downstream imports from the package, so a declined install means the whole contract scaffold falls through to the disabled branch. Do not scaffold imports against a package the project does not have.
 - Ensure `jq` is available on CI runners (default on `ubuntu-latest`; document `brew install jq` for macOS dev machines) — required by `scripts/check-pact-determinism.sh` and `scripts/publish-pact.sh`
@@ -419,6 +423,8 @@ Regardless of mode, outputs must be identical in structure and quality.
 ### 7. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

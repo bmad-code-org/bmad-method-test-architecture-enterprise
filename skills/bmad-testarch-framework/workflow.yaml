@@ -1,7 +1,7 @@
 # Test Architect workflow: bmad-testarch-framework
 name: bmad-testarch-framework
 # prettier-ignore
-description: 'Initialize test framework with Playwright or Cypress. Use when the user says "lets setup test framework" or "I want to initialize testing framework"'
+description: 'Initialize test framework and CI/CD setup for browser, backend or mobile stacks. Use when the user says "lets setup test framework" or "I want to initialize testing framework"'
 
 # Config (test_artifacts, user_name, languages) is resolved at activation in SKILL.md from modules.tea and core.
 date: system-generated
@@ -17,6 +17,9 @@ variables:
   use_typescript: true # Prefer TypeScript configuration
   framework_preference: "auto" # auto, playwright, cypress - user can override auto-detection
   project_size: "auto" # auto, small, large - influences framework recommendation
+  setup_scope: "auto" # framework, ci, both; resolved from the request
+  test_stack_type: "auto" # frontend, backend, fullstack, mobile
+  test_framework: "auto" # resolved jointly for scaffold and pipeline
 
 # Output configuration
 default_output_file: "{test_dir}/README.md" # Main deliverable is test setup README
@@ -35,6 +38,8 @@ tags:
   - test-architect
   - framework
   - initialization
+  - ci-cd
+  - pipeline
 
 execution_hints:
   interactive: false # Minimize prompts; auto-detect when possible

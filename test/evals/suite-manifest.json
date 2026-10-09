@@ -285,7 +285,7 @@
         "fragment selection, and two is the smallest number that can say whether the answer is reproducible."
       ],
       "id": "ci",
-      "skill": "bmad-testarch-ci",
+      "skills": ["bmad-testarch-framework", "bmad-testarch-ci"],
       "evalType": "behavioral",
       "harness": "test/eval-ci.js",
       "harnessOptions": {

@@ -226,7 +226,8 @@ const { readBytes, readJson, readText, writeText } = require('./lib/file-system-
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'ci-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-ci');
+const SKILL_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-framework');
+const CI_ALIAS_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-ci');
 const SUITE_ID = 'ci';
 
 // A complete CI run reads four step files, the template, several knowledge
@@ -1343,7 +1344,8 @@ async function writeMinimalGitDirectory(projectDir, set) {
  *
  *   <projectRoot>/   the project, plus a resolved _bmad/config.toml, an empty
  *                    test-artifacts/, and the minimal .git/ above
- *   skill/           the bmad-testarch-ci workflow, copied verbatim
+ *   bmad-testarch-framework/  the canonical skill, copied verbatim
+ *   bmad-testarch-ci/         the real CI compatibility entry
  *   bmod-tea/        the shared TEA knowledge base the skill reads as {tea-knowledge}
  *
  * The project root is the set's own, so the prompt that names it says which
@@ -1380,9 +1382,14 @@ async function stageIntoWorkspace(dir, set) {
   await writeMinimalGitDirectory(projectDir, set);
 
   for (const relative of filesUnder(SKILL_ROOT)) {
-    const target = path.join(dir, 'skill', relative);
+    const target = path.join(dir, 'bmad-testarch-framework', relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(SKILL_ROOT, relative), target);
+  }
+  for (const relative of filesUnder(CI_ALIAS_ROOT)) {
+    const target = path.join(dir, 'bmad-testarch-ci', relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(CI_ALIAS_ROOT, relative), target);
   }
   stageTeaKnowledge(dir);
 
@@ -1461,8 +1468,8 @@ function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
   return [
     `You are running the TEA workflow \`bmad-testarch-ci\` against the project in \`${root}/\`.`,
     '',
-    'The workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it',
-    'names in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.',
+    'Start through the real `/bmad-testarch-ci` entry. Read `bmad-testarch-ci/SKILL.md` completely and follow its',
+    'activation, shared router, and CI Create steps in order, in full. The original request is CI-only Create.',
     '',
     '----- run configuration -----',
     'Resolve the workflow placeholders and variables to these values:',
@@ -1470,7 +1477,8 @@ function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
     `- \`{project-root}\`: \`${root}\``,
     `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
-    '- `{skill-root}`: `skill`',
+    '- `{skill-root}`: `bmad-testarch-framework`',
+    '- `{ci-skill-root}`: `bmad-testarch-ci`',
     TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`ci_platform\`: \`${ciPlatform}\``,
     `- \`test_dir\`: \`${root}/tests\``,
@@ -1507,9 +1515,8 @@ function buildEditPrompt(set, { ciPlatform = PLATFORM } = {}) {
   return [
     `You are running the TEA workflow \`bmad-testarch-ci\` in edit mode against the project in \`${root}/\`.`,
     '',
-    'The workflow is in `skill/`. Read `skill/SKILL.md`, answer its mode question with `[E] Edit`, then execute',
-    '`skill/steps-e/step-01-assess.md` and `skill/steps-e/step-02-apply-edit.md` in order, in full, following every',
-    'step they load, without skipping or reordering.',
+    'Start through the real `/bmad-testarch-ci` entry. Read `bmad-testarch-ci/SKILL.md` completely and follow its',
+    'activation, shared router, and CI Edit steps in order, in full. The original request is CI-only Edit.',
     '',
     '----- run configuration -----',
     'Resolve the workflow placeholders and variables to these values:',
@@ -1517,7 +1524,8 @@ function buildEditPrompt(set, { ciPlatform = PLATFORM } = {}) {
     `- \`{project-root}\`: \`${root}\``,
     `- TEA config (\`[core]\` and \`[modules.tea]\`): \`${root}/_bmad/config.toml\``,
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
-    '- `{skill-root}`: `skill`',
+    '- `{skill-root}`: `bmad-testarch-framework`',
+    '- `{ci-skill-root}`: `bmad-testarch-ci`',
     TEA_KNOWLEDGE_PROMPT_LINE,
     `- \`ci_platform\`: \`${ciPlatform}\``,
     `- \`test_dir\`: \`${root}/tests\``,

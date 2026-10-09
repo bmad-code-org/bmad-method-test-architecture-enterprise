@@ -50,11 +50,48 @@ const {
   lintWorkflow: lintCiWorkflow,
   scoreRun: scoreCiRun,
   checkpointFilesOf: ciCheckpointFilesOf,
+  buildPrompt: buildCiPrompt,
 } = require('./eval-ci');
 
 const BASELINE_PATH = path.join(__dirname, 'probes', 'expected-strength.json');
 const CI_GROUND_TRUTH_PATH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-truth.json');
 const CI_REPLAY_ROOT = path.join(__dirname, 'replay', 'ci');
+
+/** The CI agent reads its canonical skill and alias settings at the paths its prompt resolves. */
+function ciStagingProblems(workspace, set) {
+  const prompt = buildCiPrompt(set);
+  const rootOf = (name) => new RegExp('`\\{' + name + '\\}`: `([^`]+)`').exec(prompt)?.[1];
+  const canonicalRoot = rootOf('skill-root');
+  const aliasRoot = rootOf('ci-skill-root');
+  const problems = [];
+  if (!prompt.includes('Read `bmad-testarch-ci/SKILL.md` completely')) problems.push('CI prompt bypasses its installed alias entry');
+  if (canonicalRoot !== 'bmad-testarch-framework' || aliasRoot !== 'bmad-testarch-ci')
+    problems.push('CI entry cannot resolve its canonical sibling skill');
+  const compareTree = (sourceDir, stagedRoot) => {
+    if (typeof stagedRoot !== 'string') {
+      problems.push(`${path.basename(sourceDir)}: the CI prompt resolves no skill directory`);
+      return;
+    }
+    const walk = (directory) => {
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const source = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          walk(source);
+          continue;
+        }
+        const relative = path.relative(sourceDir, source);
+        const staged = path.join(workspace.cwd, stagedRoot, relative);
+        if (!fs.existsSync(staged)) problems.push(`missing staged CI asset: ${stagedRoot}/${relative}`);
+        else if (!fs.readFileSync(source).equals(fs.readFileSync(staged)))
+          problems.push(`staged CI asset differs from its source: ${stagedRoot}/${relative}`);
+      }
+    };
+    walk(sourceDir);
+  };
+  compareTree(path.join(__dirname, '..', 'skills', 'bmad-testarch-framework'), canonicalRoot);
+  compareTree(path.join(__dirname, '..', 'skills', 'bmad-testarch-ci'), aliasRoot);
+  return problems;
+}
 
 const colors = {
   reset: '[0m',
@@ -1328,6 +1365,7 @@ async function main() {
   // from its fixture set is never answered by one run in an empty directory.
   const cacheOptions = { cache: path.join('cache-root'), agent: 'claude' };
   const emptyStaging = cacheDirectoryFor(cacheOptions, 'fragment-selection/bmad-testarch-ci');
+  if (stagingOf('ci') === 'fixture-set-v1') problems.push('CI canonical setup reused the pre-merge staging cache');
   for (const suiteId of ['trace', 'nfr', 'ci', 'test-design', 'test-review']) {
     const directory = cacheDirectoryFor(cacheOptions, suiteId);
     if (path.basename(directory) !== stagingOf(suiteId) || stagingOf(suiteId) === path.basename(emptyStaging)) {
@@ -1353,9 +1391,45 @@ async function main() {
           );
           continue;
         }
-        for (const expected of [set.projectRoot, 'skill']) {
+        for (const expected of [set.projectRoot, suiteId === 'ci' ? 'bmad-testarch-framework' : 'skill']) {
           if (!fs.existsSync(path.join(staged.cwd, expected))) {
             problems.push(`${suiteId} ${set.id}: the staged workspace holds no ${expected}/, so the leg's agent would find nothing to run`);
+          }
+        }
+        if (suiteId === 'ci') {
+          problems.push(...ciStagingProblems(staged, set).map((failure) => `${suiteId} ${set.id}: ${failure}`));
+          if (set === groundTruth.fixtureSets[0]) {
+            for (const asset of [
+              'bmad-testarch-framework/SKILL.md',
+              'bmad-testarch-framework/resources/setup-routing.md',
+              'bmad-testarch-framework/resources/setup-state.md',
+              'bmad-testarch-framework/ci/steps-c/step-01-preflight.md',
+              'bmad-testarch-framework/ci/github-actions-template.yaml',
+              'bmad-testarch-ci/SKILL.md',
+              'bmad-testarch-ci/customize.toml',
+            ]) {
+              const file = path.join(staged.cwd, asset);
+              if (!fs.existsSync(file)) continue; // The positive check already names this failure.
+              const original = fs.readFileSync(file);
+              try {
+                fs.unlinkSync(file);
+                if (!ciStagingProblems(staged, set).includes(`missing staged CI asset: ${asset}`))
+                  problems.push(`CI staging accepted a workspace missing ${asset}`);
+              } finally {
+                fs.writeFileSync(file, original);
+              }
+            }
+            const canonicalEntry = path.join(staged.cwd, 'bmad-testarch-framework', 'SKILL.md');
+            if (fs.existsSync(canonicalEntry)) {
+              const original = fs.readFileSync(canonicalEntry);
+              try {
+                fs.copyFileSync(path.join(__dirname, '..', 'skills', 'bmad-testarch-ci', 'SKILL.md'), canonicalEntry);
+                if (!ciStagingProblems(staged, set).includes('staged CI asset differs from its source: bmad-testarch-framework/SKILL.md'))
+                  problems.push('CI staging accepted the alias entry as its canonical SKILL.md');
+              } finally {
+                fs.writeFileSync(canonicalEntry, original);
+              }
+            }
           }
         }
         if (Object.keys(staged.artifacts?.[runner] ?? {}).length === 0) {

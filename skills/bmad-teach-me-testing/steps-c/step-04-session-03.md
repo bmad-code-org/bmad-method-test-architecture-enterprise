@@ -213,6 +213,16 @@ const user = createUser(); // defaults
 
 **Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/>"
 
+### 6a. Teaching: Framework and CI Setup
+
+Explain that `bmad-testarch-framework` is one setup skill for framework only, CI only, or both.
+The prompt determines scope; if CI scope is unclear in an interactive session, ask once: "Do you want CI too?" An unattended request with unclear scope sets up the framework only and states that CI was excluded.
+Framework scope covers stack selection, fixtures, scaffold, scripts, and the write-time quality hook.
+CI scope covers pipeline generation, quality gates, and evaluation-plan rendering.
+For both, agree the stack, framework, and test commands first. Scaffold and pipeline generation can then run in parallel, with joint validation after both finish. A CI request without a framework offers the framework phase first.
+`bmad-testarch-ci` and `CI` still start CI setup, while `TF` starts framework setup.
+Create starts setup, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes. Resume continues an interrupted run, whatever its scope and operation.
+
 ### 7. Quiz (3 questions)
 
 "### ✅ Knowledge Check"

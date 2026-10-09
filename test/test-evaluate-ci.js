@@ -3890,6 +3890,27 @@ function syntheticPlan(tiers, file, drop = []) {
 
 const SKILL_ROOT = path.join(ROOT, 'skills', 'bmad-testarch-evaluate');
 const READ_KEYS = ['SKILL.md', 'assets/evaluation-ci-plan.template.json', 'references/ci.md'];
+const CAPTURE_ROOT = path.join(__dirname, 'fixtures', 'evaluate-ci-repos');
+const CAPTURE_SNAPSHOTS = { 'SKILL.md': 'captured-evaluate-skill.md', 'references/ci.md': 'captured-evaluate-ci.md' };
+
+/** Preserve the live session inputs as recorded; current handoff guidance is checked by test-evaluate-guidance. */
+function capturedSessionInputs() {
+  return new Map(
+    READ_KEYS.map((relative) => {
+      const snapshot = CAPTURE_SNAPSHOTS[relative];
+      if (snapshot === undefined) return [relative, fs.readFileSync(path.join(SKILL_ROOT, relative))];
+      const bytes = fs.readFileSync(path.join(CAPTURE_ROOT, snapshot));
+      const provenance = read(path.join(CAPTURE_ROOT, snapshot.replace(/\.md$/, '.provenance.json')));
+      assert.equal(provenance.snapshot, snapshot);
+      assert.equal(provenance.sourcePath, `skills/bmad-testarch-evaluate/${relative}`);
+      assert.equal(provenance.sessionReadKey, relative);
+      assert.match(provenance.sourceRevision, /^[a-f0-9]{40}$/);
+      assert.equal(provenance.digest, sha(bytes), `${snapshot}: captured input digest differs from its provenance`);
+      return [relative, bytes];
+    }),
+  );
+}
+
 const WROTE_KEYS = ['evals/answer-grade/ci/evaluation-ci-plan.json', 'evals/answer-grade/evaluation.json'];
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
@@ -3990,7 +4011,7 @@ const REVERSALS = [
   ['1.42', (buffer, bytes) => reverseSchema2Migration(buffer, declaredPairs(bytes)), 'a schema 2 file'],
 ];
 
-function captureProblems(name, record, bytes) {
+function captureProblems(name, record, bytes, sessionInputs = capturedSessionInputs()) {
   const problems = [];
   if (!(record.model ?? '').startsWith('claude-')) problems.push(`${name}: the capture record names no model`);
   if (!(record.turns > 0 && record.durationMs > 0)) problems.push(`${name}: the capture record holds no session`);
@@ -4002,8 +4023,8 @@ function captureProblems(name, record, bytes) {
   for (const relative of READ_KEYS) {
     const digest = record.sessionRead?.[relative];
     if (!DIGEST.test(digest ?? '')) problems.push(`${name}: sessionRead holds no digest for ${relative}`);
-    else if (sha(fs.readFileSync(path.join(SKILL_ROOT, relative))) !== digest)
-      problems.push(`${name}: ${relative} changed since the live session read it; run the session again`);
+    else if (sha(sessionInputs.get(relative) ?? Buffer.alloc(0)) !== digest)
+      problems.push(`${name}: ${relative} snapshot differs from the bytes the live session read`);
   }
   // A file the session wrote and a later story migrated is held to the session's digest through the declared migrations: the
   // bytes the session wrote are rebuilt by reversing them, newest first, so the digest in `wrote` is never retyped and the
@@ -4349,6 +4370,16 @@ function checkRepositoryPlans() {
       captureProblems(side.name, blank, side.repository.bytes).some((problem) => problem.includes('holds no digest')),
       `${side.name}: an empty digest passed`,
     );
+    for (const relative of Object.keys(CAPTURE_SNAPSHOTS)) {
+      const tampered = capturedSessionInputs();
+      tampered.set(relative, Buffer.concat([tampered.get(relative), Buffer.from('\nChanged captured input.\n')]));
+      assert.ok(
+        captureProblems(side.name, record, side.repository.bytes, tampered).includes(
+          `${side.name}: ${relative} snapshot differs from the bytes the live session read`,
+        ),
+        `${side.name}: a tampered ${relative} snapshot passed the capture guard`,
+      );
+    }
     const changedRepository = new Map(side.repository.bytes);
     changedRepository.set('CONTRIBUTING.md', Buffer.from(`${changedRepository.get('CONTRIBUTING.md')} Changed.`));
     assert.ok(

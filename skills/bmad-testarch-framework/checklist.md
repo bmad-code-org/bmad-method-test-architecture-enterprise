@@ -1,5 +1,7 @@
 # Test Framework Setup - Validation Checklist
 
+Apply scaffold creation criteria to newly created frameworks. Validate evaluates the selected existing artifacts and records non-applicable criteria with reasons; it never repairs outputs. Edit re-checks only changed outputs and their direct dependencies. Reusing an existing framework for combined CI setup uses its existing commands and CI preflight contract, without this scaffold checklist or hook integrity checks.
+
 This checklist ensures the framework workflow completes successfully and all deliverables meet quality standards.
 
 ---

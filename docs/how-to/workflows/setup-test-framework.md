@@ -5,7 +5,13 @@ description: How to set up a test framework using TEA
 
 # How to Set Up a Test Framework with TEA
 
-Use TEA's `framework` workflow to scaffold test directories, fixtures, configuration, and runner commands.
+Use TEA's `framework` skill to scaffold test directories, fixtures, configuration, and runner commands, and to configure CI when requested.
+
+`bmad-testarch-framework` owns framework and CI setup. Your prompt selects framework only, CI only, or both.
+TEA infers the scope from your request. When CI scope is unclear in an interactive session, it asks once: "Do you want CI too?" An unattended request with unclear scope runs framework setup only and states that CI was excluded.
+Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together. If a working framework already exists, TEA reuses it and configures CI for its actual commands.
+
+Setup scope is separate from the operation: Create starts a new run, Resume picks up an interrupted run where it stopped, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes.
 
 ## When to Use This
 
@@ -20,13 +26,17 @@ Use TEA's `framework` workflow to scaffold test directories, fixtures, configura
 
 ## Steps
 
-### 1. Run the Framework Workflow
+### 1. Run Framework Setup
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-framework`
 - **Codex:** `$bmad-testarch-framework`
 - **Inside a `/bmad-tea` chat:** `TF`
 
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+
+For framework only, add "Set up the test framework only."
+For both phases, add "Set up the test framework and CI." The same skill runs both phases using an agreed stack, framework, and test-command contract.
+`TF` starts framework setup; the `CI` menu code starts its CI phase.
 
 ### 2. Answer TEA's Questions
 
@@ -109,7 +119,7 @@ Set `tea_use_playwright_utils = "false"` under `[modules.tea]` for plain Playwri
 
 ## Write-Time Quality Checks
 
-The framework workflow's Create mode installs the hook on Claude Code; Resume installs it when continuing through that setup step.
+The framework phase's Create operation installs the hook on Claude Code; Resume installs it when continuing through that setup step.
 TEA copies `.claude/hooks/tea-enforce.cjs` and registers pre-write, post-write, and stop hooks in the project's `.claude/settings.json`, preserving existing settings.
 The hooks run in ordinary coding sessions in that project.
 Rules apply to the test and Pact config paths in `.tea/enforce-config.json`.
@@ -144,12 +154,12 @@ Configure in your IDE's MCP settings.
 
 - **Run only once per repository**: Framework setup is a one-time operation
 - **Run after architecture is complete**: Framework aligns with tech stack
-- **Follow up with CI setup**: Run `ci` to configure CI/CD pipeline
+- **Include CI in the same run**: Ask for framework and CI setup together, or use the `ci` command later to start the CI phase
 
 ## Next Steps
 
 After test framework setup:
 
 1. **Test Design**: Create test plans for system or epics
-2. **CI Configuration**: Set up automated test runs
+2. **CI Configuration (skip if you included CI)**: Set up automated test runs
 3. **Story Implementation**: Tests are ready for development

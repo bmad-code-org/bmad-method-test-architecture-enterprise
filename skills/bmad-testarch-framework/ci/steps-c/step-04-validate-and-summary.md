@@ -34,9 +34,13 @@ Validate CI configuration and report completion details.
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+## Worker Handoff
+
+If `setup_worker` is set in a both Create run, return generated artifacts and this phase checkpoint to the coordinator before validation. Mark this phase `generated`; do not execute completion hooks or save it as completed. The coordinator runs this terminal after both workers join.
+
 ## 1. Validation
 
-Validate against `checklist.md`:
+Validate against `{skill-root}/ci/checklist.md`:
 
 - Config file created
 - Stages and sharding configured
@@ -44,7 +48,7 @@ Validate against `checklist.md`:
 - Secrets/variables documented
 - Evaluation plans found by step 3b rendered, one `tea-evaluate ci` step per tier and an `if: always()` upload of each `runs/` folder (when any plan exists)
 
-Fix gaps before completion.
+Fix gaps before completion. Run the actual contract test commands, verify all generated pipeline commands/paths/dependencies against the framework, and perform syntax and injection checks before saving completed progress.
 
 ---
 
@@ -63,6 +67,8 @@ Report:
 ### 3. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 
@@ -97,8 +103,4 @@ Report:
 
 ## On Complete
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
-
-If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
-
-If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
+Load `{skill-root}/resources/setup-phase-completion.md` completely and apply it for this phase. It resolves each applicable phase hook and canonical `workflow.on_complete` once, preserves the original operation, and continues pending phases before completing the run.

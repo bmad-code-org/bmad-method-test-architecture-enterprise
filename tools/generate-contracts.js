@@ -1364,7 +1364,10 @@ async function buildFragmentSelectionContract(spec) {
     // exclusion oracle would then be measured against the containment oracle of
     // the first case in the file. Splitting demands nothing new: the same two
     // oracles, both required, at the same severity.
-    const requirementLinks = evals.contextFiles.map((file) => ({ scheme: 'tea-workflow-step', id: `${workflow}/${file}` }));
+    const requirementLinks = evals.contextFiles.map((file) => ({
+      scheme: 'tea-workflow-step',
+      id: path.posix.normalize(`${workflow}/${file}`),
+    }));
     const riskLinks = authored.risks.map((risk) => ({ scheme: 'tea-eval-risk', id: risk }));
     behaviors.push(
       {
@@ -3668,9 +3671,9 @@ function buildCiContract() {
       setup:
         `Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root ` +
         `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/config.toml, a minimal .git/ directory, and ` +
-        `the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
+        `the canonical skill under bmad-testarch-framework/ and its real bmad-testarch-ci/ entry beside it. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
         `bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the ` +
-        `project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt ` +
+        `project root and bmad-testarch-ci/SKILL.md and resolves every placeholder against them. The project root is the one fact about the project the prompt ` +
         `carries, and it names the service rather than the project's role. ` +
         `The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of ` +
         `the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both ` +

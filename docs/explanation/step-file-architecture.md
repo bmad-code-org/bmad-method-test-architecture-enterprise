@@ -124,16 +124,18 @@ Four resolve execution mode inside a step and run their work in order.
 `teach-me-testing` is a sequential, session-based learning flow.
 `evaluate` uses its own authoring stages and the `tea-evaluate` runtime.
 
-| Workflow      | Shape               | Workers                                                                   | Aggregation                                                 |
-| ------------- | ------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `automate`    | Parallel generation | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
-| `atdd`        | Parallel generation | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
-| `test-review` | Parallel validation | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
-| `nfr-assess`  | Parallel validation | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
-| `framework`   | Sequential + probe  | Scaffold work units (structure/config, fixtures, samples)                 | Consolidates the generated framework setup                  |
-| `ci`          | Sequential + probe  | Pipeline generation                                                       | One deterministic pipeline artifact                         |
-| `test-design` | Sequential + probe  | Output generation                                                         | One deterministic design artifact                           |
-| `trace`       | Two-phase, ordered  | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
+| Workflow      | Shape                          | Workers                                                                   | Aggregation                                                 |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `automate`    | Parallel generation            | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
+| `atdd`        | Parallel generation            | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
+| `test-review` | Parallel validation            | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
+| `nfr-assess`  | Parallel validation            | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
+| `framework`   | Sequential or parallel with CI | Scaffold work units; framework and CI generation for both scope           | Validates outputs against the agreed setup contract         |
+| `ci`          | Sequential + probe             | Pipeline generation                                                       | One deterministic pipeline artifact                         |
+| `test-design` | Sequential + probe             | Output generation                                                         | One deterministic design artifact                           |
+| `trace`       | Two-phase, ordered             | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
+
+For both setup scopes, framework and CI workers can run in parallel after the stack, framework, and test commands are agreed.
 
 Workers are isolated.
 They exchange nothing directly and communicate only through the structured outputs that the aggregation step validates.
@@ -205,7 +207,7 @@ Every workflow is validated with BMad Builder, which checks for granular instruc
 Validation reports describe the working tree at the time of the run and are not committed.
 Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
-Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
+Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and the earlier `ci` workflow for GitHub Actions and GitLab CI generation. These runs predate the combined framework and CI setup skill.
 `evaluate` was first proved on itself: it authored and ran its own suite live.
 
 ## Maintaining Step Files

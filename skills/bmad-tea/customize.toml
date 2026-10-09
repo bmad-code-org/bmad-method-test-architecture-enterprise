@@ -69,12 +69,12 @@ skill = "bmad-testarch-test-design"
 
 [[agent.menu]]
 code = "TF"
-description = "Test Framework — initialize production-ready test framework architecture"
+description = "Test Framework: initialize framework architecture and optional CI/CD quality pipeline"
 skill = "bmad-testarch-framework"
 
 [[agent.menu]]
 code = "CI"
-description = "Continuous Integration — recommend and scaffold CI/CD quality pipeline"
+description = "Continuous Integration: scaffold CI/CD quality pipeline through the combined framework skill"
 skill = "bmad-testarch-ci"
 
 [[agent.menu]]

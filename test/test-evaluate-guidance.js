@@ -28,6 +28,7 @@ const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 
 const SKILL_ROOT = path.join(__dirname, '..', 'skills', 'bmad-testarch-evaluate');
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
+const CAPTURED_SKILL_PATH = path.join(__dirname, 'fixtures', 'evaluate-ci-repos', 'captured-evaluate-skill.md');
 const REFERENCE = (name) => path.join(SKILL_ROOT, 'references', `${name}.md`);
 const ASSET = (name) => path.join(SKILL_ROOT, 'assets', name);
 /** The runner's registry `target` in the guide and the starter: a path inside `launch.root`, since a bare name resolves outside the workspace and `score` exits 3. */
@@ -486,9 +487,18 @@ function corpusReferenceProblems(files, shared) {
   return problems;
 }
 
-/** `SKILL.md` stays byte-identical: both live capture records pin its digest, and neither pins a corpus guide. */
-function checkCorpusPins(engine, failures, skillBytes = fs.readFileSync(SKILL_MD_PATH), records = readCaptureRecords()) {
+/** Both live capture records pin the preserved skill snapshot, and neither pins a corpus guide. */
+function checkCorpusPins(engine, failures, skillBytes = fs.readFileSync(CAPTURED_SKILL_PATH), records = readCaptureRecords()) {
   const skillDigest = engine.digestBytes(skillBytes);
+  const provenance = JSON.parse(fs.readFileSync(CAPTURED_SKILL_PATH.replace(/\.md$/, '.provenance.json'), 'utf8'));
+  if (
+    provenance.snapshot !== path.basename(CAPTURED_SKILL_PATH) ||
+    provenance.sourcePath !== 'skills/bmad-testarch-evaluate/SKILL.md' ||
+    provenance.sessionReadKey !== 'SKILL.md' ||
+    !/^[a-f0-9]{40}$/.test(provenance.sourceRevision) ||
+    provenance.digest !== skillDigest
+  )
+    failures.push('captured Evaluate skill snapshot has invalid source provenance or digest');
   for (const [repository, record] of Object.entries(records)) {
     if (record.sessionRead?.['SKILL.md'] !== skillDigest)
       failures.push(`${repository} capture-record.json pins a SKILL.md other than the one on disk`);
@@ -4062,7 +4072,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     '## Place the live checks',
     '## Offer eval-quality-gates',
     '## Write the plan',
-    '## Hand the plan to the CI skill',
+    '## Hand the plan to framework setup with CI scope',
   ])
     requireHeading(guide, heading, 'ci.md', failures);
   for (const [heading, markers, example] of INSPECTIONS) {
@@ -4199,18 +4209,19 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'the `merge` entry when the target needs no secret, the `scheduled` and `release` entries when it does',
   ])
     requireText(write, marker, 'ci.md write the plan', failures);
-  const handoff = headingBody(guide, '## Hand the plan to the CI skill');
+  const handoff = headingBody(guide, '## Hand the plan to framework setup with CI scope');
   for (const marker of [
-    'Invoke `bmad-testarch-ci` in edit mode',
-    'or in create mode when the inspection found no pipeline file',
-    'the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`',
+    'Invoke `bmad-testarch-framework` with explicit CI setup scope and Edit operation',
+    'or Create when the inspection found no pipeline file',
+    'the rendering rules belong to `skills/bmad-testarch-framework/ci/steps-c/step-03b-render-evaluation-plans.md`',
+    '`{skill-root}/../bmad-testarch-framework/ci/steps-c/step-03b-render-evaluation-plans.md`',
     'Name in the request the concrete event of this repository for each tier it should render',
     'That step renders each `gates` entry as a wait of the named job on the evaluation job of the tier',
     'its summary reports the edit to the job, a name that matches no job and a conflicting gate',
     'so relay that report to the adopter',
     'When the plan gates a job, invoke it on the workflow file that holds that job.',
     "give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record",
-    'a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage',
+    'a declined baseline or a missing `bmad-testarch-framework` (with no usable `bmad-testarch-ci` compatibility entry) stays a named open item in the `## CI` section and does not reopen the stage',
     'Stage 12 is complete when the plan passes `check`',
     'the secrets the live tiers need',
     'every tier that exited non-zero with the stage that owns its repair',
@@ -4479,7 +4490,7 @@ function checkSkillStage12(skillContent, failures) {
   const stage12 = headingBody(skillContent, '### Stage 12: CI').trim();
   if (
     stage12 !==
-    "Inspect the adopter's repository, place each check in a tier, write `<evaluation-folder>/ci/evaluation-ci-plan.json` and hand it to `bmad-testarch-ci`. Load `references/ci.md`."
+    "Inspect the adopter's repository, place each check in a tier, write `<evaluation-folder>/ci/evaluation-ci-plan.json` and hand it to `bmad-testarch-framework` with CI setup scope. The `bmad-testarch-ci` compatibility entry remains valid. Load `references/ci.md`."
   )
     failures.push(`SKILL.md Stage 12 reads ${JSON.stringify(stage12)}`);
 }
@@ -5502,7 +5513,11 @@ async function main() {
         'ci hand-off removal',
         'ci',
         ciCheck,
-        (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
+        (text) =>
+          text.replace(
+            'Invoke `bmad-testarch-framework` with explicit CI setup scope and Edit operation',
+            'Tell the adopter about the CI skill',
+          ),
       ],
       ['ci gating section removal', 'ci', ciCheck, (text) => text.replace('## Gate the publish or deploy job', '## Something else')],
       [
@@ -5692,12 +5707,7 @@ async function main() {
         (text) => text.replace('      "gates": ["publish"],', '      "gates": ["publish", "deploy"],'),
         'does not gate the publish job',
       ],
-      [
-        'ci create mode removal',
-        'ci',
-        ciCheck,
-        (text) => text.replace(', or in create mode when the inspection found no pipeline file', ''),
-      ],
+      ['ci create mode removal', 'ci', ciCheck, (text) => text.replace(', or Create when the inspection found no pipeline file', '')],
       [
         'ci pending path removal',
         'ci',
@@ -6000,7 +6010,7 @@ async function main() {
     checkTokenMetric(meteredFailures, (text) => Math.ceil(text.length / 4));
     if (meteredFailures.length === 0) failures.push('a length-over-four token count passed the cl100k_base pin');
     const pinFailures = [];
-    checkCorpusPins(engine, pinFailures, Buffer.concat([fs.readFileSync(SKILL_MD_PATH), Buffer.from('\n')]));
+    checkCorpusPins(engine, pinFailures, Buffer.concat([fs.readFileSync(CAPTURED_SKILL_PATH), Buffer.from('\n')]));
     if (!pinFailures.some((failure) => failure.includes('pins a SKILL.md other than the one on disk')))
       failures.push('a SKILL.md with another byte passed the capture record pins');
     const pinnedGuide = readCaptureRecords();
@@ -6081,7 +6091,11 @@ async function main() {
     for (const [label, corrupt] of [
       [
         'skill stage 12 pending',
-        (text) => text.replace('and hand it to `bmad-testarch-ci`.', 'and hand it to `bmad-testarch-ci`. Stage 12 is pending.'),
+        (text) =>
+          text.replace(
+            'and hand it to `bmad-testarch-framework` with CI setup scope.',
+            'and hand it to `bmad-testarch-framework` with CI setup scope. Stage 12 is pending.',
+          ),
       ],
       [
         'skill stage 12 unavailable',

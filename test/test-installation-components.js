@@ -14,11 +14,12 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 const { packedPaths: readPackedPaths } = require('./lib/pack-listing');
+const { replayProblems: setupAliasReplayProblems, captureScenario: captureSetupAliasScenario } = require('./lib/setup-alias-replay');
 
 async function pathExists(filePath) {
   try {
@@ -32,6 +33,102 @@ async function pathExists(filePath) {
 function extractFrontmatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   return match ? match[1] : '';
+}
+
+/** CI preflight must inventory inputs and save its contract before project-changing commands. */
+function ciPreflightOrderProblems(content) {
+  const problems = [];
+  const headings = [...content.matchAll(/^## (.+)$/gm)];
+  const sections = Object.fromEntries(
+    headings.map((heading, index) => [
+      heading[1],
+      { position: heading.index, body: content.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? content.length) },
+    ]),
+  );
+  const inventory = sections['3. Verify Test Framework'];
+  const commands = sections['4. Ensure Tests Pass Locally'];
+  const contract = sections['6c. Freeze the Existing-Framework Contract and Execute Tests'];
+  if (!inventory || !commands || !contract) return ['missing inventory, command-discovery, or contract section'];
+  if (!(inventory.position < commands.position && commands.position < contract.position)) problems.push('contract stages reordered');
+  if (!inventory.body.includes('Inspect installed test dependencies read-only')) problems.push('inventory permits dependency writes');
+  if (!commands.body.includes('Hold dependency installation and test execution until section 6c freezes and journals'))
+    problems.push('command discovery permits early execution');
+  for (const section of [inventory, commands]) {
+    if (/\b(?:install (?:its|any|the|declared) .*dependencies|(?:Run|Execute) [^\n.]*test commands now|runs install)\b/.test(section.body))
+      problems.push('dependency installation or local tests precede the frozen contract');
+  }
+  const journal = contract.body.indexOf('construct and atomically journal the complete immutable contract');
+  const install = contract.body.indexOf('runs install any missing declared dependencies');
+  const execute = contract.body.indexOf('execute its actual local test commands');
+  if (!(journal !== -1 && journal < install && install < execute)) problems.push('installation or tests precede contract journaling');
+  if (!contract.body.includes('After the complete contract is successfully journaled'))
+    problems.push('execution lacks journal-success gate');
+  return problems;
+}
+
+/** Archived Create recovery needs immutable checkpoint evidence before fixed-path replacement. */
+function setupArchiveProblems(content) {
+  const problems = [];
+  const archive = content.split('## 1a. Preserve Create Checkpoints with Archived Journals\n')[1]?.split('\n## 2.')[0];
+  if (!archive) return ['missing checkpoint archival protocol'];
+  for (const required of [
+    'exclusively create immutable copies of its referenced same-run phase checkpoints',
+    'setup-run-progress-{archive_id}.checkpoints/',
+    'setup-run-progress-{archive_id}.checkpoints.json',
+    'original path, snapshot path, SHA-256 digest and original modification timestamp',
+    'verify bytes, digests, ownership and paths before replacing the active journal or any Create checkpoint',
+    'Edit/Validate Resume restores its journal only and leaves Create checkpoints unchanged',
+    'an uncertain or still-writing worker halts archival and replacement',
+    "Record justified pending-phase absences explicitly with the phase's original fixed Create path",
+    "first preserve any displaced checkpoint's own run through this archive protocol, then remove only that recorded fixed Create destination",
+    'A missing or foreign checkpoint for a phase that has saved its own Create progress halts archival unless an existing verified snapshot preserves its same-run bytes',
+    "exclude any foreign legacy checkpoint from this phase's preflight/Resume selection and preserve its history",
+    'The restored selected legacy checkpoint is authoritative even in headless mode',
+    "Execute only its owning loader's migration portion once before activation, journal adoption or next-step dispatch",
+    'verify its unchanged bytes at the modern path and adopt that modern `phase_checkpoints` reference',
+  ]) {
+    if (!archive.toLowerCase().includes(required.toLowerCase())) problems.push(`missing archive safeguard: ${required}`);
+  }
+  const resume = archive.indexOf('On Resume of an archived Create run');
+  const verify = archive.indexOf('first verify its journal digest and every required snapshot', resume);
+  const displace = archive.indexOf('Archive any displaced active run through this same protocol', resume);
+  const restore = archive.indexOf('Atomically restore selected snapshot bytes', resume);
+  const reread = archive.indexOf(
+    'Re-read and verify all restored digests and recorded absences before adopting the selected journal or dispatching Resume',
+    resume,
+  );
+  if (!(resume !== -1 && verify > resume && displace > verify && restore > displace && reread > restore))
+    problems.push('archived Resume must verify snapshots and preserve displaced runs before restoring and dispatching');
+  if (!content.includes("Before Create replaces a different run's checkpoint, the coordinator verifies that run's immutable archive"))
+    problems.push('Create may overwrite a checkpoint before its immutable archive is verified');
+  return problems;
+}
+
+function setupCompletionProblems(content) {
+  const problems = [];
+  const create = content.indexOf('### Create');
+  const validate = content.indexOf('### Validate');
+  const edit = content.indexOf('### Edit');
+  if (!(create !== -1 && create < validate && validate < edit)) return ['missing operation-specific completion sections'];
+  for (const command of content.matchAll(
+    /Run the actual test commands from the frozen contract|Record failures and repair within the authorized setup scope/g,
+  )) {
+    if (!(command.index > create && command.index < validate))
+      problems.push('Create execution or repair gate applies to another operation');
+  }
+  const validation = String(content.slice(validate, edit));
+  if (
+    !validation.includes('Never repair outputs, install missing dependencies, or change tests during Validate') ||
+    !validation.includes('Complete the owned reserved report even when criteria fail')
+  )
+    problems.push('Validate repairs or blocks its failed report');
+  const editing = String(content.slice(edit, content.indexOf('## 2.')));
+  if (
+    !editing.includes('Re-check only the changed outputs and their direct dependencies') ||
+    !editing.includes('Missing unrelated execution prerequisites do not block completion of a valid pipeline edit')
+  )
+    problems.push('Edit requires unrelated full-suite execution');
+  return problems;
 }
 
 // ANSI colors
@@ -332,30 +429,55 @@ async function runTests() {
   ];
 
   for (const dirName of workflowDirs) {
-    const workflowDir = path.join(projectRoot, `skills/${dirName}`);
+    const phasePath = dirName === 'bmad-testarch-ci' ? 'bmad-testarch-framework/ci' : dirName;
+    const workflowDir = path.join(projectRoot, `skills/${phasePath}`);
     const skillMdPath = path.join(projectRoot, `skills/${dirName}/SKILL.md`);
     const customizeTomlPath = path.join(projectRoot, `skills/${dirName}/customize.toml`);
     const workflowYamlPath = path.join(projectRoot, `skills/${dirName}/workflow.yaml`);
-    const instructionsMdPath = path.join(projectRoot, `skills/${dirName}/instructions.md`);
+    const instructionsMdPath = path.join(workflowDir, 'instructions.md');
     let workflowKnowledgeIndexValidated = false;
 
     if (await pathExists(skillMdPath)) {
       try {
         const skillContent = await fs.readFile(skillMdPath, 'utf8');
         assert(skillContent && skillContent.trim().length > 0, `${dirName}/SKILL.md is not empty`);
-        assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
-        assert(
-          skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
-          `${dirName}/SKILL.md resolves the workflow customization block`,
-        );
-        assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
-        assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
-        assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
-        assert(
-          skillContent.includes('Resolve sibling workflow files such as `instructions.md`'),
-          `${dirName}/SKILL.md explains sibling workflow path resolution`,
-        );
-        assert(/\{skill-root\}\/steps-[cev]\//.test(skillContent), `${dirName}/SKILL.md routes first step from {skill-root}`);
+        if (dirName === 'bmad-testarch-ci') {
+          assert(
+            skillContent.includes('setup_scope = ci') && skillContent.includes('setup_entry = bmad-testarch-ci'),
+            'CI compatibility entry presets CI scope and preserves invocation identity',
+          );
+          assert(
+            skillContent.includes('bmad-testarch-framework') && skillContent.includes('Load `{skill-root}/SKILL.md`'),
+            'CI compatibility entry activates the canonical skill',
+          );
+          assert(
+            skillContent.includes('create/resume/validate/edit') && skillContent.includes('setup_scope = both'),
+            'CI compatibility entry preserves operations and explicit combined requests',
+          );
+          assert(
+            skillContent.includes('bmad-testarch-ci.user.toml') && skillContent.includes('ci_platform'),
+            'CI compatibility entry preserves the existing customization layers',
+          );
+        } else {
+          assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
+          assert(
+            skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
+            `${dirName}/SKILL.md resolves the workflow customization block`,
+          );
+          assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
+          assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
+          assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
+          assert(
+            skillContent.includes('Resolve sibling workflow files such as `instructions.md`'),
+            `${dirName}/SKILL.md explains sibling workflow path resolution`,
+          );
+          assert(
+            dirName === 'bmad-testarch-ci'
+              ? skillContent.includes('bmad-testarch-framework') && skillContent.includes('CI-only')
+              : /\{skill-root\}\/steps-[cev]\//.test(skillContent),
+            `${dirName}/SKILL.md routes first step from {skill-root}`,
+          );
+        }
         assert(!skillContent.includes('Read `{skill-root}/workflow.md`'), `${dirName}/SKILL.md no longer redirects to workflow.md`);
         assert(!skillContent.includes('[workflow.md](workflow.md)'), `${dirName}/SKILL.md no longer uses a bare relative workflow link`);
       } catch (error) {
@@ -407,6 +529,7 @@ async function runTests() {
         assert(!instructionsContent.includes('`./steps-'), `${dirName}/instructions.md has no bare relative step references`);
         assert(
           instructionsContent.includes('`{skill-root}/steps-c/') ||
+            instructionsContent.includes('`{skill-root}/ci/steps-c/') ||
             instructionsContent.includes('`{skill-root}/steps-v/') ||
             instructionsContent.includes('`{skill-root}/steps-e/'),
           `${dirName}/instructions.md anchors step entrypoints to {skill-root}`,
@@ -417,7 +540,7 @@ async function runTests() {
     }
 
     for (const stepDir of ['steps-c', 'steps-e', 'steps-v']) {
-      const stepDirPath = path.join(projectRoot, `skills/${dirName}/${stepDir}`);
+      const stepDirPath = path.join(workflowDir, stepDir);
       if (!(await pathExists(stepDirPath))) continue;
 
       const stepFiles = (await fs.readdir(stepDirPath)).filter((fileName) => fileName.endsWith('.md'));
@@ -430,13 +553,17 @@ async function runTests() {
 
           assert(!stepContent.includes("nextStepFile: './"), `${stepLabel} has no cwd-sensitive nextStepFile`);
           if (stepContent.includes('nextStepFile:')) {
-            assert(/nextStepFile: '\{skill-root\}\/steps-[cev]\//.test(stepContent), `${stepLabel} anchors nextStepFile to {skill-root}`);
+            assert(
+              /nextStepFile: '\{skill-root\}\/(?:ci\/)?steps-[cev]\//.test(stepContent),
+              `${stepLabel} anchors nextStepFile to {skill-root}`,
+            );
           }
 
           assert(!stepContent.includes("validationChecklist: '../checklist.md'"), `${stepLabel} has no relative validation checklist path`);
           if (stepContent.includes('validationChecklist:')) {
             assert(
-              stepContent.includes("validationChecklist: '{skill-root}/checklist.md'"),
+              stepContent.includes("validationChecklist: '{skill-root}/checklist.md'") ||
+                stepContent.includes("validationChecklist: '{skill-root}/ci/checklist.md'"),
               `${stepLabel} anchors validationChecklist to {skill-root}`,
             );
           }
@@ -444,7 +571,8 @@ async function runTests() {
           assert(!stepContent.includes("checklistFile: '../checklist.md'"), `${stepLabel} has no relative checklistFile path`);
           if (stepContent.includes('checklistFile:')) {
             assert(
-              stepContent.includes("checklistFile: '{skill-root}/checklist.md'"),
+              stepContent.includes("checklistFile: '{skill-root}/checklist.md'") ||
+                stepContent.includes("checklistFile: '{skill-root}/ci/checklist.md'"),
               `${stepLabel} anchors checklistFile to {skill-root}`,
             );
           }
@@ -503,7 +631,7 @@ async function runTests() {
               `found ${knowledgeIndexReference}`,
             );
             // {tea-knowledge} is {skill-root}/../bmod-tea/knowledge: the bmod-tea skill installed beside this one.
-            const knowledgeIndexPath = path.join(workflowDir, '..', 'bmod-tea', 'knowledge', 'tea-index.csv');
+            const knowledgeIndexPath = path.join(projectRoot, 'skills', 'bmod-tea', 'knowledge', 'tea-index.csv');
             assert(await pathExists(knowledgeIndexPath), `${stepLabel} knowledgeIndex target exists`);
 
             if (!workflowKnowledgeIndexValidated && (await pathExists(knowledgeIndexPath))) {
@@ -541,6 +669,430 @@ async function runTests() {
     }
   }
 
+  // Setup routing remains shared across the legacy entry points and all requested scopes.
+  try {
+    const router = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-routing.md'), 'utf8');
+    const canonical = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/SKILL.md'), 'utf8');
+    const alias = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-ci/SKILL.md'), 'utf8');
+    const aliasBmod = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-ci/bmod.toml'), 'utf8'));
+    assert(
+      alias.includes(
+        'Require its `SKILL.md`, `{skill-root}/resources/setup-routing.md`, and `{skill-root}/ci/steps-c/step-01-preflight.md`',
+      ) &&
+        alias.includes('all three required files exist') &&
+        aliasBmod.skill.required_skills.includes('bmad-testarch-framework'),
+      'CI alias requires combined-setup capabilities and declares its installed skill dependency',
+    );
+    assert(
+      canonical.includes('CI-only skips framework prepend/append hooks, persistent facts and completion hooks') &&
+        canonical.indexOf('execute each `ci_workflow.activation_steps_prepend`') < canonical.indexOf('### Step 5: Greet the User') &&
+        canonical.includes('CI-only loads its CI facts and skips framework facts'),
+      'CI-only activation owns CI hooks/facts and executes its prepend before greeting',
+    );
+    const completion = await fs.readFile(
+      path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-phase-completion.md'),
+      'utf8',
+    );
+    assert(setupCompletionProblems(completion).length === 0, 'Create, Validate and Edit retain distinct completion gates');
+    for (const heading of ['### Validate', '### Edit']) {
+      assert(
+        setupCompletionProblems(completion.replace(heading, heading + '\n\nRun the actual test commands from the frozen contract.'))
+          .length > 0,
+        `${heading.slice(4)} completion guard rejects a migrated full-suite execution gate`,
+      );
+    }
+    assert(
+      completion.includes('Only when scope includes framework, resolve canonical `workflow.on_complete`') &&
+        completion.includes('CI-only completes after its CI hook'),
+      'CI-only completion keeps framework customization outside its scope',
+    );
+    for (const mode of ['framework', 'ci', 'both']) {
+      assert(router.includes('`' + mode + '`'), `shared setup router names ${mode} scope`);
+    }
+    assert(
+      router.includes('Do you want CI too?') &&
+        router.includes('ask exactly once') &&
+        router.includes('Wait for the answer before any project writes'),
+      'unclear CI intent asks once before activation hooks or project writes',
+    );
+    assert(
+      router.includes('Set it up now and continue CI in this run?') &&
+        router.includes('Declining stops the run and leaves the project untouched'),
+      'CI without a framework offers framework-first setup before writes',
+    );
+    assert(
+      router.includes('framework_reused = true') && router.includes('validate and reuse it'),
+      'combined setup validates an existing framework',
+    );
+    assert(
+      router.includes('route directly to CI Create preflight') &&
+        router.includes('Skip framework Create preflight, the scaffold checklist and write-time hook checks'),
+      'both with an existing framework follows existing test commands through CI contract discovery',
+    );
+    assert(
+      router.includes('unattended/headless run with no scope answer defaults to `framework`'),
+      'headless ambiguous requests retain framework-only setup',
+    );
+    assert(
+      router.includes('_bmad/custom/bmad-testarch-ci.user.toml') && router.includes('ci_workflow.ci_platform'),
+      'canonical CI scope reads legacy migrated customization',
+    );
+    for (const prefix of ['', 'ci/']) {
+      for (const [operation, route] of Object.entries({
+        C: 'steps-c/step-01-preflight.md',
+        R: 'steps-c/step-01b-resume.md',
+        V: 'steps-v/step-01-validate.md',
+        E: 'steps-e/step-01-assess.md',
+      })) {
+        assert(
+          canonical.includes('**If ' + operation + ':** Load `{skill-root}/' + prefix + route + '`'),
+          `canonical ${prefix || 'framework/'} scope retains ${operation} operation`,
+        );
+      }
+    }
+    assert(
+      router.includes('A completed framework checkpoint with pending CI continues to CI'),
+      'completed framework resume can continue pending CI',
+    );
+    const state = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-state.md'), 'utf8');
+    assert(
+      router.includes('All scopes and operations use `{test_artifacts}/framework/setup-run-progress.md`') &&
+        state.includes('create or adopt the active journal before executing any custom activation hook'),
+      'single-phase and combined operations persist recovery state before activation hooks',
+    );
+    for (const key of [
+      'framework.activation_steps_prepend.0',
+      'framework.activation_steps_append.0',
+      'ci.activation_steps_prepend.0',
+      'ci.activation_steps_append.0',
+      'ci.on_complete',
+      'framework.on_complete',
+    ]) {
+      assert(state.includes('`' + key + '`'), `recovery ledger tracks individual ${key} hooks`);
+    }
+    assert(
+      state.includes('If the key is in `hooks_completed`, skip execution') &&
+        state.includes('If the key is in `hooks_started` and has no completed marker, halt') &&
+        state.includes('Save the key and exact instruction in `hooks_started` before executing it'),
+      'interrupted activation hooks stop before replay or further writes',
+    );
+    assert(
+      state.includes('only after success') && state.includes('changed instruction or reordered hook list'),
+      'hook recovery keeps successful and changed instructions distinct',
+    );
+    assert(
+      state.includes('Completed journals are history; they do not select scope, operation, or hooks') &&
+        state.includes('A newer standalone or legacy phase checkpoint belonging to a different run takes priority'),
+      'completed both history cannot redirect an interrupted standalone CI run',
+    );
+    assert(
+      state.includes('It never enters a Create resume loader') && state.includes('Resume continues the same owned report'),
+      'Edit and Validate resume use their saved operation and report ownership',
+    );
+    assert(
+      state.includes('CI recovery loads only preflight sections 2 through 6c') &&
+        state.includes('This inventory performs no dependency installation, test execution, activation hooks, phase checkpoint saves') &&
+        state.includes('dispatch the original next incomplete step'),
+      'legacy checkpoints rebuild their missing contract read-only before continuing their saved route',
+    );
+    assert(
+      state.includes('archive any existing active journal intact, including an unfinished journal whose scope or targets are unrelated') &&
+        setupArchiveProblems(state).length === 0,
+      'unrelated unfinished journals survive new operations in verified archives',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace('exclusively create immutable copies of its referenced same-run phase checkpoints', 'retain fixed checkpoint paths'),
+      ).length > 0,
+      'archive guard rejects journals that lose their referenced Create checkpoint bytes',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace('first verify its journal digest and every required snapshot', 'skip verification of saved checkpoint evidence'),
+      ).length > 0,
+      'archive guard rejects checkpoint restoration before snapshot verification',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          'Archive any displaced active run through this same protocol',
+          'Replace displaced active runs without preserving them',
+        ),
+      ).length > 0,
+      'archive guard rejects restoration that destroys the displaced run',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          "Before Create replaces a different run's checkpoint, the coordinator verifies that run's immutable archive",
+          "Create replaces a different run's checkpoint without verifying its immutable archive",
+        ),
+      ).length > 0,
+      'archive guard rejects fixed-path Create replacement before archive authorization',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          "first preserve any displaced checkpoint's own run through this archive protocol, then remove only that recorded fixed Create destination",
+          'remove any checkpoint occupying the pending phase path',
+        ),
+      ).length > 0,
+      'archive guard rejects pending-phase absence restoration that loses a displaced checkpoint',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          'The restored selected legacy checkpoint is authoritative even in headless mode',
+          'A headless run selects whichever modern checkpoint is present',
+        ),
+      ).length > 0,
+      'archive guard rejects resumed legacy history replaced by a foreign modern checkpoint',
+    );
+    for (const scope of ['', 'ci/']) {
+      const resume = await fs.readFile(path.join(projectRoot, `skills/bmad-testarch-framework/${scope}steps-c/step-01b-resume.md`), 'utf8');
+      assert(
+        resume.includes('first archive any displaced modern counterpart') &&
+          resume.includes('Select that restored legacy checkpoint deterministically, including in headless mode') &&
+          resume.includes('execute items 2 and 3 below once before activation, journal adoption or saved next-step dispatch') &&
+          resume.includes('A saved pending-phase absence cannot consume any foreign checkpoint through either lookup path'),
+        `${scope || 'framework/'} Resume preserves selected archived legacy history through its migration`,
+      );
+    }
+    assert(
+      state.includes('A headless or autonomous new request starts over and archives the prior history') &&
+        state.includes('an explicit Resume keeps its recovered run'),
+      'headless start-over preserves explicitly requested Resume',
+    );
+    const parallel = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-parallel.md'), 'utf8');
+    assert(
+      parallel.includes('Before launch, atomically persist `setup_parallel_started = true`') &&
+        parallel.includes('relaunch each incomplete worker at its exact saved position') &&
+        parallel.includes('a generated CI phase waits for the framework and never restarts at CI preflight'),
+      'parallel Resume retains generated work and finishes framework readiness before CI terminal validation',
+    );
+    assert(
+      parallel.includes('journal `pipeline_action` and exact selected `pipeline_target` with the chosen platform before worker launch') &&
+        parallel.includes('CI workers consume that decision and ask no questions'),
+      'coordinator settles effective platform and pipeline update/replace before CI workers start',
+    );
+    assert(
+      router.includes('canonical-owned CI defaults') &&
+        router.includes('when the alias directory is absent') &&
+        router.includes('All legacy overrides, including migrated platform settings, remain effective even without the installed alias'),
+      'standalone canonical CI uses owned defaults and preserves legacy settings',
+    );
+    assert(
+      router.includes(
+        'For CI-only and both Create with a reused framework, build this contract from the existing framework scripts/configs and service documentation',
+      ) && router.includes('an empty contract cannot proceed to generation'),
+      'CI-only generation and validation use the existing framework contract',
+    );
+    const ciPreflight = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/ci/steps-c/step-01-preflight.md'), 'utf8');
+    const ciGeneration = await fs.readFile(
+      path.join(projectRoot, 'skills/bmad-testarch-framework/ci/steps-c/step-02-generate-pipeline.md'),
+      'utf8',
+    );
+    assert(
+      ciPreflight.includes(
+        'passing Jest/Vitest/Node built-in suite satisfies this existing-framework prerequisite without Playwright/Cypress',
+      ) &&
+        ciGeneration.includes(
+          'Jest/Vitest/Node built-in unit/component/API suite uses its actual commands and artifacts with no browser installation',
+        ),
+      'frontend applications retain existing unit/component frameworks without adding a browser prerequisite',
+    );
+    assert(
+      ciPreflight.includes('exact project-relative `pipeline_target` in the journal/contract') &&
+        ciGeneration.includes('Consume the frozen `pipeline_action` and `pipeline_target` before selecting output') &&
+        ciGeneration.includes('Preserve unrelated jobs, triggers, permissions, concurrency') &&
+        ciGeneration.includes('An implicit default update never authorizes replacement'),
+      'pipeline generation consumes the coordinator target and preserves unrelated behavior during updates',
+    );
+    assert(
+      !ciPreflight.includes('Set it up now and continue CI in this run?'),
+      'CI preflight keeps the missing-framework offer owned by the read-only router',
+    );
+    assert(
+      ciPreflightOrderProblems(ciPreflight).length === 0,
+      'CI inventories dependencies and freezes its contract before installation or tests',
+    );
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          'Inspect installed test dependencies read-only',
+          'install its declared test dependencies now.\n- Inspect installed test dependencies read-only',
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects dependency installation during inventory',
+    );
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          '## 4. Ensure Tests Pass Locally',
+          "Run the project's local test commands now.\n\n## 4. Ensure Tests Pass Locally",
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects tests before command discovery and contract journaling',
+    );
+    const prematureInstall = 'runs install any missing declared dependencies and execute its actual local test commands. ';
+    assert(
+      ciPreflightOrderProblems(
+        ciPreflight.replace(
+          '## 6c. Freeze the Existing-Framework Contract and Execute Tests',
+          '## 6c. Freeze the Existing-Framework Contract and Execute Tests\n\n' + prematureInstall,
+        ),
+      ).length > 0,
+      'CI instruction-order guard rejects installation and tests ahead of contract journaling in the contract section',
+    );
+    const savedExample = yaml.load(
+      extractFrontmatter(
+        await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-run-progress.example.md'), 'utf8'),
+      ),
+    );
+    assert(
+      savedExample.setup_scope === 'both' &&
+        savedExample.setup_operation === 'create' &&
+        savedExample.phase_status.framework === 'completed' &&
+        savedExample.phase_status.ci === 'pending',
+      'resume example records a completed framework with pending CI Create',
+    );
+    assert(
+      savedExample.phase_checkpoints.framework === '{test_artifacts}/framework/framework-setup-progress.md' &&
+        savedExample.phase_checkpoints.ci === '{test_artifacts}/ci/ci-pipeline-progress.md',
+      'resume example retains both legacy phase checkpoint paths',
+    );
+    assert(
+      typeof savedExample.run_id === 'string' &&
+        savedExample.phase_position.framework === 'phase-handoff' &&
+        savedExample.phase_position.ci.file === '{skill-root}/ci/steps-c/step-01-preflight.md',
+      'recovery example dispatches pending CI directly under its saved run identity',
+    );
+    assert(
+      savedExample.setup_parallel_started === true &&
+        savedExample.parallel_workers.framework.status === 'completed' &&
+        savedExample.parallel_workers.ci.status === 'pending' &&
+        savedExample.parallel_workers.ci.position.file === '{skill-root}/ci/steps-c/step-01-preflight.md' &&
+        Object.values(savedExample.parallel_workers).every((worker) => worker.run_id === savedExample.run_id),
+      'resume example persists each worker status and position under one run identity',
+    );
+    for (const field of ['phase_targets', 'validation_reports', 'edit_requests', 'edit_applied', 'hook_instructions']) {
+      assert(savedExample[field] !== null && typeof savedExample[field] === 'object', `recovery example persists ${field}`);
+    }
+    assert(
+      savedExample.contract.ci_platform === 'github-actions' && savedExample.contract.test_commands.length > 0,
+      'resume example retains the agreed framework commands and CI platform',
+    );
+    assert(
+      savedExample.pipeline_target === '.github/workflows/test.yml' &&
+        savedExample.contract.pipeline_target === savedExample.pipeline_target,
+      'resume example retains the coordinator pipeline target in its immutable contract',
+    );
+  } catch (error) {
+    assert(false, 'shared setup routing validates', error.message);
+  }
+
+  try {
+    for (const failure of ['spawn', 'timeout']) {
+      let scratch;
+      let runnerResult;
+      let thrown;
+      try {
+        captureSetupAliasScenario('ci-only', {
+          run(_command, _args, options) {
+            scratch = options.cwd;
+            runnerResult =
+              failure === 'spawn'
+                ? spawnSync(path.join(scratch, 'missing-runner'), [], { ...options, timeout: 1000 })
+                : spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 1000)'], { ...options, timeout: 20 });
+            return runnerResult;
+          },
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      try {
+        const capture = JSON.parse(await fs.readFile(path.join(scratch, 'capture.json'), 'utf8'));
+        assert(runnerResult.error?.code === (failure === 'spawn' ? 'ENOENT' : 'ETIMEDOUT'), `alias capture reproduces ${failure} error`);
+        assert(
+          capture.runnerError?.message === runnerResult.error.message && capture.runnerError?.code === runnerResult.error.code,
+          `alias ${failure} evidence retains the original runner error message and code`,
+        );
+        assert(
+          capture.runnerSignal === runnerResult.signal && (failure !== 'timeout' || capture.runnerSignal === 'SIGTERM'),
+          `alias ${failure} evidence retains the runner termination signal`,
+        );
+        assert(
+          thrown?.cause === runnerResult.error && thrown.message.includes(runnerResult.error.message) && thrown.message.includes(scratch),
+          `alias ${failure} throws the original cause with its retained evidence location`,
+        );
+        assert(
+          setupAliasReplayProblems(capture).includes('real alias runner failed or was terminated'),
+          `alias ${failure} replay rejects failed runner evidence`,
+        );
+      } finally {
+        if (scratch) await fs.rm(scratch, { recursive: true, force: true });
+      }
+    }
+  } catch (error) {
+    assert(false, 'CI alias runner failures retain diagnostics before throwing', error.message);
+  }
+
+  try {
+    for (const scenario of ['ci-only', 'outdated-framework']) {
+      const replay = JSON.parse(
+        await fs.readFile(path.join(projectRoot, 'test/fixtures/setup-alias-replay', `${scenario}.capture.json`), 'utf8'),
+      );
+      assert(
+        setupAliasReplayProblems(replay).length === 0,
+        `real alias ${scenario} behavior remains pinned to current source`,
+        setupAliasReplayProblems(replay).join('; '),
+      );
+      const stale = structuredClone(replay);
+      stale.sourceDigests['skills/bmad-testarch-ci/SKILL.md'] = 'sha256:changed';
+      assert(
+        setupAliasReplayProblems(stale).includes('alias replay is stale against current instructions'),
+        `alias ${scenario} replay rejects changed instruction provenance`,
+      );
+      const leaked = structuredClone(replay);
+      leaked.hookEvents = 'FRAMEWORK-PREPEND\n' + (leaked.hookEvents ?? '');
+      assert(setupAliasReplayProblems(leaked).length > 0, `alias ${scenario} replay rejects framework hook leakage`);
+      const misrouted = structuredClone(replay);
+      misrouted.route = {
+        setup_scope: 'framework',
+        setup_entry: 'bmad-testarch-ci',
+        selected_step: 'skills/bmad-testarch-framework/steps-c/step-01-preflight.md',
+        facts: ['FRAMEWORK-FACT'],
+      };
+      assert(setupAliasReplayProblems(misrouted).length > 0, `alias ${scenario} replay rejects framework routing`);
+      if (scenario === 'ci-only') {
+        const facts = structuredClone(replay);
+        facts.route.facts.push('FRAMEWORK-FACT');
+        assert(
+          setupAliasReplayProblems(facts).includes('CI-only run loaded framework persistent facts'),
+          'CI alias replay rejects framework fact leakage',
+        );
+        const greeting = structuredClone(replay);
+        greeting.activationOrder = 'GREET\nCI-PREPEND\nCI-APPEND\nCI-COMPLETE\n';
+        assert(
+          setupAliasReplayProblems(greeting).includes('CI prepend did not precede the greeting'),
+          'CI alias replay rejects prepend hooks after greeting',
+        );
+        const hollowPipeline = structuredClone(replay);
+        hollowPipeline.pipeline = '# node --test\njobs:\n  test:\n    steps:\n      - run: echo success\n';
+        assert(
+          setupAliasReplayProblems(hollowPipeline).includes('alias did not generate CI for the existing test command'),
+          'CI alias replay rejects a test command mentioned only in a comment',
+        );
+      }
+    }
+  } catch (error) {
+    assert(
+      false,
+      'real CI alias captures replay against current instructions',
+      `${error.message}; refresh with node test/lib/setup-alias-replay.js --capture`,
+    );
+  }
+
   const frameworkScaffoldStepPath = path.join(projectRoot, 'skills/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md');
   try {
     const frameworkScaffoldStep = await fs.readFile(frameworkScaffoldStepPath, 'utf8');
@@ -562,6 +1114,7 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 5: Lean Skill Shape${colors.reset}\n`);
 
   const LEAN_SKILL_DIRS = ['bmad-testarch-evaluate'];
+  const ADAPTER_SKILL_DIRS = ['bmad-testarch-ci'];
   const LEAN_REQUIRED = ['SKILL.md', 'customize.toml', 'references', 'assets'];
   const LEAN_FORBIDDEN = ['workflow.yaml', 'steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'scripts'];
 
@@ -608,20 +1161,50 @@ async function runTests() {
       .map((entry) => entry.name);
     const computedLean = [];
     const computedHouse = [];
+    const computedAdapters = [];
     for (const name of allSkillDirs) {
-      if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
+      if (ADAPTER_SKILL_DIRS.includes(name)) computedAdapters.push(name);
+      else if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
       else computedHouse.push(name);
     }
     assert(
       computedLean.sort().join(',') === [...LEAN_SKILL_DIRS].sort().join(','),
       `lean classification of skills/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
     );
+    assert(computedAdapters.sort().join(',') === [...ADAPTER_SKILL_DIRS].sort().join(','), 'CI compatibility adapter remains installed');
     assert(
-      computedHouse.sort().join(',') === [...workflowDirs].sort().join(','),
+      computedHouse.sort().join(',') ===
+        workflowDirs
+          .filter((name) => !ADAPTER_SKILL_DIRS.includes(name))
+          .sort()
+          .join(','),
       `house classification of skills/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
     );
   } catch (error) {
     assert(false, 'every skills/* directory lands on exactly one expected set', error.message);
+  }
+
+  for (const dirName of ADAPTER_SKILL_DIRS) {
+    const adapterDir = path.join(projectRoot, 'skills', dirName);
+    for (const forbidden of ['steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'resources']) {
+      assert(!(await pathExists(path.join(adapterDir, forbidden))), `${dirName} delegates ${forbidden} to the canonical framework skill`);
+    }
+    for (const required of ['SKILL.md', 'customize.toml', 'bmod.toml', 'workflow.yaml']) {
+      assert(await pathExists(path.join(adapterDir, required)), `${dirName}/${required} retains the installed entry point`);
+    }
+    const ciRoot = path.join(projectRoot, 'skills', 'bmad-testarch-framework', 'ci');
+    for (const required of [
+      'instructions.md',
+      'checklist.md',
+      'github-actions-template.yaml',
+      'gitlab-ci-template.yaml',
+      'azure-pipelines-template.yaml',
+      'jenkins-pipeline-template.groovy',
+      'harness-pipeline-template.yaml',
+      'resources',
+    ]) {
+      assert(await pathExists(path.join(ciRoot, required)), `canonical CI phase retains ${required}`);
+    }
   }
 
   for (const dirName of LEAN_SKILL_DIRS) {
@@ -776,7 +1359,8 @@ async function runTests() {
   const ONCE_PER_PROJECT_DELIVERABLES = new Set(['test-design-architecture.md', 'test-design-qa.md', '{project_name}-handoff.md']);
 
   async function stepFrontmatter(workflow, stepsDir, fileName) {
-    const text = await fs.readFile(path.join(projectRoot, 'skills', `bmad-testarch-${workflow}`, stepsDir, fileName), 'utf8');
+    const phase = workflow === 'ci' ? 'bmad-testarch-framework/ci' : `bmad-testarch-${workflow}`;
+    const text = await fs.readFile(path.join(projectRoot, 'skills', phase, stepsDir, fileName), 'utf8');
     return yaml.load(extractFrontmatter(text)) ?? {};
   }
 

@@ -39,15 +39,15 @@ Apply the requested edits to the selected output and confirm changes.
 
 ### 1. Confirm Requested Changes
 
-Restate what will be changed and confirm.
+Restate what will be changed and confirm when the journal has no saved confirmed request. Restore confirmed requests on Resume, then save their exact requested changes and this phase's next subsection in `edit_requests` and `phase_position` before writes.
 
 ### 2. Apply Changes
 
-Update the output file accordingly.
+Apply only the outstanding saved edits. Follow `resources/setup-state.md` section 4 to reconcile interrupted writes, recording each applied edit and resulting digest in `edit_applied`. Save the next subsection after each successful edit. Edit state and hook failures update the run journal; preserve historical Create checkpoint bytes unless an exact checkpoint edit was requested.
 
-### 3. Report
+### 3. Check Changed Outputs and Report
 
-Summarize the edits applied.
+Re-check the requested edits and their direct dependencies. For a framework edit, check the changed configuration, fixture or script and affected tests when necessary. Do not require an unrelated full test suite to pass or repair unrelated failures. Summarize the edits and checks applied; record any unrelated failure as an observation.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
 
@@ -61,8 +61,4 @@ Summarize the edits applied.
 
 ## On Complete
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
-
-If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
-
-If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
+Load `{skill-root}/resources/setup-phase-completion.md` completely and apply it for this phase. It resolves each applicable phase hook and canonical `workflow.on_complete` once, preserves the original operation, and continues pending phases before completing the run.

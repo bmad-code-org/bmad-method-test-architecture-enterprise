@@ -396,7 +396,7 @@ Each line is one check:
 - `replay` replays the baseline through eval-quality's `preflight` and `score` and compares the result with the baseline byte for byte, so a baseline that fails to reproduce is rejected here.
 
 Exit 0 means no check blocks the pull request.
-In a pipeline, `bmad-testarch-ci` renders one `tea-evaluate ci` step per tier from this plan.
+In a pipeline, `bmad-testarch-framework`'s CI setup renders one `tea-evaluate ci` step per tier from this plan.
 See [`ci`](/docs/reference/tea-evaluate-cli.md#ci).
 
 ## What You Learned

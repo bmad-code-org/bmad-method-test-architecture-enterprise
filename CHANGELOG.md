@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Framework setup now handles a test framework, CI, or both in the same skill. Existing commands, menu codes, customizations, and saved progress keep working. When CI scope is unclear, interactive runs ask whether to include CI and unattended runs default to framework only. Set `ci_platform` in `_bmad/custom/bmad-testarch-framework.toml` to override an existing CI customization, including an explicit `"auto"`. Setup progress is saved in `framework/setup-run-progress.md`; Resume continues interrupted Create, Edit, and Validate runs. CI-only runs keep CI customizations; Validate reports findings and Edit checks its requested changes.
 - Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page, removed duplicate site headings, and revised issue templates and banner text.
 
 ### Fixed
 
+- Setup archives preserve each run's Create checkpoints and verify them before Resume restores saved positions. CI alias replay captures retain runner errors and termination signals for diagnosis.
 - `tea-test-review` reads review configuration from the pinned base Git tree, including all TOML layers or legacy YAML, so a PR cannot change its own review settings. CLI flags retain precedence, `test_stack_type` is resolved with the other review keys, and the prompt supplies the complete resolved config throughout activation. Workflow customizations and persistent-fact policy files also come from the base tree. Full-file `--files` runs without an explicit base keep working-tree config.
 - Quality CI splits the mutation suite across `test:evaluate-mutation:qualification-basics`, `:qualification-guards`, `:recovery` and `:journals`, preserving `test:evaluate-mutation` for local full-suite runs. Refreshed weights use four recent successful runs and the mutation timeout, with load headroom; `test:shards` now limits planned scripts to 60 percent of the job cap.
 - Teach Me Testing teaches rubric 5.0 scoring and the ten workflows, including Evaluate.

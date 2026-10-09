@@ -1,8 +1,8 @@
 ---
 name: 'step-01-assess'
 description: 'Load an existing output for editing'
-nextStepFile: '{skill-root}/steps-e/step-02-apply-edit.md'
-evaluationPlansStepFile: '{skill-root}/steps-c/step-03b-render-evaluation-plans.md'
+nextStepFile: '{skill-root}/ci/steps-e/step-02-apply-edit.md'
+evaluationPlansStepFile: '{skill-root}/ci/steps-c/step-03b-render-evaluation-plans.md'
 ---
 
 # Step 1: Assess Edit Target
@@ -43,6 +43,8 @@ Identify which output should be edited and load it.
 
 ### 1. Identify Target
 
+Load `resources/setup-state.md` and save this phase's Edit position in the all-scope journal. On Resume, restore `phase_targets` and `edit_requests` for this phase and continue at its saved subsection; do not ask for an already confirmed target or enter Create resume.
+
 Ask the user to provide the output file path or select from known outputs.
 
 Known outputs for this workflow:
@@ -56,7 +58,7 @@ When several files match, list each one with its scope and ask which to edit. Do
 
 ### 2. Load Target
 
-Read the provided output file in full.
+Read the provided output file in full. Save the exact confirmed target paths and their pre-edit digests in `phase_targets`, then save the next Edit subsection before continuing.
 
 ### 3. Detect Evaluation Plans
 
@@ -65,6 +67,8 @@ Load `{evaluationPlansStepFile}`, read it completely, and run its sections 1 and
 ### 4. Confirm
 
 Confirm the target and the plans found, and proceed to edit.
+
+Journal the confirmed target, requested change context and next Edit step in `phase_position` before loading `{nextStepFile}`. Preserve every unrequested Create checkpoint field.
 
 Load next step: `{nextStepFile}`
 

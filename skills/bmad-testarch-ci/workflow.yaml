@@ -6,13 +6,16 @@ description: 'Scaffold CI/CD quality pipeline with test execution. Use when the 
 # Config (test_artifacts, user_name, languages) is resolved at activation in SKILL.md from modules.tea and core.
 date: system-generated
 
+# Compatibility metadata. Canonical framework SKILL.md activates shared routing with CI scope.
 # Workflow components
-installed_path: "."
-instructions: "./instructions.md"
-validation: "./checklist.md"
+installed_path: "../bmad-testarch-framework"
+instructions: "../bmad-testarch-framework/ci/instructions.md"
+validation: "../bmad-testarch-framework/ci/checklist.md"
 
 # Variables and inputs
 variables:
+  setup_scope: "ci" # preset by compatibility entry
+  setup_entry: "bmad-testarch-ci"
   test_dir: "{project-root}/tests" # Root test directory
   test_stack_type: "auto" # auto, frontend, backend, fullstack, mobile - detected or user override
   test_framework: "auto" # auto, playwright, cypress, jest, vitest - detected or user override

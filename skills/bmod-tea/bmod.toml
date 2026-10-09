@@ -22,7 +22,7 @@ pre_install_message = ""
 post_install_message = '''
 TEA is ready. Talk to Murat (bmad-tea) or start with Test Design (bmad-testarch-test-design).
 
-Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-testarch-framework) installs the utils packages; ask bmad how to set up the rest.
+Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-testarch-framework) installs the utils packages and owns framework and CI setup. Continuous Integration (bmad-testarch-ci) remains its CI compatibility entry. Ask bmad how to set up the rest.
 '''
 
 # Asked by `bmad setup` in this order. Members read each answer as modules.tea.<key>.

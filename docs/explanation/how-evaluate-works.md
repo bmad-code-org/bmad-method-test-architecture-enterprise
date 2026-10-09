@@ -182,7 +182,7 @@ Placement decides blocking too.
 `tea-evaluate ci --tier <tier>` runs every check of the tier, keeps the evidence of each, and exits with the most severe blocking result.
 It passes `eval-quality`'s exits through, so the pipeline fails for the engine's reason.
 A plan can name existing publish or deploy jobs for a tier to gate, so a failing release evaluation stops the shipment.
-`bmad-testarch-ci` renders the plan into the pipeline, one job per tier, as [Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans) describes.
+`bmad-testarch-framework`'s CI setup renders the plan into the pipeline, one job per tier, as [Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans) describes.
 
 ## Related
 

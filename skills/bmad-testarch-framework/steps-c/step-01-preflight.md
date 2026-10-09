@@ -113,6 +113,8 @@ Summarize:
 
 ## 5. Check for an Existing Checkpoint
 
+The pre-activation request gate has already selected the applicable run and its Resume/start-over decision. Honor that journal decision without another prompt or a reset of its ledger. A saved `setup_resume_requested` dispatches the journal's next position directly; never let the headless start-over fallback below replace selected Resume. A fresh new `run_id` following an approved start-over replaces this Create checkpoint at Save Progress while preserving prior archived journal history. Ask the phase-local question below only for a direct legacy invocation with no recorded coordinator decision.
+
 Check whether `{outputFile}` already exists. A project has one test framework setup, so a checkpoint at this path belongs to a previous run of this workflow.
 When it does not exist, also check `{legacyOutputFile}`, where runs before the `framework/` folder wrote the checkpoint. Only an in-progress legacy checkpoint counts here; a completed one stays where it is and this run starts fresh in the folder.
 
@@ -134,6 +136,8 @@ A checkpoint that carries no `workflowStatus` predates that key: treat it as `'c
 ### 6. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
+
+Retain `run_id`, `setup_scope`, `setup_operation`, the agreed `contract`, and hook ledger fields with this Create phase's frontmatter. For every scope, report this save and the next step to the coordinator so it atomically updates `{test_artifacts}/framework/setup-run-progress.md` and `phase_position` through `resources/setup-state.md`; preserve per-phase step names and artifact paths. Workers update only their own Create checkpoint.
 
 Create the `{test_artifacts}/framework/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 

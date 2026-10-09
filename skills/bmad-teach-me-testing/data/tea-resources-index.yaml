@@ -20,11 +20,13 @@ documentation:
         local: "/docs/how-to/workflows/setup-test-framework.md"
         online: "/how-to/workflows/setup-test-framework/"
         workflow: framework
+        description: "One setup skill for framework, CI, or both; prompt selects scope"
 
       - name: "Set Up CI Pipeline"
         local: "/docs/how-to/workflows/setup-ci.md"
         online: "/how-to/workflows/setup-ci/"
         workflow: ci
+        description: "CI setup through the framework skill"
 
       - name: "Test Design"
         local: "/docs/how-to/workflows/run-test-design.md"

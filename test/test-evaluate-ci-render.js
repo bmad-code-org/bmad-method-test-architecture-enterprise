@@ -50,7 +50,8 @@ const { DEFAULT_TIERS, PLAN_PATH, readPlan } = require('../cli/lib/evaluate/ci-p
 const { validateCorpus, scoreRun, guardHolds, jobBlockOf, sha256Of, withoutNeeds } = require('./eval-ci');
 
 const ROOT = path.join(__dirname, '..');
-const SKILL = path.join(ROOT, 'skills', 'bmad-testarch-ci');
+const CANONICAL_SKILL = path.join(ROOT, 'skills', 'bmad-testarch-framework');
+const SKILL = path.join(CANONICAL_SKILL, 'ci');
 const STEP = 'steps-c/step-03b-render-evaluation-plans.md';
 const PLAN_SCHEMA_FILE = 'cli/lib/evaluate/schemas/evaluation-ci-plan.schema.json';
 const PLAN_RULES_FILE = 'cli/lib/evaluate/ci-plan.js';
@@ -89,7 +90,7 @@ function frontmatterOf(text) {
 
 /** A frontmatter value naming a skill file, as a path relative to the skill root. */
 function skillPathOf(value) {
-  return typeof value === 'string' && value.startsWith('{skill-root}/') ? value.slice('{skill-root}/'.length) : null;
+  return typeof value === 'string' && value.startsWith('{skill-root}/ci/') ? value.slice('{skill-root}/ci/'.length) : null;
 }
 
 /** The blank-line separated paragraphs of a document, so a whole paragraph can be pinned. */
@@ -122,10 +123,10 @@ function nextChain(entry) {
 }
 
 function checkEntryPoints() {
-  const skill = readSkill('SKILL.md') ?? '';
-  const create = /\*\*If C:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
-  const edit = /\*\*If E:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
-  const resume = /\*\*If R:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
+  const skill = fs.readFileSync(path.join(CANONICAL_SKILL, 'SKILL.md'), 'utf8');
+  const create = /\*\*If C:\*\* Load `\{skill-root\}\/ci\/([^`]+)`/.exec(skill)?.[1] ?? null;
+  const edit = /\*\*If E:\*\* Load `\{skill-root\}\/ci\/([^`]+)`/.exec(skill)?.[1] ?? null;
+  const resume = /\*\*If R:\*\* Load `\{skill-root\}\/ci\/([^`]+)`/.exec(skill)?.[1] ?? null;
   check(create !== null && edit !== null && resume !== null, 'SKILL.md lacks a create, edit or resume route');
 
   check(readSkill(STEP) !== null, `${STEP} is missing`);
@@ -179,11 +180,11 @@ function checkEntryPoints() {
   // Resume: the checkpoint's last step routes onto the detection step and past it.
   const resumeText = resume === null ? '' : (readSkill(resume) ?? '');
   check(
-    /'step-03-configure-quality-gates'` → Load `\.\/step-03b-render-evaluation-plans\.md`/.test(resumeText),
+    resumeText.includes("'step-03-configure-quality-gates'` → Load `{skill-root}/ci/steps-c/step-03b-render-evaluation-plans.md`"),
     'resume mode: a run last saved at the quality gates step skips the detection step',
   );
   check(
-    /'step-03b-render-evaluation-plans'` → Load `\.\/step-04-validate-and-summary\.md`/.test(resumeText),
+    resumeText.includes("'step-03b-render-evaluation-plans'` → Load `{skill-root}/ci/steps-c/step-04-validate-and-summary.md`"),
     'resume mode: a run last saved at the detection step skips the validation step',
   );
   const dashboard = resumeText.split('\n').find((line) => line.startsWith('4. Render Evaluation Plans'));
@@ -1446,7 +1447,7 @@ function checkGateSentences() {
     ],
     [
       'across files the wait is workflow_run, an if with the path and a ref',
-      "In another workflow file the wait is a `workflow_run` trigger, since a job waits only for jobs of its own workflow run and `needs` cannot reach the evaluation job: add to that file's `on:`, keeping the triggers already there, `workflow_run` with `workflows` naming the pipeline file this step writes (its `name:`, or its file path when it has none) and `types: [completed]`, give the job `if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == '<the GitHub event of the tier>' && github.event.workflow_run.path == '<the pipeline file path>'`, and set `ref: ${{ github.event.workflow_run.head_sha }}` on the job's `actions/checkout` steps, as the gate block of `./github-actions-template.yaml` shows between its `evaluation-gate:begin` and `evaluation-gate:end` markers.",
+      "In another workflow file the wait is a `workflow_run` trigger, since a job waits only for jobs of its own workflow run and `needs` cannot reach the evaluation job: add to that file's `on:`, keeping the triggers already there, `workflow_run` with `workflows` naming the pipeline file this step writes (its `name:`, or its file path when it has none) and `types: [completed]`, give the job `if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == '<the GitHub event of the tier>' && github.event.workflow_run.path == '<the pipeline file path>'`, and set `ref: ${{ github.event.workflow_run.head_sha }}` on the job's `actions/checkout` steps, as the gate block of `{skill-root}/ci/github-actions-template.yaml` shows between its `evaluation-gate:begin` and `evaluation-gate:end` markers.",
     ],
     [
       'a cross-file job is limited to the pipeline, the event and the evaluated commit',

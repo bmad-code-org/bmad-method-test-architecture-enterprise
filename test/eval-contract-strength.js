@@ -236,6 +236,7 @@ function cacheDirectoryFor(options, suiteId) {
  * name whenever `stagedWorkspaceFor` changes what a suite's leg runs in.
  */
 function stagingOf(suiteId) {
+  if (suiteId === 'ci') return 'ci-alias-entry-v3';
   if (SET_STAGED_SUITES[suiteId] !== undefined) return 'fixture-set-v1';
   return suiteId === 'test-review' ? 'review-tree-v1' : 'empty-v1';
 }

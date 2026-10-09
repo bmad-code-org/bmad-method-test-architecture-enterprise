@@ -94,6 +94,7 @@ Present this content (mostly autonomous, clear and educational):
 TEA is a comprehensive test architecture framework that provides:
 
 - **10 Workflows:** Teach Me Testing, Test Design, Framework, CI, ATDD, Automate, Test Review, NFR Evidence Audit, Trace, Evaluate
+- **Framework and CI setup:** One `bmad-testarch-framework` skill handles framework only, CI only, or both. The `bmad-testarch-ci` command and `CI` menu code start its CI setup. TEA infers the scope from your prompt and asks "Do you want CI too?" once when unclear in an interactive session. An unattended request with unclear scope sets up the framework only. Create, Resume, Validate, and Edit choose the operation.
 - **59 Knowledge Fragments:** Distilled expertise on patterns, best practices, Playwright Utils
 - **Quality Standards:** Definition of Done with execution limits (no flaky tests, no hard waits, etc.)
 - **Risk-Based Testing:** P0-P3 matrix for prioritizing test coverage
@@ -306,7 +307,7 @@ duration: '30 min'
 
 ## Key Concepts Covered
 
-1. **TEA Framework:** 9 workflows + 59 knowledge fragments + quality standards
+1. **TEA Framework:** 10 workflows + 59 knowledge fragments + quality standards
 2. **Risk-Based Testing:** P0-P3 prioritization matrix
 3. **Quality Standards:** Definition of Done (no flaky tests, no hard waits, stateless, self-cleaning)
 4. **Engagement Models:** Lite, Solo, Integrated, Enterprise, Brownfield

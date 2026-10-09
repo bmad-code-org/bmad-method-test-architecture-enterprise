@@ -57,7 +57,7 @@ Each workflow can run directly in a fresh session.
 | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---- | ------------------------------------------------------ |
 | [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/)    | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                   |
 | [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)          | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence                 |
-| [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Scaffold a test framework                              |
+| [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                   |
 | [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Connect tests and quality checks to CI                 |
 | [ATDD](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)                        | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
 | [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)                | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
@@ -65,6 +65,11 @@ Each workflow can run directly in a fresh session.
 | [NFR Evidence Audit](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)    | `/bmad-testarch-nfr`         | NR   | Assess performance, security, and reliability evidence |
 | [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/)          | `/bmad-testarch-evaluate`    | EV   | Build and run a behavioral evaluation                  |
 | [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/)                      | `/bmad-testarch-trace`       | TR   | Map requirements to tests and decide a release gate    |
+
+Framework and CI setup share one skill, `bmad-testarch-framework`.
+Ask for framework only, CI only, or both; TEA infers the scope from your prompt and asks "Do you want CI too?" once when CI scope is unclear in an interactive session. An unattended request with unclear scope runs framework setup only and states that CI was excluded.
+`/bmad-testarch-ci` and the `CI` menu code still work and start the same skill's CI setup, with your existing CI customizations.
+Create, Resume, Validate, and Edit remain available for the selected setup scope.
 
 For Codex, replace the leading `/` in the table with `$`.
 The agent menu also accepts `GATE` to route you through test review, NFR evidence audit, and trace Phase 2.
