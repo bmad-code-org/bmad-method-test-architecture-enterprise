@@ -34,13 +34,15 @@ const path = require('node:path');
 
 const ENGINE_PACKAGE = 'eval-quality';
 const ENGINE_CLI_ENV = 'TEA_EVALUATE_ENGINE_CLI';
+/** The range TeA's own manifest declares for the peer, so the message cannot name a floor the manifest has moved past. */
+const ENGINE_RANGE = require('../../../package.json').peerDependencies[ENGINE_PACKAGE];
 
 /** Raised when the optional peer is not installed where this runtime can reach it. */
 class EngineUnavailableError extends Error {
   constructor(cause) {
     super(
       `${ENGINE_PACKAGE} is not installed where tea-evaluate can reach it. ` +
-        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=7.2.0" in the project that runs Evaluate. ` +
+        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@"${ENGINE_RANGE}" in the project that runs Evaluate. ` +
         `(${cause?.message ?? 'no further detail'})`,
       { cause },
     );
