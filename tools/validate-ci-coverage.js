@@ -269,6 +269,8 @@ function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChai
  * in CI would be wrong rather than merely unproven, not a convenience.
  */
 const DELIBERATELY_LOCAL = {
+  'test:evaluate-mutation':
+    'the full mutation suite remains a local convenience command; CI runs every case once through its four grouped scripts',
   'docs:dev': 'an interactive dev server; categorically cannot run unattended in CI',
   'docs:preview': 'an interactive preview server; categorically cannot run unattended in CI',
   'docs:fix-links': '--write mode of the covered docs:validate-links; running fix-mode in CI would mutate the diff mid-job',

@@ -42,12 +42,19 @@
  * timing table.
  *
  * Refreshing the weights: every CI shard writes `--timings` into a
- * `timings-<i>` artifact. Download them with `gh run download <run-id>
- * --pattern 'timings-*'`, then merge every downloaded `shard-<i>.json` with
- * `jq -S -s add` into tools/test-shard-weights.json. A weight carries load
- * headroom: the median of several recent runs plus 25 percent, or the maximum
- * for a suite whose cases split into `--group` scripts, shared out by each
- * group's share of the suite's local time.
+ * `timings-<i>` artifact. Download several complete successful runs with
+ * `env -u GITHUB_TOKEN gh run download <run-id> --pattern 'timings-*' --dir <run-dir>`.
+ * Merge each run's shard JSON objects, then take each script's median seconds
+ * across the runs, multiply by 1.25 and round to one decimal place.
+ * Keep only scripts in the current chain. Inspect the resulting packing with
+ * `--list` and check the measured totals against the job cap before committing.
+ * The 2026-10-09 refresh used runs 37949053138, 37940935230, 37915059942
+ * and 37913367825. Their mutation suite measured 231.9 to 288.9 seconds;
+ * attempt 1 of run 37913367825 timed out after at least 920.4 mutation seconds.
+ * Its four group weights apportion that lower bound plus 25 percent by local
+ * coverage timings, so a successful rerun cannot erase the slowdown evidence.
+ * Local group seconds: qualification-basics 40.346, qualification-guards 79.460,
+ * recovery 52.145 and journals 30.143.
  *
  * Usage:
  *   node tools/test-shards.js --shard <i>/<n> [--coverage-dir D] [--timings out.json]
