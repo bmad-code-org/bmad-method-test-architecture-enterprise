@@ -83,6 +83,20 @@ Every contribution should strengthen human-AI collaboration. Ask yourself: **"Do
 
 Please propose small, granular changes! For large or significant changes, discuss in Discord and open an issue first. This prevents wasted effort on PRs that may not align with planned changes.
 
+## How TEA Differs From Other BMad Modules
+
+Most BMad modules are skills only: they install with `npx skills add` and are not published to npm.
+TEA's skills install the same way.
+
+TEA also ships command-line tools that run in CI, where no skill installer is involved: `tea-test-review` gates pull requests on test quality, and `tea-evaluate` runs behavioral evaluations.
+So TEA keeps publishing its npm package, `bmad-method-test-architecture-enterprise`, as the delivery channel for those tools.
+The package carries the skills beside the tools on purpose.
+`tea-test-review` reviews with the skill packaged next to it, so a pull request cannot edit the reviewer that judges it, and the tool and its skill always come from one version.
+
+Releases run through the publish workflow (`npm run release:patch`, `release:minor`, `release:major`, or `release:next` for a prerelease).
+It bumps the version, stamps `CHANGELOG.md`, and publishes to npm.
+A change to a tool's flags, exit codes or verdict format is a change to a published interface, so give it a changelog entry and the matching semver bump.
+
 ## Pull Request Guidelines
 
 ### Which Branch?
