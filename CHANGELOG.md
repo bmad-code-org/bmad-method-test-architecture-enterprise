@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Framework setup now includes CI in the same skill. Ask for a framework, CI, or both; TEA infers the scope or asks whether to include CI, and offers framework setup when a CI request has no harness. Existing framework and CI commands, menu codes, customizations, and saved progress keep working.
+- Framework setup now handles a test framework, CI, or both in the same skill. Existing commands, menu codes, customizations, and saved progress keep working. When CI scope is unclear, interactive runs ask whether to include CI and unattended runs default to framework only. Set `ci_platform` in `_bmad/custom/bmad-testarch-framework.toml` to override an existing CI customization, including an explicit `"auto"`. Setup progress is saved in `framework/setup-run-progress.md`; Resume continues interrupted Create, Edit, and Validate runs. CI-only runs keep CI customizations; Validate reports findings and Edit checks its requested changes.
 - Pruned and clarified public documentation and contributor guides. Restored the documentation link at the top of the README, corrected scoring, gate, execution-support, and setup guidance, and repaired tutorial examples. Simplified the mobile landing page, removed duplicate site headings, and revised issue templates and banner text.
 
 ### Fixed

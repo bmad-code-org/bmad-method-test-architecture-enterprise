@@ -60,7 +60,9 @@ Read `{outputFile}` and parse YAML frontmatter for:
 
 ---
 
-### 2. Verify Previously Created Artifacts
+### 2. Recover a Missing Legacy Contract and Verify Artifacts
+
+When this recovered legacy Create checkpoint has no contract, follow `resources/setup-state.md` section 4's `setup_inventory_only` recovery before next-step dispatch. Read recorded choices and the actual project inventory, atomically journal the reconstructed contract, and retain the original `lastStep`/`stepsCompleted`. Contract recovery skips installs/tests, custom hooks, phase checkpoint writes and full preflight replay. Clear inventory mode, then verify artifacts and dispatch the original next incomplete step.
 
 Since this is a file-creation workflow, verify that artifacts from completed steps still exist on disk:
 

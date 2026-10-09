@@ -26,7 +26,7 @@ documentation:
         local: "/docs/how-to/workflows/setup-ci.md"
         online: "/how-to/workflows/setup-ci/"
         workflow: ci
-        description: "Compatibility entry selecting the framework skill's CI phase"
+        description: "CI setup through the framework skill"
 
       - name: "Test Design"
         local: "/docs/how-to/workflows/run-test-design.md"

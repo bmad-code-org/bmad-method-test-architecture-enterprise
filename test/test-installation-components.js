@@ -19,6 +19,7 @@ const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 const { packedPaths: readPackedPaths } = require('./lib/pack-listing');
+const { replayProblems: setupAliasReplayProblems } = require('./lib/setup-alias-replay');
 
 async function pathExists(filePath) {
   try {
@@ -62,6 +63,33 @@ function ciPreflightOrderProblems(content) {
   if (!(journal !== -1 && journal < install && install < execute)) problems.push('installation or tests precede contract journaling');
   if (!contract.body.includes('After the complete contract is successfully journaled'))
     problems.push('execution lacks journal-success gate');
+  return problems;
+}
+
+function setupCompletionProblems(content) {
+  const problems = [];
+  const create = content.indexOf('### Create');
+  const validate = content.indexOf('### Validate');
+  const edit = content.indexOf('### Edit');
+  if (!(create !== -1 && create < validate && validate < edit)) return ['missing operation-specific completion sections'];
+  for (const command of content.matchAll(
+    /Run the actual test commands from the frozen contract|Record failures and repair within the authorized setup scope/g,
+  )) {
+    if (!(command.index > create && command.index < validate))
+      problems.push('Create execution or repair gate applies to another operation');
+  }
+  const validation = String(content.slice(validate, edit));
+  if (
+    !validation.includes('Never repair outputs, install missing dependencies, or change tests during Validate') ||
+    !validation.includes('Complete the owned reserved report even when criteria fail')
+  )
+    problems.push('Validate repairs or blocks its failed report');
+  const editing = String(content.slice(edit, content.indexOf('## 2.')));
+  if (
+    !editing.includes('Re-check only the changed outputs and their direct dependencies') ||
+    !editing.includes('Missing unrelated execution prerequisites do not block completion of a valid pipeline edit')
+  )
+    problems.push('Edit requires unrelated full-suite execution');
   return problems;
 }
 
@@ -607,6 +635,39 @@ async function runTests() {
   try {
     const router = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-routing.md'), 'utf8');
     const canonical = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/SKILL.md'), 'utf8');
+    const alias = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-ci/SKILL.md'), 'utf8');
+    const aliasBmod = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-ci/bmod.toml'), 'utf8'));
+    assert(
+      alias.includes(
+        'Require its `SKILL.md`, `{skill-root}/resources/setup-routing.md`, and `{skill-root}/ci/steps-c/step-01-preflight.md`',
+      ) &&
+        alias.includes('all three required files exist') &&
+        aliasBmod.skill.required_skills.includes('bmad-testarch-framework'),
+      'CI alias requires combined-setup capabilities and declares its installed skill dependency',
+    );
+    assert(
+      canonical.includes('CI-only skips framework prepend/append hooks, persistent facts and completion hooks') &&
+        canonical.indexOf('execute each `ci_workflow.activation_steps_prepend`') < canonical.indexOf('### Step 5: Greet the User') &&
+        canonical.includes('CI-only loads its CI facts and skips framework facts'),
+      'CI-only activation owns CI hooks/facts and executes its prepend before greeting',
+    );
+    const completion = await fs.readFile(
+      path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-phase-completion.md'),
+      'utf8',
+    );
+    assert(setupCompletionProblems(completion).length === 0, 'Create, Validate and Edit retain distinct completion gates');
+    for (const heading of ['### Validate', '### Edit']) {
+      assert(
+        setupCompletionProblems(completion.replace(heading, heading + '\n\nRun the actual test commands from the frozen contract.'))
+          .length > 0,
+        `${heading.slice(4)} completion guard rejects a migrated full-suite execution gate`,
+      );
+    }
+    assert(
+      completion.includes('Only when scope includes framework, resolve canonical `workflow.on_complete`') &&
+        completion.includes('CI-only completes after its CI hook'),
+      'CI-only completion keeps framework customization outside its scope',
+    );
     for (const mode of ['framework', 'ci', 'both']) {
       assert(router.includes('`' + mode + '`'), `shared setup router names ${mode} scope`);
     }
@@ -624,6 +685,15 @@ async function runTests() {
     assert(
       router.includes('framework_reused = true') && router.includes('validate and reuse it'),
       'combined setup validates an existing framework',
+    );
+    assert(
+      router.includes('route directly to CI Create preflight') &&
+        router.includes('Skip framework Create preflight, the scaffold checklist and write-time hook checks'),
+      'both with an existing framework follows existing test commands through CI contract discovery',
+    );
+    assert(
+      router.includes('unattended/headless run with no scope answer defaults to `framework`'),
+      'headless ambiguous requests retain framework-only setup',
     );
     assert(
       router.includes('_bmad/custom/bmad-testarch-ci.user.toml') && router.includes('ci_workflow.ci_platform'),
@@ -682,17 +752,70 @@ async function runTests() {
       'Edit and Validate resume use their saved operation and report ownership',
     );
     assert(
+      state.includes('CI recovery loads only preflight sections 2 through 6c') &&
+        state.includes('This inventory performs no dependency installation, test execution, activation hooks, phase checkpoint saves') &&
+        state.includes('dispatch the original next incomplete step'),
+      'legacy checkpoints rebuild their missing contract read-only before continuing their saved route',
+    );
+    assert(
+      state.includes('archive any existing active journal intact, including an unfinished journal whose scope or targets are unrelated') &&
+        state.includes('verify the archive write before replacing the active journal'),
+      'unrelated unfinished journals survive new operations in verified archives',
+    );
+    assert(
+      state.includes('A headless or autonomous new request starts over and archives the prior history') &&
+        state.includes('an explicit Resume keeps its recovered run'),
+      'headless start-over preserves explicitly requested Resume',
+    );
+    const parallel = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/resources/setup-parallel.md'), 'utf8');
+    assert(
+      parallel.includes('Before launch, atomically persist `setup_parallel_started = true`') &&
+        parallel.includes('relaunch each incomplete worker at its exact saved position') &&
+        parallel.includes('a generated CI phase waits for the framework and never restarts at CI preflight'),
+      'parallel Resume retains generated work and finishes framework readiness before CI terminal validation',
+    );
+    assert(
+      parallel.includes('journal `pipeline_action` and exact selected `pipeline_target` with the chosen platform before worker launch') &&
+        parallel.includes('CI workers consume that decision and ask no questions'),
+      'coordinator settles effective platform and pipeline update/replace before CI workers start',
+    );
+    assert(
       router.includes('canonical-owned CI defaults') &&
         router.includes('when the alias directory is absent') &&
         router.includes('All legacy overrides, including migrated platform settings, remain effective even without the installed alias'),
       'standalone canonical CI uses owned defaults and preserves legacy settings',
     );
     assert(
-      router.includes('For CI-only, build this contract from the existing framework scripts/configs and service documentation') &&
-        router.includes('an empty contract cannot proceed to generation'),
+      router.includes(
+        'For CI-only and both Create with a reused framework, build this contract from the existing framework scripts/configs and service documentation',
+      ) && router.includes('an empty contract cannot proceed to generation'),
       'CI-only generation and validation use the existing framework contract',
     );
     const ciPreflight = await fs.readFile(path.join(projectRoot, 'skills/bmad-testarch-framework/ci/steps-c/step-01-preflight.md'), 'utf8');
+    const ciGeneration = await fs.readFile(
+      path.join(projectRoot, 'skills/bmad-testarch-framework/ci/steps-c/step-02-generate-pipeline.md'),
+      'utf8',
+    );
+    assert(
+      ciPreflight.includes(
+        'passing Jest/Vitest/Node built-in suite satisfies this existing-framework prerequisite without Playwright/Cypress',
+      ) &&
+        ciGeneration.includes(
+          'Jest/Vitest/Node built-in unit/component/API suite uses its actual commands and artifacts with no browser installation',
+        ),
+      'frontend applications retain existing unit/component frameworks without adding a browser prerequisite',
+    );
+    assert(
+      ciPreflight.includes('exact project-relative `pipeline_target` in the journal/contract') &&
+        ciGeneration.includes('Consume the frozen `pipeline_action` and `pipeline_target` before selecting output') &&
+        ciGeneration.includes('Preserve unrelated jobs, triggers, permissions, concurrency') &&
+        ciGeneration.includes('An implicit default update never authorizes replacement'),
+      'pipeline generation consumes the coordinator target and preserves unrelated behavior during updates',
+    );
+    assert(
+      !ciPreflight.includes('Set it up now and continue CI in this run?'),
+      'CI preflight keeps the missing-framework offer owned by the read-only router',
+    );
     assert(
       ciPreflightOrderProblems(ciPreflight).length === 0,
       'CI inventories dependencies and freezes its contract before installation or tests',
@@ -719,8 +842,8 @@ async function runTests() {
     assert(
       ciPreflightOrderProblems(
         ciPreflight.replace(
-          'For CI-only, resolve required dependency choices',
-          prematureInstall + 'For CI-only, resolve required dependency choices',
+          '## 6c. Freeze the Existing-Framework Contract and Execute Tests',
+          '## 6c. Freeze the Existing-Framework Contract and Execute Tests\n\n' + prematureInstall,
         ),
       ).length > 0,
       'CI instruction-order guard rejects installation and tests ahead of contract journaling in the contract section',
@@ -748,6 +871,14 @@ async function runTests() {
         savedExample.phase_position.ci.file === '{skill-root}/ci/steps-c/step-01-preflight.md',
       'recovery example dispatches pending CI directly under its saved run identity',
     );
+    assert(
+      savedExample.setup_parallel_started === true &&
+        savedExample.parallel_workers.framework.status === 'completed' &&
+        savedExample.parallel_workers.ci.status === 'pending' &&
+        savedExample.parallel_workers.ci.position.file === '{skill-root}/ci/steps-c/step-01-preflight.md' &&
+        Object.values(savedExample.parallel_workers).every((worker) => worker.run_id === savedExample.run_id),
+      'resume example persists each worker status and position under one run identity',
+    );
     for (const field of ['phase_targets', 'validation_reports', 'edit_requests', 'edit_applied', 'hook_instructions']) {
       assert(savedExample[field] !== null && typeof savedExample[field] === 'object', `recovery example persists ${field}`);
     }
@@ -755,8 +886,69 @@ async function runTests() {
       savedExample.contract.ci_platform === 'github-actions' && savedExample.contract.test_commands.length > 0,
       'resume example retains the agreed framework commands and CI platform',
     );
+    assert(
+      savedExample.pipeline_target === '.github/workflows/test.yml' &&
+        savedExample.contract.pipeline_target === savedExample.pipeline_target,
+      'resume example retains the coordinator pipeline target in its immutable contract',
+    );
   } catch (error) {
     assert(false, 'shared setup routing validates', error.message);
+  }
+
+  try {
+    for (const scenario of ['ci-only', 'outdated-framework']) {
+      const replay = JSON.parse(
+        await fs.readFile(path.join(projectRoot, 'test/fixtures/setup-alias-replay', `${scenario}.capture.json`), 'utf8'),
+      );
+      assert(
+        setupAliasReplayProblems(replay).length === 0,
+        `real alias ${scenario} behavior remains pinned to current source`,
+        setupAliasReplayProblems(replay).join('; '),
+      );
+      const stale = structuredClone(replay);
+      stale.sourceDigests['skills/bmad-testarch-ci/SKILL.md'] = 'sha256:changed';
+      assert(
+        setupAliasReplayProblems(stale).includes('alias replay is stale against current instructions'),
+        `alias ${scenario} replay rejects changed instruction provenance`,
+      );
+      const leaked = structuredClone(replay);
+      leaked.hookEvents = 'FRAMEWORK-PREPEND\n' + (leaked.hookEvents ?? '');
+      assert(setupAliasReplayProblems(leaked).length > 0, `alias ${scenario} replay rejects framework hook leakage`);
+      const misrouted = structuredClone(replay);
+      misrouted.route = {
+        setup_scope: 'framework',
+        setup_entry: 'bmad-testarch-ci',
+        selected_step: 'skills/bmad-testarch-framework/steps-c/step-01-preflight.md',
+        facts: ['FRAMEWORK-FACT'],
+      };
+      assert(setupAliasReplayProblems(misrouted).length > 0, `alias ${scenario} replay rejects framework routing`);
+      if (scenario === 'ci-only') {
+        const facts = structuredClone(replay);
+        facts.route.facts.push('FRAMEWORK-FACT');
+        assert(
+          setupAliasReplayProblems(facts).includes('CI-only run loaded framework persistent facts'),
+          'CI alias replay rejects framework fact leakage',
+        );
+        const greeting = structuredClone(replay);
+        greeting.activationOrder = 'GREET\nCI-PREPEND\nCI-APPEND\nCI-COMPLETE\n';
+        assert(
+          setupAliasReplayProblems(greeting).includes('CI prepend did not precede the greeting'),
+          'CI alias replay rejects prepend hooks after greeting',
+        );
+        const hollowPipeline = structuredClone(replay);
+        hollowPipeline.pipeline = '# node --test\njobs:\n  test:\n    steps:\n      - run: echo success\n';
+        assert(
+          setupAliasReplayProblems(hollowPipeline).includes('alias did not generate CI for the existing test command'),
+          'CI alias replay rejects a test command mentioned only in a comment',
+        );
+      }
+    }
+  } catch (error) {
+    assert(
+      false,
+      'real CI alias captures replay against current instructions',
+      `${error.message}; refresh with node test/lib/setup-alias-replay.js --capture`,
+    );
   }
 
   const frameworkScaffoldStepPath = path.join(projectRoot, 'skills/bmad-testarch-framework/steps-c/step-03-scaffold-framework.md');

@@ -45,9 +45,9 @@ Restate what will be changed and confirm when the journal has no saved confirmed
 
 Apply only the outstanding saved edits. Follow `resources/setup-state.md` section 4 to reconcile interrupted writes, recording each applied edit and resulting digest in `edit_applied`. Save the next subsection after each successful edit. Edit state and hook failures update the run journal; preserve historical Create checkpoint bytes unless an exact checkpoint edit was requested.
 
-### 3. Report
+### 3. Check Changed Outputs and Report
 
-Summarize the edits applied.
+Re-check the requested edits and their direct dependencies. For a framework edit, check the changed configuration, fixture or script and affected tests when necessary. Do not require an unrelated full test suite to pass or repair unrelated failures. Summarize the edits and checks applied; record any unrelated failure as an observation.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
 

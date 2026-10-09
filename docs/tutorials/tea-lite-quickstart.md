@@ -78,17 +78,16 @@ You can also invoke each workflow directly.
 
 - Claude Code / Cursor / Windsurf: `/bmad-testarch-framework`
 - Codex: `$bmad-testarch-framework`
-
-Request framework only, or ask to include CI in the same setup run. TEA asks "Do you want CI too?" once when CI scope is unclear.
-
 - Inside a TEA chat: `TF`
+
+This tutorial sets up the test framework only. You can add CI later.
 
 Tell TEA:
 
 ```text
 We're testing the React TodoMVC app at https://todomvc.com/examples/react/dist/.
 Use Playwright with TypeScript for browser E2E tests.
-Use GitHub Actions for CI.
+Set up the test framework only. We'll add CI later.
 ```
 
 Review the generated `tests/` structure, `playwright.config.ts`, environment example, and Node version file.

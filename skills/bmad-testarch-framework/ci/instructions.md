@@ -46,7 +46,4 @@ Step 3b renders every `ci/evaluation-ci-plan.json` it finds into the pipeline, i
 
 ### 5. Resume Support
 
-If the user selects **Resume** mode, load, read completely, and execute:
-`{skill-root}/ci/steps-c/step-01b-resume.md`
-
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+Resume follows the saved position in `setup-run-progress.md`. Only a legacy Create checkpoint with no saved journal position loads `{skill-root}/ci/steps-c/step-01b-resume.md` after recovering any missing contract through read-only inventory. This loader then routes directly to the next incomplete step.

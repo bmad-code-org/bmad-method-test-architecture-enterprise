@@ -27,7 +27,7 @@ Find every evaluation CI plan in the repository and render each one into the pip
 
 ## CONTEXT BOUNDARIES:
 
-- Available context: the pipeline file written by steps 2 and 3 (create mode) or loaded by `steps-e/step-01-assess.md` (edit mode), and the platform, test stack and Node version the pipeline was built on
+- Available context: the pipeline file written by steps 2 and 3 (create mode) or loaded by `{skill-root}/ci/steps-e/step-01-assess.md` (edit mode), and the platform, test stack and Node version the pipeline was built on
 - Create mode: take those from step 1. On resume, read them from the step 1 and 2 output recorded in `{outputFile}`
 - Edit mode: step 1 does not run. The platform is the one the loaded file's path names (`.github/workflows/*.yml` and `.github/workflows/*.yaml` are `github-actions`, `.gitlab-ci.yml` is `gitlab-ci`, `Jenkinsfile` is `jenkins`, `azure-pipelines.yml` is `azure-devops`, `.harness/*.yaml` is `harness`, `.circleci/config.yml` is `circle-ci`), and the runner and Node setup are the ones the file's own jobs use
 - Limits: change no job this step did not write, except the event guards of section 3 item 7 and the wait of section 3 item 10, which changes that one job's `needs` in the pipeline file, or across files that job's `if:` and checkout `ref:`, its workflow's `workflow_run` trigger and the event guards of that workflow's other jobs, and nothing else
@@ -37,7 +37,7 @@ Find every evaluation CI plan in the repository and render each one into the pip
 Two places load this step.
 
 - **Create mode** reaches it from step 3 through `nextStepFile`. Run sections 1 to 5, then load `{nextStepFile}`.
-- **Edit mode** loads sections 1 and 2 from `steps-e/step-01-assess.md` and sections 3 and 4 from `steps-e/step-02-apply-edit.md`. Hold what section 1 finds in the conversation and never write `{outputFile}`: the checkpoint belongs to the create run. Skip section 5, report what was rendered in the edit summary, and return to the edit step that loaded this one. Edit mode renders only when the loaded target is a pipeline file; for any other target, report the plans found and render nothing.
+- **Edit mode** loads sections 1 and 2 from `{skill-root}/ci/steps-e/step-01-assess.md` and sections 3 and 4 from `{skill-root}/ci/steps-e/step-02-apply-edit.md`. Hold what section 1 finds in the conversation and never write `{outputFile}`: the checkpoint belongs to the create run. Skip section 5, report what was rendered in the edit summary, and return to the edit step that loaded this one. Edit mode renders only when the loaded target is a pipeline file; for any other target, report the plans found and render nothing.
 
 ## MANDATORY SEQUENCE
 

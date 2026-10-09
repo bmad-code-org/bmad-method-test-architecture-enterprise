@@ -117,7 +117,13 @@ Resolution precedence:
 
 ## 1. Resolve Output Path and Select Template
 
-Determine the pipeline output file path based on the detected `ci_platform`:
+Consume the frozen `pipeline_action` and `pipeline_target` before selecting output. For Update or Replace, read the complete selected existing target; its recorded path is the output path. The platform table supplies a default path only for a new Create target. An absent target decision, incompatible platform/path, missing expected existing file, or unexpected file at a Create target returns to the coordinator before any writes. Workers ask no questions or choose replacements independently.
+
+- **Create**: generate at the agreed new target after verifying it is still absent.
+- **Update**: merge only the authorized testing/quality-gate changes into the selected target. Preserve unrelated jobs, triggers, permissions, concurrency, reusable inputs, environment settings and other pipeline behavior. Add required trigger changes only when they are part of the recorded request, such as evaluation-plan gates or Pact dispatch integration. Report proposed conflicts to the coordinator before writing.
+- **Replace**: regenerate only the selected target when the journal records explicit replacement authorization. Preserve other pipeline files and their unrelated settings. An implicit default update never authorizes replacement.
+
+Use the agreed target for all subsequent steps and helper/docs references. Platform defaults for a new target:
 
 | CI Platform      | Output Path                                 | Template File                                      |
 | ---------------- | ------------------------------------------- | -------------------------------------------------- |
@@ -191,14 +197,14 @@ Include stages:
 
 Write the selected pipeline configuration to the resolved output path from step 1. Adjust test commands based on `test_stack_type` and `test_framework`:
 
-- **Frontend/Fullstack**: Include browser install, E2E/component test commands, Playwright/Cypress artifacts
+- **Frontend/Fullstack**: Run the contract's declared test commands. Include browser install and Playwright/Cypress artifacts only for an observed or requested browser surface. A Jest/Vitest/Node built-in unit/component/API suite uses its actual commands and artifacts with no browser installation.
 - **Backend (Node.js)**: Use `npm test` or framework-specific commands (`vitest`, `jest`), skip browser install
 - **Backend (Python)**: Use `pytest` with coverage (`pytest --cov`), install via `pip install -r requirements.txt` or `poetry install`
 - **Backend (Java/Kotlin)**: Use `mvn test` or `gradle test`, cache `.m2/repository` or `.gradle/caches`
 - **Backend (Go)**: Use `go test ./...` with coverage (`-coverprofile`), cache Go modules
 - **Backend (C#/.NET)**: Use `dotnet test` with coverage, restore NuGet packages
 - **Backend (Ruby)**: Use `bundle exec rspec` with coverage, cache `vendor/bundle`
-- **Mobile**: Two-tier pipeline, because the device layer is the expensive one. Load `mobile-ci-device-lab.md` before generating this leg; it carries the artifact, caching, and pinning details the rest of these bullets summarize:
+- **Mobile with an observed/requested device surface**: Two-tier pipeline, because the device layer is the expensive one. Mobile unit/component-only suites run their existing commands without device jobs. Load `mobile-ci-device-lab.md` before generating this leg; it carries the artifact, caching, and pinning details the rest of these bullets summarize:
   - **Build artifact**: flows run against a release-shaped build (unsigned APK, simulator IPA) or a development build that the job installs. Never against a prebuilt development shell such as Expo Go: the native modules the flows need are absent, and it adds a dev server, a manifest exchange, and a third-party launch to the CI path that users never take.
   - **Every push**: unit and component tests plus contract tests. No emulator, no app build. This is the gate people wait on.
   - **PR**: build the app once, boot ONE emulator or simulator on the primary target, run `maestro test {maestro_root}/ --include-tags P0` (where `{maestro_root}` is the resolved Maestro root directory: `maestro/` or `.maestro/`). Skip the browser install entirely; there is no browser.

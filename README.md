@@ -3,7 +3,7 @@
 [Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/) · [Getting started](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) · [Contributing](./CONTRIBUTING.md) · [MIT license](./LICENSE)
 
 TEA is a BMad module for test planning, automation, evaluation, and release decisions.
-Its agent, Murat, uses ten registered workflow entries and a shared testing knowledge base to turn requirements and risks into tests and evidence.
+Its agent, Murat, uses ten workflows and a shared testing knowledge base to turn requirements and risks into tests and evidence.
 You can use TEA on its own or alongside BMad Method.
 
 TEA helps you:
@@ -58,7 +58,7 @@ Each workflow can run directly in a fresh session.
 | [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/)    | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                   |
 | [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)          | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence                 |
 | [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                   |
-| [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Select the framework skill's CI phase                  |
+| [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Connect tests and quality checks to CI                 |
 | [ATDD](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)                        | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
 | [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)                | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
 | [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)          | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                  |
@@ -67,8 +67,8 @@ Each workflow can run directly in a fresh session.
 | [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/)                      | `/bmad-testarch-trace`       | TR   | Map requirements to tests and decide a release gate    |
 
 Framework and CI setup share one skill, `bmad-testarch-framework`.
-Ask for framework only, CI only, or both; TEA infers the scope from your prompt and asks "Do you want CI too?" once when CI scope is unclear.
-The existing `bmad-testarch-ci` invocation selects the CI phase through a compatibility adapter, preserving its triggers, menu code, and customizations.
+Ask for framework only, CI only, or both; TEA infers the scope from your prompt and asks "Do you want CI too?" once when CI scope is unclear in an interactive session. An unattended request with unclear scope runs framework setup only and states that CI was excluded.
+`/bmad-testarch-ci` and the `CI` menu code still work and start the same skill's CI setup, with your existing CI customizations.
 Create, Resume, Validate, and Edit remain available for the selected setup scope.
 
 For Codex, replace the leading `/` in the table with `$`.

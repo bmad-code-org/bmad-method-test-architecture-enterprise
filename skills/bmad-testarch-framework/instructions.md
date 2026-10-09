@@ -33,6 +33,6 @@ From `workflow.yaml`, resolve:
 
 ### 2. Shared Scope and Operation Routing
 
-Load `{skill-root}/SKILL.md` and `{skill-root}/resources/setup-routing.md` completely. Apply the read-only request gate before activation hooks or project writes, then preserve create/resume/validate/edit across each selected phase. Framework root paths and CI artifact/checkpoint paths remain unchanged. Framework Create routes to `{skill-root}/steps-c/step-01-preflight.md`; framework Resume routes to `{skill-root}/steps-c/step-01b-resume.md` after the shared resume checks.
+Load `{skill-root}/SKILL.md` and `{skill-root}/resources/setup-routing.md` completely. Apply the read-only request gate before activation hooks or project writes, then preserve create/resume/validate/edit across each selected phase. Framework root paths and CI artifact/checkpoint paths remain unchanged. Framework Create routes to `{skill-root}/steps-c/step-01-preflight.md`; Resume follows the saved position in `setup-run-progress.md`. Only a legacy Create checkpoint with no saved journal position loads `{skill-root}/steps-c/step-01b-resume.md`.
 
 For both Create, load `{skill-root}/resources/setup-parallel.md` after framework selection. Every phase terminal loads `{skill-root}/resources/setup-phase-completion.md` and completes only after all selected phases pass.

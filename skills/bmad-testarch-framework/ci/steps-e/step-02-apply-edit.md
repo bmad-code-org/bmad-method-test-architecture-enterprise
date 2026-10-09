@@ -48,9 +48,9 @@ Apply only the outstanding saved edits. Follow `resources/setup-state.md` sectio
 
 When the loaded target is a pipeline file, run sections 3 and 4 of `{evaluationPlansStepFile}` on it, whether or not step 1 found plans, so the generated jobs of a plan that was deleted are removed, then return here. Skip its section 5.
 
-### 3. Report
+### 3. Check Changed Outputs and Report
 
-Summarize the edits applied.
+Re-check the requested edits and their direct dependencies. For a pipeline edit, check syntax, injection safety and evaluation-plan rendering/gates when applicable. Do not require an unrelated full test suite to pass or repair unrelated failures. Summarize the edits and checks applied; record any unrelated failure as an observation.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
 

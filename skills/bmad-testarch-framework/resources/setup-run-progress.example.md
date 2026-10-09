@@ -6,9 +6,27 @@ setup_scope: 'both'
 setup_operation: 'create'
 setup_entry: 'bmad-testarch-framework'
 ci_scope_answered: true
+ci_scope_defaulted: false
 framework_first_accepted: false
 framework_reused: false
+ci_platform: 'github-actions'
+pipeline_action: 'create'
+pipeline_target: '.github/workflows/test.yml'
 active_phase: 'ci'
+setup_parallel_started: true
+parallel_workers:
+  framework:
+    run_id: 'example-20261009-backend-setup'
+    role: 'framework'
+    status: 'completed'
+    position: 'phase-handoff'
+  ci:
+    run_id: 'example-20261009-backend-setup'
+    role: 'ci'
+    status: 'pending'
+    position:
+      file: '{skill-root}/ci/steps-c/step-01-preflight.md'
+      subsection: '1'
 phase_status:
   framework: 'completed'
   ci: 'pending'
@@ -41,6 +59,12 @@ contract:
   service_commands: []
   artifact_paths: ['test-results/']
   ci_platform: 'github-actions'
+  pipeline_action: 'create'
+  pipeline_target: '.github/workflows/test.yml'
+  test_surfaces: ['unit', 'integration']
+  dependency_decisions:
+    playwright_utils: 'disabled'
+    pactjs_utils: 'disabled'
   integration_flags:
     tea_use_playwright_utils: false
     tea_use_pactjs_utils: false

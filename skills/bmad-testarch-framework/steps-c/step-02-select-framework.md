@@ -91,7 +91,7 @@ Respect `config.test_framework` if explicitly set (not `"auto"`).
 
 ## 2. Announce Decision
 
-State the selected framework and reasoning. For every scope, record the stack/framework/package-manager/test-command contract from `resources/setup-routing.md` before scaffold generation. Include every detected surface, config path, toolchain, exact local/CI test commands, service/startup/readiness requirements and integration plan. Include the CI platform only when CI is requested. Resolve dependency consent before workers or dependency writes and save the final accepted contract in the all-scope journal.
+State the selected framework and reasoning. For every scope, record the stack/framework/package-manager/test-command contract from `resources/setup-routing.md` before scaffold generation. Include every detected surface, config path, toolchain, exact local/CI test commands, service/startup/readiness requirements and integration plan. When CI is requested, resolve `ci_workflow` and effective platform precedence through the shared router before freezing. The coordinator executes CI preflight section 5 as read-only planning, settles any existing pipeline update/replace choice, and records `pipeline_action`, exact selected `pipeline_target`, plus the final platform in the contract. Include platform only when CI is requested. Resolve dependency consent before workers or dependency writes and save the final accepted contract in the all-scope journal.
 
 ---
 

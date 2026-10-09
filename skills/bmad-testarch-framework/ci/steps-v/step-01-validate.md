@@ -66,7 +66,7 @@ Read `{validationChecklist}` and list all criteria.
 
 ### 3. Validate Outputs
 
-Evaluate outputs against each checklist item. Save each completed criterion/result and the next Validate subsection in the journal; Resume continues unfinished criteria with the same selected artifacts and reserved report.
+Evaluate outputs against every applicable checklist item. Mark non-applicable scaffold criteria as N/A with a reason for existing frameworks or narrower artifact scopes. Record actual test execution when applicable and available; failures and unavailable prerequisites are report results. Do not install dependencies, repair outputs or modify tests. A report with FAIL criteria still completes the Validate operation. Save each completed criterion/result and the next Validate subsection in the journal; Resume continues unfinished criteria with the same selected artifacts and reserved report.
 
 ### 3a. Script Injection Scan
 

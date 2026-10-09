@@ -64,6 +64,9 @@ function ciStagingProblems(workspace, set) {
   const canonicalRoot = rootOf('skill-root');
   const aliasRoot = rootOf('ci-skill-root');
   const problems = [];
+  if (!prompt.includes('Read `bmad-testarch-ci/SKILL.md` completely')) problems.push('CI prompt bypasses its installed alias entry');
+  if (canonicalRoot !== 'bmad-testarch-framework' || aliasRoot !== 'bmad-testarch-ci')
+    problems.push('CI entry cannot resolve its canonical sibling skill');
   const compareTree = (sourceDir, stagedRoot) => {
     if (typeof stagedRoot !== 'string') {
       problems.push(`${path.basename(sourceDir)}: the CI prompt resolves no skill directory`);
@@ -1388,7 +1391,7 @@ async function main() {
           );
           continue;
         }
-        for (const expected of [set.projectRoot, 'skill']) {
+        for (const expected of [set.projectRoot, suiteId === 'ci' ? 'bmad-testarch-framework' : 'skill']) {
           if (!fs.existsSync(path.join(staged.cwd, expected))) {
             problems.push(`${suiteId} ${set.id}: the staged workspace holds no ${expected}/, so the leg's agent would find nothing to run`);
           }
@@ -1397,11 +1400,12 @@ async function main() {
           problems.push(...ciStagingProblems(staged, set).map((failure) => `${suiteId} ${set.id}: ${failure}`));
           if (set === groundTruth.fixtureSets[0]) {
             for (const asset of [
-              'skill/SKILL.md',
-              'skill/resources/setup-routing.md',
-              'skill/resources/setup-state.md',
-              'skill/ci/steps-c/step-01-preflight.md',
-              'skill/ci/github-actions-template.yaml',
+              'bmad-testarch-framework/SKILL.md',
+              'bmad-testarch-framework/resources/setup-routing.md',
+              'bmad-testarch-framework/resources/setup-state.md',
+              'bmad-testarch-framework/ci/steps-c/step-01-preflight.md',
+              'bmad-testarch-framework/ci/github-actions-template.yaml',
+              'bmad-testarch-ci/SKILL.md',
               'bmad-testarch-ci/customize.toml',
             ]) {
               const file = path.join(staged.cwd, asset);
@@ -1415,12 +1419,12 @@ async function main() {
                 fs.writeFileSync(file, original);
               }
             }
-            const canonicalEntry = path.join(staged.cwd, 'skill', 'SKILL.md');
+            const canonicalEntry = path.join(staged.cwd, 'bmad-testarch-framework', 'SKILL.md');
             if (fs.existsSync(canonicalEntry)) {
               const original = fs.readFileSync(canonicalEntry);
               try {
                 fs.copyFileSync(path.join(__dirname, '..', 'skills', 'bmad-testarch-ci', 'SKILL.md'), canonicalEntry);
-                if (!ciStagingProblems(staged, set).includes('staged CI asset differs from its source: skill/SKILL.md'))
+                if (!ciStagingProblems(staged, set).includes('staged CI asset differs from its source: bmad-testarch-framework/SKILL.md'))
                   problems.push('CI staging accepted the alias entry as its canonical SKILL.md');
               } finally {
                 fs.writeFileSync(canonicalEntry, original);

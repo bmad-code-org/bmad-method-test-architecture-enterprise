@@ -45,7 +45,7 @@ Run TEA workflows standalone, without BMad Method planning.
 3. `test-review` (optional)
 4. `trace` (coverage matrix, then gate decision)
 
-Run `framework` if you want TEA to scaffold the harness, the CI pipeline, or both. The `ci` command remains a compatibility entry for the same skill's CI phase.
+Run `framework` if you want TEA to scaffold the harness, the CI pipeline, or both. The `ci` command also starts the same skill's CI setup.
 Both work best after the stack and architecture are decided.
 
 **You bring:** coverage oracle inputs (requirements, specs, external system-of-record pointers, or an analyzable source tree), a development environment, and project context.
@@ -87,7 +87,7 @@ Model 5 adapts this sequence to an existing codebase.
 | **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2         | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, `gate-decision-{run_key}.json`, release summary |
 
 `test-design` runs before `framework` setup so NFR evidence needs can shape the infrastructure.
-Framework and CI setup run in the same skill, in Phase 3 after architecture. Request either phase or both; the `ci` compatibility entry selects CI scope.
+Framework and CI setup run in the same skill, in Phase 3 after architecture. Request either phase or both; the `ci` command starts CI setup.
 The gate decision is one of PASS, CONCERNS, or FAIL.
 
 ### Enterprise track deltas

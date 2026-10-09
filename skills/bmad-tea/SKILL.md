@@ -78,7 +78,7 @@ Dispatch on a clear match by invoking the item's `skill` or executing its `promp
 
 ### Framework and CI Setup Routing
 
-TF invokes `bmad-testarch-framework`, the canonical owner of framework and CI setup. CI invokes the installed `bmad-testarch-ci` compatibility entry with CI scope preset. Preserve both codes, names, custom menu overrides, requested scope and operation. A request for framework and pipeline setup routes directly to TF with `setup_scope = both`; these two compatible setup intents are one combined workflow. The shared router asks “Do you want CI too?” once when setup leaves CI intent unclear.
+TF invokes `bmad-testarch-framework`, the canonical owner of framework and CI setup. CI invokes the installed `bmad-testarch-ci` compatibility entry with CI scope preset. Preserve both codes, names, custom menu overrides, requested scope and operation. A request for framework and pipeline setup routes directly to TF with `setup_scope = both`. The shared router asks “Do you want CI too?” once when setup leaves CI intent unclear.
 
 ### Routing Ambiguity Boundaries
 

@@ -65,7 +65,7 @@ Each suite evaluates a specific skill against concrete artifacts:
 - `bmad-testarch-test-review`: Verifies recall of planted anti-patterns without raising false alarms on clean code.
 - `bmad-testarch-nfr`: Evaluates whether NFR assessments ground their verdicts in supplied evidence files.
 - `bmad-testarch-trace`: Checks that requirements-to-evidence matrices resolve full provenance, identify gaps, and maintain stable metadata.
-- `bmad-testarch-ci`: Exercises the compatibility entry for the framework skill's CI phase and validates that generated CI configurations parse and wire real test commands.
+- `bmad-testarch-ci`: Exercises the framework skill's CI phase instructions and validates that generated CI configurations parse and wire real test commands.
 - `bmad-testarch-automate`: Tests regression detection against running services using four hand-authored spec sets without model calls.
 - `bmad-testarch-framework`: Tests template-produced scaffolds in capability-restricted sandboxes with explicitly permitted registry and loopback access.
 - `bmad-teach-me-testing`: Tests multi-turn teaching sessions and persistent learner progress.
@@ -152,7 +152,7 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is TEA's tenth workflow.
 It takes a described target (a skill, an agent, a workflow, a tool-use system, an AI feature) through a scored development and held-out evaluation built on `eval-quality`, names the gaps the scores expose, helps repair them, and finishes with the CI plan that enforces the evaluation.
 Its runtime, `tea-evaluate`, validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
-The framework skill's CI phase, reached through `bmad-testarch-ci`, renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
+`bmad-testarch-framework`'s CI setup renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
 The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks one small skill from requirements to a scored run and an accepted baseline.
 [How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains the stack and the rules behind it.
 Evaluate authored and ran its own suite; `test/evaluations/bmad-testarch-evaluate/` is the reference for an Evaluate-authored evaluation, and TEA's generator-owned suites are the reference for hand-built ones.

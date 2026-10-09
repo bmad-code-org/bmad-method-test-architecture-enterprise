@@ -216,12 +216,12 @@ const user = createUser(); // defaults
 ### 6a. Teaching: Framework and CI Setup
 
 Explain that `bmad-testarch-framework` is one setup skill for framework only, CI only, or both.
-The prompt determines scope; if CI scope is unclear, ask once: "Do you want CI too?"
+The prompt determines scope; if CI scope is unclear in an interactive session, ask once: "Do you want CI too?" An unattended request with unclear scope sets up the framework only and states that CI was excluded.
 Framework scope covers stack selection, fixtures, scaffold, scripts, and the write-time quality hook.
 CI scope covers pipeline generation, quality gates, and evaluation-plan rendering.
 For both, agree the stack, framework, and test commands first. Scaffold and pipeline generation can then run in parallel, with joint validation after both finish. A CI request without a framework offers the framework phase first.
-`bmad-testarch-ci` and `CI` remain compatibility entries selecting CI scope, while `TF` starts framework setup.
-Create, Validate, and Edit select the operation for the chosen scope. Every scope and operation saves a shared journal with targets, position, phase status, and a hook ledger. Resume restores the saved scope and original operation, skipping completed hooks. Edit and Validate preserve existing Create checkpoint bytes.
+`bmad-testarch-ci` and `CI` still start CI setup, while `TF` starts framework setup.
+Create starts setup, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes. Resume continues an interrupted run, whatever its scope and operation.
 
 ### 7. Quiz (3 questions)
 

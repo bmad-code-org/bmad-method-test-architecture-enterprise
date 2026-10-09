@@ -8,10 +8,10 @@ description: How to set up a test framework using TEA
 Use TEA's `framework` skill to scaffold test directories, fixtures, configuration, and runner commands, and to configure CI when requested.
 
 `bmad-testarch-framework` owns framework and CI setup. Your prompt selects framework only, CI only, or both.
-TEA infers the scope from your request. When CI scope is unclear, it asks once: "Do you want CI too?"
-Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together.
+TEA infers the scope from your request. When CI scope is unclear in an interactive session, it asks once: "Do you want CI too?" An unattended request with unclear scope runs framework setup only and states that CI was excluded.
+Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together. If a working framework already exists, TEA reuses it and configures CI for its actual commands.
 
-Setup scope is separate from the operation: Create starts a new run, Resume continues the saved scope and original operation, Validate checks existing outputs, and Edit revises them. Each operation journals its targets and position; Edit and Validate preserve prior Create checkpoints.
+Setup scope is separate from the operation: Create starts a new run, Resume picks up an interrupted run where it stopped, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes.
 
 ## When to Use This
 
@@ -154,12 +154,12 @@ Configure in your IDE's MCP settings.
 
 - **Run only once per repository**: Framework setup is a one-time operation
 - **Run after architecture is complete**: Framework aligns with tech stack
-- **Include CI in the same run**: Ask for framework and CI setup together, or use the `ci` compatibility command later to start the CI phase
+- **Include CI in the same run**: Ask for framework and CI setup together, or use the `ci` command later to start the CI phase
 
 ## Next Steps
 
 After test framework setup:
 
 1. **Test Design**: Create test plans for system or epics
-2. **CI Configuration**: Set up automated test runs
+2. **CI Configuration (skip if you included CI)**: Set up automated test runs
 3. **Story Implementation**: Tests are ready for development

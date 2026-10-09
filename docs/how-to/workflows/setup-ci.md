@@ -6,13 +6,13 @@ description: Configure automated test execution with selective testing and burn-
 # How to Set Up CI Pipeline with TEA
 
 Use the CI phase of TEA's `framework` skill to configure test jobs, sharding, burn-in runs, and result artifacts.
-The existing `bmad-testarch-ci` command and `CI` menu code select this phase through a compatibility adapter.
+The existing `bmad-testarch-ci` command and `CI` menu code start the same skill's CI setup, with your existing CI customizations.
 
 `bmad-testarch-framework` owns framework and CI setup. Your prompt selects framework only, CI only, or both.
-TEA infers the scope from your request. When CI scope is unclear, it asks once: "Do you want CI too?"
-Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together.
+TEA infers the scope from your request. When CI scope is unclear in an interactive session, it asks once: "Do you want CI too?" An unattended request with unclear scope runs framework setup only and states that CI was excluded.
+Explicit framework-only requests skip the CI phase. For both, TEA agrees the stack, framework, and test commands first, then can generate the scaffold and pipeline in parallel and validate them together. If a working framework already exists, TEA reuses it and configures CI for its actual commands.
 
-Setup scope is separate from the operation: Create starts a new run, Resume continues the saved scope and original operation, Validate checks existing outputs, and Edit revises them. Each operation journals its targets and position; Edit and Validate preserve prior Create checkpoints.
+Setup scope is separate from the operation: Create starts a new run, Resume picks up an interrupted run where it stopped, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes.
 
 ## When to Use This
 
@@ -26,7 +26,7 @@ Setup scope is separate from the operation: Create starts a new run, Resume cont
 ## Prerequisites
 
 - A working test framework, or permission to create one during setup
-- Tests written (have something to run in CI)
+- Tests written, or sample tests from framework setup
 - CI/CD platform access (GitHub Actions, GitLab CI, etc.)
 
 ## Steps
@@ -40,8 +40,12 @@ Setup scope is separate from the operation: Create starts a new run, Resume cont
 Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
 You can also run `/bmad-testarch-framework` or `$bmad-testarch-framework` with "Set up CI for the existing test framework."
-If no framework exists, TEA offers to include framework setup. On acceptance, it agrees the stack, framework, and test commands before generating both outputs; final validation checks them together.
+If no framework exists, TEA offers to include framework setup. Declining stops the run without changes. On acceptance, it agrees the stack, framework, and test commands before generating both outputs; final validation checks them together.
 Choose Create, Resume, Validate, or Edit for the selected setup scope. Existing CI customizations and saved checkpoints remain usable.
+
+Create installs the dependencies needed to run the existing test commands and starts their required local services during preflight.
+It uses your project's scripts and configuration; common commands include `npm test`, `pytest`, `mvn test`, `go test ./...`, `dotnet test`, and `bundle exec rspec`.
+Validate records execution results and missing prerequisites in its report. Edit checks the pipeline changes you requested, such as syntax, injection safety, and evaluation-plan rendering.
 
 ### 2. Select CI/CD Platform
 

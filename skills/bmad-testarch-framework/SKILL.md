@@ -38,13 +38,15 @@ Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skil
 
 Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
 
+When scope includes CI, resolve `ci_workflow` through `resources/setup-routing.md` section 2 before any CI hook, greeting, contract freeze or worker launch. Retain canonical `workflow` separately for explicit platform precedence. This resolution reads settings only; the activation stages below execute the applicable hooks and facts.
+
 ### Step 2: Execute Prepend Steps
 
-Execute each entry in `{workflow.activation_steps_prepend}` in order through `{skill-root}/resources/setup-state.md` section 3. The request gate has recovered the current run and persisted its journal before this step. Save each entry's started marker before executing it, skip completed entries, and halt on any started entry with an uncertain outcome.
+When scope includes framework, execute each entry in `{workflow.activation_steps_prepend}` in order through `{skill-root}/resources/setup-state.md` section 3. CI-only skips framework prepend/append hooks, persistent facts and completion hooks. When scope includes CI, execute each `ci_workflow.activation_steps_prepend` entry through the same durable protocol now, before config/greeting. The request gate has recovered the current run and persisted its journal before this step. Save each entry's started marker before executing it, skip completed entries, and halt on any started entry with an uncertain outcome.
 
 ### Step 3: Load Persistent Facts
 
-Treat every entry in `{workflow.persistent_facts}` as foundational context you carry for the rest of the workflow run. Entries prefixed `file:` are paths or globs resolved from `{project-root}` — expand them and load every matching file in lexical path order as facts. All other entries are facts verbatim.
+When scope includes framework, treat every entry in `{workflow.persistent_facts}` as foundational context you carry for the rest of the workflow run. When scope includes CI, load `ci_workflow.persistent_facts` here under the same rules. CI-only loads its CI facts and skips framework facts. Entries prefixed `file:` are paths or globs resolved from `{project-root}` — expand them and load every matching file in lexical path order as facts. All other entries are facts verbatim.
 
 ### Step 4: Load Config
 
@@ -60,7 +62,7 @@ Greet `{user_name}`, speaking in `{communication_language}`.
 
 ### Step 6: Execute Append Steps
 
-Execute each entry in `{workflow.activation_steps_append}` in order through the same individual durable hook protocol. Save `framework` in `activation_completed` only after all applicable entries succeed. Preserve the full journal and hook ledger through every scope and operation Resume.
+After greeting, execute each applicable append entry through the same individual durable hook protocol: framework `{workflow.activation_steps_append}` when scope includes framework, then `ci_workflow.activation_steps_append` when scope includes CI. Save each applicable phase in `activation_completed` after its entries succeed. Preserve the full journal and hook ledger through every scope and operation Resume.
 
 Activation is complete. Begin the workflow below.
 
@@ -83,11 +85,11 @@ Load `{skill-root}/resources/setup-routing.md` completely. Continue sections 2 t
 
 ### CI Phase
 
-Activate the CI settings as specified in `resources/setup-routing.md`, keeping `{skill-root}` bound to the canonical framework directory.
+CI settings and applicable activation hooks were handled in the activation stages above. Keep `{skill-root}` bound to the canonical framework directory; do not replay CI activation at phase handoff.
 
 - **If C:** Load `{skill-root}/ci/steps-c/step-01-preflight.md`
 - **If R:** Load `{skill-root}/ci/steps-c/step-01b-resume.md` only for a legacy Create checkpoint without a journal next position. Journal-backed Resume dispatches its saved C/E/V next file/subsection directly.
 - **If V:** Load `{skill-root}/ci/steps-v/step-01-validate.md`
 - **If E:** Load `{skill-root}/ci/steps-e/step-01-assess.md`
 
-For both scope, the coordinator runs the applicable framework and CI phases under the same operation and agreed contract. Read `resources/setup-parallel.md` before concurrent generation. Every phase terminal loads `{skill-root}/resources/setup-phase-completion.md`; completion occurs after all requested phases pass.
+For both scope, the coordinator runs the applicable framework and CI phases under the same operation and agreed contract. Read `resources/setup-parallel.md` before concurrent generation. Every phase terminal loads `{skill-root}/resources/setup-phase-completion.md`; completion occurs after all requested phases satisfy their operation-specific completion criteria.

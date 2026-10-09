@@ -1,5 +1,7 @@
 # CI/CD Pipeline Setup - Validation Checklist
 
+For Create, evaluate all applicable setup criteria. Validate reports failures and unavailable execution prerequisites without repair; Edit checks only changed outputs and their direct dependencies. A completed Validate report can contain FAIL criteria. Existing or reused frameworks do not need framework scaffold creation criteria. Use the contract's observed `test_surfaces` and frameworks to decide browser/device criteria; a frontend or mobile application with only unit/API tests does not require browser/device jobs, installs or caches.
+
 ## Prerequisites
 
 - [ ] Git repository initialized (`.git` directory or worktree marker exists)
@@ -48,8 +50,8 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 - [ ] Node version matches project
 - [ ] Test directory paths correct
 - [ ] Stack-conditional steps applied:
-  - [ ] Browser install included for frontend/fullstack stacks
-  - [ ] Browser install omitted for backend-only stacks
+  - [ ] Browser install included when a browser test surface is declared
+  - [ ] Browser install omitted when no browser test surface is declared
   - [ ] Test commands match detected framework
 
 ### Step 3: Parallel Sharding
@@ -61,18 +63,18 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 
 ### Step 4: Burn-In Loop
 
-- [ ] Burn-in job created (frontend/fullstack stacks) or intentionally skipped (backend-only)
+- [ ] Burn-in job created for an applicable browser/device surface or intentionally skipped with a reason
 - [ ] 10 iterations configured (when enabled)
 - [ ] Proper exit on failure (`|| exit 1`)
 - [ ] Runs on appropriate triggers (PR, cron)
 - [ ] Failure artifacts uploaded
-- [ ] Backend-only stacks: burn-in skipped by default (documented reason: targets UI flakiness)
+- [ ] Unit/API-only suites: UI burn-in skipped by default (documented reason: no browser/device test surface)
 
 ### Step 5: Caching Configuration
 
 - [ ] Dependency cache configured (npm/yarn)
 - [ ] Cache key uses lockfile hash
-- [ ] Browser cache configured (Playwright/Cypress)
+- [ ] Browser cache configured when Playwright/Cypress browsers are required
 - [ ] Restore-keys defined for fallback
 - [ ] Cache paths correct for platform
 
