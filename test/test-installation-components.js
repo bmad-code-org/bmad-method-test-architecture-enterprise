@@ -14,12 +14,12 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 const { packedPaths: readPackedPaths } = require('./lib/pack-listing');
-const { replayProblems: setupAliasReplayProblems } = require('./lib/setup-alias-replay');
+const { replayProblems: setupAliasReplayProblems, captureScenario: captureSetupAliasScenario } = require('./lib/setup-alias-replay');
 
 async function pathExists(filePath) {
   try {
@@ -63,6 +63,44 @@ function ciPreflightOrderProblems(content) {
   if (!(journal !== -1 && journal < install && install < execute)) problems.push('installation or tests precede contract journaling');
   if (!contract.body.includes('After the complete contract is successfully journaled'))
     problems.push('execution lacks journal-success gate');
+  return problems;
+}
+
+/** Archived Create recovery needs immutable checkpoint evidence before fixed-path replacement. */
+function setupArchiveProblems(content) {
+  const problems = [];
+  const archive = content.split('## 1a. Preserve Create Checkpoints with Archived Journals\n')[1]?.split('\n## 2.')[0];
+  if (!archive) return ['missing checkpoint archival protocol'];
+  for (const required of [
+    'exclusively create immutable copies of its referenced same-run phase checkpoints',
+    'setup-run-progress-{archive_id}.checkpoints/',
+    'setup-run-progress-{archive_id}.checkpoints.json',
+    'original path, snapshot path, SHA-256 digest and original modification timestamp',
+    'verify bytes, digests, ownership and paths before replacing the active journal or any Create checkpoint',
+    'Edit/Validate Resume restores its journal only and leaves Create checkpoints unchanged',
+    'an uncertain or still-writing worker halts archival and replacement',
+    "Record justified pending-phase absences explicitly with the phase's original fixed Create path",
+    "first preserve any displaced checkpoint's own run through this archive protocol, then remove only that recorded fixed Create destination",
+    'A missing or foreign checkpoint for a phase that has saved its own Create progress halts archival unless an existing verified snapshot preserves its same-run bytes',
+    "exclude any foreign legacy checkpoint from this phase's preflight/Resume selection and preserve its history",
+    'The restored selected legacy checkpoint is authoritative even in headless mode',
+    "Execute only its owning loader's migration portion once before activation, journal adoption or next-step dispatch",
+    'verify its unchanged bytes at the modern path and adopt that modern `phase_checkpoints` reference',
+  ]) {
+    if (!archive.toLowerCase().includes(required.toLowerCase())) problems.push(`missing archive safeguard: ${required}`);
+  }
+  const resume = archive.indexOf('On Resume of an archived Create run');
+  const verify = archive.indexOf('first verify its journal digest and every required snapshot', resume);
+  const displace = archive.indexOf('Archive any displaced active run through this same protocol', resume);
+  const restore = archive.indexOf('Atomically restore selected snapshot bytes', resume);
+  const reread = archive.indexOf(
+    'Re-read and verify all restored digests and recorded absences before adopting the selected journal or dispatching Resume',
+    resume,
+  );
+  if (!(resume !== -1 && verify > resume && displace > verify && restore > displace && reread > restore))
+    problems.push('archived Resume must verify snapshots and preserve displaced runs before restoring and dispatching');
+  if (!content.includes("Before Create replaces a different run's checkpoint, the coordinator verifies that run's immutable archive"))
+    problems.push('Create may overwrite a checkpoint before its immutable archive is verified');
   return problems;
 }
 
@@ -759,9 +797,67 @@ async function runTests() {
     );
     assert(
       state.includes('archive any existing active journal intact, including an unfinished journal whose scope or targets are unrelated') &&
-        state.includes('verify the archive write before replacing the active journal'),
+        setupArchiveProblems(state).length === 0,
       'unrelated unfinished journals survive new operations in verified archives',
     );
+    assert(
+      setupArchiveProblems(
+        state.replace('exclusively create immutable copies of its referenced same-run phase checkpoints', 'retain fixed checkpoint paths'),
+      ).length > 0,
+      'archive guard rejects journals that lose their referenced Create checkpoint bytes',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace('first verify its journal digest and every required snapshot', 'skip verification of saved checkpoint evidence'),
+      ).length > 0,
+      'archive guard rejects checkpoint restoration before snapshot verification',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          'Archive any displaced active run through this same protocol',
+          'Replace displaced active runs without preserving them',
+        ),
+      ).length > 0,
+      'archive guard rejects restoration that destroys the displaced run',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          "Before Create replaces a different run's checkpoint, the coordinator verifies that run's immutable archive",
+          "Create replaces a different run's checkpoint without verifying its immutable archive",
+        ),
+      ).length > 0,
+      'archive guard rejects fixed-path Create replacement before archive authorization',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          "first preserve any displaced checkpoint's own run through this archive protocol, then remove only that recorded fixed Create destination",
+          'remove any checkpoint occupying the pending phase path',
+        ),
+      ).length > 0,
+      'archive guard rejects pending-phase absence restoration that loses a displaced checkpoint',
+    );
+    assert(
+      setupArchiveProblems(
+        state.replace(
+          'The restored selected legacy checkpoint is authoritative even in headless mode',
+          'A headless run selects whichever modern checkpoint is present',
+        ),
+      ).length > 0,
+      'archive guard rejects resumed legacy history replaced by a foreign modern checkpoint',
+    );
+    for (const scope of ['', 'ci/']) {
+      const resume = await fs.readFile(path.join(projectRoot, `skills/bmad-testarch-framework/${scope}steps-c/step-01b-resume.md`), 'utf8');
+      assert(
+        resume.includes('first archive any displaced modern counterpart') &&
+          resume.includes('Select that restored legacy checkpoint deterministically, including in headless mode') &&
+          resume.includes('execute items 2 and 3 below once before activation, journal adoption or saved next-step dispatch') &&
+          resume.includes('A saved pending-phase absence cannot consume any foreign checkpoint through either lookup path'),
+        `${scope || 'framework/'} Resume preserves selected archived legacy history through its migration`,
+      );
+    }
     assert(
       state.includes('A headless or autonomous new request starts over and archives the prior history') &&
         state.includes('an explicit Resume keeps its recovered run'),
@@ -893,6 +989,52 @@ async function runTests() {
     );
   } catch (error) {
     assert(false, 'shared setup routing validates', error.message);
+  }
+
+  try {
+    for (const failure of ['spawn', 'timeout']) {
+      let scratch;
+      let runnerResult;
+      let thrown;
+      try {
+        captureSetupAliasScenario('ci-only', {
+          run(_command, _args, options) {
+            scratch = options.cwd;
+            runnerResult =
+              failure === 'spawn'
+                ? spawnSync(path.join(scratch, 'missing-runner'), [], { ...options, timeout: 1000 })
+                : spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 1000)'], { ...options, timeout: 20 });
+            return runnerResult;
+          },
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      try {
+        const capture = JSON.parse(await fs.readFile(path.join(scratch, 'capture.json'), 'utf8'));
+        assert(runnerResult.error?.code === (failure === 'spawn' ? 'ENOENT' : 'ETIMEDOUT'), `alias capture reproduces ${failure} error`);
+        assert(
+          capture.runnerError?.message === runnerResult.error.message && capture.runnerError?.code === runnerResult.error.code,
+          `alias ${failure} evidence retains the original runner error message and code`,
+        );
+        assert(
+          capture.runnerSignal === runnerResult.signal && (failure !== 'timeout' || capture.runnerSignal === 'SIGTERM'),
+          `alias ${failure} evidence retains the runner termination signal`,
+        );
+        assert(
+          thrown?.cause === runnerResult.error && thrown.message.includes(runnerResult.error.message) && thrown.message.includes(scratch),
+          `alias ${failure} throws the original cause with its retained evidence location`,
+        );
+        assert(
+          setupAliasReplayProblems(capture).includes('real alias runner failed or was terminated'),
+          `alias ${failure} replay rejects failed runner evidence`,
+        );
+      } finally {
+        if (scratch) await fs.rm(scratch, { recursive: true, force: true });
+      }
+    }
+  } catch (error) {
+    assert(false, 'CI alias runner failures retain diagnostics before throwing', error.message);
   }
 
   try {

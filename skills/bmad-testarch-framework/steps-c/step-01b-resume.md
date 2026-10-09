@@ -36,10 +36,14 @@ Resume an interrupted workflow by loading the existing progress document, verify
 
 ### 1. Load Output Document
 
+For an archived Create run, the coordinator first follows `resources/setup-state.md` section 1a to verify its immutable checkpoint snapshots, archive displaced history and restore the selected original checkpoint bytes. Load only that restored same-run checkpoint; a different run at the fixed path cannot supply this run's choices or worker position. A preservation or restore failure halts before migration, hooks or step dispatch.
+
 A checkpoint that carries no `workflowStatus` predates that key: treat it as `'completed'` when its `lastStep` is `'step-05-validate-and-summary'`, and as `'in-progress'` otherwise.
 
 **Legacy checkpoint migration.** Runs from older TEA versions wrote the checkpoint to `{legacyOutputFile}`, at the root of `{test_artifacts}`.
 Migrate it only while it is in progress. A completed legacy checkpoint stays where it is and is never moved or deleted.
+
+For explicit Resume of an in-progress archived legacy checkpoint restored through `setup-state.md` section 1a, first archive any displaced modern counterpart and verify the selected legacy checkpoint's identity and digest. Select that restored legacy checkpoint deterministically, including in headless mode, and execute items 2 and 3 below once before activation, journal adoption or saved next-step dispatch. Preserve its raw bytes and update the adopted journal's phase reference to `{outputFile}`. A completed archived legacy checkpoint stays at its restored legacy path with its saved phase reference and bypasses migration. The general conflict choice in item 1 applies to other in-progress legacy recovery. A saved pending-phase absence cannot consume any foreign checkpoint through either lookup path.
 
 1. If `{outputFile}` also exists, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checkpoint deletes `{legacyOutputFile}` and continues from `{outputFile}`; keeping the legacy checkpoint continues with item 2. A headless run keeps the folder checkpoint, leaves `{legacyOutputFile}` untouched, and says so.
 2. Create the `{test_artifacts}/framework/` folder if it does not exist and write the legacy checkpoint's content to `{outputFile}` unchanged.

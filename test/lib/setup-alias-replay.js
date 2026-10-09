@@ -42,6 +42,7 @@ function replayProblems(capture, currentSources = sourceDigests()) {
   if (JSON.stringify(capture.sourceDigests) !== JSON.stringify(currentSources))
     problems.push('alias replay is stale against current instructions');
   if (capture.runnerExit !== 0) problems.push('real alias runner did not complete');
+  if (capture.runnerError || capture.runnerSignal) problems.push('real alias runner failed or was terminated');
   if (
     capture.command?.slice(0, 2).join(' ') !== 'node cli/skill-runner.js' ||
     capture.command?.slice(-2).join(' ') !== '--timeout-ms 600000' ||
@@ -90,7 +91,7 @@ function replayProblems(capture, currentSources = sourceDigests()) {
   return problems;
 }
 
-function captureScenario(scenario) {
+function captureScenario(scenario, { run = spawnSync } = {}) {
   const capturedSources = sourceDigests();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-setup-alias-'));
   for (const name of ['bmad-testarch-ci', 'bmod-tea'])
@@ -148,7 +149,7 @@ function captureScenario(scenario) {
     '600000',
   ];
   fs.writeFileSync(path.join(scratch, 'prompt.txt'), prompt + '\n');
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'cli/skill-runner.js'), ...command.slice(2)], {
+  const result = run(process.execPath, [path.join(ROOT, 'cli/skill-runner.js'), ...command.slice(2)], {
     cwd: scratch,
     input: prompt,
     encoding: 'utf8',
@@ -162,6 +163,8 @@ function captureScenario(scenario) {
     prompt,
     sourceDigests: capturedSources,
     runnerExit: result.status,
+    runnerError: result.error ? { message: result.error.message, code: result.error.code ?? null } : null,
+    runnerSignal: result.signal ?? null,
     stdout: result.stdout,
     stderr: result.stderr,
     hookEvents: read('hook-events.txt'),
@@ -172,13 +175,19 @@ function captureScenario(scenario) {
     pipeline: read('.github/workflows/test.yml'),
   };
   fs.writeFileSync(path.join(scratch, 'capture.json'), JSON.stringify(capture, null, 2) + '\n');
+  if (result.error) {
+    throw new Error(
+      `${scenario} runner failed (${result.error.code ?? 'unknown code'}): ${result.error.message}; evidence retained at ${scratch}`,
+      { cause: result.error },
+    );
+  }
   const problems = replayProblems(capture);
   if (problems.length > 0) throw new Error(`${scenario} failed; evidence retained at ${scratch}: ${problems.join('; ')}`);
   fs.writeFileSync(path.join(FIXTURES, `${scenario}.capture.json`), JSON.stringify(capture, null, 2) + '\n');
   console.log(`${scenario}: current alias capture passed; evidence retained at ${scratch}`);
 }
 
-module.exports = { sourceDigests, replayProblems };
+module.exports = { sourceDigests, replayProblems, captureScenario };
 if (require.main === module) {
   if (process.argv[2] !== '--capture') throw new Error('Use --capture to refresh the two real alias cases.');
   for (const scenario of ['ci-only', 'outdated-framework']) captureScenario(scenario);

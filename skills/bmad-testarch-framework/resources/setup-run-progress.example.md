@@ -79,3 +79,5 @@ lastSaved: '2026-10-09T18:00:00Z'
 # Shared Setup Progress
 
 Every scope and operation uses this durable journal; this example records a both Create run with a completed framework phase and pending CI phase. Resume verifies the framework's existing artifacts and continues at CI preflight without repeating framework generation or completion hooks.
+
+When this Create run is archived, the coordinator preserves this journal's exact bytes and its same-run checkpoints in an immutable `setup-run-progress-{archive_id}.checkpoints/` directory. The adjacent `.checkpoints.json` sidecar records original phase paths, snapshot digests and the journal digest. Resume verifies that bundle, archives displaced history, and restores the original checkpoint bytes before dispatch. Pending phases without a saved checkpoint have an explicit absence record.
