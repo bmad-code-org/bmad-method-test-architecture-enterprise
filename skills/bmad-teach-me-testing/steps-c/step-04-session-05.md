@@ -188,7 +188,7 @@ Correct: A
 A) ATDD generates E2E, Automate generates API tests
 B) ATDD writes tests first (red phase), Automate tests existing code
 C) ATDD is faster than Automate
-D) They're the same workflow"
+D) Both modes require implemented code before generating tests"
 
 Correct: B
 

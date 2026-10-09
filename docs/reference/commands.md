@@ -226,7 +226,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 Start the automation skill in red mode to generate acceptance test scaffolds before implementation. The existing ATDD command and `AT` menu code select this default mode. Your prompt can explicitly select either mode.
 
-Create executes an isolated, un-skipped copy with `tea-atdd-red-check`, confirms failures match the missing acceptance behavior, and repairs test setup or generation errors for up to three rounds. The saved red scaffolds retain their deliberate skips for the implementation handoff. Validate reports findings; Edit checks its changes. Neither operation runs repair.
+Create verifies an isolated, activated copy with `tea-atdd-red-check` when the verifier is available and compatible with the project. When it is unavailable or incompatible, Create uses the project's native runner with its original configuration and environment. Verification confirms failures match the missing acceptance behavior and repairs test setup or generation errors for up to three rounds. The saved red scaffolds retain their deliberate skips for the implementation handoff. Validate reports findings; Edit checks its changes. Neither operation runs repair.
 
 **Phase:** Phase 4 (Implementation)
 

@@ -7,10 +7,10 @@ description: 'Generate red-phase acceptance test scaffolds using TDD cycle. Use 
 date: system-generated
 
 # Workflow components
-installed_path: "."
-instructions: "./instructions.md"
-validation: "./checklist.md"
-template: "./atdd-checklist-template.md"
+installed_path: "red"
+instructions: "red/instructions.md"
+validation: "red/checklist.md"
+template: "red/atdd-checklist-template.md"
 
 # Variables and inputs
 variables:

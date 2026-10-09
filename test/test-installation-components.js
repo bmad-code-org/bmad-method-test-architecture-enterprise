@@ -428,6 +428,21 @@ async function runTests() {
     'bmad-testarch-trace',
   ];
 
+  const canonicalAutomateRoot = path.join(projectRoot, 'skills/bmad-testarch-automate');
+  const redWorkflow = yaml.load(await fs.readFile(path.join(canonicalAutomateRoot, 'red/workflow.yaml'), 'utf8'));
+  for (const [component, expected] of Object.entries({
+    installed_path: 'red',
+    instructions: 'red/instructions.md',
+    validation: 'red/checklist.md',
+    template: 'red/atdd-checklist-template.md',
+  })) {
+    assert(redWorkflow[component] === expected, `red workflow ${component} resolves from the canonical skill root`);
+    assert(
+      await pathExists(path.resolve(canonicalAutomateRoot, redWorkflow[component])),
+      `red workflow ${component} selects an installed red asset`,
+    );
+  }
+
   for (const dirName of workflowDirs) {
     const phasePath =
       dirName === 'bmad-testarch-ci'
