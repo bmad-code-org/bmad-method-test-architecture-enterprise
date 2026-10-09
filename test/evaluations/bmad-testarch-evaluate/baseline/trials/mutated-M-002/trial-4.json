@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-002",
   "trialIndex": 4,
   "workspace": "trial-mutated-M-002-4",
-  "elapsedMs": 74130,
+  "elapsedMs": 57605,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Used the gaps guide's AD-10 exits-and-classes table rows for `tea-evaluate 11` and `tea-evaluate 12`, since `node cli/evaluate.js` is the `tea-evaluate` source for both the run and preflight commands.",
+            "basis": "Using the \"Map AD-10 exits and classes to repairs\" table in gaps.md, the `tea-evaluate 11` row and the `tea-evaluate 12` row both name the class for these tea-evaluate CLI exits.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "evaluation weakness"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49980,\"outputTokens\":745,\"costUsd\":\"0.07848859999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35078,\"outputTokens\":852,\"costUsd\":\"0.0770952\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md's classification mapping, a web application is classified as the ai-feature targetKind row even with no AI behavior, and that row's interface kind is api (adopter-owned EnvironmentProbePort).",
+            "basis": "Per inspection.md's classification note, a web application is always classified as the ai-feature targetKind even with no AI behavior, taking the ai-feature row's interface kind, which the mapping table lists as api.",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44003,\"outputTokens\":679,\"costUsd\":\"0.0540764\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44369,\"outputTokens\":620,\"costUsd\":\"0.054000400000000004\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows transcribed top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md, using each row's first column (source and exit, backticks stripped) as id and second column verbatim as class.",
+            "basis": "Rows transcribed top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md, with id as the unquoted source-and-exit and class as the second column verbatim.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":78702,\"outputTokens\":1587,\"costUsd\":\"0.07707259999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50596,\"outputTokens\":1052,\"costUsd\":\"0.0495032\"}\n"
         },
         "artifacts": {}
       }
@@ -293,13 +293,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The request names tea-evaluate run with exit \"malformed\", which is not a numeric exit the gaps guide's table lists for that source (only 10, 11, 12, 13, 64), so per the guide's own rule I must not guess a class.",
+            "basis": "The request's exit value is \"malformed\", not a numeric exit code the gaps guide's AD-10 table lists for the `tea-evaluate` source, so per the guide's own rule (an exit the table does not list for that source has no class) no class can be assigned without guessing.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50128,\"outputTokens\":703,\"costUsd\":\"0.078045\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50585,\"outputTokens\":599,\"costUsd\":\"0.0778298\"}\n"
         },
         "artifacts": {}
       }

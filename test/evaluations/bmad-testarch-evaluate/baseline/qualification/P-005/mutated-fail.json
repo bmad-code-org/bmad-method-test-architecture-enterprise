@@ -57,7 +57,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Both commands invoke tea-evaluate (cli/evaluate.js), so the gaps guide's \"Map AD-10 exits and classes to repairs\" table rows `tea-evaluate 11` and `tea-evaluate 12` apply.",
+            "basis": "Both commands invoke node cli/evaluate.js, i.e. the tea-evaluate source, so exit 11 maps to the `tea-evaluate 11` row and exit 12 to the `tea-evaluate 12` row of the AD-10 table in gaps.md.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -65,7 +65,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49910,\"outputTokens\":561,\"costUsd\":\"0.0764522\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50335,\"outputTokens\":578,\"costUsd\":\"0.077376\"}\n"
         },
         "artifacts": {}
       }
@@ -109,7 +109,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md's classification note, a web application is always classified as the `ai-feature` targetKind (including one with no AI behavior) and takes the interface kind of that row, which the mapping table lists as `web`.",
+            "basis": "The AD-4 mapping table's `ai-feature`/`web` row applies, since the guide states a web application is an `ai-feature` target—including one with no AI behavior—and takes the interface kind of that row.",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "web"
@@ -117,7 +117,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43945,\"outputTokens\":638,\"costUsd\":\"0.0535104\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44100,\"outputTokens\":478,\"costUsd\":\"0.0518844\"}\n"
         },
         "artifacts": {}
       }
@@ -161,7 +161,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows taken top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md, with id as the first column (unbacktick) and class as the second column verbatim.",
+            "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order, with id from column 1 (backticks stripped) and class verbatim from column 2.",
             "status": "answered",
             "exits": [
               {
@@ -221,7 +221,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":93836,\"outputTokens\":1272,\"costUsd\":\"0.0763678\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":62628,\"outputTokens\":938,\"costUsd\":\"0.06767580000000001\"}\n"
         },
         "artifacts": {}
       }
@@ -268,13 +268,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The gaps guide's AD-10 table lists only specific numeric tea-evaluate exits (10, 11, 12, 13, 64) and states a request naming no exit, or an exit the table does not list for that source, has no class, and 'malformed' is not one of those listed numeric exits.",
+            "basis": "The gaps guide's AD-10 table only classifies numeric exits it lists for tea-evaluate (10, 11, 12, 13, 64), and an exit of \\\"malformed\\\" is not one of them, so per the guide's own rule a request naming an exit the table does not list has no class.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50098,\"outputTokens\":731,\"costUsd\":\"0.0782354\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50539,\"outputTokens\":816,\"costUsd\":\"0.07989560000000001\"}\n"
         },
         "artifacts": {}
       }

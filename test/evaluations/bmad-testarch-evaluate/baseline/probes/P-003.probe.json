@@ -6,9 +6,9 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "systemId": "bmad-testarch-evaluate",
-  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
-  "artifactDigest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448",
-  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "implementationDigest": "sha256:b5b433b1b0e12f43a6422cfdedc0d0a4bfb2b34d256038cd08688c0d763a6801",
+  "artifactDigest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053",
+  "commitDigest": "sha256:55301f7657ffb6d1b75f5982af7a4ee90450de1b305ae0fb3b3b216936ea3a4d",
   "rationale": "[held-out] Seeded defect: M-002 gives exit 12 the evaluation weakness class, so Stage 11 sends an infrastructure failure to an evaluation repair.",
   "qualification": {
     "route": "controlled-mutation",
@@ -18,20 +18,20 @@
       "storage": "public",
       "path": "skills/bmad-testarch-evaluate/references/gaps.md",
       "privateRef": null,
-      "digest": "sha256:80414690e5fdf8975dd9e2ebe76e3f75defb9741a60ea5d7218138feedc19448"
+      "digest": "sha256:ab01ca6c0edfd2c6842fb066a92ba0a993634f5b3ce533b34b31345f58d19053"
     },
     "expectedObservableFailure": "Asked about a preflight that exited 12, Stage 11 names evaluation weakness, so the classify-exits reply carries exit12 \"evaluation weakness\".",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/baseline-pass.json",
+      "path": "runs/20261009T010807069Z-976d232a/qualification/P-003/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:a6140360e4efb93b30841d50937bbf3a33c88609a491183e36e0e74b45580bb6"
+      "digest": "sha256:59acbbd40e8aaa7dd515d58736a846f6e4557785e6406df6c93ab0c5efa1977c"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/mutated-fail.json",
+      "path": "runs/20261009T010807069Z-976d232a/qualification/P-003/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:99b610b7cefb185b9b4937f6909257e667b37b3e11365c3704d4b598671b4937"
+      "digest": "sha256:8270525ecd0cc0f0fcb760cb032a0490a87b7cb52c396ecee1d3eb737ccc6582"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261008T091018365Z-868be12a/qualification/P-003/mutated-fail.json",
+          "path": "runs/20261009T010807069Z-976d232a/qualification/P-003/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:99b610b7cefb185b9b4937f6909257e667b37b3e11365c3704d4b598671b4937"
+          "digest": "sha256:8270525ecd0cc0f0fcb760cb032a0490a87b7cb52c396ecee1d3eb737ccc6582"
         }
       ],
       "source": "controlled-mutation",

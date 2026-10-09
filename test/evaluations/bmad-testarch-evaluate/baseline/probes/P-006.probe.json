@@ -6,19 +6,19 @@
   "probeClass": "zero-action",
   "behaviorId": "B-003",
   "systemId": "bmad-testarch-evaluate",
-  "implementationDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
-  "artifactDigest": "sha256:a44e616f98ae64d6356a7b1b33fa3d322b356ee5d525e9ac64e7e46c1ac7f6f1",
-  "commitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+  "implementationDigest": "sha256:b5b433b1b0e12f43a6422cfdedc0d0a4bfb2b34d256038cd08688c0d763a6801",
+  "artifactDigest": "sha256:b5b433b1b0e12f43a6422cfdedc0d0a4bfb2b34d256038cd08688c0d763a6801",
+  "commitDigest": "sha256:55301f7657ffb6d1b75f5982af7a4ee90450de1b305ae0fb3b3b216936ea3a4d",
   "rationale": "[representative] Clean control: the committed exit table holds thirteen rows, and Stage 11 lists every one with the class its row gives.",
   "qualification": {
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261008T091018365Z-868be12a/qualification/P-006/baseline-pass.json",
+      "path": "runs/20261009T010807069Z-976d232a/qualification/P-006/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:0d2f5242962bf51557dceec6adbcea72a9a4e02450939746b9ec45c93ef8ba21"
+      "digest": "sha256:23fc280ecbbd975f966e8820d2e0ee004fd9a144579c93f8d9aa7859d5e31b87"
     },
-    "revisionCommitDigest": "sha256:d11c242f03ca386ee2204a98c15d9a1d0e63c8a6fb1ae0359c800fa0027a4ca3",
+    "revisionCommitDigest": "sha256:55301f7657ffb6d1b75f5982af7a4ee90450de1b305ae0fb3b3b216936ea3a4d",
     "noKnownDefectStatement": "The exit table in references/gaps.md holds the thirteen rows the contract's reference set names at this revision, which test:evaluate-dogfood holds."
   },
   "expectedClean": true,

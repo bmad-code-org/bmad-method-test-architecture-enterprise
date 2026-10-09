@@ -40,7 +40,7 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "Gaps guide table 'Map AD-10 exits and classes to repairs' rows 'tea-evaluate 11' and 'tea-evaluate 12' both name the source as tea-evaluate (the node cli/evaluate.js CLI) and assign class 'infrastructure' to each exit.",
+        "basis": "Used the \"Map AD-10 exits and classes to repairs\" table rows for `tea-evaluate 11` and `tea-evaluate 12`, since both commands are TeA's own `node cli/evaluate.js` (the `tea-evaluate` source).",
         "status": "answered",
         "exit11": "infrastructure",
         "exit12": "infrastructure"
@@ -48,7 +48,7 @@
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":34749,\"outputTokens\":616,\"costUsd\":\"0.073917\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50422,\"outputTokens\":836,\"costUsd\":\"0.08026219999999999\"}\n"
     },
     "artifacts": {}
   }

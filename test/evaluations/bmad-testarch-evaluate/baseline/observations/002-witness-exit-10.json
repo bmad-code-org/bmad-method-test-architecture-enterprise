@@ -40,13 +40,13 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "The gaps guide's AD-10 table row for `tea-evaluate 10` names this source/exit pair \"authoring defect\".",
+        "basis": "The guide's AD-10 table maps the row \"tea-evaluate 10\" to the class \"authoring defect\".",
         "class": "authoring defect"
       }
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49451,\"outputTokens\":371,\"costUsd\":\"0.0740918\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49973,\"outputTokens\":378,\"costUsd\":\"0.07512120000000001\"}\n"
     },
     "artifacts": {}
   }

@@ -40,13 +40,13 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "The gaps guide's Stage 11 table \"Map AD-10 exits and classes to repairs\" lists the row for source tea-evaluate and exit 11 as the matching source/exit pair for this node cli/evaluate.js command.",
+        "basis": "The gaps guide's AD-10 table row for source and exit `tea-evaluate 11` assigns this class, since the command is tea-evaluate's own CLI (node cli/evaluate.js) exiting 11.",
         "class": "evaluation weakness"
       }
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49429,\"outputTokens\":489,\"costUsd\":\"0.063115\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49944,\"outputTokens\":548,\"costUsd\":\"0.0639258\"}\n"
     },
     "artifacts": {}
   }

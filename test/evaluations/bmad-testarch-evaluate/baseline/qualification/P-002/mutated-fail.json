@@ -4,7 +4,7 @@
   "phase": "mutated-fail",
   "workspace": "qualify-P-002",
   "targetArtifact": "skills/bmad-testarch-evaluate/references/gaps.md",
-  "targetArtifactDigest": "sha256:890a0db7dd02c11f3ea48e91fbd988f42f7b0651cc40d0b43e9633167341dd3b",
+  "targetArtifactDigest": "sha256:a179cb4a88e05135b37fc5665605856d544a13fb301c0ba94f77657f1efbaa70",
   "verdict": "violated",
   "oracles": [
     {
@@ -57,7 +57,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per the gaps guide's 'Map AD-10 exits and classes to repairs' table, both commands are tea-evaluate invocations, and the rows 'tea-evaluate 11' and 'tea-evaluate 12' both assign the class infrastructure (with distinct repair text for each exit).",
+            "basis": "The AD-10 table in gaps.md rows \"tea-evaluate 11\" and \"tea-evaluate 12\" both classify as infrastructure, which matches commands run via node cli/evaluate.js run and preflight.",
             "status": "answered",
             "exit11": "infrastructure",
             "exit12": "infrastructure"
@@ -65,7 +65,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50243,\"outputTokens\":937,\"costUsd\":\"0.0811642\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50436,\"outputTokens\":1202,\"costUsd\":\"0.0838186\"}\n"
         },
         "artifacts": {}
       }
@@ -109,7 +109,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per inspection.md's rule that a web application is an ai-feature target even with no AI behavior and takes the interface kind of the ai-feature row, and AD-4's mapping table row `ai-feature | api | adopter-owned EnvironmentProbePort`, the dental booking web app (HTML pages + JSON HTTP API, no AI features) classifies as targetKind `ai-feature` with interface `api`.",
+            "basis": "inspection.md's explicit rule states a web application is classified as the ai-feature targetKind even with no AI behavior, taking the interface kind of the ai-feature row (api, adopter-owned EnvironmentProbePort adapter).",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -117,7 +117,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43691,\"outputTokens\":559,\"costUsd\":\"0.0520274\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44105,\"outputTokens\":479,\"costUsd\":\"0.0518764\"}\n"
         },
         "artifacts": {}
       }
@@ -161,7 +161,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows transcribed top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md, giving each row's source-and-exit id (column 1, unbackticked) and AD-10 class (column 2).",
+            "basis": "Rows copied top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in skills/bmad-testarch-evaluate/references/gaps.md.",
             "status": "answered",
             "exits": [
               {
@@ -221,7 +221,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":76431,\"outputTokens\":1078,\"costUsd\":\"0.06608299999999999\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49622,\"outputTokens\":991,\"costUsd\":\"0.045115\"}\n"
         },
         "artifacts": {}
       }
@@ -268,13 +268,13 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The source is tea-evaluate (node cli/evaluate.js run), but the exit value \"malformed\" is not a number and does not appear among the exits the gaps guide's table lists for that source (10, 11, 12, 13, 64), so per the guide's own rule it names no class and must not be guessed.",
+            "basis": "The request asks for the AD-10 class for a `node cli/evaluate.js run` command with exit value \\\"malformed\\\", but the gaps guide's exit table only lists numeric exits for specific sources and says an exit the table does not list for that source has no class, so it must be refused rather than guessed.",
             "status": "refused"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50072,\"outputTokens\":1156,\"costUsd\":\"0.0824346\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50640,\"outputTokens\":961,\"costUsd\":\"0.0815254\"}\n"
         },
         "artifacts": {}
       }

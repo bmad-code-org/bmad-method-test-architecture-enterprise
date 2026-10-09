@@ -40,7 +40,7 @@
     "stdout": {
       "kind": "json",
       "value": {
-        "basis": "Transcribed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with its id (source and exit) and class columns.",
+        "basis": "Listed every row of the gaps guide's \"Map AD-10 exits and classes to repairs\" table in top-to-bottom order with id (source and exit) and class exactly as written.",
         "status": "answered",
         "exits": [
           {
@@ -96,7 +96,7 @@
     },
     "stderr": {
       "kind": "text",
-      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":78203,\"outputTokens\":1424,\"costUsd\":\"0.0746588\"}\n"
+      "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49536,\"outputTokens\":995,\"costUsd\":\"0.0447312\"}\n"
     },
     "artifacts": {}
   }

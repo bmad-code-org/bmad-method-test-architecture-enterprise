@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-005",
   "trialIndex": 3,
   "workspace": "trial-mutated-M-005-3",
-  "elapsedMs": 59446,
+  "elapsedMs": 64038,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Both commands invoke the tea-evaluate CLI, so each exit is read from the gaps guide's AD-10 table rows 'tea-evaluate 11' and 'tea-evaluate 12' in references/gaps.md.",
+            "basis": "Both commands run cli/evaluate.js, which the gaps guide's AD-10 table treats as the tea-evaluate source, mapping its exit 11 row to \"evaluation weakness\" and its exit 12 row to \"infrastructure\".",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49893,\"outputTokens\":540,\"costUsd\":\"0.0761932\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50466,\"outputTokens\":658,\"costUsd\":\"0.078453\"}\n"
         },
         "artifacts": {}
       }
@@ -134,7 +134,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "inspection.md states a web application is an ai-feature target even with no AI behavior and takes the interface kind of the ai-feature row, which is api.",
+            "basis": "Per inspection.md, a web application is classified as an ai-feature target even with no AI behavior, taking the interface kind of the ai-feature row, which is api (adopter-owned EnvironmentProbePort).",
             "status": "answered",
             "targetKind": "ai-feature",
             "interface": "api"
@@ -142,7 +142,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43953,\"outputTokens\":616,\"costUsd\":\"0.0533072\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44134,\"outputTokens\":507,\"costUsd\":\"0.0522344\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows extracted top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in skills/bmad-testarch-evaluate/references/gaps.md.",
+            "basis": "Rows taken top-to-bottom from the \"Map AD-10 exits and classes to repairs\" table in gaps.md (skills/bmad-testarch-evaluate/references/gaps.md).",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49998,\"outputTokens\":1055,\"costUsd\":\"0.04868020000000001\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61870,\"outputTokens\":1284,\"costUsd\":\"0.0664508\"}\n"
         },
         "artifacts": {}
       }
@@ -293,14 +293,14 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The exit value \"malformed\" is not a numeric exit the table lists for tea-evaluate's `run` command, so per the gaps guide's fallback rule this is an evaluation weakness.",
+            "basis": "The gaps guide's AD-10 table matches source and exit together, and its own text says a request naming an exit the table does not list for that source is an evaluation weakness; \"malformed\" is not a numeric exit the table lists for tea-evaluate run, so that class applies.",
             "status": "answered",
             "class": "evaluation weakness"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50077,\"outputTokens\":852,\"costUsd\":\"0.079388\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35365,\"outputTokens\":989,\"costUsd\":\"0.07916100000000001\"}\n"
         },
         "artifacts": {}
       }

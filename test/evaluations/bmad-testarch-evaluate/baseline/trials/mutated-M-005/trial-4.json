@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-005",
   "trialIndex": 4,
   "workspace": "trial-mutated-M-005-4",
-  "elapsedMs": 70068,
+  "elapsedMs": 65948,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -82,7 +82,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Per the gaps guide's \"Map AD-10 exits and classes to repairs\" table, both commands are tea-evaluate invocations, so exit 11 matches the row `tea-evaluate 11` and exit 12 matches the row `tea-evaluate 12`.",
+            "basis": "Both commands invoke the tea-evaluate source, so gaps.md's AD-10 table rows `tea-evaluate 11` and `tea-evaluate 12` apply regardless of subcommand.",
             "status": "answered",
             "exit11": "evaluation weakness",
             "exit12": "infrastructure"
@@ -90,7 +90,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":49968,\"outputTokens\":536,\"costUsd\":\"0.0763886\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":35061,\"outputTokens\":539,\"costUsd\":\"0.0738934\"}\n"
         },
         "artifacts": {}
       }
@@ -134,15 +134,15 @@
         "stdout": {
           "kind": "json",
           "value": {
+            "basis": "inspection.md states a web application is an ai-feature target even with no AI behavior and takes the interface kind of the ai-feature row, which per the mapping table is api (adapter: adopter-owned EnvironmentProbePort).",
             "status": "answered",
             "targetKind": "ai-feature",
-            "interface": "api",
-            "basis": "Per inspection.md's mapping table, a web application is classified as the `ai-feature` row (explicitly including one with no AI behavior) and takes that row's interface kind, `api`."
+            "interface": "api"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":43983,\"outputTokens\":622,\"costUsd\":\"0.053430200000000004\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":44139,\"outputTokens\":486,\"costUsd\":\"0.052006399999999994\"}\n"
         },
         "artifacts": {}
       }
@@ -186,7 +186,7 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "Rows extracted top-to-bottom from the gaps guide's \"Map AD-10 exits and classes to repairs\" table, giving each row's Source-and-exit id and AD-10 class exactly as written.",
+            "basis": "Rows transcribed in order from the \"Map AD-10 exits and classes to repairs\" table in references/gaps.md.",
             "status": "answered",
             "exits": [
               {
@@ -246,7 +246,7 @@
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":61167,\"outputTokens\":906,\"costUsd\":\"0.06578300000000001\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":78197,\"outputTokens\":1057,\"costUsd\":\"0.070562\"}\n"
         },
         "artifacts": {}
       }
@@ -293,14 +293,14 @@
         "stdout": {
           "kind": "json",
           "value": {
-            "basis": "The request names a `tea-evaluate run` command but an exit value of \"malformed\" rather than a listed numeric exit, and the gaps guide's AD-10 table states that an exit it does not list for that source is an evaluation weakness.",
+            "basis": "The exit value \"malformed\" is not a numeric exit the gaps guide's AD-10 table lists for the tea-evaluate source (10, 11, 12, 13, 64), so per its catch-all rule this names an evaluation weakness.",
             "status": "answered",
             "class": "evaluation weakness"
           }
         },
         "stderr": {
           "kind": "text",
-          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50158,\"outputTokens\":1006,\"costUsd\":\"0.0811646\"}\n"
+          "value": "TEA_EVALUATE_USAGE_JSON:{\"inputTokens\":50551,\"outputTokens\":1823,\"costUsd\":\"0.0899376\"}\n"
         },
         "artifacts": {}
       }
