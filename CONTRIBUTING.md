@@ -91,7 +91,8 @@ TEA's skills install the same way.
 TEA also ships command-line tools that run in CI, where no skill installer is involved: `tea-test-review` gates pull requests on test quality, and `tea-evaluate` runs behavioral evaluations.
 So TEA keeps publishing its npm package, `bmad-method-test-architecture-enterprise`, as the delivery channel for those tools.
 The package carries the skills beside the tools on purpose.
-`tea-test-review` reviews with the skill packaged next to it, so a pull request cannot edit the reviewer that judges it, and the tool and its skill always come from one version.
+In an adopter's CI, `tea-test-review` runs from the installed package and reviews with the skill packaged next to it, so a pull request cannot edit the reviewer that judges it, and the tool and its skill always come from one version.
+TEA's own `.github/workflows/tea-test-review.yaml` is the exception: it runs the CLI from the checkout to try the code under development, so it is not a gate a pull request could not influence.
 
 Releases run through the publish workflow (`npm run release:patch`, `release:minor`, `release:major`, or `release:next` for a prerelease).
 It bumps the version, stamps `CHANGELOG.md`, and publishes to npm.
