@@ -52,10 +52,10 @@
  * drop a definition while keeping the entry that calls it, so the failure arrives
  * after the commit with nothing naming the cause.
  *
- * The `Install actionlint` step of `quality.yaml` and `publish.yaml` is held the same way.
+ * The `Install actionlint` step of `quality.yaml` is held the same way. `publish.yaml` reuses that workflow for its tests, so it carries no copy of the step.
  * A GitHub outage answers the release download with an error page.
  * The pinned download script hands whatever arrives to `tar`, so an inline `curl | bash` step fails a whole shard on one 503.
- * Both workflows run `tools/install-actionlint.sh` (`actionlintInstallStepProblems`).
+ * The workflow runs `tools/install-actionlint.sh` (`actionlintInstallStepProblems`).
  * That installer keeps its retry, its `gzip -t` and checksum checks, its latest-version resolution and its commit-pinned, hash-checked download script (`actionlintInstallerProblems`).
  *
  * Usage: node tools/validate-ci-coverage.js
@@ -331,8 +331,8 @@ function staleDeliberatelyLocalEntries(manifest) {
   return Object.keys(DELIBERATELY_LOCAL).filter((name) => typeof manifest.scripts[name] !== 'string');
 }
 
-/** The workflows whose `Install actionlint` step runs the shared installer. */
-const ACTIONLINT_WORKFLOWS = ['quality.yaml', 'publish.yaml'];
+/** The workflows whose `Install actionlint` step runs the shared installer: the ones that run the npm test chain. */
+const ACTIONLINT_WORKFLOWS = ['quality.yaml'];
 const ACTIONLINT_INSTALLER = path.join(PROJECT_ROOT, 'tools', 'install-actionlint.sh');
 
 /**
@@ -436,7 +436,7 @@ function actionlintInstallerProblems(text) {
   return ACTIONLINT_INSTALLER_PARTS.filter(([, holds]) => !holds(code)).map(([part]) => `tools/install-actionlint.sh no longer ${part}`);
 }
 
-/** Both workflows and the installer, read from the repository. */
+/** The workflow and the installer, read from the repository. */
 function actionlintInstallProblems(workflowRoot = WORKFLOW_ROOT, installer = ACTIONLINT_INSTALLER) {
   const problems = ACTIONLINT_WORKFLOWS.flatMap((name) =>
     actionlintInstallStepProblems(name, fs.readFileSync(path.join(workflowRoot, name), 'utf8')),
@@ -493,7 +493,7 @@ function main() {
     console.error(`${colors.red}the actionlint install no longer retries and verifies its download:${colors.reset}`);
     for (const problem of installProblems) console.error(`  - ${problem}`);
     console.error(
-      `\n${colors.dim}Both workflows run \`bash tools/install-actionlint.sh <directory>\` in their Install actionlint step, and the installer keeps the retry, the tarball checks and the version resolution.${colors.reset}`,
+      `\n${colors.dim}The workflow runs \`bash tools/install-actionlint.sh <directory>\` in its Install actionlint step, and the installer keeps the retry, the tarball checks and the version resolution.${colors.reset}`,
     );
     return 1;
   }

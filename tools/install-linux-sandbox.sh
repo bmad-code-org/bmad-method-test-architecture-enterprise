@@ -3,7 +3,7 @@
 #
 # Usage: bash tools/install-linux-sandbox.sh
 #
-# quality.yaml, publish.yaml and failing-pack-loop.yaml run this, so the retry and the bounds live once.
+# quality.yaml (which publish.yaml reuses for its tests) and failing-pack-loop.yaml run this, so the retry and the bounds live once.
 # bubblewrap is the Linux isolation backend of tea-atdd-red-check and tea-evaluate; strace is the observer of tea-evaluate's audit,
 # and the same commands exit 12 without them.
 #
