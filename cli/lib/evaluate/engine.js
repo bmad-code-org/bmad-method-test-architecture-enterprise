@@ -35,7 +35,9 @@ const path = require('node:path');
 const ENGINE_PACKAGE = 'eval-quality';
 const ENGINE_CLI_ENV = 'TEA_EVALUATE_ENGINE_CLI';
 /** The range TeA's own manifest declares for the peer, so the message cannot name a floor the manifest has moved past. */
-const ENGINE_RANGE = require('../../../package.json').peerDependencies[ENGINE_PACKAGE];
+const ENGINE_RANGE = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8')).peerDependencies[
+  ENGINE_PACKAGE
+];
 
 /** Raised when the optional peer is not installed where this runtime can reach it. */
 class EngineUnavailableError extends Error {
