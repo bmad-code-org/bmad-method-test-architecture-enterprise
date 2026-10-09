@@ -320,7 +320,7 @@ It reviews with the skill shipped in its own package, scopes to changed tests (`
 
 The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
 
-A copy-paste workflow lives at `cli/examples/pr-test-review.yml`, and the full flag, exit-code, and security reference is at [tea-test-review CLI](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/).
+`tea-test-review --github` also opens a check run and keeps one short pull-request comment up to date, and `tea-test-review render` prints the same comment, check-run text or summary from a verdict file for any other CI. Copy-paste workflows live at `cli/examples/pr-test-review.yml` (GitHub Actions) and `cli/examples/gitlab-ci.yaml` (GitLab), and the full flag, exit-code, and security reference is at [tea-test-review CLI](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/).
 
 ## Configuration
 

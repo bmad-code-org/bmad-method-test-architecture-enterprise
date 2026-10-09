@@ -1,12 +1,12 @@
 # CLI examples
 
-`pr-test-review.yml` is the full annotated template, start there. These two cover real adaptations.
+`pr-test-review.yml` is the full annotated GitHub Actions template, start there. `gitlab-ci.yaml` is the same review on GitLab merge requests. The sections below cover real adaptations.
 
 ## A central reusable-workflows repo
 
-Some orgs centralize CI logic: one repo owns `workflow_call` workflows, consuming repos call them. If that repo already has a comment-triggered `@claude` reviewer (opt-in, advisory, fired from `issue_comment`), don't graft TEA onto it. TEA needs to run on every PR automatically and gate merges, a different job than an on-demand advisory review. Add it as its own pair, same shape as whatever pattern you already use:
+Some orgs centralize CI logic: one repo owns `workflow_call` workflows, consuming repos call them. If that repo already has a comment-triggered `@claude` reviewer (opt-in, advisory, fired from `issue_comment`), don't graft TEA onto it. TEA needs to run on every PR automatically and gate merges, a different job than an on-demand advisory review. Add it as its own workflow pair, same shape as whatever pattern you already use:
 
-- **Reusable workflow** (central repo, e.g. `rwf-tea-test-review.yml`): copy the `review` and `comment` jobs from `pr-test-review.yml` into a `workflow_call` workflow. Promote `--min-score`, `--max-critical`, `--min-files`, and the pinned `TEA_VERSION` to `inputs:`, and the Anthropic key to a required secret.
+- **Reusable workflow** (central repo, e.g. `rwf-tea-test-review.yml`): copy the `review` job from `pr-test-review.yml` into a `workflow_call` workflow. `--github` already publishes the comment and the check run from that one job. Promote `--min-score`, `--max-critical`, `--min-files`, and the pinned `TEA_VERSION` to `inputs:`, and the Anthropic key to a required secret.
 - **Caller** (each consuming repo, or the central repo itself for dogfooding): a thin `pull_request`-triggered workflow that does `uses: <org>/<central-repo>/.github/workflows/rwf-tea-test-review.yml@<ref>`.
 
 Keep the trigger on `pull_request`. That's what makes it a required check: it runs automatically, no one has to remember to summon it.
@@ -22,8 +22,9 @@ on:
         required: true
 jobs:
   review:
-    # ...same steps as pr-test-review.yml's `review` job...
-    run: tea-test-review --base "$BASE_REF" --min-score ${{ inputs.min_score }} --agent claude --skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review" --output test-review.md --json test-review.json
+    # ...same steps as pr-test-review.yml's `review` job, including its env block
+    # (GITHUB_TOKEN: ${{ github.token }} and PR_NUMBER: ${{ github.event.pull_request.number }})...
+    run: tea-test-review --github --pr "$PR_NUMBER" --min-score ${{ inputs.min_score }} --agent claude --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```
 
 ```yaml
@@ -33,6 +34,12 @@ on:
     types: [opened, synchronize, reopened]
 jobs:
   tea-test-review:
+    # A reusable workflow's token is limited by the caller's job permissions, and a
+    # permission that is missing only shows up as a warning that nothing was published.
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
     uses: <org>/<central-repo>/.github/workflows/rwf-tea-test-review.yml@v1
     with:
       min_score: 80
@@ -49,5 +56,5 @@ The two don't compete. Check whether the bot's config sets a required commit sta
 Adjust flags to your layout, for example a monorepo with tests outside the default directory:
 
 ```yaml
-run: tea-test-review --base "$BASE_REF" --test-dir playwright --min-score 80 --agent claude --skill-root "$GITHUB_WORKSPACE/.tea-review/skills/bmad-testarch-test-review" --output test-review.md --json test-review.json
+run: tea-test-review --github --pr "$PR_NUMBER" --test-dir playwright --min-score 80 --agent claude --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```

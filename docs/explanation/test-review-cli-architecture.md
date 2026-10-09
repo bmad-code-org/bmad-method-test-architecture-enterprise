@@ -13,7 +13,7 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ---
 
-## Ten problems, eleven modules
+## Twelve problems, thirteen modules
 
 | Problem                                          | Module                               |
 | ------------------------------------------------ | ------------------------------------ |
@@ -27,8 +27,10 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 | Make it run with no human present                | `lib/build-prompt.js`                |
 | Spawn it without trusting it                     | `lib/run-agent.js`, `lib/isolate.js` |
 | Turn prose into an exit code                     | `lib/parse-report.js`                |
+| Say what happened to a person                    | `lib/render.js`                      |
+| Put it where the pull request is                 | `lib/github-publisher.js`            |
 
-`cli/test-review.js` runs them in order: resolve skill, resolve config, look up the pull request base (with `--pr`), split the diff, measure the convention baseline, load the registry's row severities, build prompt, check the agent CLI is installed and logged in, then spawn agent under isolation and parse report, once per attempt (`--retries` repeats the pair after an agent or parse failure), emit verdict, exit.
+`cli/test-review.js` runs them in order: resolve skill, resolve config, look up the pull request base (with `--pr`), split the diff, measure the convention baseline, load the registry's row severities, build prompt, check the agent CLI is installed and logged in, then spawn agent under isolation and parse report, once per attempt (`--retries` repeats the pair after an agent or parse failure), emit verdict, render the comment file and publish to GitHub when asked, exit. A failure at any step still reaches the last two: the run ends in an exit code, the renderer turns a run with no verdict into a broken gate, and the publisher closes the check run it opened.
 
 `lib/registry-rows.js` closes a gap found while auditing the parser: a report could document a real, row-cited Critical finding in prose while its `**Total Violations**:` summary line claimed zero, and nothing compared the two. The CLI computed Approve at 100/100 straight from the summary line, with the finding sitting right there unread. It now reads `criteria-registry.md`'s row → severity map directly from the skill, never a hardcoded copy that could drift, and `parse-report.js` binds every `**Row**: <id>` citation to a real row with a matching severity and reconciles the documented Critical/High finding blocks against the counts the summary claims. Scoped to Critical and High, the two severities that flip `deriveRecommendation`'s output.
 

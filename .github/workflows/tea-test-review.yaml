@@ -5,13 +5,14 @@
 #
 # NOT YET ENABLED: no ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN repository
 # secret exists yet, so the trigger is workflow_dispatch only, not
-# pull_request, and the two agent-running steps below are gated on
+# pull_request, and the agent-running steps below are gated on
 # `github.event_name == 'pull_request'`: under workflow_dispatch they are
 # skipped. A run without either secret would just fail and post a confusing
-# "infrastructure failure" comment on every real PR. The steps stay real
-# instead of commented out so the verdict step's `steps.run-review.outcome`
-# resolves for actionlint (test:workflows-lint). A skipped step's outcome is
-# `skipped`, which the verdict step reports as "failed", as it did before.
+# broken-gate comment on every real PR. The steps stay real instead of
+# commented out so actionlint (test:workflows-lint) checks them. The verdict step
+# exports the outcome as a job output for jobs that `needs` this one, and its
+# `steps.run-review.outcome` read doubles as the lint check's negative control.
+# A skipped step's outcome is `skipped`, which the verdict step reports as "failed".
 #
 # To enable: add one of the two secrets and switch `on:` back to
 # `pull_request: { types: [opened, synchronize, reopened] }`. The agent steps
@@ -43,6 +44,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
+      pull-requests: write
+      checks: write
     outputs:
       verdict: ${{ steps.verdict.outputs.verdict }}
     steps:
@@ -73,16 +76,17 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          BASE_REF: origin/${{ github.base_ref }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         # A secret the repository lacks expands to an empty string, and the agent runner passes a set variable through as it is,
         # so the empty one is unset: an empty ANTHROPIC_API_KEY beside a real OAuth token would reach the agent as a key.
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then unset ANTHROPIC_API_KEY; fi
           if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then unset CLAUDE_CODE_OAUTH_TOKEN; fi
-          node cli/test-review.js --base "$BASE_REF" --agent claude --test-dir test --output test-review.md --json test-review.json
+          node cli/test-review.js --github --pr "$PR_NUMBER" --agent claude --test-dir test --artifact-name tea-test-review --output test-review.md --json test-review.json
 
       - name: Upload review artifacts
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: tea-test-review
@@ -101,188 +105,3 @@ jobs:
             verdict="passed"
           fi
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
-
-  comment:
-    name: Comment the outcome
-    needs: review
-    # Only meaningful with a PR to comment on; skips cleanly on workflow_dispatch.
-    if: always() && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Download review artifacts
-        id: download
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: tea-test-review
-
-      - name: Find-and-update the review comment
-        uses: actions/github-script@v7
-        env:
-          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
-          REVIEW_RESULT: ${{ needs.review.result }}
-          REVIEW_VERDICT: ${{ needs.review.outputs.verdict }}
-        with:
-          # Kept in sync by hand with cli/examples/pr-test-review.yml's
-          # "Find-and-update the review comment" step: same comment-building
-          # logic, duplicated because that file is a standalone copy-paste
-          # template for other repos and cannot depend on this one.
-          script: |
-            const fs = require("fs");
-            const marker = "<!-- tea-test-review -->";
-            const artifactsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}#artifacts`;
-            // GitHub caps a comment body at 65536 chars; this leaves headroom
-            // for the digest and wrapper around the inlined report.
-            const MAX_INLINE_REPORT_CHARS = 40000;
-
-            let body = null;
-            const artifactAvailable = process.env.DOWNLOAD_OUTCOME === "success" && fs.existsSync("test-review.json");
-            if (artifactAvailable) {
-              try {
-                const verdict = JSON.parse(fs.readFileSync("test-review.json", "utf8"));
-                if (verdict.skipped) {
-                  body = [
-                    marker,
-                    "## TEA Test Review: skipped",
-                    "",
-                    `${verdict.reason ?? "No changed test files in this PR"}.`,
-                    "",
-                    `[Review job artifacts](${artifactsUrl})`,
-                  ].join("\n");
-                } else {
-                  const counts = verdict.gatingViolations ?? verdict.violations ?? {};
-                  const violations = `${counts.critical ?? 0} Critical / ${counts.high ?? 0} High / ${counts.medium ?? 0} Medium / ${counts.low ?? 0} Low`;
-                  const findings = Array.isArray(verdict.findings) ? verdict.findings : [];
-                  const findingByRow = new Map(findings.filter((finding) => finding?.row).map((finding) => [finding.row, finding]));
-                  const displayItems = (items) =>
-                    (Array.isArray(items) ? items : [])
-                      .map((item) => String(item).trim())
-                      .filter((item) => item && !/^n\s*\/?\s*a[.!]?$/i.test(item));
-                  const weaknesses = displayItems(verdict.keyWeaknesses)
-                    .map((item) => {
-                      const row = item.match(/^\[([A-Z]\d+)\](?:\s+|$)/)?.[1];
-                      const finding = findingByRow.get(row);
-                      return finding ? `[${row}] ${finding.title}` : null;
-                    })
-                    .filter(Boolean)
-                    .slice(0, 3);
-                  const advisories = displayItems(verdict.advisoryObservations).slice(0, 3);
-                  // Named, not just counted: a finding that cites "line 200" is
-                  // unattributable on a PR touching more than one test file.
-                  const reviewed = Array.isArray(verdict.reviewedFiles) ? verdict.reviewedFiles : [];
-                  const markdownCodeSpan = (value) => {
-                    const text = String(value);
-                    const longestBacktickRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
-                    const fence = "`".repeat(longestBacktickRun + 1);
-                    const padding = text.startsWith("`") || text.endsWith("`") ? " " : "";
-                    return `${fence}${padding}${text}${padding}${fence}`;
-                  };
-
-                  const lines = [
-                    marker,
-                    `## TEA Test Review: ${verdict.recommendation}`,
-                    "",
-                    `- **Review mode**: ${verdict.reviewMode ?? "full-file"}`,
-                    `- **Gate mode**: ${verdict.gateOn ?? "all"}`,
-                    `- **Gating quality score**: ${verdict.gatingQualityScore ?? verdict.qualityScore ?? "n/a"}/100`,
-                    `- **${verdict.reviewMode === "pr" ? "Effective" : "Full-review effective"} score**: ${verdict.qualityScore ?? "n/a"}/100`,
-                    `- **Raw deduction score**: ${verdict.rawQualityScore ?? "n/a"}/100`,
-                    `- **${verdict.reviewMode === "pr" ? "Score" : "Full-review score"} rule**: ${verdict.scoreOverrideRule ?? "n/a"}`,
-                    `- **Recommendation**: ${verdict.recommendation}`,
-                    `- **Gating violations**: ${violations}`,
-                    `- **Verdict rule**: ${verdict.verdictRule ?? "n/a"}`,
-                    `- **Reviewed files**: ${reviewed.length}`,
-                    ...reviewed.slice(0, 10).map((f) => `  - ${markdownCodeSpan(f)}`),
-                    ...(reviewed.length > 10 ? [`  - … and ${reviewed.length - 10} more`] : []),
-                  ];
-                  const provenance = verdict.reviewProvenance ?? {};
-                  const shown = (value) => markdownCodeSpan(value ?? "unavailable");
-                  lines.push(
-                    `- **TeA CLI / skill rubric**: ${shown(provenance.teaCliVersion)} / ${shown(provenance.skillRubricVersion)}`,
-                    `- **Model**: ${shown(provenance.modelIdentifier)}`,
-                    `- **Base / head SHA**: ${shown(provenance.baseSha)} / ${shown(provenance.headSha)}`,
-                    `- **Provenance gate mode**: ${shown(provenance.gateMode)}`,
-                  );
-                  if (provenance.triggerComment) {
-                    lines.push(`- **Trigger comment**: ${shown(provenance.triggerComment)}`);
-                  }
-                  if (provenance.workflowRun) {
-                    lines.push(`- **Workflow run**: ${shown(provenance.workflowRun)}`);
-                  }
-                  if (weaknesses.length > 0) {
-                    lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));
-                  }
-                  if (advisories.length > 0) {
-                    lines.push("", "**Advisory observations**:", ...advisories.map((item) => `- ${item}`));
-                  }
-                  lines.push("");
-
-                  // Inline the full report (not just the digest above) so a
-                  // reviewer can paste it straight into an AI coding agent to
-                  // apply the fixes, no artifact download required. Falls back
-                  // to the artifact link alone if the report is too large or
-                  // missing from the download.
-                  const reportText = fs.existsSync("test-review.md") ? fs.readFileSync("test-review.md", "utf8") : null;
-                  if (reportText && reportText.length <= MAX_INLINE_REPORT_CHARS) {
-                    // A reviewed file's own content can contain a literal
-                    // </details>; inserting a zero-width space breaks that as
-                    // an HTML closing tag while leaving the visible text
-                    // effectively unchanged, so it cannot end this block early
-                    // and spill raw markdown into the rest of the comment.
-                    const safeReportText = reportText.replace(/<\/details>/gi, "<\u200B/details>");
-                    lines.push(
-                      "<details>",
-                      "<summary>Full report (paste into your AI coding agent to apply the fixes)</summary>",
-                      "",
-                      safeReportText,
-                      "",
-                      "</details>",
-                      "",
-                      `[Verdict JSON](${artifactsUrl})`,
-                    );
-                  } else {
-                    lines.push(`[Full report and verdict JSON](${artifactsUrl})`);
-                  }
-                  body = lines.join("\n");
-                }
-              } catch {
-                body = null;
-              }
-            }
-            if (body === null) {
-              body = [
-                marker,
-                "## TEA Test Review: infrastructure failure",
-                "",
-                "The review job did not produce a readable verdict artifact.",
-                "This is **not** a review verdict; treat the gate as broken, not as approved tests.",
-                "",
-                `Review job result: ${process.env.REVIEW_RESULT} (verdict output: ${process.env.REVIEW_VERDICT || "n/a"}).`,
-                `[Review job artifacts](${artifactsUrl})`,
-              ].join("\n");
-            }
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
