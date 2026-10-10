@@ -288,9 +288,7 @@ Write JSON to temp file: `/tmp/tea-atdd-api-tests-{run_key}-{{timestamp}}.json`
   "success": false,
   "subagent": "atdd-api-tests",
   "error": "Error message describing what went wrong",
-  "partial_output": {
-    /* any tests generated before error */
-  }
+  "partial_output": {/* any tests generated before error */}
 }
 ```
 
