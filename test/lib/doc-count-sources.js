@@ -310,6 +310,7 @@ exports.REPLAY_CAPTURED_BYTES = replay.filter(replayCarriesBytes).length;
 exports.REPLAY_ATDD_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'atdd' && replayCarriesBytes(entry)).length;
 exports.REPLAY_TEST_REVIEW_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'test-review' && replayCarriesBytes(entry)).length;
 exports.REPLAY_CI_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'ci' && replayCarriesBytes(entry)).length;
+exports.REPLAY_TRACE_CAPTURED_BYTES = replay.filter((entry) => entry.suite === 'trace' && replayCarriesBytes(entry)).length;
 
 /** The `ci` cases over the `full` and `minimal` projects, whose fixture sets are named `full-...` and `minimal-...`. */
 exports.REPLAY_CI_FULL_AND_MINIMAL = replay.filter(

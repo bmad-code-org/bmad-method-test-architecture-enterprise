@@ -10,14 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `tea-nfr` to run the installed NFR evidence audit with explicit requirement, implementation and evidence inputs; scope-specific report/context validation; retained raw vendor attempts; and transactional publication with source alias guards.
-
-### Fixed
-
-- NFR publication now detects supplied file and directory permission/type changes and parses actual Markdown headings and YAML fences. Valid native enum decorations and source-backed code quotations preserve canonical status and evidence checks. Retained both original Codex parser failures and separate controlled replay regressions.
-- Corrected the clean NFR evaluation fixture's outbound transport evidence to TLS 1.3, matching its existing requirement. Preserved the original conflicting baseline as historical evidence. NFR evaluator single runs now report unrepeated, with stability unmeasured, and `--artifacts-dir` retains every attempt before retry or cleanup.
-- NFR CLI rejects an invalid configured artifact root with a clear configuration error before invoking an agent.
-- Synchronize test chain count and isolate boundary helper naming in NFR test tooling.
-- Publish validated artifact text directly and preserve workflow error failure classes during publication rollback.
+- `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
 
@@ -27,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The architecture page links to `eval-quality` and identifies AgentEvals as an optional evaluator of agent tool calls.
 - The Evaluate tutorial now explains the usual coding-agent workflow before walking through its prepared example by hand.
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
+
+### Fixed
+
+- NFR publication now detects supplied file and directory permission/type changes and parses actual Markdown headings and YAML fences. Valid native enum decorations and source-backed code quotations preserve canonical status and evidence checks. Retained both original Codex parser failures and separate controlled replay regressions.
+- Corrected the clean NFR evaluation fixture's outbound transport evidence to TLS 1.3, matching its existing requirement. Preserved the original conflicting baseline as historical evidence. NFR evaluator single runs now report unrepeated, with stability unmeasured, and `--artifacts-dir` retains every attempt before retry or cleanup.
+- NFR CLI rejects an invalid configured artifact root with a clear configuration error before invoking an agent.
+- Synchronize test chain count and isolate boundary helper naming in NFR test tooling.
+- Publish validated artifact text directly and preserve workflow error failure classes during publication rollback.
+- Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
+- Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
+- Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.
+- Trace evaluation removes incomplete attempt directories after capture errors and preserves staging errors during retries.
+- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names and output redirection, and excludes commands whose execution or failure can be hidden by shell control flow.
+- The test guide's Test Review command now runs only the Test Review CLI suite; `test:cli` still runs both Test Review and Trace CLI suites.
+- Trace preserves source priorities through mapping and coverage arithmetic. The CLI freezes source criteria before agent execution, validates the saved oracle ledger and live evidence, and checks outputs before publication. It rejects malformed artifacts and missing runtime evidence, confines reports to the current attempt, and restores prior reports after failed writes. Mapping records each accepted test declaration and its assertion anchors.
 
 ## [2.0.1] - 2026-10-10
 

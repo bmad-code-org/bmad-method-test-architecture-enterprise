@@ -234,6 +234,7 @@ Capture explicit coverage signals so Phase 1 can detect common blind spots:
 - API endpoint coverage
   - Inventory endpoints referenced by requirements/specs and endpoints exercised by API tests
   - Mark endpoints with no direct tests
+  - Count an endpoint as directly tested when an API test calls its route and asserts a response. A test can exercise the endpoint while leaving a specific requirement unproved. Record missing permission-denied assertions under authentication/authorization coverage.
 - Authentication/authorization coverage
   - Detect tests for login/session/token flows and permission-denied paths
   - Mark auth/authz requirements with missing negative-path tests
