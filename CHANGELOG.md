@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Teach Me Testing writes its saved progress as one YAML document. Its first two quizzes correctly state that three of three answers are needed to reach the 70 percent passing score. The original Codex baseline and unreadable saved progress remain retained.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.

@@ -248,7 +248,7 @@
     "test:suite-manifest": "node test/test-suite-manifest.js",
     "test:supply-chain": "node test/test-supply-chain.js",
     "test:tea-workflow-descriptions": "node test/test-tea-workflow-descriptions.js",
-    "test:teach-me-testing-scoring": "node test/test-teach-me-testing-scoring.js",
+    "test:teach-me-testing-scoring": "node test/test-teach-me-testing-scoring.js && node test/test-teach-progress-format.js",
     "test:test-design-qualification": "node test/test-test-design-qualification.js",
     "test:test-review-pr-scope": "node test/test-test-review-pr-scope.js",
     "test:test-review-qualification": "node test/test-test-review-qualification.js",

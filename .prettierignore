@@ -47,3 +47,6 @@ _bmad-output/implementation-artifacts/evaluate/story-1.29.md
 
 # Story 1.54's approved matrix is frozen and retains its approved spacing.
 _bmad-output/implementation-artifacts/evaluate/story-1.54.md
+
+# Immutable Codex observations and result records.
+test/results/teach-codex-2026-10-09/*.json

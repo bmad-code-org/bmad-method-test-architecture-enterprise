@@ -288,7 +288,7 @@ Display:
 
 "### ✅ Knowledge Check
 
-3 questions to validate your understanding. Passing: ≥70% (2 of 3 correct)."
+3 questions to validate your understanding. Passing: ≥70% (3 of 3 correct; 2 of 3 is 66.67%)."
 
 **Question 1:**
 
