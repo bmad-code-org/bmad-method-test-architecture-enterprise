@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The Test Review evaluation now uses Codex to check the pull request gate with live evidence and replays its accepted baseline in PR CI.
 - `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-test-review` now shows the agent's bounded output when a review agent exits with an error.
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
 - Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
 - Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.

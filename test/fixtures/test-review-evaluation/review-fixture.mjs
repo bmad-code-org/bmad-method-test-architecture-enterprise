@@ -115,7 +115,9 @@ if (review === 'merge') {
 const cliArgs = [
   join(repoRoot, 'cli', 'test-review.js'),
   '--agent',
-  process.env.REVIEW_FIXTURE_AGENT || 'claude',
+  'codex',
+  '--model',
+  'gpt-5.6-sol',
   '--skill-root',
   join(repoRoot, 'skills', 'bmad-testarch-test-review'),
   '--project-root',

@@ -1,0 +1,12 @@
+{
+  "probeId": "P-013",
+  "probeClass": "zero-action",
+  "behaviorId": "B-011",
+  "expectedClean": true,
+  "rationale": "[boundary] Clean control: the covariance test added in a repository that configures mypy while its CI runs only pytest is a High H10 finding.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

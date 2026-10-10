@@ -10,7 +10,7 @@
  *
  *   STUB_MODE          approve (default) | approve-low | block | request-changes |
  *                      request-changes-critical | critical-approve | conflict |
- *                      score-mismatch | partial | findings | nothing | fail |
+ *                      score-mismatch | partial | findings | nothing | fail | quota |
  *                      forbidden-write | stale-copy | fabricated-convention |
  *                      honest-absent-convention | fabricated-critical-count |
  *                      honest-critical-count
@@ -145,6 +145,13 @@ if (process.env.STUB_MODEL_USAGE && jsonRequested) {
 if (mode === 'fail') {
   console.error('stub-agent: simulated agent failure (STUB_MODE=fail)');
   process.exit(2);
+}
+
+if (mode === 'quota') {
+  process.stdout.write(
+    `${JSON.stringify({ type: 'result', is_error: true, api_error_status: 429, api_error: 'usage_limit_reached', result: 'Weekly limit reached; try again after reset.' })}\n`,
+  );
+  process.exit(1);
 }
 
 if (mode === 'nothing') {

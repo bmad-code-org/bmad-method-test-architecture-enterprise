@@ -302,6 +302,11 @@ function printMissingReportDiagnostics(agentResult, agent) {
   }
 }
 
+function printAgentFailureDiagnostics(error, agent) {
+  const tail = boundedAgentOutputTail(agentAnswerText(agent, error.stdout));
+  if (tail) console.error(`Agent stdout on failure (bounded tail):\n${tail}`);
+}
+
 /**
  * Validate a --waive-until value: it must be a real calendar date in YYYY-MM-DD
  * form, strictly after the local today (day granularity, local timezone).
@@ -1801,6 +1806,7 @@ async function runReview(session) {
         fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
       }
       if (error.code === 'AGENT_FAILED' || error.code === 'REPORT_MISSING' || error.code === 'REPORT_UNPARSEABLE') {
+        if (error.code === 'AGENT_FAILED') printAgentFailureDiagnostics(error, options.agent);
         if (attempt < retries) {
           console.error(`tea-test-review: ${error.message}`);
           const retryNotice = `attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`;

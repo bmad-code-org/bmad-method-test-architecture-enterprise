@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-test-review",
-  "sourceSpecDigest": "sha256:8825c6cabb08dde577bf13670b7119b06ddbb26513eb7b11428c1cc6eece010f",
+  "sourceSpecDigest": "sha256:13c1190d08a3d5ecc2333268c5351b1df167445b329a24a9462468f6befc64fc",
   "behaviors": [
     {
       "id": "B-001",
@@ -192,6 +192,69 @@
       ],
       "oracles": [
         "O-009"
+      ]
+    },
+    {
+      "id": "B-010",
+      "description": "A type-assignability test in a repository that runs no type checker is a High value-assertion finding.",
+      "severity": "material",
+      "observableSuccessCriterion": "The covariance-no-checker review recommends Request Changes or Block and carries an H10 finding inside the covariance test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-007"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "h10-unchecked-type-test-exempted"
+        }
+      ],
+      "oracles": [
+        "O-010"
+      ]
+    },
+    {
+      "id": "B-011",
+      "description": "A type-assignability test in a repository that configures a type checker its CI never runs is a High value-assertion finding.",
+      "severity": "material",
+      "observableSuccessCriterion": "The covariance-config-only review recommends Request Changes or Block and carries an H10 finding inside the covariance test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-007"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "h10-configured-checker-exempted"
+        }
+      ],
+      "oracles": [
+        "O-011"
+      ]
+    },
+    {
+      "id": "B-012",
+      "description": "A type-assignability test in a repository whose CI runs a type checker over the source package alone, and not over the test's file, is a High value-assertion finding.",
+      "severity": "material",
+      "observableSuccessCriterion": "The covariance-checker-excludes-tests review recommends Request Changes or Block and carries an H10 finding inside the covariance test.",
+      "requirementLinks": [
+        {
+          "scheme": "test-review-requirements",
+          "id": "B-007"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "test-review-risks",
+          "id": "h10-checker-outside-test-exempted"
+        }
+      ],
+      "oracles": [
+        "O-012"
       ]
     }
   ],
@@ -1496,6 +1559,291 @@
           }
         ]
       }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "H10 is High for the covariance test in a repository with no type checker: pytest is the only check CI runs, so the runtime assertion that the value is not None is all the test asserts.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the covariance-no-checker review.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
+        "evidenceTargets": [
+          "/interactions/covariance-no-checker/stdout/recommendation",
+          "/interactions/covariance-no-checker/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/covariance-no-checker/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/covariance-no-checker/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        11,
+                        12,
+                        13,
+                        14,
+                        15
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-011",
+      "polarity": "expects-hold",
+      "commentary": "H10 is High for the covariance test in a repository that configures mypy over shop and tests while CI runs only pytest: a configured checker that never runs asserts nothing about the type.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the covariance-config-only review.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
+        "evidenceTargets": [
+          "/interactions/covariance-config-only/stdout/recommendation",
+          "/interactions/covariance-config-only/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/covariance-config-only/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/covariance-config-only/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        11,
+                        12,
+                        13,
+                        14,
+                        15
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-012",
+      "polarity": "expects-hold",
+      "commentary": "H10 is High for the covariance test in a repository whose CI runs mypy with files limited to shop: the checker never reads the test's file, so it asserts nothing about the test's assignments.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The recommendation and findings array of the covariance-checker-excludes-tests review.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
+        "evidenceTargets": [
+          "/interactions/covariance-checker-excludes-tests/stdout/recommendation",
+          "/interactions/covariance-checker-excludes-tests/stdout/findings"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "set-membership",
+            "operands": [
+              {
+                "pointer": "/interactions/covariance-checker-excludes-tests/stdout/recommendation"
+              },
+              {
+                "literal": [
+                  "Request Changes",
+                  "Block"
+                ]
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/covariance-checker-excludes-tests/stdout/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
+                    }
+                  ]
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [
+                        11,
+                        12,
+                        13,
+                        14,
+                        15
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   "rubrics": [],
@@ -1849,6 +2197,75 @@
           }
         }
       }
+    },
+    {
+      "stepId": "covariance-no-checker",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "covariance-no-checker"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "covariance-config-only",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "covariance-config-only"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "covariance-checker-excludes-tests",
+      "interfaceId": "review-fixture",
+      "operationId": "review",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "fixture": {
+            "literal": "covariance-checker-excludes-tests"
+          },
+          "review": {
+            "literal": "head"
+          },
+          "mode": {
+            "literal": "pr"
+          }
+        }
+      }
     }
   ],
   "scopedResources": null,
@@ -1874,7 +2291,7 @@
   },
   "safetyLimits": [
     "Every fixture is synthetic: no adopter code, report text or repository name appears in it.",
-    "Live legs run through the local Claude Code CLI on the owner's subscription, with no API key and no metered spend."
+    "Live legs run through the local Codex CLI on the owner's account, with no API key and no metered spend."
   ],
   "requiredEvidence": [
     "The exit code and the verdict JSON on stdout of every review.",

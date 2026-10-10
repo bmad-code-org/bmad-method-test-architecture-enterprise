@@ -1,5 +1,5 @@
 {
   "schemaVersion": 1,
-  "modelSnapshot": "claude-sonnet-5-5",
+  "modelSnapshot": "gpt-5.6-sol",
   "systemPromptDigest": "sha256:f0c59ec203d48ebe2b55016791368e84cdb6cd066097749f12950d03f4aebd18"
 }

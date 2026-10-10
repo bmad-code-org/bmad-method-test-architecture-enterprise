@@ -9,5 +9,5 @@
     "replace": "    return { ...result, verdict_impact: gateOn === 'all' };",
     "occurrences": 1
   },
-  "expectedObservableFailure": "The adds-defects review marks its introduced findings advisory, gates on none, and recommends Approve on stdout."
+  "expectedObservableFailure": "The adds-defects review removes introduced findings from the pull request verdict and recommends Approve on stdout."
 }

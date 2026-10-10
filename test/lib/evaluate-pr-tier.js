@@ -35,6 +35,7 @@ const EVALUATIONS = Object.freeze([
   { key: 'promptfoo', story: '1.20', folder: 'test/fixtures/evaluate-promptfoo/evals/summary', env: {} },
   { key: 'ai-feature', story: '1.24', folder: 'test/fixtures/evaluate-authoring/ai-feature/evaluation', env: {} },
   { key: 'test-review', story: '1.24', folder: 'test/fixtures/evaluate-authoring/test-review/evaluation', env: {} },
+  { key: 'test-review-live', story: 'test-review', folder: 'test/evaluations/bmad-testarch-test-review', env: {}, workspace: 'git' },
   { key: 'gap-loop', story: '1.25', folder: 'test/fixtures/evaluate-gap-loop/after/evaluation', env: {} },
   { key: 'learn', story: '1.26', folder: 'test/fixtures/evaluate-learn/evaluation', env: {} },
   { key: 'tutorial', story: '2.6', folder: 'test/fixtures/evaluate-tutorial/evaluation', env: {} },

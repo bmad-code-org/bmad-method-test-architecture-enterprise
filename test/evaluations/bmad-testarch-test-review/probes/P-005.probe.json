@@ -7,6 +7,6 @@
   "defects": [],
   "qualification": {
     "route": "clean-control",
-    "noKnownDefectStatement": "Known defect at this revision: the self-comparison is located on the unchanged assertion, classified pre-existing, and the review approves. This control records the before state."
+    "noKnownDefectStatement": "No known defect at this revision."
   }
 }
