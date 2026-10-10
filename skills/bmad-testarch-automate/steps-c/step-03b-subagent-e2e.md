@@ -238,9 +238,7 @@ Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{run_key}-{{timestamp}}.js
   "success": false,
   "subagent": "e2e-tests",
   "error": "Error message describing what went wrong",
-  "partial_output": {
-    /* any tests generated before error */
-  }
+  "partial_output": {/* any tests generated before error */}
 }
 ```
 

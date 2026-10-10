@@ -81,18 +81,14 @@ test.describe('[Feature] API Tests', () => {
     });
 
     expect(status).toBe(201);
-    expect(body).toMatchObject({
-      /* expected */
-    });
+    expect(body).toMatchObject({/* expected */});
   });
 
   test('[P1] should handle [error scenario]', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'POST',
       path: '/api/endpoint',
-      body: {
-        /* invalid */
-      },
+      body: {/* invalid */},
     });
 
     expect(status).toBe(422);
@@ -111,15 +107,11 @@ import { test, expect } from '@playwright/test';
 test.describe('[Feature] API Tests', () => {
   test('[P0] should handle successful [operation]', async ({ request }) => {
     const response = await request.post('/api/endpoint', {
-      data: {
-        /* test data */
-      },
+      data: {/* test data */},
     });
 
     expect(response.status()).toBe(201);
-    expect(await response.json()).toMatchObject({
-      /* expected */
-    });
+    expect(await response.json()).toMatchObject({/* expected */});
   });
 });
 ```
@@ -285,9 +277,7 @@ Write JSON to temp file: `/tmp/tea-automate-api-tests-{run_key}-{{timestamp}}.js
   "success": false,
   "subagent": "api-tests",
   "error": "Error message describing what went wrong",
-  "partial_output": {
-    /* any tests generated before error */
-  }
+  "partial_output": {/* any tests generated before error */}
 }
 ```
 
