@@ -247,6 +247,13 @@ test('retained live evaluation preserves original capture bytes and declared out
   assert.equal(native.executions[0].passedTests, 1);
   for (const [file, digest] of Object.entries(native.criticalSourceSha256))
     assert.equal(capture.files[`browser-after/post-capture-final-parser/source/${file}`].sha256, digest);
+  const counts = read('browser-after/post-capture-final-parser-counts/result.json');
+  assert.equal(counts.completed, true);
+  assert.equal(counts.executions[0].summaryComplete, true);
+  assert.equal(counts.executions[0].failedTests, 0);
+  assert.equal(counts.executions[0].errors, 0);
+  for (const [file, digest] of Object.entries(counts.criticalSourceSha256))
+    assert.equal(capture.files[`browser-after/post-capture-final-parser-counts/source/${file}`].sha256, digest);
   assert.equal(capture.manifest.model, 'gpt-5.6-sol');
   assert.ok(capture.manifest.limitations.length >= 4);
 });

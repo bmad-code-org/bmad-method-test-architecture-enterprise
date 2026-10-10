@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "archive": "evidence.json.gz",
-  "sha256": "dd2b9885ea4dfb79d5c7c42fa3e3d7c085bee991aa0953463ac69f9492f8dcce",
-  "fileCount": 1157,
+  "sha256": "ba10a66d1546867fb0f5da1d946f7764e9abe16aa84b12bb2b3ae69430f5ff4a",
+  "fileCount": 1192,
   "manifest": {
     "confirmationProvenance": {
       "kind": "live-cli-resume-confirmation",
@@ -34,10 +34,10 @@
       "Baseline Python and after Python scores use different checks; equal 9/9 scores establish generated assertion behavior and do not measure a quality uplift."
     ],
     "finalParserVerification": {
-      "sourceCommit": "315104e4757558f5e7eff32d92d25423905a9282",
+      "sourceCommit": "b15420736a2383a9aafd83348af8d24f7988bee5",
       "criticalSourceSha256": {
         "cli/framework.js": "5439d3c7bf52535797bdeee6ffa8c0b34cae3a15ab465aefa8189e3388a43c6f",
-        "cli/lib/framework-setup.js": "519ec662c0dfee633279a28d7b921b298f966d0b8c155fe7c5bec219c4b8765d",
+        "cli/lib/framework-setup.js": "73ee92402c0231d1f4c4865f1753dbb96e226774b6f2c93efb587405d6f9d668",
         "cli/lib/workflow-cli.js": "600ed8742945b918b38f410665d8f549c1691c2c1b05162ee61284941f975242",
         "cli/lib/resolve-tea-config.js": "4dcc0fd472b23373b75f9d1e73378459f12be1fe0c411089efb3b463ef2693dd",
         "cli/lib/agent-adapters.js": "2d586ffd0ac44cb2fa6758d239cb7f344b32601ffcb9dc8745aad08118ad67bc"
