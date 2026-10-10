@@ -33,6 +33,11 @@ function resultDestination(root, value, protectedFiles) {
   if (existing && !existing.isFile()) throw new Error('--json must name a regular file');
   const canonical = existing ? fs.realpathSync(output) : output;
   for (const file of protectedFiles.filter(Boolean)) {
+    if (typeof file === 'object') {
+      if (canonical === file.path || (existing && `${existing.dev}:${existing.ino}` === file.identity))
+        throw new Error('--json collides with a protected input or artifact');
+      continue;
+    }
     const input = path.resolve(root, file);
     if (!fs.existsSync(input)) continue;
     const stat = fs.statSync(input, { bigint: true });
@@ -40,6 +45,23 @@ function resultDestination(root, value, protectedFiles) {
       throw new Error('--json collides with a protected input or artifact');
   }
   return output;
+}
+
+function freezeInputs(root, files) {
+  const protectedFiles = [];
+  const visited = new Set();
+  const visit = (file) => {
+    if (!fs.existsSync(file)) return;
+    const real = fs.realpathSync(file);
+    const stat = fs.statSync(real, { bigint: true });
+    const identity = `${stat.dev}:${stat.ino}`;
+    if (stat.isFile()) protectedFiles.push({ path: real, identity });
+    if (!stat.isDirectory() || visited.has(identity)) return;
+    visited.add(identity);
+    for (const child of fs.readdirSync(real)) visit(path.join(real, child));
+  };
+  for (const file of files.filter(Boolean)) visit(path.resolve(root, file));
+  return protectedFiles;
 }
 
 function selectMode(explicit, request, savedMode) {
@@ -121,7 +143,7 @@ async function main(argv) {
     if (options.story) story = artifactPath(root, options.story, '--story');
     if (options.checkpoint) checkpoint = artifactPath(root, options.checkpoint, '--checkpoint');
     targets = options.target.map((target) => safeTarget(root, target));
-    protectedFiles = [story, checkpoint, 'package.json', ...targets.filter((target) => fs.statSync(path.join(root, target)).isFile())];
+    protectedFiles = freezeInputs(root, [story, checkpoint, 'package.json', ...targets]);
     if (options.json) resultDestination(root, options.json, protectedFiles);
     if (options.operation !== 'create' && !checkpoint) throw new Error(`--checkpoint is required for ${options.operation}`);
     if (options.operation === 'create' && checkpoint) throw new Error('--checkpoint requires Resume, Validate or Edit');
@@ -134,6 +156,8 @@ async function main(argv) {
           throw new Error('Resume story differs from its saved scope');
         if (targets.length > 0 && JSON.stringify(saved.cli_targets) !== JSON.stringify(targets))
           throw new Error('Resume targets differ from its saved scope');
+        protectedFiles.push(...freezeInputs(root, [saved.cli_story, ...(saved.cli_targets ?? [])]));
+        if (options.json) resultDestination(root, options.json, protectedFiles);
       }
       savedMode = saved?.testMode ?? saved?.test_mode;
       if (savedMode && !MODES.includes(savedMode)) throw new Error('checkpoint has an invalid generation mode');
@@ -195,7 +219,7 @@ async function main(argv) {
       options,
       prepare,
       capabilities: ['command-execution'],
-      validate: ({ manifestPath, startedAtMs, requestId }) =>
+      validate: ({ manifestPath, startedAtMs, requestId, attemptDir }) =>
         parseResult({
           manifestPath,
           projectRoot: root,
@@ -208,6 +232,7 @@ async function main(argv) {
           targets,
           selectedCheckpoint: checkpoint,
           checkpointBefore,
+          evidenceDir: attemptDir,
         }),
     });
     const payload = { ...result.value, modeSelection, evidenceDir: result.runDir, agent: options.agent };

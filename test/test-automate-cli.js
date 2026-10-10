@@ -132,8 +132,48 @@ try {
       fs.existsSync(path.join(result.evidenceDir, 'attempt-1/stdout.txt')),
     'successful run retains prompt and agent streams',
   );
+  const inventory = JSON.parse(fs.readFileSync(path.join(result.evidenceDir, 'attempt-1/generated-test-inventory.json'), 'utf8'));
+  check(
+    inventory.tests.length === 1 && inventory.tests[0].file === 'tests/api/generated.spec.ts' && inventory.files[0].sha256.length === 64,
+    'completion retains independently derived generated file, leaf and source identity',
+  );
+  for (const scenario of [
+    'second-file',
+    'second-leaf',
+    'wrong-title',
+    'wrong-line',
+    'wrong-column',
+    'missing-project',
+    'anonymous-report',
+    'dynamic-test',
+    'table-test',
+    'callback-test',
+    'repeat-missing',
+    'computed-test',
+    'declared-alias',
+  ]) {
+    const missingScope = invoke([...agent, 'coverage'], scenario);
+    check(
+      missingScope.status === 3 && /inventory|generated test|unrelated project/.test(missingScope.stderr),
+      `${scenario} cannot conceal unexecuted or unrelated generated scope`,
+    );
+  }
+  for (const scenario of ['repeat-complete', 'projects-complete', 'alias-suite'])
+    check(invoke([...agent, 'coverage'], scenario).status === 0, `${scenario} reconciles all actual generated identities`);
+  for (const mode of ['expand', 'red'])
+    for (const scenario of ['incomplete-steps', 'wrong-terminal', 'wrong-step-mode']) {
+      const incomplete = invoke([...agent, '--mode', mode, ...(mode === 'red' ? ['--story', 'story.md'] : []), 'coverage'], scenario);
+      check(
+        incomplete.status === 3 && /completed mode-specific/.test(incomplete.stderr),
+        `${mode} ${scenario} cannot claim terminal generation`,
+      );
+    }
   const red = invoke([...agent, '--mode', 'red', '--story', 'story.md']);
   check(red.status === 0 && JSON.parse(red.stdout).executionStatus === 'verified red', 'verified red exits 0 with intended failure counts');
+  check(
+    invoke([...agent, '--mode', 'red', '--story', 'story.md'], 'activated-red').status === 0,
+    'native red locations retain identity when the disposable activation removes skip',
+  );
   check(
     fs.readFileSync(path.join(scratch, 'tests/api/generated.spec.ts'), 'utf8').startsWith('test.skip'),
     'red deliverable preserves its scaffold skip',
@@ -224,6 +264,28 @@ try {
     'JSON preflight rejects a hardlink alias of a protected target',
   );
   check(fs.readFileSync(path.join(scratch, 'target.json')).equals(protectedBytes), 'hardlink rejection preserves protected input bytes');
+  fs.mkdirSync(path.join(scratch, 'src'), { recursive: true });
+  const directoryInput = path.join(scratch, 'src/schema.json');
+  fs.writeFileSync(directoryInput, '{"criticalSource":"preserve"}\n');
+  fs.linkSync(directoryInput, path.join(scratch, 'directory-alias.json'));
+  fs.symlinkSync(directoryInput, path.join(scratch, 'directory-symlink.json'));
+  const directoryBytes = fs.readFileSync(directoryInput);
+  for (const output of ['src/schema.json', 'directory-alias.json', 'directory-symlink.json']) {
+    check(
+      invoke([...agent, '--target', 'src', '--json', output, 'coverage']).status === 2,
+      `directory input protection rejects existing descendant or alias ${output}`,
+    );
+    check(fs.readFileSync(directoryInput).equals(directoryBytes), `directory collision preserves source bytes for ${output}`);
+  }
+  check(
+    invoke([...agent, '--target', 'src', '--json', 'late-directory-result.json', 'coverage'], 'late-directory-hardlink').status === 3,
+    'directory input protection survives a hardlink created during execution',
+  );
+  check(fs.readFileSync(directoryInput).equals(directoryBytes), 'late directory alias rejection preserves original source bytes');
+  check(
+    invoke([...agent, '--target', 'src', '--json', 'src/new-result.json', 'coverage']).status === 0,
+    'directory target permits a new output path while protecting existing descendants',
+  );
   check(
     invoke([...agent, '--json', 'late-result.json', 'coverage'], 'late-hardlink').status === 3,
     'JSON postflight rejects a newly created hardlink to generated evidence',
@@ -273,6 +335,34 @@ try {
     invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint], 'reset-rounds').status === 3,
     'Resume rejects a reset of its spent repair budget',
   );
+  const resumeProgress = invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint], 'incomplete-steps');
+  check(
+    resumeProgress.status === 3 && /completed mode-specific/.test(resumeProgress.stderr),
+    'Resume requires complete owning mode progress',
+  );
+  const preservedResume = fs.readFileSync(path.join(scratch, checkpoint));
+  check(
+    invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint], 'increment-round').status === 3,
+    'disabled Resume cannot increment the retained repair count',
+  );
+  fs.writeFileSync(path.join(scratch, checkpoint), preservedResume);
+  check(
+    invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint, '--json', 'target.json']).status === 2,
+    'Resume protects its saved target scope without requiring repeated caller targets',
+  );
+  for (const setting of ['auto_validate', 'auto_heal_failures']) {
+    fs.writeFileSync(path.join(scratch, '_bmad/config.toml'), `[modules.tea]\n${setting} = false\n`);
+    const forbiddenRound = invoke([...agent, 'coverage'], 'disabled-round');
+    check(
+      forbiddenRound.status === 3 && /disabled healing/.test(forbiddenRound.stderr),
+      `fresh Create cannot spend a repair round when ${setting} is false`,
+    );
+    const zero = invoke([...agent, 'coverage']);
+    check(
+      zero.status === 0 && JSON.parse(zero.stdout).healingRoundsUsed === 0,
+      `fresh Create retains zero repair rounds when ${setting} is false`,
+    );
+  }
   fs.writeFileSync(path.join(scratch, '_bmad/config.toml'), '[modules.tea]\nauto_validate = false\n');
   const disabled = invoke([...agent, 'coverage']);
   check(disabled.status === 0 && JSON.parse(disabled.stdout).executionStatus === 'disabled', 'explicit validation opt-out remains visible');

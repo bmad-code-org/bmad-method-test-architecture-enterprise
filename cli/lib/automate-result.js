@@ -6,6 +6,7 @@ const { createHash } = require('node:crypto');
 const { isDeepStrictEqual, stripVTControlCharacters } = require('node:util');
 const yaml = require('js-yaml');
 const { projectPath } = require('./workflow-cli');
+const { generatedInventory, reconcileInventory } = require('./automate-inventory');
 
 const STATUSES = ['passed', 'verified red', 'failed', 'could not measure', 'disabled'];
 const RESULT_KEYS = [
@@ -102,6 +103,7 @@ function parseResult({
   targets = [],
   selectedCheckpoint,
   checkpointBefore,
+  evidenceDir,
 }) {
   let result;
   try {
@@ -149,6 +151,7 @@ function parseResult({
   const actual = { executed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, assertionFailures: 0 };
   const successful = ['passed', 'verified red'].includes(result.executionStatus);
   let recognizedReports = 0;
+  const nativeReports = [];
   const reportIdentities = new Set();
   for (const file of result.executionReports) {
     const absolute = path.join(projectRoot, file);
@@ -171,11 +174,20 @@ function parseResult({
     const observed = reportCounts(report);
     if (observed) {
       recognizedReports++;
+      nativeReports.push(report);
       for (const key of Object.keys(actual)) actual[key] += observed[key];
     }
   }
   const allRecognized = recognizedReports > 0 && recognizedReports === result.executionReports.length;
   if (successful && !allRecognized) throw new Error('successful execution requires supported native reports for every final scope');
+  if (successful) {
+    const inventory = generatedInventory(projectRoot, result.generatedFiles);
+    if (evidenceDir)
+      fs.writeFileSync(path.join(evidenceDir, 'generated-test-inventory.json'), `${JSON.stringify(inventory, null, 2)}\n`, { flag: 'wx' });
+    const verified = reconcileInventory(inventory, nativeReports, { mode });
+    if (evidenceDir)
+      fs.writeFileSync(path.join(evidenceDir, 'validated-test-scopes.json'), `${JSON.stringify(verified, null, 2)}\n`, { flag: 'wx' });
+  }
   if (recognizedReports > 0) {
     for (const key of ['executed', 'passed', 'failed', 'skipped'])
       if (allRecognized ? actual[key] !== result.counts.final[key] : actual[key] > result.counts.final[key])
@@ -247,6 +259,20 @@ function parseResult({
   }
   if (operation === 'create' || operation === 'resume') {
     if (checkpoint?.workflowStatus !== 'completed') throw new Error('generation checkpoint is incomplete');
+    const terminal = mode === 'red' ? 'step-05-validate-and-complete' : 'step-04-validate-and-summarize';
+    const required =
+      mode === 'red'
+        ? ['step-01-preflight-and-context', 'step-02-generation-mode', 'step-03-test-strategy', terminal]
+        : ['step-01-preflight-and-context', 'step-02-identify-targets', terminal];
+    const aggregation =
+      mode === 'red' ? ['step-04c-aggregate', 'step-04-generate-tests'] : ['step-03c-aggregate', 'step-03-generate-tests'];
+    if (
+      !Array.isArray(checkpoint.stepsCompleted) ||
+      required.some((step) => !checkpoint.stepsCompleted.includes(step)) ||
+      !aggregation.some((step) => checkpoint.stepsCompleted.includes(step)) ||
+      checkpoint.lastStep !== terminal
+    )
+      throw new Error('generation checkpoint does not retain completed mode-specific steps and terminal step');
     if (result.generatedFiles.length === 0) throw new Error('generation completed without generated files');
     if (checkpoint.test_mode !== mode || checkpoint.test_operation !== 'create')
       throw new Error('generation checkpoint has inconsistent mode or operation');
@@ -255,6 +281,11 @@ function parseResult({
     }
     if (checkpoint.healing_rounds_used !== result.healingRoundsUsed)
       throw new Error('generation checkpoint and manifest disagree on repair rounds');
+    if (
+      (!settings.auto_validate || !settings.auto_heal_failures) &&
+      result.healingRoundsUsed !== (operation === 'resume' ? (checkpointBefore?.state.healing_rounds_used ?? 0) : 0)
+    )
+      throw new Error('disabled healing cannot consume repair rounds');
     if (!settings.auto_validate && result.executionStatus !== 'disabled') throw new Error('disabled validation must report disabled');
     if (settings.auto_validate && result.executionStatus === 'disabled')
       throw new Error('validation was enabled but execution reports disabled');

@@ -30,6 +30,8 @@ npm run test:automate-generation-evidence
 
 This CI check verifies immutable capture hashes, preserves the delivered red skips, and executes the reviewed generated API suite against fresh fixed and mutated service copies. Native execution uses the existing supervised process tree runner and the original project test configuration. Ports are chosen per run. The scorer records actual attempt statuses, runner errors, source hashes and the assertion failures that detect the inclusive boundary regression. It saves raw streams and an execution record for timeout/signal outcomes before reporting the blocker, and refuses to overwrite an existing measurement.
 
+A later controller revision adds generated source leaf/file/project reconciliation, mode-specific completed-step checks, disabled-healing counter checks, and directory input protection. This replay applies that later parser to the unchanged reviewed manifest and native report, and separately reconciles the original red ATDD leaf identities. The model source revision remains the immutable revision recorded in each capture's provenance. The later source inventory checks final saved source; it does not establish a new model run or a pre-execution source freeze.
+
 To inspect or execute a captured project separately, extract its archive into a new directory and provide its Playwright dependency:
 
 ```bash

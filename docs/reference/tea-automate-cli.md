@@ -79,6 +79,12 @@ JSON output includes the request identity, selected mode and operation, executio
 
 Passing expand and verified red outcomes require supported native Playwright JSON or ATDD verifier reports for every final scope. Counts must match recorded attempts. Verified red requires an assertion failure for every executed test; timeouts, interruptions, runner errors, and source changes reject success. Unsupported report formats retain their evidence and require a failed or unmeasured outcome. JSON result destinations are checked before and after generation against input and artifact paths, including hardlink aliases.
 
+Before accepting success, the controller derives each generated JavaScript or TypeScript test leaf from its saved source. Playwright results must identify the same file, suite/title, source line, column, and matching configured project, including configured repetitions. Native ATDD results must identify a unique file and leaf title. Missing files, leaves, or project scopes reject success. Static literal registrations and imported test aliases are supported. Runtime loops, table registrations, computed titles, and unresolved callbacks require a failed or unmeasured outcome because the controller cannot enumerate their complete scope from source.
+
+Each successful attempt retains `generated-test-inventory.json` with source hashes and `validated-test-scopes.json` with reconciled runner identities. These are controller checks of the final generated source. The skill owns its pre-execution scope freeze and execution history. The controller inventory alone cannot prove that source stayed unchanged during model execution.
+
+Create and Resume require the selected mode's completed preflight, strategy/target, aggregation or generation, and terminal steps. A completed flag alone cannot finish generation. When validation or healing is disabled, fresh Create consumes zero repair rounds and Resume preserves its saved counter. Directory targets protect every existing file descendant and its inode aliases before execution; new JSON paths remain available inside those directories.
+
 | Exit | Meaning                                                                                                                 |
 | ---- | ----------------------------------------------------------------------------------------------------------------------- |
 | `0`  | Passing expand execution, verified red execution, completed operation, configured validation opt-out, or prompt preview |

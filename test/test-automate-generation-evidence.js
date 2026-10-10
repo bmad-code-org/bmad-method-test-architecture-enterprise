@@ -7,6 +7,7 @@ const os = require('node:os');
 const { createHash } = require('node:crypto');
 const { scoreGeneratedProject } = require('./eval-automate-generation');
 const { parseResult } = require('../cli/lib/automate-result');
+const { generatedInventory, reconcileInventory } = require('../cli/lib/automate-inventory');
 const { HEALING_DEFAULTS } = require('../cli/lib/automate-prompt');
 const CAPTURES = path.join(__dirname, 'results/automate-codex-2026-10-09');
 const digest = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -67,6 +68,32 @@ async function main() {
       story: 'docs/stories/6-6-voucher-redemption.md',
     });
     assert.equal(validated.counts.final.passed, 9, 'retained request-bound manifest passes the current parser');
+    const reviewedInventory = generatedInventory(project, manifest.generatedFiles);
+    const reviewedReports = manifest.executionReports.map((file) => JSON.parse(fs.readFileSync(path.join(project, file), 'utf8')));
+    assert.equal(
+      reconcileInventory(reviewedInventory, reviewedReports).executionScopes.length,
+      9,
+      'unchanged real Playwright evidence identifies every generated leaf and project under the later parser',
+    );
+    const redProject = path.join(scratch, 'red-project');
+    fs.cpSync(path.join(CAPTURES, 'red/generated'), redProject, { recursive: true });
+    const redNative = JSON.parse(fs.readFileSync(path.join(CAPTURES, 'red/workflow-artifacts/red-report-initial.json'), 'utf8'));
+    const redInventory = generatedInventory(redProject, [
+      'tests/api/locker-reservations.spec.ts',
+      'tests/support/factories/reservation.ts',
+    ]);
+    assert.equal(
+      reconcileInventory(redInventory, [redNative]).executionScopes.length,
+      5,
+      'retained actual ATDD leaf/file identity passes the later source parser',
+    );
+    const missingRedLeaf = structuredClone(redNative);
+    missingRedLeaf.files[0].tests.pop();
+    assert.throws(
+      () => reconcileInventory(redInventory, [missingRedLeaf]),
+      /omits generated test/,
+      'actual ATDD capture cannot conceal one unexecuted leaf',
+    );
     const score = await scoreGeneratedProject(project, path.join(scratch, 'execution'));
     assert.equal(score.pass, true, 'captured generation must pass the real HTTP fixture and detect its inclusive-boundary regression');
     assert.equal(score.generationWasInvoked, false, 'replay must disclose that it executes a previously generated suite');

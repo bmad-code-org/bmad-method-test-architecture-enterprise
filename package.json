@@ -304,6 +304,7 @@
     "statements": 78
   },
   "dependencies": {
+    "@babel/parser": "^7.29.9",
     "@clack/prompts": "^0.11.0",
     "ajv": "^8.20.0",
     "boxen": "^5.1.2",
