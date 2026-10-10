@@ -373,13 +373,13 @@ Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 require
 
 #### P0 Criteria (Must ALL Pass)
 
-| Criterion | Threshold | Actual | Status |
+| Criterion             | Threshold | Actual                    | Status   |
 | --------------------- | --------- | ------------------------- | -------- | -------- |
-| P0 Coverage | 100% | {p0_coverage}% | {✅ PASS | ❌ FAIL} |
-| P0 Test Pass Rate | 100% | {p0_pass_rate}% | {✅ PASS | ❌ FAIL} |
-| Security Issues | 0 | {security_issue_count} | {✅ PASS | ❌ FAIL} |
-| Critical NFR Failures | 0 | {critical_nfr_fail_count} | {✅ PASS | ❌ FAIL} |
-| Flaky Tests | 0 | {flaky_test_count} | {✅ PASS | ❌ FAIL} |
+| P0 Coverage           | 100%      | {p0_coverage}%            | {✅ PASS | ❌ FAIL} |
+| P0 Test Pass Rate     | 100%      | {p0_pass_rate}%           | {✅ PASS | ❌ FAIL} |
+| Security Issues       | 0         | {security_issue_count}    | {✅ PASS | ❌ FAIL} |
+| Critical NFR Failures | 0         | {critical_nfr_fail_count} | {✅ PASS | ❌ FAIL} |
+| Flaky Tests           | 0         | {flaky_test_count}        | {✅ PASS | ❌ FAIL} |
 
 **P0 Evaluation**: {✅ ALL PASS | ❌ ONE OR MORE FAILED}
 
@@ -387,12 +387,12 @@ Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 require
 
 #### P1 Criteria (Required for PASS, May Accept for CONCERNS)
 
-| Criterion | Threshold | Actual | Status |
+| Criterion              | Threshold                 | Actual               | Status   |
 | ---------------------- | ------------------------- | -------------------- | -------- | ----------- | -------- |
-| P1 Coverage | ≥{min_p1_coverage}% | {p1_coverage}% | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
-| P1 Test Pass Rate | ≥{min_p1_pass_rate}% | {p1_pass_rate}% | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
+| P1 Coverage            | ≥{min_p1_coverage}%       | {p1_coverage}%       | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
+| P1 Test Pass Rate      | ≥{min_p1_pass_rate}%      | {p1_pass_rate}%      | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
 | Overall Test Pass Rate | ≥{min_overall_pass_rate}% | {overall_pass_rate}% | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
-| Overall Coverage | ≥{min_coverage}% | {overall_coverage}% | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
+| Overall Coverage       | ≥{min_coverage}%          | {overall_coverage}%  | {✅ PASS | ⚠️ CONCERNS | ❌ FAIL} |
 
 **P1 Evaluation**: {✅ ALL PASS | ⚠️ SOME CONCERNS | ❌ FAILED}
 
