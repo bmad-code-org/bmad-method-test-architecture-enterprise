@@ -71,7 +71,6 @@ function inside(root, candidate) {
 function projectPath(projectRoot, value, label = 'path') {
   const root = fs.realpathSync(projectRoot);
   const target = path.resolve(root, value);
-  if (!inside(root, target)) throw new WorkflowError('usage', `${label} must be inside --project-root`);
   let existing = target;
   while (!fs.existsSync(existing)) {
     // A dangling link must fail before traversing it during a later mkdir/write.
@@ -82,8 +81,9 @@ function projectPath(projectRoot, value, label = 'path') {
     }
     existing = path.dirname(existing);
   }
-  if (!inside(root, fs.realpathSync(existing))) throw new WorkflowError('usage', `${label} resolves outside --project-root`);
-  return target;
+  const resolved = path.resolve(fs.realpathSync(existing), path.relative(existing, target));
+  if (!inside(root, resolved)) throw new WorkflowError('usage', `${label} resolves outside --project-root`);
+  return resolved;
 }
 function readInput(projectRoot, value, label = 'input') {
   const target = projectPath(projectRoot, value, label);
