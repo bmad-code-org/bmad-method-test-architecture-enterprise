@@ -20,19 +20,19 @@ These runs use TEA's existing diagnostic harness and independent fixture expecta
 
 ## Public command integration
 
-The two public archives retain actual `tea-trace --agent codex` invocations against the same seeded and clean fixtures at commit `bcce79b6ff24d311bc95c81e679abb4d50aefc23`, with adapter default `gpt-5.6-sol`. The agent workspace excludes ground truth. Each compressed JSON archive stores every file as base64; its manifest pins the archive and each original file's bytes. The filenames keep Windows checkouts within their path budget.
+The two public archives retain actual `tea-trace --agent codex` invocations against the same seeded and clean fixtures at commit `bcce79b6ff24d311bc95c81e679abb4d50aefc23`, with adapter default `gpt-5.6-sol`. The agent workspace excludes ground truth. Each compressed JSON archive stores retained files as base64; its manifest pins the archive and every retained file's bytes. Raw Codex stderr streams and empty files are omitted. The filenames keep Windows checkouts within their path budget.
 
 The seeded invocation exited 1 with FAIL, and the clean invocation exited 0 with PASS. Both preserved source and tests. Criterion classification, gate criteria, arithmetic, oracle metadata, citations, rejected evidence, waiver handling, and live-evidence checks passed. The saved diagnostic score records 11 of 12 run-metadata checks per case: the public command uses an absolute published matrix link, while the diagnostic harness expects its relative staging link. The raw score retains this convention difference. These two integrations provide one repetition each; they do not measure stability.
 
 ## First diagnostic after attempt
 
-`after-attempt-1.json` preserves the four-run after attempt at bcce79b6 unchanged. Every measured accuracy group passed at100%, with zero false positives, invented or duplicate criteria, incomplete runs, or source mutations. The seeded repetitions were stable and their arithmetic passed80/80 checks. The clean repetitions used six and fifteen valid evidence anchors, respectively. The harness includes citation counts in its stability signature, so the clean case was unstable and the aggregate exited1. The compressed archive pins all four staged workspaces, prompts, observations, streams, and invocation output. This attempt is retained as a measured failure. A followup makes assertion anchors explicit in the mapping instructions and repeats the evaluation with the same thresholds.
+`after-attempt-1.json` preserves the four-run after attempt at bcce79b6 unchanged. Every measured accuracy group passed at100%, with zero false positives, invented or duplicate criteria, incomplete runs, or source mutations. The seeded repetitions were stable and their arithmetic passed80/80 checks. The clean repetitions used six and fifteen valid evidence anchors, respectively. The harness includes citation counts in its stability signature, so the clean case was unstable and the aggregate exited1. The compressed archive pins all four staged workspaces, prompts, observations, nonempty streams, and invocation output. This attempt is retained as a measured failure. A followup makes assertion anchors explicit in the mapping instructions and repeats the evaluation with the same thresholds.
 
 ## Second diagnostic after attempt
 
 `after-attempt-2.json` records four completed runs at f4045e99 with the same model, corpus, repetitions, scoring expectations, and thresholds.
 Every measured accuracy group passed at 100%; arithmetic passed 156/156 checks.
 Both cases were stable across their repetitions, with zero invented or duplicate criteria, clean false positives, incomplete runs, or fixture mutations.
-The archive retains all four staged workspaces, requests, observations, streams, and invocation output with per-file byte pins.
+The archive retains all four staged workspaces, requests, observations, nonempty streams, and invocation output with per-file byte pins.
 This measurement preceded the later public-command source-ledger and fresh-live-failure validation repairs.
 It supplies diagnostic evidence for the mapping skill at its recorded source commit.

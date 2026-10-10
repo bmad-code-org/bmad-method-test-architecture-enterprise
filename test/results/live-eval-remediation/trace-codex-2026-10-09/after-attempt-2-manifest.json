@@ -4,7 +4,7 @@
   "agent": "codex",
   "model": "gpt-5.6-sol",
   "archive": "after-attempt-2.json.gz",
-  "archiveSha256": "ea1b309585b2ddaa5eb61ac992116be8332cbb8a11ae8e8fd749d469893fc7d1",
+  "archiveSha256": "6e85d92472de3ac87f75b2fd2ec43f5e8fad27bc569caa2a992b5435c487650d",
   "files": [
     {
       "path": "artifacts/codex-clean-api-token-lifecycle-run-1-attempt-1-M9aUsd/observation.json",
@@ -15,11 +15,6 @@
       "path": "artifacts/codex-clean-api-token-lifecycle-run-1-attempt-1-M9aUsd/prompt.txt",
       "bytes": 2676,
       "sha256": "5f5e1a2189c05a3cd17ea04cb3119e2bba1b270cba89b5c5b5d07d19c79ccaae"
-    },
-    {
-      "path": "artifacts/codex-clean-api-token-lifecycle-run-1-attempt-1-M9aUsd/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "artifacts/codex-clean-api-token-lifecycle-run-1-attempt-1-M9aUsd/stdout.txt",
@@ -502,11 +497,6 @@
       "sha256": "5f5e1a2189c05a3cd17ea04cb3119e2bba1b270cba89b5c5b5d07d19c79ccaae"
     },
     {
-      "path": "artifacts/codex-clean-api-token-lifecycle-run-2-attempt-1-Y7Xgba/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
       "path": "artifacts/codex-clean-api-token-lifecycle-run-2-attempt-1-Y7Xgba/stdout.txt",
       "bytes": 150,
       "sha256": "abdbb21027b7c548d07893f0054e273c9ac1229c9955407e7fa23791b1b25dc0"
@@ -985,11 +975,6 @@
       "path": "artifacts/codex-seeded-tenant-data-export-run-1-attempt-1-08jfvN/prompt.txt",
       "bytes": 2663,
       "sha256": "5b745bdd8ba1491ed52ef41929f8ce4c5673c128fee5632b1115a49bfe83b8e9"
-    },
-    {
-      "path": "artifacts/codex-seeded-tenant-data-export-run-1-attempt-1-08jfvN/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "artifacts/codex-seeded-tenant-data-export-run-1-attempt-1-08jfvN/stdout.txt",
@@ -1485,11 +1470,6 @@
       "path": "artifacts/codex-seeded-tenant-data-export-run-2-attempt-1-FhodoB/prompt.txt",
       "bytes": 2663,
       "sha256": "5b745bdd8ba1491ed52ef41929f8ce4c5673c128fee5632b1115a49bfe83b8e9"
-    },
-    {
-      "path": "artifacts/codex-seeded-tenant-data-export-run-2-attempt-1-FhodoB/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "artifacts/codex-seeded-tenant-data-export-run-2-attempt-1-FhodoB/stdout.txt",

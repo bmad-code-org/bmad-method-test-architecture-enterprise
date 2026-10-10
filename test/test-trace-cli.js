@@ -547,6 +547,7 @@ try {
       ['clean-api-token-lifecycle', '5', 'PASS'],
     ]) {
       const manifest = JSON.parse(fs.readFileSync(path.join(evidence, `public-${name}-manifest.json`), 'utf8'));
+      assert.ok(manifest.files.every((file) => !file.path.endsWith('/stderr.txt') && file.bytes > 0));
       const archive = fs.readFileSync(path.join(evidence, manifest.archive));
       assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.archiveSha256);
       assert.equal(manifest.groundTruthAbsent, true);
@@ -616,6 +617,7 @@ try {
   check('repeated diagnostic after archive preserves all four actual measurements and byte pins', () => {
     const directory = path.join(__dirname, 'results', 'live-eval-remediation', 'trace-codex-2026-10-09');
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'after-attempt-2-manifest.json'), 'utf8'));
+    assert.ok(manifest.files.every((file) => !file.path.endsWith('/stderr.txt') && file.bytes > 0));
     const archive = fs.readFileSync(path.join(directory, manifest.archive));
     assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.archiveSha256);
     const capture = JSON.parse(gunzipSync(archive));
@@ -644,6 +646,7 @@ try {
       ['public-after-cr', '7eabcf927a1400b5599c6027da71efdf2aa64dea', false],
     ]) {
       const manifest = JSON.parse(fs.readFileSync(path.join(directory, capture, 'public-native.manifest.json')));
+      assert.ok(manifest.files.every((file) => !file.path.endsWith('/stderr.txt') && file.bytes > 0));
       const compressed = fs.readFileSync(path.join(directory, capture, manifest.archive));
       assert.equal(createHash('sha256').update(compressed).digest('hex'), manifest.archiveSha256);
       assert.equal(manifest.sourceCommit, commit);

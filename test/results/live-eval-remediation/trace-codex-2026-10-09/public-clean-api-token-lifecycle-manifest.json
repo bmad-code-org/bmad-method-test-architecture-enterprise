@@ -5,7 +5,7 @@
   "agent": "codex",
   "model": "gpt-5.6-sol",
   "archive": "public-clean-api-token-lifecycle.json.gz",
-  "archiveSha256": "a3078570fe7ae79c2c705d6170ff522fec0fa377c7f93007ae8f79b592fd316a",
+  "archiveSha256": "f783afccd2a6c616102b74c545ed6a89252a8d2d9e708ca1375a20c5be76da74",
   "groundTruthAbsent": true,
   "files": [
     {
@@ -17,11 +17,6 @@
       "path": "invocation/result.json",
       "bytes": 11940,
       "sha256": "86057727e936730d9b6b2243afb17464cffe11578fe5711130b3f71c6b18b8b8"
-    },
-    {
-      "path": "invocation/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "invocation/stdout.txt",
@@ -42,11 +37,6 @@
       "path": "workspace/api-token-lifecycle/.tea-runs/tea-trace-SfivKK/attempt-1/prompt.txt",
       "bytes": 5428,
       "sha256": "1937b136b0ebcabd6e8e6332adbd14a8df2829b59738785016d7ca6d8e17bc0b"
-    },
-    {
-      "path": "workspace/api-token-lifecycle/.tea-runs/tea-trace-SfivKK/attempt-1/stderr.txt",
-      "bytes": 1098680,
-      "sha256": "5200f740021d28f493e1b3bcf948f10bb84bcc7df861912bdb6cc8be2b334385"
     },
     {
       "path": "workspace/api-token-lifecycle/.tea-runs/tea-trace-SfivKK/attempt-1/stdout.txt",

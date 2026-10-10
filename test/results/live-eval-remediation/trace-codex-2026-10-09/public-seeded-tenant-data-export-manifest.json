@@ -5,7 +5,7 @@
   "agent": "codex",
   "model": "gpt-5.6-sol",
   "archive": "public-seeded-tenant-data-export.json.gz",
-  "archiveSha256": "a86f19ad946e552ca841b368c327b60136c370e949e1eb38793aa3f7111d664e",
+  "archiveSha256": "7d358c5c906680cfe11a4405fb93dedc41361a29047cc2fb75fe947c0de5e0af",
   "groundTruthAbsent": true,
   "files": [
     {
@@ -17,11 +17,6 @@
       "path": "invocation/result.json",
       "bytes": 16117,
       "sha256": "f9444a5f9c63f8f0089faa8a7d718e491d6c84b7149c512aa60c7cef3a65ba45"
-    },
-    {
-      "path": "invocation/stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "invocation/stdout.txt",
@@ -457,11 +452,6 @@
       "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/prompt.txt",
       "bytes": 5447,
       "sha256": "23ba7dee431f4c519a171a0802ff2dc5c0855f215546f964466a0b868d395550"
-    },
-    {
-      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/stderr.txt",
-      "bytes": 1618343,
-      "sha256": "51cf4ebf04cbe3b76c08bd78d44b58e4042a0784435aa9608732f0e1a2386186"
     },
     {
       "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/stdout.txt",

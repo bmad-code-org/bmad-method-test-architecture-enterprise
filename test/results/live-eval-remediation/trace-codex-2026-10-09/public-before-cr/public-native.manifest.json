@@ -4,7 +4,7 @@
   "agent": "codex",
   "requestedModel": "gpt-5.6-sol",
   "archive": "public-native.json.gz",
-  "archiveSha256": "7de311ad29b946e6e9fdc662cd56c9dd3ae4e3249460a97388b43a5f1c705667",
+  "archiveSha256": "413e63b851b90f5d40fa6e1d0f31f4bc960cf0381683baaabed10e754d8d160e",
   "expectedCalls": 2,
   "completedCalls": 2,
   "nativeExits": [
@@ -22,11 +22,6 @@
       "path": "clean/.tea-runs/tea-trace-Wt3uxC/attempt-1/prompt.txt",
       "bytes": 4494,
       "sha256": "102fa794126118965a223a276fc6c560834b8ea07540c47a4e09bda784e28445"
-    },
-    {
-      "path": "clean/.tea-runs/tea-trace-Wt3uxC/attempt-1/stderr.txt",
-      "bytes": 1217152,
-      "sha256": "383dc2c27106276ac9b3315ba2a077ef194e41a16cb43ff0ebf771f7a4b66d30"
     },
     {
       "path": "clean/.tea-runs/tea-trace-Wt3uxC/attempt-1/stdout.txt",
@@ -114,11 +109,6 @@
       "sha256": "ee22b8359204e301f47b4d73507bbd705971d971426805979bd14d2213cccd6d"
     },
     {
-      "path": "clean-stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
       "path": "clean-stdout.json",
       "bytes": 660,
       "sha256": "14abf0e5841f7d2e93698e37339ddd93c08c137118f0a064a3523451cc43deb8"
@@ -132,11 +122,6 @@
       "path": "seeded/.tea-runs/tea-trace-6I0lwv/attempt-1/prompt.txt",
       "bytes": 4541,
       "sha256": "292834a221d9ef98a80bdb0f0ae7b0d5f5e0c17132b6a345f8fd54a91f38143a"
-    },
-    {
-      "path": "seeded/.tea-runs/tea-trace-6I0lwv/attempt-1/stderr.txt",
-      "bytes": 1954002,
-      "sha256": "053d5ed2bd4e53be79684dd64dcf6002bd5743ace042c227270ba85979873bf2"
     },
     {
       "path": "seeded/.tea-runs/tea-trace-6I0lwv/attempt-1/stdout.txt",
@@ -232,11 +217,6 @@
       "path": "seeded-result.json",
       "bytes": 102,
       "sha256": "a000e404da4fa27e62bae94c8323051bcefe29994c5048ed1b5109d4b76e8e35"
-    },
-    {
-      "path": "seeded-stderr.txt",
-      "bytes": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "seeded-stdout.json",
