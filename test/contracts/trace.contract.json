@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
-  "sourceSpecDigest": "sha256:58f432490a8b22a0834c0173b225b1dcff40c7eda867591aaaa5669f687e7717",
+  "sourceSpecDigest": "sha256:9c8d40682d1343bd92249537dba176fdbd56cac23142da80f42a79b7f66dbf9e",
   "behaviors": [
     {
       "id": "B-001",

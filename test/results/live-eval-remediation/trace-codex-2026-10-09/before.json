@@ -1,0 +1,444 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T01:39:35.998Z",
+  "mode": "live",
+  "repository": {
+    "commit": "cbcf937135585c072846026ea7cacbcedf74182d",
+    "dirty": true
+  },
+  "suite": {
+    "id": "trace",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-trace"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/trace.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:5d2090b39d708de9b56ef5f764a4a6f0f92244c0f0805df3923dc8303851d993",
+    "promptDigest": "sha256:c165414728903ef86c0f0bd07aabe620e9d114849a5190a5ec67cd1e01e1f5a3",
+    "caseIds": [
+      "seeded-tenant-data-export",
+      "clean-api-token-lifecycle"
+    ],
+    "cases": [
+      {
+        "id": "seeded-tenant-data-export",
+        "promptDigest": "sha256:006b60605c7973048f7f247fab549db9a19755d93f5bb964a15385de0fa1f1c6"
+      },
+      {
+        "id": "clean-api-token-lifecycle",
+        "promptDigest": "sha256:03750d486b989804f3f455cc25b0e2aad4992bcee03d5e20ba985a5a8672f34f"
+      }
+    ],
+    "thresholds": {
+      "criterionStatusAccuracy": 0.9,
+      "discriminatingCriterionAccuracy": 1,
+      "gateAccuracy": 1,
+      "gateCriteriaAccuracy": 1,
+      "coverageArithmeticAccuracy": 1,
+      "oracleResolutionAccuracy": 1,
+      "runMetadataAccuracy": 1,
+      "evidenceCitationPrecision": 0.9,
+      "rejectedEvidenceAccuracy": 1,
+      "waiverOracleAccuracy": 1,
+      "liveEvidenceAccuracy": 1,
+      "maxCleanFalsePositives": 0,
+      "maxInventedCriteria": 0,
+      "maxDuplicateCriteria": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 4,
+        "completed": 4
+      },
+      "measurements": {
+        "criterionStatusAccuracy": 1,
+        "discriminatingCriterionAccuracy": 1,
+        "gateAccuracy": 1,
+        "gateCriteriaAccuracy": 1,
+        "coverageArithmeticAccuracy": 0.967948717948718,
+        "oracleResolutionAccuracy": 1,
+        "runMetadataAccuracy": 1,
+        "evidenceCitationPrecision": 1,
+        "rejectedEvidenceAccuracy": 1,
+        "waiverOracleAccuracy": 1,
+        "liveEvidenceAccuracy": 1,
+        "cleanFalsePositives": 0,
+        "inventedCriteria": 0,
+        "duplicateCriteria": 0,
+        "unstableCases": 1,
+        "incompleteCases": 0,
+        "fixtureMutations": 0,
+        "waiverRunsNotScored": 0
+      },
+      "durationMs": 1892612,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "coverageArithmeticAccuracy",
+        "1 unstable case(s)"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "seeded-tenant-data-export",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"seeded-tenant-data-export\",[\"AC-1=FULL\",\"AC-2=NONE\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\",\"AC-6=FULL\",\"AC-7=FULL\",\"AC-8=PARTIAL\",\"AC-9=FULL\",\"AC-10=NONE\"],[],[],\"FAIL\",[\"coverage.inventory.covered=7\",\"coverage.inventory.total=10\",\"coverage.inventory.pct=70\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=1\",\"priority_breakdown.P0.pct=50\",\"priority_breakdown.P1.total=6\",\"priority_breakdown.P1.covered=6\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=0\",\"priority_breakdown.P2.pct=0\",\"priority_breakdown.P3.total=1\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=0\",\"risk_summary.critical_open=1\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=1\",\"by_level.e2e.criteria_covered=3\",\"by_level.e2e.tests=3\",\"by_level.api.criteria_covered=6\",\"by_level.api.tests=6\",\"by_level.component.criteria_covered=0\",\"by_level.component.tests=0\",\"by_level.unit.criteria_covered=1\",\"by_level.unit.tests=1\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=10\",\"coverage.inventory.pct is round(covered/total*100)=70\",\"priority_breakdown.P0.pct is round(covered/total*100)=50\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=0\",\"priority_breakdown.P3.pct is round(covered/total*100)=0\",\"recommendations name AC-2=true\",\"recommendations name AC-8=true\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"50%\\\"\",\"gate_criteria.p0_status=\\\"NOT_MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"70%\\\"\",\"gate_criteria.overall_status=\\\"NOT_MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"oracle.resolution_mode=\\\"formal_requirements\\\"\",\"oracle.confidence=\\\"high\\\"\",\"oracle.sources names the oracle document=true\",\"oracle.external_pointer_status=\\\"not_used\\\"\",\"oracle.synthetic=false\"],[\"decision_mode=\\\"deterministic\\\"\",\"target.type=\\\"epic\\\"\",\"target.id=\\\"4\\\"\",\"links.trace_report_path=\\\"tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md\\\"\",\"links.trace_report_url=\\\"\\\"\",\"links.artifact_url=\\\"\\\"\",\"links.journey_evidence_url=\\\"\\\"\",\"tests.skipped_cases=0\",\"tests.fixme_cases=0\",\"tests.pending_cases=0\",\"heuristics.ui_journey_status=\\\"not_applicable\\\"\",\"heuristics.ui_state_status=\\\"not_applicable\\\"\"],[\"rejected_evidence is an array=true\",\"rejected_evidence.length=1\",\"rejected_evidence names AC-2 at tenant-export.api.spec.ts:30-38=true\"],[10,10,[],[]],[true,[\"waivers.filed=2\",\"waivers.valid=1\",\"waivers.invalid=1\",\"waiver W-1 reported valid=true\",\"waiver W-2 reported invalid=true\",\"waiver W-2 names failed check business_justification=true\",\"waiver W-2 names failed check approver_authority=true\",\"waiver W-2 names failed check expiry_present=true\",\"waiver W-2 names failed check remediation_due_date=true\",\"waiver W-2 names failed check not_security=true\",\"waiver W-2 names failed check contract_complete=true\",\"waiver W-2 does not fail fail_only=false\"]],[\"live_evidence.present=true\",\"live_evidence.counted=0\",\"live_evidence.requirements_live_only=0\",\"live_evidence.failed=0\",\"live_evidence.contradicted=0\",\"live_evidence.blocked=0\",\"live_evidence.skipped=0\",\"live_evidence.unmatched=0\",\"live_evidence.invalid=1\",\"live_evidence.stale + live_evidence.unverifiable=1\",\"blocker 4-LIVE-001 at severity high=\\\"high\\\"\",\"blocker 4-LIVE-002 at severity medium=\\\"medium\\\"\",\"blockers count=2\"],0,0]",
+          "metricContributions": {
+            "criterionStatusAccuracy.numerator": 10,
+            "criterionStatusAccuracy.denominator": 10,
+            "criterionStatusAccuracy.threshold": 0.9,
+            "discriminatingCriterionAccuracy.numerator": 1,
+            "discriminatingCriterionAccuracy.denominator": 1,
+            "discriminatingCriterionAccuracy.threshold": 1,
+            "gateAccuracy.numerator": 1,
+            "gateAccuracy.denominator": 1,
+            "gateAccuracy.threshold": 1,
+            "gateCriteriaAccuracy.numerator": 12,
+            "gateCriteriaAccuracy.denominator": 12,
+            "gateCriteriaAccuracy.threshold": 1,
+            "coverageArithmeticAccuracy.numerator": 35,
+            "coverageArithmeticAccuracy.denominator": 40,
+            "coverageArithmeticAccuracy.threshold": 1,
+            "oracleResolutionAccuracy.numerator": 7,
+            "oracleResolutionAccuracy.denominator": 7,
+            "oracleResolutionAccuracy.threshold": 1,
+            "runMetadataAccuracy.numerator": 12,
+            "runMetadataAccuracy.denominator": 12,
+            "runMetadataAccuracy.threshold": 1,
+            "evidenceCitationPrecision.numerator": 10,
+            "evidenceCitationPrecision.denominator": 10,
+            "evidenceCitationPrecision.threshold": 0.9,
+            "rejectedEvidenceAccuracy.numerator": 3,
+            "rejectedEvidenceAccuracy.denominator": 3,
+            "rejectedEvidenceAccuracy.threshold": 1,
+            "waiverOracleAccuracy.numerator": 12,
+            "waiverOracleAccuracy.denominator": 12,
+            "waiverOracleAccuracy.threshold": 1,
+            "liveEvidenceAccuracy.numerator": 13,
+            "liveEvidenceAccuracy.denominator": 13,
+            "liveEvidenceAccuracy.threshold": 1,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "inventedCriteria": 0,
+            "maxInventedCriteria": 0,
+            "duplicateCriteria": 0,
+            "maxDuplicateCriteria": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "coverageArithmeticAccuracy; unstable case",
+          "triage": [
+            {
+              "reason": "coverageArithmeticAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "coverageArithmeticAccuracy",
+            "1 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-tenant-data-export\",[\"AC-1=FULL\",\"AC-2=NONE\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\",\"AC-6=FULL\",\"AC-7=FULL\",\"AC-8=PARTIAL\",\"AC-9=FULL\",\"AC-10=NONE\"],[],[],\"FAIL\",[\"coverage.inventory.covered=7\",\"coverage.inventory.total=10\",\"coverage.inventory.pct=70\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=1\",\"priority_breakdown.P0.pct=50\",\"priority_breakdown.P1.total=6\",\"priority_breakdown.P1.covered=6\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=0\",\"priority_breakdown.P2.pct=0\",\"priority_breakdown.P3.total=1\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=0\",\"risk_summary.critical_open=1\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=1\",\"by_level.e2e.criteria_covered=3\",\"by_level.e2e.tests=3\",\"by_level.api.criteria_covered=6\",\"by_level.api.tests=6\",\"by_level.component.criteria_covered=0\",\"by_level.component.tests=0\",\"by_level.unit.criteria_covered=1\",\"by_level.unit.tests=1\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=10\",\"coverage.inventory.pct is round(covered/total*100)=70\",\"priority_breakdown.P0.pct is round(covered/total*100)=50\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=0\",\"priority_breakdown.P3.pct is round(covered/total*100)=0\",\"recommendations name AC-2=true\",\"recommendations name AC-8=true\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"50%\\\"\",\"gate_criteria.p0_status=\\\"NOT_MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"70%\\\"\",\"gate_criteria.overall_status=\\\"NOT_MET\\\"\",\"collection_status=\\\"COLLECTED\\\"…sha256:6df851580b9a1958b5a2ebf6c03ef83d89ed81e958934f7a256308ce231215e7"
+            },
+            {
+              "kind": "artifact",
+              "value": "tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:a67b4d2e6116b08135575cd486209d574d8ca4b59d29301b7b7b9e6591d6b46a {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T01:12:01Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
+            },
+            {
+              "kind": "artifact",
+              "value": "tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:b52c7254ef513057fc93614ccb307f2217b79b2e2be0de22926a0cafb68cf64c --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T01:12:01Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md'] coverageBasis: 'acceptance_cr"
+            }
+          ]
+        },
+        {
+          "caseId": "seeded-tenant-data-export",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"seeded-tenant-data-export\",[\"AC-1=FULL\",\"AC-2=NONE\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\",\"AC-6=FULL\",\"AC-7=FULL\",\"AC-8=PARTIAL\",\"AC-9=FULL\",\"AC-10=NONE\"],[],[],\"FAIL\",[\"coverage.inventory.covered=7\",\"coverage.inventory.total=10\",\"coverage.inventory.pct=70\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=1\",\"priority_breakdown.P0.pct=50\",\"priority_breakdown.P1.total=5\",\"priority_breakdown.P1.covered=5\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=2\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=50\",\"priority_breakdown.P3.total=1\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=0\",\"risk_summary.critical_open=1\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=1\",\"by_level.e2e.criteria_covered=3\",\"by_level.e2e.tests=3\",\"by_level.api.criteria_covered=6\",\"by_level.api.tests=6\",\"by_level.component.criteria_covered=0\",\"by_level.component.tests=0\",\"by_level.unit.criteria_covered=1\",\"by_level.unit.tests=1\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=10\",\"coverage.inventory.pct is round(covered/total*100)=70\",\"priority_breakdown.P0.pct is round(covered/total*100)=50\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=50\",\"priority_breakdown.P3.pct is round(covered/total*100)=0\",\"recommendations name AC-2=true\",\"recommendations name AC-8=true\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"50%\\\"\",\"gate_criteria.p0_status=\\\"NOT_MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"70%\\\"\",\"gate_criteria.overall_status=\\\"NOT_MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"oracle.resolution_mode=\\\"formal_requirements\\\"\",\"oracle.confidence=\\\"high\\\"\",\"oracle.sources names the oracle document=true\",\"oracle.external_pointer_status=\\\"not_used\\\"\",\"oracle.synthetic=false\"],[\"decision_mode=\\\"deterministic\\\"\",\"target.type=\\\"epic\\\"\",\"target.id=\\\"4\\\"\",\"links.trace_report_path=\\\"tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md\\\"\",\"links.trace_report_url=\\\"\\\"\",\"links.artifact_url=\\\"\\\"\",\"links.journey_evidence_url=\\\"\\\"\",\"tests.skipped_cases=0\",\"tests.fixme_cases=0\",\"tests.pending_cases=0\",\"heuristics.ui_journey_status=\\\"not_applicable\\\"\",\"heuristics.ui_state_status=\\\"not_applicable\\\"\"],[\"rejected_evidence is an array=true\",\"rejected_evidence.length=1\",\"rejected_evidence names AC-2 at tenant-export.api.spec.ts:30-38=true\"],[10,10,[],[]],[true,[\"waivers.filed=2\",\"waivers.valid=1\",\"waivers.invalid=1\",\"waiver W-1 reported valid=true\",\"waiver W-2 reported invalid=true\",\"waiver W-2 names failed check business_justification=true\",\"waiver W-2 names failed check approver_authority=true\",\"waiver W-2 names failed check expiry_present=true\",\"waiver W-2 names failed check remediation_due_date=true\",\"waiver W-2 names failed check not_security=true\",\"waiver W-2 names failed check contract_complete=true\",\"waiver W-2 does not fail fail_only=false\"]],[\"live_evidence.present=true\",\"live_evidence.counted=0\",\"live_evidence.requirements_live_only=0\",\"live_evidence.failed=0\",\"live_evidence.contradicted=0\",\"live_evidence.blocked=0\",\"live_evidence.skipped=0\",\"live_evidence.unmatched=0\",\"live_evidence.invalid=1\",\"live_evidence.stale + live_evidence.unverifiable=1\",\"blocker 4-LIVE-001 at severity high=\\\"high\\\"\",\"blocker 4-LIVE-002 at severity medium=\\\"medium\\\"\",\"blockers count=2\"],0,0]",
+          "metricContributions": {
+            "criterionStatusAccuracy.numerator": 10,
+            "criterionStatusAccuracy.denominator": 10,
+            "criterionStatusAccuracy.threshold": 0.9,
+            "discriminatingCriterionAccuracy.numerator": 1,
+            "discriminatingCriterionAccuracy.denominator": 1,
+            "discriminatingCriterionAccuracy.threshold": 1,
+            "gateAccuracy.numerator": 1,
+            "gateAccuracy.denominator": 1,
+            "gateAccuracy.threshold": 1,
+            "gateCriteriaAccuracy.numerator": 12,
+            "gateCriteriaAccuracy.denominator": 12,
+            "gateCriteriaAccuracy.threshold": 1,
+            "coverageArithmeticAccuracy.numerator": 40,
+            "coverageArithmeticAccuracy.denominator": 40,
+            "coverageArithmeticAccuracy.threshold": 1,
+            "oracleResolutionAccuracy.numerator": 7,
+            "oracleResolutionAccuracy.denominator": 7,
+            "oracleResolutionAccuracy.threshold": 1,
+            "runMetadataAccuracy.numerator": 12,
+            "runMetadataAccuracy.denominator": 12,
+            "runMetadataAccuracy.threshold": 1,
+            "evidenceCitationPrecision.numerator": 10,
+            "evidenceCitationPrecision.denominator": 10,
+            "evidenceCitationPrecision.threshold": 0.9,
+            "rejectedEvidenceAccuracy.numerator": 3,
+            "rejectedEvidenceAccuracy.denominator": 3,
+            "rejectedEvidenceAccuracy.threshold": 1,
+            "waiverOracleAccuracy.numerator": 12,
+            "waiverOracleAccuracy.denominator": 12,
+            "waiverOracleAccuracy.threshold": 1,
+            "liveEvidenceAccuracy.numerator": 13,
+            "liveEvidenceAccuracy.denominator": 13,
+            "liveEvidenceAccuracy.threshold": 1,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "inventedCriteria": 0,
+            "maxInventedCriteria": 0,
+            "duplicateCriteria": 0,
+            "maxDuplicateCriteria": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "model-instability",
+          "reason": "unstable case",
+          "triage": [
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "1 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-tenant-data-export\",[\"AC-1=FULL\",\"AC-2=NONE\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\",\"AC-6=FULL\",\"AC-7=FULL\",\"AC-8=PARTIAL\",\"AC-9=FULL\",\"AC-10=NONE\"],[],[],\"FAIL\",[\"coverage.inventory.covered=7\",\"coverage.inventory.total=10\",\"coverage.inventory.pct=70\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=1\",\"priority_breakdown.P0.pct=50\",\"priority_breakdown.P1.total=5\",\"priority_breakdown.P1.covered=5\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=2\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=50\",\"priority_breakdown.P3.total=1\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=0\",\"risk_summary.critical_open=1\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=1\",\"by_level.e2e.criteria_covered=3\",\"by_level.e2e.tests=3\",\"by_level.api.criteria_covered=6\",\"by_level.api.tests=6\",\"by_level.component.criteria_covered=0\",\"by_level.component.tests=0\",\"by_level.unit.criteria_covered=1\",\"by_level.unit.tests=1\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=10\",\"coverage.inventory.pct is round(covered/total*100)=70\",\"priority_breakdown.P0.pct is round(covered/total*100)=50\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=50\",\"priority_breakdown.P3.pct is round(covered/total*100)=0\",\"recommendations name AC-2=true\",\"recommendations name AC-8=true\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"50%\\\"\",\"gate_criteria.p0_status=\\\"NOT_MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"70%\\\"\",\"gate_criteria.overall_status=\\\"NOT_MET\\\"\",\"collection_status=\\\"COLLECTED…sha256:3a400be90a6276898adb69ec5c33743816df96d41288cce09302cf2a27a780ca"
+            },
+            {
+              "kind": "artifact",
+              "value": "tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:260c7add88973bdff708f7637c3150f4ad1084799f337c5cbb00c748a1117117 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T01:20:34Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
+            },
+            {
+              "kind": "artifact",
+              "value": "tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:5147c9a99016492462d24f5df6926de7b1c27c2d99254941ae00fa63ea8b9861 --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T01:20:34Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md'] coverageBasis: 'acceptance_cr"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-api-token-lifecycle",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-api-token-lifecycle\",[\"AC-1=FULL\",\"AC-2=FULL\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\"],[],[],\"PASS\",[\"coverage.inventory.covered=5\",\"coverage.inventory.total=5\",\"coverage.inventory.pct=100\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=2\",\"priority_breakdown.P0.pct=100\",\"priority_breakdown.P1.total=2\",\"priority_breakdown.P1.covered=2\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=100\",\"priority_breakdown.P3.total=0\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=100\",\"risk_summary.critical_open=0\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=0\",\"by_level.e2e.criteria_covered=1\",\"by_level.e2e.tests=1\",\"by_level.api.criteria_covered=3\",\"by_level.api.tests=4\",\"by_level.component.criteria_covered=1\",\"by_level.component.tests=1\",\"by_level.unit.criteria_covered=0\",\"by_level.unit.tests=0\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=6\",\"coverage.inventory.pct is round(covered/total*100)=100\",\"priority_breakdown.P0.pct is round(covered/total*100)=100\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=100\",\"priority_breakdown.P3.pct is round(covered/total*100)=100\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p0_status=\\\"MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"100%\\\"\",\"gate_criteria.overall_status=\\\"MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"oracle.resolution_mode=\\\"formal_requirements\\\"\",\"oracle.confidence=\\\"high\\\"\",\"oracle.sources names the oracle document=true\",\"oracle.external_pointer_status=\\\"not_used\\\"\",\"oracle.synthetic=false\"],[\"decision_mode=\\\"deterministic\\\"\",\"target.type=\\\"epic\\\"\",\"target.id=\\\"5\\\"\",\"links.trace_report_path=\\\"api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md\\\"\",\"links.trace_report_url=\\\"\\\"\",\"links.artifact_url=\\\"\\\"\",\"links.journey_evidence_url=\\\"\\\"\",\"tests.skipped_cases=0\",\"tests.fixme_cases=0\",\"tests.pending_cases=0\",\"heuristics.ui_journey_status=\\\"not_applicable\\\"\",\"heuristics.ui_state_status=\\\"not_applicable\\\"\"],[\"rejected_evidence is an array=true\",\"rejected_evidence.length=0\"],[6,6,[],[]],[true,[\"waivers block absent when no register exists=undefined\"]],[\"live_evidence.present=false\",\"live_evidence.freshness=\\\"not_present\\\"\",\"blockers is empty=0\"],0,0]",
+          "metricContributions": {
+            "criterionStatusAccuracy.numerator": 5,
+            "criterionStatusAccuracy.denominator": 5,
+            "criterionStatusAccuracy.threshold": 0.9,
+            "discriminatingCriterionAccuracy.numerator": 1,
+            "discriminatingCriterionAccuracy.denominator": 1,
+            "discriminatingCriterionAccuracy.threshold": 1,
+            "gateAccuracy.numerator": 1,
+            "gateAccuracy.denominator": 1,
+            "gateAccuracy.threshold": 1,
+            "gateCriteriaAccuracy.numerator": 12,
+            "gateCriteriaAccuracy.denominator": 12,
+            "gateCriteriaAccuracy.threshold": 1,
+            "coverageArithmeticAccuracy.numerator": 38,
+            "coverageArithmeticAccuracy.denominator": 38,
+            "coverageArithmeticAccuracy.threshold": 1,
+            "oracleResolutionAccuracy.numerator": 7,
+            "oracleResolutionAccuracy.denominator": 7,
+            "oracleResolutionAccuracy.threshold": 1,
+            "runMetadataAccuracy.numerator": 12,
+            "runMetadataAccuracy.denominator": 12,
+            "runMetadataAccuracy.threshold": 1,
+            "evidenceCitationPrecision.numerator": 6,
+            "evidenceCitationPrecision.denominator": 6,
+            "evidenceCitationPrecision.threshold": 0.9,
+            "rejectedEvidenceAccuracy.numerator": 2,
+            "rejectedEvidenceAccuracy.denominator": 2,
+            "rejectedEvidenceAccuracy.threshold": 1,
+            "waiverOracleAccuracy.numerator": 1,
+            "waiverOracleAccuracy.denominator": 1,
+            "waiverOracleAccuracy.threshold": 1,
+            "liveEvidenceAccuracy.numerator": 3,
+            "liveEvidenceAccuracy.denominator": 3,
+            "liveEvidenceAccuracy.threshold": 1,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "inventedCriteria": 0,
+            "maxInventedCriteria": 0,
+            "duplicateCriteria": 0,
+            "maxDuplicateCriteria": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-api-token-lifecycle\",[\"AC-1=FULL\",\"AC-2=FULL\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\"],[],[],\"PASS\",[\"coverage.inventory.covered=5\",\"coverage.inventory.total=5\",\"coverage.inventory.pct=100\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=2\",\"priority_breakdown.P0.pct=100\",\"priority_breakdown.P1.total=2\",\"priority_breakdown.P1.covered=2\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=100\",\"priority_breakdown.P3.total=0\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=100\",\"risk_summary.critical_open=0\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=0\",\"by_level.e2e.criteria_covered=1\",\"by_level.e2e.tests=1\",\"by_level.api.criteria_covered=3\",\"by_level.api.tests=4\",\"by_level.component.criteria_covered=1\",\"by_level.component.tests=1\",\"by_level.unit.criteria_covered=0\",\"by_level.unit.tests=0\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=6\",\"coverage.inventory.pct is round(covered/total*100)=100\",\"priority_breakdown.P0.pct is round(covered/total*100)=100\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=100\",\"priority_breakdown.P3.pct is round(covered/total*100)=100\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p0_status=\\\"MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"100%\\\"\",\"gate_criteria.overall_status=\\\"MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"orac…sha256:9c4c4da5d9aef84611b27a4892fc9e91d6b444b06309cae41324116e66cee2fc"
+            },
+            {
+              "kind": "artifact",
+              "value": "api-token-lifecycle/test-artifacts/trace/e2e-trace-summary-epic-5.json"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:a2958adba0c5145a0fc633e389a1398a8a5f3f26d8765b5a2ce5dc1aed962eda {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T01:30:12Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"api-token-life"
+            },
+            {
+              "kind": "artifact",
+              "value": "api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:48d3f02006e05e073db650f7e0855c7f41c6ec24cb5b131575d6881ed13169aa --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T01:30:12Z' workflowType: 'testarch-trace' inputDocuments: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md'] coverageBasis: 'acceptance_criteria' oracleConfide"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-api-token-lifecycle",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"clean-api-token-lifecycle\",[\"AC-1=FULL\",\"AC-2=FULL\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\"],[],[],\"PASS\",[\"coverage.inventory.covered=5\",\"coverage.inventory.total=5\",\"coverage.inventory.pct=100\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=2\",\"priority_breakdown.P0.pct=100\",\"priority_breakdown.P1.total=2\",\"priority_breakdown.P1.covered=2\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=100\",\"priority_breakdown.P3.total=0\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=100\",\"risk_summary.critical_open=0\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=0\",\"by_level.e2e.criteria_covered=1\",\"by_level.e2e.tests=1\",\"by_level.api.criteria_covered=3\",\"by_level.api.tests=4\",\"by_level.component.criteria_covered=1\",\"by_level.component.tests=1\",\"by_level.unit.criteria_covered=0\",\"by_level.unit.tests=0\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=6\",\"coverage.inventory.pct is round(covered/total*100)=100\",\"priority_breakdown.P0.pct is round(covered/total*100)=100\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=100\",\"priority_breakdown.P3.pct is round(covered/total*100)=100\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p0_status=\\\"MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"100%\\\"\",\"gate_criteria.overall_status=\\\"MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"oracle.resolution_mode=\\\"formal_requirements\\\"\",\"oracle.confidence=\\\"high\\\"\",\"oracle.sources names the oracle document=true\",\"oracle.external_pointer_status=\\\"not_used\\\"\",\"oracle.synthetic=false\"],[\"decision_mode=\\\"deterministic\\\"\",\"target.type=\\\"epic\\\"\",\"target.id=\\\"5\\\"\",\"links.trace_report_path=\\\"api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md\\\"\",\"links.trace_report_url=\\\"\\\"\",\"links.artifact_url=\\\"\\\"\",\"links.journey_evidence_url=\\\"\\\"\",\"tests.skipped_cases=0\",\"tests.fixme_cases=0\",\"tests.pending_cases=0\",\"heuristics.ui_journey_status=\\\"not_applicable\\\"\",\"heuristics.ui_state_status=\\\"not_applicable\\\"\"],[\"rejected_evidence is an array=true\",\"rejected_evidence.length=0\"],[6,6,[],[]],[true,[\"waivers block absent when no register exists=undefined\"]],[\"live_evidence.present=false\",\"live_evidence.freshness=\\\"not_present\\\"\",\"blockers is empty=0\"],0,0]",
+          "metricContributions": {
+            "criterionStatusAccuracy.numerator": 5,
+            "criterionStatusAccuracy.denominator": 5,
+            "criterionStatusAccuracy.threshold": 0.9,
+            "discriminatingCriterionAccuracy.numerator": 1,
+            "discriminatingCriterionAccuracy.denominator": 1,
+            "discriminatingCriterionAccuracy.threshold": 1,
+            "gateAccuracy.numerator": 1,
+            "gateAccuracy.denominator": 1,
+            "gateAccuracy.threshold": 1,
+            "gateCriteriaAccuracy.numerator": 12,
+            "gateCriteriaAccuracy.denominator": 12,
+            "gateCriteriaAccuracy.threshold": 1,
+            "coverageArithmeticAccuracy.numerator": 38,
+            "coverageArithmeticAccuracy.denominator": 38,
+            "coverageArithmeticAccuracy.threshold": 1,
+            "oracleResolutionAccuracy.numerator": 7,
+            "oracleResolutionAccuracy.denominator": 7,
+            "oracleResolutionAccuracy.threshold": 1,
+            "runMetadataAccuracy.numerator": 12,
+            "runMetadataAccuracy.denominator": 12,
+            "runMetadataAccuracy.threshold": 1,
+            "evidenceCitationPrecision.numerator": 6,
+            "evidenceCitationPrecision.denominator": 6,
+            "evidenceCitationPrecision.threshold": 0.9,
+            "rejectedEvidenceAccuracy.numerator": 2,
+            "rejectedEvidenceAccuracy.denominator": 2,
+            "rejectedEvidenceAccuracy.threshold": 1,
+            "waiverOracleAccuracy.numerator": 1,
+            "waiverOracleAccuracy.denominator": 1,
+            "waiverOracleAccuracy.threshold": 1,
+            "liveEvidenceAccuracy.numerator": 3,
+            "liveEvidenceAccuracy.denominator": 3,
+            "liveEvidenceAccuracy.threshold": 1,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "inventedCriteria": 0,
+            "maxInventedCriteria": 0,
+            "duplicateCriteria": 0,
+            "maxDuplicateCriteria": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-api-token-lifecycle\",[\"AC-1=FULL\",\"AC-2=FULL\",\"AC-3=FULL\",\"AC-4=FULL\",\"AC-5=FULL\"],[],[],\"PASS\",[\"coverage.inventory.covered=5\",\"coverage.inventory.total=5\",\"coverage.inventory.pct=100\",\"priority_breakdown.P0.total=2\",\"priority_breakdown.P0.covered=2\",\"priority_breakdown.P0.pct=100\",\"priority_breakdown.P1.total=2\",\"priority_breakdown.P1.covered=2\",\"priority_breakdown.P1.pct=100\",\"priority_breakdown.P2.total=1\",\"priority_breakdown.P2.covered=1\",\"priority_breakdown.P2.pct=100\",\"priority_breakdown.P3.total=0\",\"priority_breakdown.P3.covered=0\",\"priority_breakdown.P3.pct=100\",\"risk_summary.critical_open=0\",\"risk_summary.high_open=0\",\"risk_summary.medium_open=0\",\"risk_summary.low_open=0\",\"by_level.e2e.criteria_covered=1\",\"by_level.e2e.tests=1\",\"by_level.api.criteria_covered=3\",\"by_level.api.tests=4\",\"by_level.component.criteria_covered=1\",\"by_level.component.tests=1\",\"by_level.unit.criteria_covered=0\",\"by_level.unit.tests=0\",\"by_level.live.criteria_covered=0\",\"by_level.live.tests=0\",\"by_level.other.criteria_covered=0\",\"by_level.other.tests=0\",\"tests.files=4\",\"tests.cases=6\",\"coverage.inventory.pct is round(covered/total*100)=100\",\"priority_breakdown.P0.pct is round(covered/total*100)=100\",\"priority_breakdown.P1.pct is round(covered/total*100)=100\",\"priority_breakdown.P2.pct is round(covered/total*100)=100\",\"priority_breakdown.P3.pct is round(covered/total*100)=100\"],[\"gate_criteria.p0_coverage_required=\\\"100%\\\"\",\"gate_criteria.p0_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p0_status=\\\"MET\\\"\",\"gate_criteria.p1_coverage_target=\\\"90%\\\"\",\"gate_criteria.p1_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.p1_coverage_actual=\\\"100%\\\"\",\"gate_criteria.p1_status=\\\"MET\\\"\",\"gate_criteria.overall_coverage_minimum=\\\"80%\\\"\",\"gate_criteria.overall_coverage_actual=\\\"100%\\\"\",\"gate_criteria.overall_status=\\\"MET\\\"\",\"collection_status=\\\"COLLECTED\\\"\",\"gate_basis=\\\"priority_thresholds\\\"\"],[\"collection_mode=\\\"contract_static\\\"\",\"inventory_basis=\\\"acceptance_criteria\\\"\",\"orac…sha256:9c4c4da5d9aef84611b27a4892fc9e91d6b444b06309cae41324116e66cee2fc"
+            },
+            {
+              "kind": "artifact",
+              "value": "api-token-lifecycle/test-artifacts/trace/e2e-trace-summary-epic-5.json"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:9c86e176a640fd331ae8af718caaa501516c201599a0e9bd015125dc2dff9ec3 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T01:37:54Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"api-token-life"
+            },
+            {
+              "kind": "artifact",
+              "value": "api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:58f95904f24f9c344010eb6b132fc27f1a013ba6b5427300981b467ff8b9b213 --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T01:37:54Z' workflowType: 'testarch-trace' inputDocuments: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md'] coverageBasis: 'acceptance_criteria' oracleConfide"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 1892721,
+  "failureClass": "quality",
+  "exitCode": 1
+}

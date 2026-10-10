@@ -14,8 +14,8 @@
  *
  * `scriptsCoveredInCi` gets the same treatment: a chain run through
  * tools/test-shards.js over a full 1..N matrix covers every chained script,
- * an incomplete matrix covers none of them, and with no sharded run a chained
- * script counts only when a workflow names it. `shardRunProblems` refuses each
+ * an incomplete matrix covers none of them, and nested commands count only
+ * when their failure can fail CI. `shardRunProblems` refuses each
  * way a green run could skip a shard or swallow its failure, one case each,
  * and `chainedScripts` refuses a chain part that is not a bare `npm run`.
  *
@@ -162,6 +162,87 @@ function checkShardedChainCoversEveryChainedScript() {
     covered.has('test:a') && covered.has('test:b'),
     `a full shard matrix did not count the chain as run in CI: ${JSON.stringify([...covered])}`,
   );
+}
+
+function checkShardedChainCoversNestedScripts() {
+  const scripts = {
+    'test:cli':
+      'echo "npm run test:orphan" && printf "before; npm run test:orphan" && npm run test:test-review-cli && node test/test-trace-cli.js',
+    'test:test-review-cli': 'node test/test-test-review-cli.js',
+    'test:orphan': 'node test/test-orphan.js',
+  };
+  const covered = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    covered.has('test:cli') && covered.has('test:test-review-cli') && !covered.has('test:orphan'),
+    `a sharded command did not count its nested npm script as run in CI: ${JSON.stringify([...covered])}`,
+  );
+}
+
+function checkConditionalFallbackDoesNotCountAsCovered() {
+  const scripts = {
+    'test:cli': 'npm run test:fast || npm run test:orphan; npm run test:always',
+    'test:fast': 'node test/fast.js',
+    'test:orphan': 'node test/orphan.js',
+    'test:always': 'node test/always.js',
+  };
+  const covered = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    covered.has('test:always') && !covered.has('test:fast') && !covered.has('test:orphan'),
+    `conditional fallback was counted as guaranteed CI execution: ${JSON.stringify([...covered])}`,
+  );
+  scripts['test:cli'] = 'npm run test:fast && npm run test:maybe || npm run test:orphan; npm run test:always';
+  scripts['test:maybe'] = 'node test/maybe.js';
+  const chained = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    chained.has('test:always') && !chained.has('test:fast') && !chained.has('test:maybe') && !chained.has('test:orphan'),
+    `conditional command chain was counted as guaranteed CI execution: ${JSON.stringify([...chained])}`,
+  );
+}
+
+function checkNestedScriptNamesAndMaskedChains() {
+  const scripts = {
+    'test:root': 'npm run test:setup && npm run test:unit.js',
+    'test:setup': 'node test/setup.js',
+    'test:unit.js': 'node test/unit.js',
+  };
+  check(
+    JSON.stringify(chainedScripts({ scripts: { test: 'npm run test:unit.js && npm run lint:md' } })) === '["test:unit.js","lint:md"]',
+    'a dotted script name in the test chain was refused',
+  );
+  const covered = () => scriptsCoveredInCi(['test:root'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(covered().has('test:unit.js'), 'a dotted nested script was missed');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js; echo done';
+  check(!covered().has('test:setup') && !covered().has('test:unit.js'), 'a later statement masked && failures');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js\n echo done';
+  check(!covered().has('test:setup') && !covered().has('test:unit.js'), 'a later line masked && failures');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js;';
+  check(covered().has('test:unit.js'), 'a trailing separator hid a command required for success');
+  scripts['test:root'] = 'case x in y) npm run test:unit.js;; esac; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'an unmatched case clause counted as CI execution');
+  scripts['test:root'] = 'if false; then\nnpm run test:unit.js\nfi\nnpm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'an unexecuted if branch counted as CI execution');
+  scripts['test:root'] = 'npm run test:unit.js & echo done; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a background command counted as CI execution');
+  scripts['test:root'] = 'npm run test:unit.js | cat; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a pipeline command counted as CI execution');
+  scripts['test:root'] = '(npm run test:unit.js); npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a subshell command counted as guaranteed CI execution');
+  scripts['test:root'] = 'helper() {\nnpm run test:unit.js\n}\nnpm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a function body counted without its invocation');
+  scripts['test:root'] = 'npm run test:unit.js || true';
+  check(!covered().has('test:unit.js'), 'a fallback hid a script failure');
+  scripts['test:root'] = 'npm run test:unit.js; echo done';
+  check(!covered().has('test:unit.js'), 'a later statement hid a script failure');
+  scripts['test:root'] = 'npm run test:unit.js; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'only the last statement should gate CI');
+  scripts['test:root'] = 'npm run test:unit.js && npm run test:setup';
+  check(covered().has('test:unit.js') && covered().has('test:setup'), 'an unmasked && chain should gate CI');
+  scripts['test:root'] = 'npm run test:unit.js > log 2>&1';
+  check(covered().has('test:unit.js'), 'a file-descriptor redirect hid a nested script from CI coverage');
+  scripts['test:root'] = 'npm run test:unit.js &> log';
+  check(covered().has('test:unit.js'), 'a combined output redirect hid a nested script from CI coverage');
+  scripts['test:root'] = 'npm run test:unit.js 2>&1 &';
+  check(!covered().has('test:unit.js'), 'a background command with redirection counted as a CI gate');
 }
 
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {
@@ -393,7 +474,7 @@ function checkEachWorkflowKeepsTheInstaller() {
 function checkRealRepoIsClean() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   const chained = chainedScripts(manifest);
-  const inCi = scriptsCoveredInCi(chained);
+  const inCi = scriptsCoveredInCi(chained, undefined, undefined, manifest.scripts);
   const install = actionlintInstallProblems();
   check(install.length === 0, `the real actionlint install is refused: ${JSON.stringify(install)}`);
   const notRun = chained.filter((script) => !inCi.has(script));
@@ -415,6 +496,9 @@ function main() {
   checkStaleDeliberatelyLocalEntriesFlagsARemovedScript();
   checkStaleDeliberatelyLocalEntriesClearsAPresentScript();
   checkShardedChainCoversEveryChainedScript();
+  checkShardedChainCoversNestedScripts();
+  checkConditionalFallbackDoesNotCountAsCovered();
+  checkNestedScriptNamesAndMaskedChains();
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
   checkEveryBypassIsRefused();

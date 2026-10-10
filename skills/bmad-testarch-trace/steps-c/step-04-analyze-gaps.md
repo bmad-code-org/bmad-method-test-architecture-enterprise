@@ -116,6 +116,10 @@ Resolution precedence:
 2. `tea_execution_mode` from config
 3. Runtime capability fallback (when probing enabled)
 
+### 0b. Reconcile the Oracle Ledger
+
+Before classifying gaps, compare every matrix item's ID and priority with Step 1's persisted oracle ledger. Require exactly one matrix item per oracle item and unchanged priorities. Correct any drift from the ledger before using the matrix in Sections 1 and 3. Repeat this check when resuming a saved mapping.
+
 ### 1. Gap Analysis
 
 **Identify uncovered requirements:**
@@ -147,7 +151,7 @@ const lowGaps = uncoveredRequirements.filter((req) => req.priority === 'P3');
 
 ### 2. Coverage Heuristics Checks
 
-Use the heuristics inventory from Step 2 and mapped criteria from Step 3 to flag common coverage blind spots:
+Use the heuristics inventory from Step 2 and mapped criteria from Step 3 to flag common coverage blind spots. Carry Step 2's endpoint inventory through unchanged: endpoint reachability comes from API calls and response assertions, while missing permission-denied assertions appear in the auth gap list.
 
 ```javascript
 const endpointCoverageGaps = coverageHeuristics?.endpoints_without_tests || [];
@@ -286,6 +290,20 @@ const liveEvidence = {
   stale: staleCount,
   unverifiable: unverifiableCount,
   failed: countDisposition('fail'),
+  fresh_failed: liveRecordsForRollup.filter((record) => {
+    if (record.disposition !== 'fail') return false;
+    const recorded = String(record.recorded_source_sha || '')
+      .trim()
+      .toLowerCase();
+    const current = String(currentSourceSha || '')
+      .trim()
+      .toLowerCase();
+    return (
+      /^[0-9a-f]{7,64}$/.test(recorded) &&
+      /^[0-9a-f]{7,64}$/.test(current) &&
+      (recorded.startsWith(current) || current.startsWith(recorded))
+    );
+  }).length,
   contradicted: countDisposition('contradicted'),
   blocked: countDisposition('blocked'),
   skipped: countDisposition('skipped'),
@@ -690,7 +708,28 @@ const coverageMatrix = {
 
 **Write to temp file for Phase 2:**
 
+Recount `FULL` rows before saving. The overall count must equal the sum of the four priority counts and the number of `FULL` requirement rows. If any count differs, correct the statistics from the mapped rows and repeat this check. `PARTIAL`, `UNIT-ONLY`, and `INTEGRATION-ONLY` do not count as fully covered.
+
 ```javascript
+const rows = coverageMatrix.requirements;
+const statistics = coverageMatrix.coverage_statistics;
+const priorities = ['P0', 'P1', 'P2', 'P3'];
+const fullRows = rows.filter((row) => row.coverage === 'FULL');
+const countedByPriority = priorities.reduce((count, priority) => count + statistics.priority_breakdown[priority].covered, 0);
+if (
+  statistics.total_requirements !== rows.length ||
+  statistics.fully_covered !== fullRows.length ||
+  statistics.fully_covered !== countedByPriority ||
+  statistics.overall_coverage_percentage !== safePct(fullRows.length, rows.length) ||
+  priorities.some(
+    (priority) =>
+      statistics.priority_breakdown[priority].total !== rows.filter((row) => row.priority === priority).length ||
+      statistics.priority_breakdown[priority].covered !== fullRows.filter((row) => row.priority === priority).length,
+  )
+) {
+  throw new Error('Coverage totals disagree with mapped requirement rows; correct Phase 1 statistics before saving');
+}
+
 const outputPath = '{tempOutputFile}';
 fs.writeFileSync(outputPath, JSON.stringify(coverageMatrix, null, 2), 'utf8');
 
