@@ -1230,6 +1230,7 @@ function testDesignDiagnosticProjection(scored, mutations) {
   const ordering = scored.orderingChecks.filter((check) => check.resolvable);
   return {
     groundedRiskRecall: {
+      expected: scored.grounding.declared,
       numerator: scored.grounding.matched,
       denominator: scored.grounding.declared,
       threshold: THRESHOLDS.groundedRiskRecall,
@@ -1270,11 +1271,13 @@ function testDesignDiagnosticProjection(scored, mutations) {
       threshold: THRESHOLDS.riskLinkResolutionAccuracy,
     },
     priorityOrderingAccuracy: {
+      expected: scored.orderingChecks.length,
       numerator: scored.flattenedPriorities ? 0 : ordering.filter((check) => check.ok).length,
       denominator: scored.flattenedPriorities ? 0 : ordering.length,
       threshold: THRESHOLDS.priorityOrderingAccuracy,
     },
     coverageMappingAccuracy: {
+      expected: scored.coverageChecks.length,
       numerator: scored.coverageChecks.filter((check) => check.ok).length,
       denominator: scored.coverageChecks.length,
       threshold: THRESHOLDS.coverageMappingAccuracy,
@@ -1684,6 +1687,39 @@ function runnerRecord(
 /* Entry point                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/** Apply thresholds only to measurements declared by the selected fixture sets.
+ * @param {object[]} sets Selected corpus fixture sets.
+ * @param {object} measurements Observed rates; absent denominators remain null.
+ * @returns {string[]} Quality failures without turning absent expectations into perfect rates.
+ */
+function measurementFailures(sets, measurements) {
+  const materialDeclared = sets.some((set) => (set.materialRisks ?? []).length > 0);
+  const orderingDeclared = sets.some((set) => orderedPairsFor(set).length > 0);
+  const inapplicable = new Set([
+    ...(materialDeclared ? [] : ['groundedRiskRecall', 'coverageMappingAccuracy']),
+    ...(orderingDeclared ? [] : ['priorityOrderingAccuracy']),
+  ]);
+  const failures = [];
+  for (const key of [
+    'groundedRiskRecall',
+    'riskPrecision',
+    'scaleComplianceAccuracy',
+    'scoreArithmeticAccuracy',
+    'categoryValidityAccuracy',
+    'bandPlacementAccuracy',
+    'riskIdWellFormedAccuracy',
+    'riskLinkResolutionAccuracy',
+    'priorityOrderingAccuracy',
+    'coverageMappingAccuracy',
+  ]) {
+    if (inapplicable.has(key)) continue;
+    const value = measurements[key];
+    if (value === null) failures.push(`${key} (unmeasurable)`);
+    else if (value < THRESHOLDS[key]) failures.push(key);
+  }
+  return failures;
+}
+
 async function main() {
   const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
@@ -1989,24 +2025,7 @@ async function main() {
     console.log(`  fixture mutations    ${String(totals.mutations).padStart(3)}   (max ${THRESHOLDS.maxFixtureMutations})`);
 
     const failures = [];
-    for (const key of [
-      'groundedRiskRecall',
-      'riskPrecision',
-      'scaleComplianceAccuracy',
-      'scoreArithmeticAccuracy',
-      'categoryValidityAccuracy',
-      'bandPlacementAccuracy',
-      'riskIdWellFormedAccuracy',
-      'riskLinkResolutionAccuracy',
-      'priorityOrderingAccuracy',
-      'coverageMappingAccuracy',
-    ]) {
-      const value = measurements[key];
-      // NaN fails every comparison, so an unmeasurable metric would otherwise clear a
-      // bar it never met. Unmeasurable is a failure, and it says which metric.
-      if (value === null) failures.push(`${key} (unmeasurable)`);
-      else if (value < THRESHOLDS[key]) failures.push(key);
-    }
+    failures.push(...measurementFailures(sets, measurements));
     if (totals.unscoredTables > THRESHOLDS.maxUnscoredRiskTables) {
       failures.push(`${totals.unscoredTables} risk table(s) state no score, so their rows were never scored`);
     }
@@ -2079,6 +2098,7 @@ if (require.main === module) {
 
 module.exports = {
   runnerRecord,
+  measurementFailures,
   parseArgs,
   loadGroundTruth,
   selectSets,

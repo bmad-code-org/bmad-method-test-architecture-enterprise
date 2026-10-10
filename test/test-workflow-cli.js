@@ -456,3 +456,73 @@ test('retention failure always cleans the workspace and preserves a preceding ru
     assert.equal(fs.existsSync(workspace.dir), false);
   }
 });
+
+test('clean-only evaluation preserves absent rates without failing undeclared expectations', () => {
+  const { measurementFailures } = require('./eval-test-design');
+  const truth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/test-design-eval/ground-truth.json'), 'utf8'));
+  const clean = truth.fixtureSets.find((set) => set.id === 'clean-last-sync-indicator');
+  const seeded = truth.fixtureSets.find((set) => set.id === 'seeded-offline-order-capture');
+  const original = JSON.parse(fs.readFileSync(path.join(__dirname, 'results/codex-test-design/raw/clean-attempt-3/result.json'), 'utf8'));
+  const measurements = original.runners[0].measurements;
+  assert.equal(measurements.groundedRiskRecall, null);
+  assert.equal(measurements.priorityOrderingAccuracy, null);
+  assert.deepEqual(measurementFailures([clean], measurements), []);
+  assert.deepEqual(measurementFailures([seeded], measurements), [
+    'groundedRiskRecall (unmeasurable)',
+    'priorityOrderingAccuracy (unmeasurable)',
+    'coverageMappingAccuracy (unmeasurable)',
+  ]);
+  assert.deepEqual(measurementFailures([clean], { ...measurements, riskPrecision: 0 }), ['riskPrecision']);
+});
+
+test('clean fixture selection passes the executable gate with the retained actual report', (t) => {
+  const root = project(t);
+  const stub = path.join(root, 'replay-agent.cjs');
+  const report = path.join(__dirname, 'results/codex-test-design/raw/clean-attempt-3/clean-last-sync-indicator/test-design-epic-9.md');
+  fs.writeFileSync(
+    stub,
+    `
+const fs = require('node:fs'), path = require('node:path');
+if (process.argv.includes('--version')) { console.log('controlled report replay'); process.exit(0); }
+fs.readFileSync(0, 'utf8');
+const out = path.join(process.cwd(), 'field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md');
+fs.mkdirSync(path.dirname(out), {recursive: true});
+fs.copyFileSync(${JSON.stringify(report)}, out);
+console.log('retained report replay');
+`,
+  );
+  const resultPath = path.join(root, 'result.json');
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(__dirname, 'eval-test-design.js'),
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      process.execPath,
+      '--agent-arg',
+      stub,
+      '--set',
+      'clean-last-sync-indicator',
+      '--runs',
+      '1',
+      '--json',
+      resultPath,
+    ],
+    { encoding: 'utf8', timeout: 30_000 },
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const payload = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+  assert.equal(payload.runners[0].measurements.groundedRiskRecall, null);
+  assert.deepEqual(payload.runners[0].failures, []);
+  const { validateEvalResult } = require('./schema/eval-result');
+  assert.equal(validateEvalResult(payload).success, true);
+  for (const mutation of ['positive-expectation', 'missing-expectation', 'nonzero-numerator']) {
+    const changed = structuredClone(payload);
+    const contribution = changed.runners[0].diagnostics[0].metricContributions;
+    if (mutation === 'positive-expectation') contribution['groundedRiskRecall.expected'] = 1;
+    if (mutation === 'missing-expectation') delete contribution['groundedRiskRecall.expected'];
+    if (mutation === 'nonzero-numerator') contribution['groundedRiskRecall.numerator'] = 1;
+    assert.equal(validateEvalResult(changed).success, false, mutation);
+  }
+});

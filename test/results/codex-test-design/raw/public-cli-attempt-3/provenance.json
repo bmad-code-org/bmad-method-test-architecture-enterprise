@@ -1,0 +1,12 @@
+{
+  "mode": "live",
+  "sourceCommit": "aea6103d4bcf4f57e141c2d806f938e20877fd79",
+  "sourceStatusAfterRuns": "?? node_modules",
+  "trackedSourceUnchanged": true,
+  "sourceStatusExplanation": "The frozen clone has an untracked node_modules symlink to locked dependencies. The original suite dirty:true is retained unchanged. No tracked source changed.",
+  "requestedModel": "gpt-5.6-sol",
+  "agentVersion": "codex-cli 0.162.0",
+  "cliExitCode": 0,
+  "command": "node cli/test-design.js --project-root /tmp/remaining-skills-evidence/test-design-cli-schema-recovery/field-order-capture --input /tmp/remaining-skills-evidence/test-design-cli-schema-recovery/field-order-capture/docs/epic-7.md --epic 7 --agent codex --output-dir test-artifacts --evidence-dir .tea-runs --retries 0",
+  "agentExitCode": 0
+}
