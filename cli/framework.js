@@ -6,10 +6,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 const { resolveModel } = require('./lib/agent-adapters');
-const { agentOptions } = require('./lib/workflow-cli');
+const { agentOptions, WorkflowError } = require('./lib/workflow-cli');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
 const { addAgentOptions, resolveWorkflowSkill, runWithEvidence } = require('./lib/workflow-cli');
-const { SKILL_NAME, SCOPES, OPERATIONS, projectPath, prepareSetup, setupPrompt, inspectCompletion } = require('./lib/framework-setup');
+const {
+  SKILL_NAME,
+  SCOPES,
+  OPERATIONS,
+  projectPath,
+  readJournal,
+  prepareSetup,
+  setupPrompt,
+  inspectCompletion,
+  protectResultPath,
+} = require('./lib/framework-setup');
 
 function collect(value, previous) {
   return [...previous, value];
@@ -84,6 +94,7 @@ function main(argv = process.argv) {
     ) {
       throw new Error('--json must name a .json result file separate from setup inputs and journal');
     }
+    protectResultPath(request, jsonPath);
     if (options.agent === 'none') {
       process.stdout.write(`${setupPrompt(request)}\n`);
       return 0;
@@ -95,7 +106,15 @@ function main(argv = process.argv) {
       options,
       capabilities: ['command-execution'],
       prepare: ({ attempt }) => ({ prompt: setupPrompt(request, { retry: attempt > 1 }), request }),
-      validate: ({ attemptDir }) => inspectCompletion(request, { evidenceDir: attemptDir, timeoutMs: Number(options.timeoutMs) }),
+      validate: ({ attemptDir }) => {
+        try {
+          protectResultPath(request, jsonPath, readJournal(projectPath(projectRoot, request.journalPath))?.data);
+        } catch (error) {
+          jsonPath = null;
+          throw new WorkflowError('usage', error.message, { cause: error });
+        }
+        return inspectCompletion(request, { evidenceDir: attemptDir, timeoutMs: Number(options.timeoutMs) });
+      },
     });
     const outcome = execution.value;
     const result = {

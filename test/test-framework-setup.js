@@ -80,7 +80,7 @@ test('Resume restores saved both scope and original Edit operation', (t) => {
 test('retry asks Resume with existing journal and retains original request', (t) => {
   const f = fixture(t);
   const request = f.prepare();
-  assert.match(setupPrompt(request, { retry: true }), /headless create request/);
+  assert.throws(() => setupPrompt(request, { retry: true }), /no recoverable progress/);
   f.journal({ workflowStatus: 'in-progress' });
   assert.match(setupPrompt(request, { retry: true }), /headless resume request/);
   assert.equal(inspectCompletion(request).completed, false);
@@ -153,9 +153,13 @@ test('native verification preserves project environment and records the caller t
     else process.env[key] = previous;
   });
   const request = f.prepare();
+  fs.writeFileSync(
+    path.join(f.root, 'tests/environment.test.cjs'),
+    "require('node:test')('environment',()=>require('node:assert/strict').equal(process.env.TEA_FRAMEWORK_PROJECT_SETTING,'kept'));\n",
+  );
   f.journal({
     contract: {
-      test_commands: ['node -e "if(process.env.TEA_FRAMEWORK_PROJECT_SETTING !== \'kept\')process.exit(7)"'],
+      test_commands: ['node --test tests/environment.test.cjs'],
       pipeline_target: '.github/workflows/test.yaml',
     },
   });
@@ -188,4 +192,24 @@ test('empty framework directory cannot establish Create completion', (t) => {
   assert.equal(outcome.completed, false);
   assert.match(outcome.issues.join('\n'), /no nonempty test source/);
   assert.equal(outcome.executions.length, 0);
+});
+
+test('unsupported successful commands cannot establish native test execution', (t) => {
+  const f = fixture(t);
+  const request = f.prepare();
+  f.journal({ contract: { test_commands: ['node -e "console.log(\'1 passed\')"'], pipeline_target: '.github/workflows/test.yaml' } });
+  const result = inspectCompletion(request);
+  assert.equal(result.completed, false);
+  assert.equal(result.executions[0].runner, null);
+  assert.match(result.issues.join('\n'), /positive supported test execution/);
+});
+
+test('skip-only Node tests do not establish passing assertion execution', (t) => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.root, 'tests/smoke.test.cjs'), "require('node:test').skip('placeholder',()=>{});\n");
+  const request = f.prepare();
+  f.journal();
+  const result = inspectCompletion(request);
+  assert.equal(result.completed, false);
+  assert.equal(result.executions[0].passedTests, 0);
 });

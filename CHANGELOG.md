@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Framework CLI result publication preserves manifests, configuration, input files and generated setup outputs through symlink and hard-link aliases. Resume preserves frozen identity, contract and hook ledgers; completion requires configured hooks, frozen output paths and positive native test execution. Retries reject unrelated completed history, and full journal paths remain confined to the project.
 - Framework and CI Create now require the Git worktree before activation or framework writes. The Codex evaluation exposed a run that skipped this existing CI prerequisite; the user CLI also rejects it before model execution.
 
 ### Changed

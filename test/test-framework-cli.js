@@ -28,6 +28,7 @@ const prompt = fs.readFileSync(0, 'utf8');
 const mode = process.argv[2];
 const journalPath = JSON.parse(prompt.match(/Persist the shared journal at ("[^"\n]+")./)[1]);
 const scope = prompt.match(/Explicit setup_scope: (\w+)\./)[1];
+if (mode === 'old-retry') { if (!fs.existsSync('old-retry.txt')) {fs.writeFileSync('old-retry.txt', 'first');process.exit(1);} console.log('old history');process.exit(0); }
 if (mode === 'nothing') { console.log('done'); process.exit(0); }
 fs.mkdirSync(path.dirname(journalPath), { recursive: true });
 fs.mkdirSync('tests', { recursive: true });
@@ -42,6 +43,21 @@ if (operation === 'validate') {
  const report = path.join(path.dirname(journalPath), 'validation.md');
  fs.writeFileSync(report, '# FAIL\nMissing assertions\n');
  text += 'validation_reports:\n  framework: '+JSON.stringify(report)+'\n';
+}
+if (mode === 'replace-id') text = text.replace('command-test-run', 'replacement-run');
+if (mode === 'change-contract') text = text.replace('test_commands: [node --test]', 'test_commands: [node --test tests/smoke.test.cjs]');
+if (mode === 'missing-config') text = text.replace('contract:\n', 'contract:\n  config_paths: [missing.config.json]\n');
+if (mode === 'zero-tests') { fs.unlinkSync('tests/smoke.test.cjs');fs.writeFileSync('tests/helper.cjs', 'module.exports = {};\n');text=text.replace('framework: [tests/smoke.test.cjs]', 'framework: [tests/helper.cjs]'); }
+if (mode === 'new-output' || mode === 'new-output-hardlink') {
+ fs.writeFileSync('setup.config.json', '{"generated":true}\n');
+ if (mode === 'new-output-hardlink') fs.linkSync('setup.config.json', 'result-alias.json');
+ text = text.replace('contract:\n', 'contract:\n  config_paths: [setup.config.json]\n');
+}
+if (mode === 'hooks') {
+ const hooks = JSON.parse(prompt.match(/stable ledger keys: (\{[^\n]+\})\./)[1]);
+ text = text.replace('hooks_started: []', 'hooks_started: '+JSON.stringify(Object.keys(hooks)))
+   .replace('hooks_completed: []', 'hooks_completed: '+JSON.stringify(Object.keys(hooks)));
+ text += 'hook_instructions: '+JSON.stringify(hooks)+'\n';
 }
 fs.writeFileSync(journalPath, text+'---\n# Setup\n');
 if (failed) { fs.writeFileSync('first-attempt.txt', prompt); console.error('transient failure'); process.exit(1); }
@@ -137,4 +153,123 @@ test('CI Create without a Git worktree fails before evidence or generation write
   assert.equal(result.status, 2, result.stderr);
   assert.match(result.stderr, /Git repository required/);
   assert.deepEqual(fs.readdirSync(f.root), before);
+});
+
+test('result refuses package manifest and hard-linked instructions before generation', (t) => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.root, 'package.json'), '{"private":true}\n');
+  const manifest = f.run([...f.agent(), '--json', 'package.json']);
+  assert.equal(manifest.status, 2, manifest.stdout);
+  assert.equal(fs.readFileSync(path.join(f.root, 'package.json'), 'utf8'), '{"private":true}\n');
+  fs.writeFileSync(path.join(f.root, 'request.json'), 'Keep request bytes');
+  fs.linkSync(path.join(f.root, 'request.json'), path.join(f.root, 'linked.json'));
+  const linked = f.run([...f.agent(), '--instructions', 'request.json', '--json', 'linked.json']);
+  assert.equal(linked.status, 2, linked.stdout);
+  assert.equal(fs.readFileSync(path.join(f.root, 'request.json'), 'utf8'), 'Keep request bytes');
+});
+
+test('external framework journal symlink fails before prompt or evidence writes', (t) => {
+  const f = fixture(t);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-framework-outside-'));
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(f.root, 'artifacts'));
+  fs.symlinkSync(outside, path.join(f.root, 'artifacts/framework'), 'dir');
+  const result = f.run([...f.agent(), '--output', 'safe-evidence']);
+  assert.equal(result.status, 2, result.stdout);
+  assert.deepEqual(fs.readdirSync(outside), []);
+  assert.equal(fs.existsSync(path.join(f.root, 'safe-evidence')), false);
+});
+
+test('configured completion hook cannot be omitted from a completed journal', (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.root, '_bmad/custom'));
+  fs.writeFileSync(path.join(f.root, '_bmad/custom/bmad-testarch-framework.toml'), '[workflow]\non_complete="Write hook marker."\n');
+  const result = f.run(f.agent());
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(JSON.parse(result.stdout).issues.join('\n'), /framework.on_complete/);
+});
+
+test('Resume rejects replaced identity, changed contract and discarded saved hook records', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(f.agent()).status, 0);
+  const journal = path.join(f.root, 'artifacts/framework/setup-run-progress.md');
+  const original = fs.readFileSync(journal, 'utf8').replace('workflowStatus: completed', 'workflowStatus: in-progress');
+  for (const mode of ['replace-id', 'change-contract']) {
+    fs.writeFileSync(journal, original);
+    const result = f.run([...f.agent(mode), '--operation', 'resume']);
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(JSON.parse(result.stdout).issues.join('\n'), /frozen/);
+  }
+  fs.writeFileSync(
+    journal,
+    original
+      .replace('hooks_started: []', 'hooks_started: [framework.on_complete]')
+      .replace('hooks_completed: []', 'hooks_completed: [framework.on_complete]')
+      .replace('phase_status:', 'hook_instructions: {framework.on_complete: "Saved hook"}\nphase_status:'),
+  );
+  const discarded = f.run([...f.agent(), '--operation', 'resume']);
+  assert.equal(discarded.status, 1, discarded.stdout);
+  assert.match(JSON.parse(discarded.stdout).issues.join('\n'), /saved hook/);
+});
+
+test('Resume with an uncertain started hook halts before agent writes', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(f.agent()).status, 0);
+  const journal = path.join(f.root, 'artifacts/framework/setup-run-progress.md');
+  const prior = fs
+    .readFileSync(journal, 'utf8')
+    .replace('workflowStatus: completed', 'workflowStatus: in-progress')
+    .replace('hooks_started: []', 'hooks_started: [ci.on_complete]');
+  fs.writeFileSync(journal, prior);
+  const result = f.run([...f.agent(), '--operation', 'resume']);
+  assert.equal(result.status, 2, result.stdout);
+  assert.match(result.stderr, /uncertain started hook/);
+  assert.equal(fs.readFileSync(journal, 'utf8'), prior);
+});
+
+test('all frozen configuration outputs are required despite populated phase targets', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('missing-config'));
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(JSON.parse(result.stdout).issues.join('\n'), /missing.config.json/);
+});
+
+test('helper source and zero registered tests cannot complete Create', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('zero-tests'));
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(JSON.parse(result.stdout).issues.join('\n'), /positive supported test execution/);
+});
+
+test('newly generated configuration and its hard link are protected before result publication', (t) => {
+  for (const mode of ['new-output', 'new-output-hardlink']) {
+    const f = fixture(t);
+    const result = f.run([...f.agent(mode), '--json', mode === 'new-output' ? 'setup.config.json' : 'result-alias.json']);
+    assert.equal(result.status, 2, result.stdout);
+    assert.equal(fs.readFileSync(path.join(f.root, 'setup.config.json'), 'utf8'), '{"generated":true}\n');
+    assert.match(result.stderr, /protected setup/);
+  }
+});
+
+test('configured framework and CI hook identities require exact completed lifecycles', (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.root, '_bmad/custom'));
+  for (const skill of ['framework', 'ci'])
+    fs.writeFileSync(
+      path.join(f.root, `_bmad/custom/bmad-testarch-${skill}.toml`),
+      '[workflow]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n',
+    );
+  const result = f.run([...f.agent('hooks'), '--scope', 'both']);
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+});
+
+test('retry cannot adopt unchanged completed history after transport failure', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(f.agent()).status, 0);
+  const journal = path.join(f.root, 'artifacts/framework/setup-run-progress.md');
+  const prior = fs.readFileSync(journal, 'utf8');
+  const result = f.run([...f.agent('old-retry'), '--retries', '1']);
+  assert.equal(result.status, 2, result.stdout);
+  assert.match(result.stderr, /no recoverable progress/);
+  assert.equal(fs.readFileSync(journal, 'utf8'), prior);
 });

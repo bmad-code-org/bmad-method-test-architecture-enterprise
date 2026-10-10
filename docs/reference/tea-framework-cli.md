@@ -100,3 +100,7 @@ Validate findings remain in the skill outputs and captured agent transcript.
 | `3`  | Agent transport, timeout, or artifact parsing failure             |
 
 For the interactive workflow and its stack choices, see [framework and CI setup](../how-to/workflows/setup-test-framework.md).
+
+Create success also requires positive native test execution. The controller recognizes Node's test runner, unittest, pytest, Playwright, Vitest, Jest, Cypress, Go, Cargo, .NET and PHPUnit summaries. Ordinary npm, pnpm, Yarn and shell-script commands resolve to their declared runner. An unknown runner, an empty suite or a skipped-only suite produces an incomplete result with retained logs.
+
+Resume preserves the saved run identity, frozen contract and completed hook instructions. An uncertain started hook requires explicit operator recovery recorded in the journal before headless execution. Automatic retries continue only newly recoverable progress from the current invocation. Result publication protects configuration, input files and generated setup outputs, including symlink and hard-link aliases.
