@@ -47,7 +47,7 @@ For each resolved oracle item (formal requirement, endpoint/spec item, or synthe
   - **UNIT-ONLY** and **INTEGRATION-ONLY** are for the case where a _missing_ level is what leaves the criterion unestablished: unit tests only, against a criterion stating an HTTP status or a rendered state; or API/component tests only, against a criterion stating branch-level logic that needs unit proof. "The only evidence is API-level" is not by itself INTEGRATION-ONLY.
 - Cite every mapped test as a backticked `` `path:line` `` pair, the form `trace-template.md` and `resources/traceability-matrix.example.md` both use. The backticks are the delimiter, so a path holding a space survives whole. An undelimited pair written into prose has no boundary but the file extension, and a path with a space in it is then read only from its last space-free segment onward.
 - Record test level and priority
-- For every accepted static test, cite its declaration once and each assertion that establishes a required observable outcome once within the criterion's evidence block. Use the exact assertion line; for a multiline assertion, use its opening line. Explain the Given/When/Then outcome beside these anchors. Keep repeated prose references free of additional `path:line` pairs so the evidence ledger has a stable, auditable set of anchors.
+- For every accepted static test, cite its declaration once and each assertion that establishes a required observable outcome once within the criterion's evidence block. Use the exact assertion line; for a multiline assertion, use its opening line. Use one project-relative path spelling throughout. Do not cite setup or action lines as separate anchors. Explain their role beside the assertion anchors. Before Step 4, scan each criterion block and remove duplicate `path:line` pairs, including pairs repeated in prose.
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:
   - Endpoint coverage present/missing (for API-impacting items)
@@ -65,6 +65,8 @@ A test earns its place in a criterion's `tests` array by establishing part of wh
 That is the rule for this workflow, and it fixes what every count derived from `tests` means: `tests.cases`, `coverage.by_level.*.tests`, and Step 4's live-only derivation all count test cases this trace accepted as evidence. The other answer, admitting the test and leaving the criterion at NONE, would have made the same numbers mean "test cases considered", so a suite full of mistitled tests would report level counts a reader could not use to judge where coverage actually sits.
 
 Record every such test in `rejectedEvidence` against the criterion it claims, with the reason its assertions fall short. Carry the list forward for Step 4 and persist it into the progress document so a resumed Step 4 can read it. A reader needs to see that the test was read and turned down: a test that claims a criterion and then vanishes from the report is indistinguishable from a test nobody found.
+
+Use the test's explicit ID when its source declares one. Otherwise set `test_id` to its project-relative `file:line` declaration anchor. Do not assign a new sequence number to a rejected test.
 
 ```javascript
 // One entry per test whose name claims a criterion its assertions do not establish.
