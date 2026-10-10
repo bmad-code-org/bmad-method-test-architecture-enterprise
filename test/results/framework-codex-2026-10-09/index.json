@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "archive": "evidence.json.gz",
-  "sha256": "c0714de99d144d6cd81baea2934b44aeb5bb1a938923611a94d7fb76e9c798f1",
-  "fileCount": 1122,
+  "sha256": "dd2b9885ea4dfb79d5c7c42fa3e3d7c085bee991aa0953463ac69f9492f8dcce",
+  "fileCount": 1157,
   "manifest": {
     "confirmationProvenance": {
       "kind": "live-cli-resume-confirmation",
@@ -32,6 +32,18 @@
       "The earlier full-access attempt was interrupted at handoff without recoverable raw stdout or final exit. Its prompt and saved partial journal remain; confirmation is a separate live Resume.",
       "The initial native browser scorer called a nonexistent baseline npm test script. Its failed invocation logs remain under independent-validation. Final scored execution uses the actual frozen npm run test:e2e command.",
       "Baseline Python and after Python scores use different checks; equal 9/9 scores establish generated assertion behavior and do not measure a quality uplift."
-    ]
+    ],
+    "finalParserVerification": {
+      "sourceCommit": "315104e4757558f5e7eff32d92d25423905a9282",
+      "criticalSourceSha256": {
+        "cli/framework.js": "5439d3c7bf52535797bdeee6ffa8c0b34cae3a15ab465aefa8189e3388a43c6f",
+        "cli/lib/framework-setup.js": "519ec662c0dfee633279a28d7b921b298f966d0b8c155fe7c5bec219c4b8765d",
+        "cli/lib/workflow-cli.js": "600ed8742945b918b38f410665d8f549c1691c2c1b05162ee61284941f975242",
+        "cli/lib/resolve-tea-config.js": "4dcc0fd472b23373b75f9d1e73378459f12be1fe0c411089efb3b463ef2693dd",
+        "cli/lib/agent-adapters.js": "2d586ffd0ac44cb2fa6758d239cb7f344b32601ffcb9dc8745aad08118ad67bc"
+      },
+      "kind": "controlled-post-capture-native-verification",
+      "projection": "Original journal/checkpoint project-root references projected into a disposable project copy. Original archived capture unchanged. No model call."
+    }
   }
 }
