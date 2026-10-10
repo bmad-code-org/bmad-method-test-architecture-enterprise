@@ -187,7 +187,9 @@ const opts: VerifierOptions = {
   publishVerificationResult: process.env.CI === 'true',
   providerVersion: process.env.GIT_SHA || 'dev',
   consumerVersionSelectors: [{ mainBranch: true }, { deployedOrReleased: true }],
-  stateHandlers: {/* ... */},
+  stateHandlers: {
+    /* ... */
+  },
   requestFilter: (req, res, next) => {
     /* ... */
   },
@@ -203,7 +205,9 @@ const opts = buildVerifierOptions({
   provider: 'my-api',
   port: '3001',
   includeMainAndDeployed: true,
-  stateHandlers: {/* ... */},
+  stateHandlers: {
+    /* ... */
+  },
   requestFilter: createRequestFilter({ tokenGenerator: () => 'token' }),
 });
 ```
