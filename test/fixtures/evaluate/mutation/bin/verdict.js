@@ -337,7 +337,7 @@ if (act === 'claude-keychain') {
     `keychain-read: ${read}`,
     `keychain-sidecar-write: ${sidecar}`,
   );
-  if (read !== 'allowed') {
+  if (read !== 'allowed' && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     process.stderr.write('No keychain.\n');
     process.exit(4);
   }

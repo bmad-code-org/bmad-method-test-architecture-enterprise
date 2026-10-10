@@ -37,10 +37,21 @@ function linked(candidate) {
 function withFixedHost(body) {
   const realpathSync = fs.realpathSync;
   const existsSync = fs.existsSync;
+  const homedir = os.homedir;
+  const userInfo = os.userInfo;
   const stub = (candidate) => linked(String(candidate));
   stub.native = stub;
   fs.realpathSync = stub;
-  fs.existsSync = (candidate) => (candidate === '/run/user' ? true : existsSync(candidate));
+  fs.existsSync = (candidate) =>
+    candidate === '/run/user' || candidate === '/fixture/home/.CFUserTextEncoding' ? true : existsSync(candidate);
+  os.homedir = () => '/fixture/home';
+  os.userInfo = () => ({
+    username: 'runner',
+    uid: 501,
+    gid: 501,
+    shell: '/bin/bash',
+    homedir: '/fixture/home',
+  });
   // The evaluation layer names the user's private root, `/tmp/tea-evaluate-p<uid>` (Story 1.88), so the user is fixed too.
   const getuid = process.getuid;
   process.getuid = () => 501;
@@ -49,6 +60,8 @@ function withFixedHost(body) {
   } finally {
     fs.realpathSync = realpathSync;
     fs.existsSync = existsSync;
+    os.homedir = homedir;
+    os.userInfo = userInfo;
     process.getuid = getuid;
   }
 }
@@ -329,13 +342,13 @@ function collectGeneratedOutputs() {
         'confinement.seatbeltTargetProfile.audit': confinement.seatbeltTargetProfile({
           workspace,
           writable: [privateDirectory],
+          readable: [workspace, privateDirectory, '/usr/lib/node', rootHome],
           evaluationFolder,
           git: { ...git, alternates: [] },
           privateRoot,
           rootHome,
           audit: {
             token: 'tea-evaluate-audit-0123456789abcdef',
-            exempt: [workspace, privateDirectory, '/usr/lib/node', rootHome],
             quiet: [git.metadata, '/var/folders/ab/cd/T/tea-workspace-view'],
           },
         }),
@@ -353,6 +366,11 @@ function collectGeneratedOutputs() {
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);
+      for (const [key, output] of Object.entries(outputs)) {
+        if (!key.startsWith('confinement.targetSandbox.wrap.seatbelt')) continue;
+        const profileAt = output.args.indexOf('-p') + 1;
+        output.args[profileAt] = output.args[profileAt].replace(`(subpath "${nodeInstallation}")`, '(subpath "<node-installation>")');
+      }
       for (const key of [
         'confinement.targetSandbox.wrap.bubblewrap.audit',
         'confinement.targetSandbox.wrap.bubblewrap.audit.ownedStatus',

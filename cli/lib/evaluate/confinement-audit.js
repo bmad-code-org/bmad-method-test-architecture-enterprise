@@ -6,8 +6,8 @@
  * runtime reads. `confinement.js` holds the boundary and decides what each
  * sandbox grants; this module only observes.
  *
- *   Seatbelt     the target's profile reports every `file-read-data` it allows
- *                outside the grants (`with report`) and tags each file rule it
+ *   Seatbelt     the target's profile refuses ungranted `file-read-data` and
+ *                reports those refusals, tagging each file rule it
  *                holds with a random token of the sandbox (`with message`).
  *                The kernel logs a report as `Sandbox: <name>(<pid>) allow|
  *                deny(1) <operation> <real path>` with the token on the next

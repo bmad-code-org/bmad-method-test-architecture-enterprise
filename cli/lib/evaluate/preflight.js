@@ -1286,11 +1286,12 @@ async function runInWorkspaces({
   // A passed `preflight` is refused when every leg of the pristine workspace opened a path outside the allowlist: a target that lives
   // outside its workspace loads its own files on every launch, so every trial opens them too, and `score` refuses a trial that does
   // (exit 3). `run` judges the trials' own manifests, the set `score` judges, so it does not refuse on the legs.
-  if (afterVerdict === null && verdict.exitCode === 0) {
+  // Seatbelt can refuse an undeclared runner before it produces a passing leg. Preserve the captured denial's path and setup guidance.
+  if (afterVerdict === null && (verdict.exitCode === 0 || confinement.mode === 'seatbelt')) {
     const refusal = mountRefusal({
       mounts: mountsOfEveryLeg(legMounts, [`${pristine.kind} pristine`]),
       folder,
-      who: 'legs',
+      who: confinement.mode === 'seatbelt' ? 'denied-legs' : 'legs',
     });
     if (refusal !== null) return outcome({ stage: 'leg', exitCode: 3, message: refusal });
   }
