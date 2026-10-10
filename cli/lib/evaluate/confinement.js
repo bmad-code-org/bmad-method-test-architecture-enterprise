@@ -147,7 +147,7 @@
  *                as the isolation manifest's `observedMounts`, which
  *                eval-quality holds against the allowed mounts and records as
  *                an isolation violation (Story 1.60). Seatbelt reports each
- *                read its profile allows outside the grants (`with report`) and
+ *                ungranted read its profile refuses and
  *                tags every file rule with a token of the sandbox (`with
  *                message`), and a `/usr/bin/log stream` child the runtime owns
  *                writes the kernel's reports of that token to a file beneath
@@ -463,15 +463,17 @@ function seatbeltLayerProfile(evaluationFolder, gitDirectory = null, hooksDirect
  * A `connect()` to a path-based unix socket is refused anywhere but the workspace, the private directories, the home and the two system services in `SEATBELT_SYSTEM_SOCKETS` (Story 1.87).
  * The rule names a path, so it holds for a socket bound after the call started.
  *
- * With `audit` (`{ token, exempt }`), the kernel reports what the profile allows or refuses.
+ * Read grants restrict file data to the workspace, system roots and explicitly declared dependencies.
+ * With `audit` (`{ token }`), the kernel reports refusals with the sandbox token.
  * Every file rule that denies carries the sandbox's token (`with message`).
- * One rule reports each `file-read-data` the profile allows outside `exempt` (the paths the sandbox may read, and the root directory itself) with the same token (`with report`).
+ * Every ungranted `file-read-data` is denied even when its diagnostic is lost by the unified log.
  * That rule is placed before every rule that follows it, so a later grant (the home, a call directory, the git directory's own entry) overrides it.
- * Without `audit` the profile is the one every earlier story generated, byte for byte.
+ * The same read boundary applies when a qualification port carries no observer.
  */
 function seatbeltTargetProfile({
   workspace,
   writable,
+  readable = [],
   evaluationFolder,
   git = null,
   privateRoot = null,
@@ -485,11 +487,8 @@ function seatbeltTargetProfile({
   const socketRules = seatbeltSocketRules(allowed);
   const socketRoutes = (candidates) => candidates.map((entry) => `(remote unix-socket ${entry})`).join('\n  ');
   const tagged = audit === null ? '' : ` (with message "${audit.token}")`;
-  // Seatbelt decides an operation by the rules that name it before the rules that name its wildcard, so the report rule
-  // (which names `file-read-data`) would override every later `file-read*` rule, whatever their order; an audited profile
-  // therefore names `file-read-data` in each rule that governs reads, which keeps the textual order (the last matching rule
-  // wins) the unaudited profile relies on.
-  const reads = audit === null ? 'file-read*' : 'file-read-data file-read*';
+  // Specific data-read grants outrank wildcard rules in Seatbelt. Every protected denial and re-grant must name the data operation.
+  const reads = 'file-read-data file-read*';
   const subpaths = (candidate) => spellings(candidate).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
   // A denial of reads and writes of `paths`; an audited profile names `file-read-data` and tags it (see `reads`).
   const denials = (paths) => [`(deny ${reads} file-write*\n  ${paths.join('\n  ')}${tagged})`];
@@ -542,18 +541,12 @@ function seatbeltTargetProfile({
           `(allow file-read-metadata\n  ${reachableAncestors.flatMap(literals).join('\n  ')})`,
           `(allow network-outbound\n  ${socketRoutes(reachable.flatMap(subpaths))})`,
         ];
-  // What the sandbox may read is not reported; every other read the profile allows is (macOS reports by real path, so both spellings are named).
-  const reportRule =
-    audit === null
-      ? []
-      : [
-          `(allow file-read-data\n  (require-all\n    ${[
-            ...EXACT_GRANTS.map((entry) => `(require-not (literal "${entry}"))`),
-            ...audit.exempt
-              .flatMap(spellings)
-              .map((entry) => `(require-not (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`),
-          ].join('\n    ')})\n  (with report)${tagged})`,
-        ];
+  // Kernel enforcement is independent of the lossy log: ungranted data reads are refused even if their diagnostic is dropped.
+  // Keep the specific operation in later denials/re-grants so Seatbelt's wildcard precedence cannot reopen protected paths.
+  const reportRule = [
+    `(deny file-read-data${tagged})`,
+    `(allow file-read-data\n  ${[...EXACT_GRANTS.map((entry) => `(literal "${entry}")`), ...readable.flatMap(subpaths)].join('\n  ')})`,
+  ];
   // A target's git tries to write the worktree's own entry and the private repository (the index lock of a `git status`), which
   // the profile refuses and the target's git expects to fail; the refusal carries no token, so it is not an observed mount.
   const quiet =
@@ -1457,15 +1450,13 @@ function targetSandbox({
         const profile = seatbeltTargetProfile({
           workspace,
           writable: grants,
+          readable: readRoots([...grants, ...readable]),
           evaluationFolder,
           git,
           privateRoot,
           rootHome,
           rootGrants: callDirectories,
-          audit:
-            observer === null
-              ? null
-              : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: [...ownGitEntries(), ...linked] },
+          audit: observer === null ? null : { token: observer.token, quiet: [...ownGitEntries(), ...linked] },
         });
         // `env` runs outside the sandbox and after the watchdog hop that starts every target, which is where Node adds the host's `NODE_V8_COVERAGE` to the environment; the sandbox then starts the target without it, as Bubblewrap's `--unsetenv` does.
         return {

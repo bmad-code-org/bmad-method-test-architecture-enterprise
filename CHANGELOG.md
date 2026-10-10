@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Enforce Darwin evaluation file-read grants in the kernel so dropped audit diagnostics cannot expose ungranted host files; run Git confinement fixtures through the selected executable without its Xcode shim cache.
+
 - Desktop documentation pages reserve enough space for the table of contents, keeping its links inside the viewport. Persistent documentation checks verify desktop and mobile layout, numbered step navigation, and rendered compatibility anchors.
 - Setup archives preserve each run's Create checkpoints and verify them before Resume restores saved positions. CI alias replay captures retain runner errors and termination signals for diagnosis.
 - `tea-test-review` reads review configuration from the pinned base Git tree, including all TOML layers or legacy YAML, so a PR cannot change its own review settings. CLI flags retain precedence, `test_stack_type` is resolved with the other review keys, and the prompt supplies the complete resolved config throughout activation. Workflow customizations and persistent-fact policy files also come from the base tree. Full-file `--files` runs without an explicit base keep working-tree config.

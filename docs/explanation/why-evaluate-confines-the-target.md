@@ -62,11 +62,11 @@ The next preflight removes the probe directory of a dead process and names it in
 ## What the audit watches
 
 The audit is what turns confinement into evidence.
-It lists every path a trial's processes opened outside what they were granted, and `score` exits 3 when that list is not empty.
+It lists reported access outside the trial's grants, and `score` exits 3 when that list is not empty. On macOS this includes denied attempts; on Linux it includes the accesses captured by the syscall trace.
 `run` exits 3 with the same paths once its trials are sealed, and `preflight` exits 3 for a path every one of its legs opened, so a setup `score` would refuse stops before a full run.
 The reference lists what the audit reports and how to grant a path; these are the mechanisms behind it, and what each mechanism can miss.
 
-On macOS the Seatbelt profile reports each read it allows outside the grants and tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
+On macOS the Seatbelt profile refuses file data outside the workspace, private call directories, home, system runtime roots and explicitly declared dependencies. It tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
 On Linux the runtime runs the Bubblewrap command under `strace -f --seccomp-bpf --decode-pids=pidns`, started outside the namespace, and reads the trace when the call ends, which ends every process the call left running; `--seccomp-bpf` stops a process only at the file syscalls, `connect`, `sendto`, `sendmsg` and `sendmmsg` (each with an address or without one), `bind` and the mount calls, so a process that makes few of them runs at about its untraced speed.
 Both files sit beneath the run's private parent, which every target withholds, and no code runs inside the target, so no target can read, rewrite or truncate what the runtime reads of the audit.
 On Linux the `strace` process belongs to the runtime and a target cannot signal it.
@@ -89,7 +89,7 @@ On Linux the tracer fails `io_uring_setup` with `ENOSYS`, the answer of a kernel
 On Linux a binary is judged by the path it was started by, and a link in the workspace that leads to a binary outside the grants is not followed.
 An exec or link read through a process's own links under `/proc` or `/dev` (its root, working directory, a descriptor or a mapped file, with or without a `..`, and an exec of a descriptor itself) is listed, since the path leads anywhere the process can reach.
 On macOS the kernel's reports are lossy: the log lost none of 3,000 reports at a quiet host's 440 a second, one to five of 1,600 on a host saturated by other work, and 7 to 20 percent of a burst of 40,000 a second, each without a trace.
-A target that reads one ungranted file while the host is saturated can therefore be missed, and an empty `observedMounts` from a macOS run means that no report arrived; in every measured burst most reports arrived.
+A diagnostic for an ungranted attempt can therefore be missed, and an empty `observedMounts` from a macOS run means that no diagnostic arrived. The kernel refuses the attempted read independently of log delivery, so the missing diagnostic cannot admit host file data. Explicit `systemPaths` are required for dependencies outside the existing runtime roots.
 Linux's trace holds every traced syscall of the call.
 To tell a complete macOS audit from a lossy one, each trial's audit reads a file beneath its own directory, one no target may open, through the sandbox's own token every 50 ms while the trial runs and once more when it ends (a canary read), and counts the canaries the log delivered against the canaries sent.
 A canary counts as sent when the audit attempts it, before its file is written or its process started, so a canary that a target killed or stopped, one the host could not start and one skipped while eight were already running count as undelivered.
@@ -107,7 +107,7 @@ The summary line of `run` names every `lossy` trial with the canaries lost out o
 `complete` means the log delivered every canary the audit sent and the host never handed the log reports faster than it keeps them.
 The canaries sample the log every 50 ms, so on a saturated host a single report of the target can still drop between two canaries, and a trial of a few seconds sends too few canaries to catch every loss at the measured rates; the rate counter is what marks such a trial `lossy`.
 The counter does not cover every loss: on a quiet host the log has also been seen to drop a single read of a Node process in a window of a second or two, with no flood, no loss event and every canary delivered.
-`complete` makes a missing read unlikely and does not rule it out.
+`complete` describes the diagnostic channel samples. It cannot prove every denied attempt was recorded. The kernel read grants remain enforced when a report is missing.
 Every Linux trial records `complete` with no canary sent, since `strace` reports every traced syscall of the call.
 A trial that launched nothing (a gameability arm), every trial of a run that opted out and the evaluator qualification attempts of a sealed-brief agent have no entry, and a `records` run has no trials to list.
 A run whose observer fails (the log stream ended, or a read the runtime made did not come back through it, or the log reported lost events and the trial listed no read, or the trace of a call holds no start of its target) leaves the trial with no record and exits 12.

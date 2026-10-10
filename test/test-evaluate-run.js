@@ -475,11 +475,13 @@ function refusesMounts(result, named = []) {
  * no repository, and `launch.root` points at the project (Story 1.112).
  */
 let cachedGitToolchain = null;
+let gitToolchainBin = null;
 
 /**
  * The directories of this host's `git` outside the system's own (Story 1.60): the confinement audits every process of a target,
  * a `git` the fixture's target runs included, and a toolchain outside `/usr` is read from where it is installed, as an adopter
- * declares it in `systemPaths` (a Homebrew prefix on macOS, the developer directory of a Command Line Tools or Xcode shim).
+ * declares it in `systemPaths` (a Homebrew prefix on macOS or the selected Command Line Tools or Xcode installation).
+ * Resolve Darwin's shim before confinement so its framework and cache dependencies remain outside the target's grants.
  * Nothing on a host whose git lives under `/usr`, as CI's does.
  */
 function gitToolchainPaths() {
@@ -487,14 +489,16 @@ function gitToolchainPaths() {
   const found = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
   const paths = new Set();
   if (found !== '') {
-    const real = fs.realpathSync(found);
+    let real = fs.realpathSync(found);
+    if (process.platform === 'darwin' && real.startsWith('/usr/bin/')) {
+      const selected = spawnSync('xcrun', ['--find', 'git'], { encoding: 'utf8', env: BASE_ENV });
+      if (selected.status !== 0 || !fs.existsSync(selected.stdout.trim())) throw new Error('cannot resolve selected Darwin git');
+      real = fs.realpathSync(selected.stdout.trim());
+      gitToolchainBin = path.dirname(real);
+    }
     const cellar = real.indexOf('/Cellar/');
     if (cellar !== -1) paths.add(real.slice(0, cellar));
     else if (!real.startsWith('/usr/') && !real.startsWith('/bin/')) paths.add(path.dirname(path.dirname(real)));
-    if (process.platform === 'darwin' && real.startsWith('/usr/bin/')) {
-      const developer = spawnSync('xcode-select', ['-p'], { encoding: 'utf8' }).stdout.trim();
-      for (const entry of [developer, '/Library/Developer', '/Library/Apple', '/Library/Preferences']) if (entry !== '') paths.add(entry);
-    }
   }
   cachedGitToolchain = [...paths].filter((entry) => fs.existsSync(entry));
   return cachedGitToolchain;
@@ -537,7 +541,17 @@ function makeProject(
   history({ repository, project, folder });
   const directory = tempDir(`${label}-temp`);
   runtimeTemps.push({ label, directory });
-  return { repository, project, folder, env: { TMPDIR: directory, TMP: directory, TEMP: directory } };
+  return {
+    repository,
+    project,
+    folder,
+    env: {
+      TMPDIR: directory,
+      TMP: directory,
+      TEMP: directory,
+      ...(toolchain && gitToolchainBin !== null ? { PATH: `${gitToolchainBin}${path.delimiter}${BASE_ENV.PATH}` } : {}),
+    },
+  };
 }
 
 /** The newest run directory under `runs/`; with `expected`, how many there must be. */
@@ -4134,7 +4148,7 @@ function useWrappedEvaluator(folder) {
  */
 async function checkConfinedEvaluationFolder() {
   const refusal = /^refused (EPERM|EACCES|ENOENT|EROFS)$/;
-  const probed = makeProject('confinement-probe');
+  const probed = makeProject('confinement-probe', { toolchain: true });
   const contractBytes = fs.readFileSync(path.join(probed.folder, 'contract.json'));
   const probedRun = evaluate(['run', '--evaluation', probed.folder], {
     ...probed.env,
@@ -4223,39 +4237,43 @@ async function checkObservedMounts() {
     VERDICT_TOUCH: outside,
   });
   const observedDirectory = runDirectoryOf(observed.folder);
-  checkTrialRefusal(
-    observedRun,
-    observedDirectory,
-    { conditionArm: 'clean', trialIndex: 1 },
-    [mountOf(realOutside, observed)],
-    'a confined run whose target read an ungranted file',
-  );
-  // The refusal is the run's recorded end: sealed and complete, so `score` still reads the manifests, with the exit 3 and the path.
-  const observedRecord = observedDirectory === null ? {} : readJson(path.join(observedDirectory, 'run.json'));
-  (refusesMounts(observedRun) ? check : checkReport)(
+  const actualMounts = observedMountsOf(observedDirectory, 'P-001');
+  const output = trialStdout(observedDirectory, 'clean', 1);
+  const omittedDiagnostic = process.platform === 'darwin' && actualMounts.length === 0;
+  const expectedMounts = omittedDiagnostic ? [] : [mountOf(realOutside, observed)];
+  if (omittedDiagnostic) {
+    check(observedRun.status === 0, `a kernel-refused read without a diagnostic ended ${observedRun.status}: ${observedRun.output}`);
+  } else {
+    checkTrialRefusal(
+      observedRun,
+      observedDirectory,
+      { conditionArm: 'clean', trialIndex: 1 },
+      expectedMounts,
+      'a confined run whose target reached for an ungranted file',
+    );
+  }
+  const observedRecord = readJson(path.join(observedDirectory, 'run.json'));
+  check(
     observedRecord.completed === true &&
-      observedRecord.outcome?.exitCode === 3 &&
-      String(observedRecord.outcome?.message).includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
-    `run.json records ${JSON.stringify({ completed: observedRecord.completed, outcome: observedRecord.outcome })}; expected a completed run that ended with exit 3 naming the file`,
+      observedRecord.outcome?.exitCode === (omittedDiagnostic ? 0 : 3) &&
+      (omittedDiagnostic || String(observedRecord.outcome?.message).includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`)),
+    `run.json does not preserve its actual diagnostic outcome: ${JSON.stringify(observedRecord.outcome)}`,
   );
   check(
-    /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
-    'the target could not read the ungranted file, so the case proves nothing',
+    (process.platform === 'darwin' ? /ungranted-read: refused EPERM/ : /ungranted-read: allowed/).test(output),
+    `the target did not exercise the expected ungranted read boundary: ${output}`,
   );
-  checkMounts(
-    observedMountsOf(observedDirectory, 'P-001'),
-    [mountOf(realOutside, observed)],
-    "P-001's observed mounts after a target's read",
-  );
+  checkMounts(actualMounts, expectedMounts, "P-001's observed mounts after the target's attempt");
   const otherMounts = observedMountsOf(observedDirectory, 'P-002');
   check(
     JSON.stringify(otherMounts) === '[]',
     `P-002's trials read nothing ungranted, yet its manifest lists ${JSON.stringify(otherMounts)}`,
   );
   const observedScore = evaluate(['score', '--evaluation', observed.folder], observed.env);
-  checkReport(
-    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`),
-    `score over an observed ungranted mount exited ${observedScore.status}; expected 3 with eval-quality's isolation violation\n${observedScore.output}`,
+  check(
+    observedScore.status === (omittedDiagnostic ? 0 : 3) &&
+      (omittedDiagnostic || observedScore.output.includes(`mount outside allowlist: ${mountOf(realOutside, observed)}`)),
+    `score did not preserve the observed isolation outcome: ${observedScore.output}`,
   );
   const declared = makeProject('confinement-declared', {
     edit: ({ folder }) =>
@@ -4272,6 +4290,69 @@ async function checkObservedMounts() {
     declaredRun.status === 0 && JSON.stringify(declaredMounts) === '[]',
     `a read under a declared system path was reported (exit ${declaredRun.status}, observed ${JSON.stringify(declaredMounts)})\n${declaredRun.output}`,
   );
+}
+
+/** The kernel read boundary holds even when a stream delivers every canary and drops all host-file diagnostics. */
+async function checkDroppedReadReports() {
+  if (process.platform !== 'darwin') {
+    skipCase('dropped Seatbelt read reports', 'this regression exercises the macOS kernel boundary');
+    return;
+  }
+  const outside = path.join(tempDir('dropped-read-outside'), 'host-notes.txt');
+  const secret = 'ungranted-host-secret-91d9';
+  fs.writeFileSync(outside, secret);
+  const project = makeProject('dropped-read-boundary', {
+    edit: ({ project: root }) => {
+      const target = path.join(root, 'bin', 'verdict.js');
+      fs.appendFileSync(
+        target,
+        String.raw`
+if (act === 'read-ungranted') {
+  const link = path.join(process.cwd(), 'ungranted-link');
+  fs.symlinkSync(process.env.VERDICT_TOUCH, link);
+  process.stdout.write('ungranted-link: ' + attempt(() => fs.readFileSync(link)) + '\n');
+  fs.unlinkSync(link);
+  const hard = path.join(process.cwd(), 'ungranted-hardlink');
+  process.stdout.write('ungranted-hardlink: ' + attempt(() => { fs.linkSync(process.env.VERDICT_TOUCH, hard); fs.readFileSync(hard); }) + '\n');
+  if (fs.existsSync(hard)) fs.unlinkSync(hard);
+  const child = spawnSync('/bin/cat', [process.env.VERDICT_TOUCH], { encoding: 'utf8', env: {} });
+  process.stdout.write('ungranted-child: ' + child.status + ':' + child.stdout + '\n');
+}
+`,
+      );
+    },
+  });
+  const stub = dropLogStub('host-notes.txt', 0);
+  try {
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      [LOG_ENV]: stub.executable,
+      VERDICT_WHEN: 'trial-clean-1',
+      VERDICT_DO: 'read-ungranted',
+      VERDICT_TOUCH: outside,
+    });
+    const directory = runDirectoryOf(project.folder);
+    const output = trialStdout(directory, 'clean', 1);
+    check(ran.status === 0, `a run whose denied attempts have no diagnostics did not finish: ${ran.output}`);
+    check(
+      output.includes('ungranted-read: refused EPERM') &&
+        output.includes('ungranted-link: refused EPERM') &&
+        output.includes('ungranted-hardlink: refused EPERM') &&
+        output.includes('ungranted-child: 1:'),
+      `the kernel admitted a direct, linked or empty-environment child read while its log hid diagnostics: ${output}`,
+    );
+    check(!output.includes(secret), 'ungranted host bytes reached target output');
+    const channel = readJson(path.join(directory, 'run.json')).observedMountsChannel;
+    check(
+      channel.every((entry) => entry.canariesDelivered === entry.canariesSent && !entry.logReportedLoss),
+      `the diagnostic-drop witness also dropped canaries: ${JSON.stringify(channel)}`,
+    );
+    check(JSON.stringify(observedMountsOf(directory, 'P-001')) === '[]', 'the log-drop witness retained host-file diagnostics');
+    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
+    check(scored.status === 0, `scoring the kernel-confined run failed: ${scored.output}`);
+  } finally {
+    stub.end();
+  }
 }
 
 /**
@@ -5242,7 +5323,7 @@ async function checkAuditMechanism() {
       const audited = await open();
       await audited.run(process.execPath, [
         '-e',
-        `const fs = require('node:fs'); for (let i = 0; i < 2000; i += 1) fs.readFileSync(${JSON.stringify(files)} + '/f' + i + '.txt');`,
+        `const fs = require('node:fs'); for (let i = 0; i < 2000; i += 1) { try { fs.readFileSync(${JSON.stringify(files)} + '/f' + i + '.txt'); } catch (error) { if (error.code !== 'EPERM') throw error; } }`,
       ]);
       return observeWithChannel(audited);
     },
@@ -6254,7 +6335,7 @@ async function checkLeftoverProcess() {
 async function checkEvaluatorSwap() {
   for (const confined of [true, false]) {
     const label = confined ? 'confinement-swap' : 'confinement-swap-open';
-    const project = makeProject(label, { unconfined: !confined, edit: ({ folder }) => useWrappedEvaluator(folder) });
+    const project = makeProject(label, { unconfined: !confined, toolchain: true, edit: ({ folder }) => useWrappedEvaluator(folder) });
     const implBytes = fs.readFileSync(path.join(project.folder, 'evaluator', 'impl.js'));
     const marker = path.join(tempDir(`${label}-marker`), 'swapper');
     const listener = reportListener(label);
@@ -6591,7 +6672,7 @@ async function checkCallDirectoryUnits() {
     home,
   }).wrap('/bin/true', [], [...grants, outside], [], { environment });
   const profile = seatbeltProfile(seatbelt);
-  const denied = profile.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
+  const denied = profile.indexOf(`(deny file-read-data file-read* file-write*\n  (subpath "${privateRoot}")`);
   check(
     denied > 0 &&
       [temporary, portDirectory, bridgeDirectory].every((directory) => profile.lastIndexOf(`(subpath "${directory}")`) > denied) &&
@@ -7254,11 +7335,8 @@ async function checkTargetHomeUnits() {
         ...extra,
       }).wrap('/bin/true', []),
     );
-  const reportRule = (text) => text.slice(text.indexOf('(allow file-read-data'), text.indexOf('(with report)'));
-  check(
-    reportRule(auditedProfile({ home })).includes(`(require-not (subpath "${home}"))`),
-    "the audit's report rule does not exempt the home",
-  );
+  const reportRule = (text) => text.slice(text.indexOf('(allow file-read-data'), text.indexOf('(deny file-read-data file-read*'));
+  check(reportRule(auditedProfile({ home })).includes(`(subpath "${home}")`), "the audit's report rule does not exempt the home");
   check(!reportRule(auditedProfile({})).includes(home), "the audit's report rule exempts a home the sandbox has none of");
 
   // A home beneath the private root (the run's own parent holds it) is the one exception to the root's withholding: the
@@ -7267,8 +7345,8 @@ async function checkTargetHomeUnits() {
   const rootHome = path.join(privateRoot, 'run-1-abc', 'tea-evaluate-target-home-x');
   fs.mkdirSync(rootHome, { recursive: true });
   const inRoot = seatbeltProfile(build('seatbelt', { privateRoot, home: rootHome }).wrap('/bin/true', []));
-  const rootDeny = inRoot.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
-  const rootAllow = inRoot.indexOf(`(allow file-read* file-write*\n  (subpath "${rootHome}")`);
+  const rootDeny = inRoot.indexOf(`(deny file-read-data file-read* file-write*\n  (subpath "${privateRoot}")`);
+  const rootAllow = inRoot.indexOf(`(allow file-read-data file-read* file-write*\n  (subpath "${rootHome}")`);
   check(
     rootDeny !== -1 && rootAllow > rootDeny && !writeRules(inRoot).includes(rootHome),
     `the Seatbelt profile does not re-allow the home beneath the private root after the root's denial:\n${inRoot}`,
@@ -7335,7 +7413,7 @@ async function checkTargetHomeUnits() {
   const token = /\(with message "(tea-evaluate-audit-[0-9a-f]{16})"\)/.exec(auditedRoot)?.[1];
   check(
     token !== undefined &&
-      auditedRoot.indexOf('(with report)') <
+      auditedRoot.indexOf('(deny file-read-data') <
         auditedRoot.indexOf(`(allow file-read-data file-read* file-write*\n  (subpath "${rootHome}")`) &&
       auditedRoot.includes(`(deny file-read-data file-read* file-write*\n  (subpath "${privateRoot}")`) &&
       auditedRoot.includes(`(subpath "${privateRoot}") (with message "${token}"))`) &&
@@ -9450,7 +9528,7 @@ async function checkPrivateRootAcrossRuns() {
       // A Seatbelt profile refuses every socket outside its grants (Story 1.87).
       // The control takes that denial out to see what the root alone withholds.
       const attempt = (sandbox, { withoutSocketDenial = false } = {}) => {
-        const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
+        const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], [], [tokenFile]);
         if (withoutSocketDenial && confinement.mode === 'seatbelt')
           wrapped.args[wrapped.args.indexOf('-p') + 1] = mutatedSocketProfile(seatbeltProfile(wrapped), 'no-rule');
         const result = spawnSync(wrapped.target, wrapped.args, {
@@ -9537,9 +9615,15 @@ function runConfined(workspace, folder, script, { git: gitAccess = gitAccessOf(w
   if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
   const status = confinement.mode === 'bubblewrap' ? tempDir('withheld-history-status') : null;
   const sandbox = targetSandbox({ confinement, workspace: workspace.top, git: gitAccess, status });
-  const wrapped = sandbox.wrap('/bin/sh', ['-c', script], []);
+  const ownGit = gitAccessOf(workspace);
+  const readable = [
+    ...gitToolchainPaths(),
+    ...(ownGit === null ? [] : [ownGit.directory, ownGit.metadata, ownGit.view, ...ownGit.alternates].filter(Boolean)),
+  ];
+  const wrapped = sandbox.wrap('/bin/sh', ['-c', script], [], readable);
   const result = spawnSync(wrapped.target, wrapped.args, {
     cwd: workspace.root,
+    env: { ...GIT_ENV, ...(gitToolchainBin === null ? {} : { PATH: `${gitToolchainBin}${path.delimiter}${BASE_ENV.PATH}` }) },
     encoding: 'utf8',
     timeout: SPAWN_TIMEOUT_MS,
     killSignal: 'SIGKILL',
@@ -10705,7 +10789,10 @@ async function checkWithheldHistoryReach() {
     // The stub `git` on PATH is a tool the target is meant to run, so its entry lists the directory that holds it.
     const stubs = fs.realpathSync(tempDir('reach-large-git'));
     const large = reachProject('reach-large', { systemPaths: [stubs] });
-    const real = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
+    const real =
+      gitToolchainBin === null
+        ? spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim()
+        : path.join(gitToolchainBin, 'git');
     // The store's object walk answers as git does and then prints more ids; every other git call is git's.
     fs.writeFileSync(
       path.join(stubs, 'git'),
@@ -11588,6 +11675,8 @@ async function checkSubscriptionLogin() {
     "a confined run whose agent read the host's keychain",
   );
   const stoodOut = trialStdout(stood.directory, 'clean', 1);
+  if (process.platform === 'darwin')
+    check(loginField(stoodOut, 'keychain-read') === 'refused EPERM', 'the keychain data was readable despite the kernel grants');
   check(
     loginField(stoodOut, 'keychain-home') !== undefined && !String(loginField(stoodOut, 'keychain-home')).includes('login.keychain-db'),
     `the private home held a keychain: ${loginField(stoodOut, 'keychain-home')}`,
@@ -12148,10 +12237,7 @@ async function checkSubscriptionLoginUnits() {
     'a Bubblewrap sandbox with no linked file carries the key or the file',
   );
   const profile = seatbeltProfile(sandboxFor('seatbelt', [file]).wrap(process.execPath, ['-e', '']));
-  check(
-    profile.includes(`(require-not (subpath "${file}"))`),
-    "a Seatbelt profile with a linked file does not exempt it from the audit's report",
-  );
+  check(profile.includes(`(subpath "${file}")`), 'a Seatbelt profile with a linked file does not grant its data read');
   check(
     profile.includes(`(deny file-write*\n  (subpath "${file}"))`),
     'a Seatbelt profile with a linked file does not quiet the audit of a refused write to it',
@@ -18840,7 +18926,7 @@ function unbackedNetworkSentences(reference, mechanism, claims) {
     'Every other process the run starts to run your code or an agent',
     'On Linux the runtime runs the Bubblewrap command under `strace -f',
     'These variables replace any host value',
-    'reads the rest of the host, since Node, git and your toolchain read from the system',
+    'reads its workspace, private call directories, home, system runtime roots and declared `systemPaths`',
     "The target's git sees the evaluated commit's full history",
     "cannot change its worktree's git state",
     'The audit lists a path once, by its real path',
@@ -19612,7 +19698,7 @@ async function checkSeatbeltPathSocketUnits() {
   );
   held(audited, real(outsideHome));
   check(
-    audited.includes(SEATBELT_SOCKET_DENIAL) && audited.indexOf(SEATBELT_SOCKET_DENIAL) < audited.indexOf('(with report)'),
+    audited.includes(SEATBELT_SOCKET_DENIAL) && audited.indexOf(SEATBELT_SOCKET_DENIAL) < audited.indexOf('(deny file-read-data'),
     'the audited Seatbelt profile does not carry the socket denial before the report rule',
   );
 
@@ -19880,10 +19966,13 @@ async function checkSeatbeltPathSocketRoute() {
     }
 
     // The log socket takes a datagram from a logging client: a Python client connects to it, and a profile with every allowance taken out refuses it.
-    const python = '/usr/bin/python3';
+    const selectedPython = spawnSync('/usr/bin/xcrun', ['--find', 'python3'], { encoding: 'utf8' });
+    const python = selectedPython.status === 0 ? fs.realpathSync(selectedPython.stdout.trim()) : '/usr/bin/python3';
+    const pythonPrefix = spawnSync(python, ['-I', '-S', '-c', 'import sys; print(sys.base_prefix)'], { encoding: 'utf8' });
+    const pythonGrants = [path.dirname(python), ...(pythonPrefix.status === 0 ? [fs.realpathSync(pythonPrefix.stdout.trim())] : [])];
     if (spawnSync(python, ['--version'], { encoding: 'utf8' }).status === 0) {
       const logs = async (mutate) => {
-        let wrapped = sandbox.wrap(python, ['-c', SYSLOG_PROBE]);
+        let wrapped = sandbox.wrap(python, ['-I', '-S', '-B', '-c', SYSLOG_PROBE], [], pythonGrants);
         if (mutate !== null) wrapped = mutated(wrapped, mutate);
         return (await launch(wrapped)).stdout.trim();
       };
@@ -22136,6 +22225,7 @@ const CASES = [
   { name: 'the subdirectory digest', body: checkSubdirectoryDigest, group: 'run' },
   { name: 'the confined evaluation folder', body: checkConfinedEvaluationFolder, group: 'confinement', lossy: true },
   { name: 'the observed mounts', body: checkObservedMounts, group: 'confinement', lossy: true },
+  { name: 'the dropped read reports', body: checkDroppedReadReports, group: 'confinement' },
   { name: 'the platform refusal', body: checkPlatformRefusal, group: 'confinement' },
   { name: 'the leftover process', body: checkLeftoverProcess, group: 'confinement' },
   { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement', lossy: true },
