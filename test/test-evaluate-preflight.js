@@ -2071,18 +2071,23 @@ function checkLossyLegAudit() {
 }
 
 function checkRunnerOutsideAllowlist() {
+  const kernelReads = process.platform === 'darwin';
   const refusal = (output) => {
     // The runner's own files are the paths it names; the first three of the sorted list, in the form the records use.
     check(/mount outside allowlist: (<[a-z-]+>|\/)\S+/.test(output), `the refusal names no path outside the allowlist:\n${output}`);
-    const opened = Number(/opened (\d+) path/.exec(output)?.[1]);
+    const opened = Number(/(?:opened|attempted access to) (\d+) path/.exec(output)?.[1]);
     check(
-      opened >= 2,
-      `the refusal counts ${opened} path(s); the runner's sources and the package it requires are at least two:\n${output}`,
+      opened >= (kernelReads ? 1 : 2),
+      `the refusal counts ${opened} path(s); expected the attempted runner file on Darwin or its loaded sources on Linux:\n${output}`,
     );
     check(
       /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist.*so every trial will too, and `score` refuses a trial that does \(exit 3\)/.test(
         output,
-      ) || /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(output),
+      ) ||
+        /isolation manifest violation: the trials opened \d+ path\(s\) outside the allowlist, so `score` would exit 3/.test(output) ||
+        /isolation manifest violation: every preflight leg attempted access to \d+ path\(s\) outside the allowlist.*the kernel refused those accesses \(exit 3\)/.test(
+          output,
+        ),
       `the refusal does not say why score would exit 3:\n${output}`,
     );
     for (const setup of [
@@ -2096,7 +2101,7 @@ function checkRunnerOutsideAllowlist() {
     }
   };
 
-  // The bare name with nothing granted: the legs pass the engine's verdict, and the mounts alone refuse the setup.
+  // The ungranted bare name: Linux traces the loaded runner; Darwin blocks it before its verdict can pass.
   const bare = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
   const refused = runPreflight(bare);
   check(refused.status === 3, `preflight over the bare runner name exited ${refused.status}; expected 3\n${refused.output}`);
@@ -2108,8 +2113,8 @@ function checkRunnerOutsideAllowlist() {
     const verdictPath = path.join(directory, 'preflight-verdict.json');
     const verdict = fs.existsSync(verdictPath) ? readJson(verdictPath) : null;
     check(
-      verdict?.passed === true,
-      `the engine's verdict was ${verdict?.passed ?? 'missing'}; the refusal must come from the mounts alone`,
+      verdict?.passed === !kernelReads,
+      `the engine's verdict was ${verdict?.passed ?? 'missing'}; expected ${!kernelReads} after ${kernelReads ? 'kernel refusal of runner data' : 'successful traced runner reads'}`,
     );
     const recorded = readJson(path.join(directory, 'run.json')).outcome;
     check(
@@ -2118,22 +2123,26 @@ function checkRunnerOutsideAllowlist() {
     );
   }
 
-  // `run` refuses it from the trials it sealed, the set `score` judges: exit 3 naming the paths, the trial sets sealed and complete.
+  // Linux seals refused trials for score. Darwin blocks the runner during its verdict and seals no trials.
   const bareRun = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
   writeScoringPolicy(bareRun);
   const refusedRun = runEvaluate(['run', '--evaluation', bareRun]);
   check(refusedRun.status === 3, `run over the bare runner name exited ${refusedRun.status}; expected 3\n${refusedRun.output}`);
-  refusal(refusedRun.output);
+  if (!kernelReads) refusal(refusedRun.output);
   const runDirectory = runDirectoryOf(bareRun);
   const runRecord = runDirectory === null ? {} : readJson(path.join(runDirectory, 'run.json'));
   check(
-    runRecord.completed === true && runRecord.outcome?.exitCode === 3 && runRecord.outcome?.stage === 'trial',
-    `run.json records ${JSON.stringify({ completed: runRecord.completed, outcome: runRecord.outcome })}; expected a completed run that ended with exit 3 at the trial stage`,
+    runRecord.completed === !kernelReads &&
+      runRecord.outcome?.exitCode === 3 &&
+      runRecord.outcome?.stage === (kernelReads ? 'verdict' : 'trial'),
+    `run.json records ${JSON.stringify({ completed: runRecord.completed, outcome: runRecord.outcome })}; expected ${kernelReads ? 'a kernel-blocked runner to stop before trials at verdict' : 'a completed run refused at trial'}`,
   );
   const refusedScore = runEvaluate(['score', '--evaluation', bareRun]);
   check(
-    refusedScore.status === 3 && refusedScore.output.includes('mount outside allowlist: '),
-    `score over the refused run exited ${refusedScore.status}; expected the same exit 3 with the isolation violation\n${refusedScore.output}`,
+    kernelReads
+      ? refusedScore.status === 64 && refusedScore.output.includes('did not complete and sealed nothing to score')
+      : refusedScore.status === 3 && refusedScore.output.includes('mount outside allowlist: '),
+    `score over the refused run exited ${refusedScore.status}; expected ${kernelReads ? '64 with no sealed trials' : '3 with the isolation violation'}\n${refusedScore.output}`,
   );
 
   // Setup one: the bare name, with the directories the runner runs from listed in `systemPaths`.

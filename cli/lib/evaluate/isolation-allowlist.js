@@ -115,7 +115,7 @@ function chanceMountNotes(legs, folder) {
  * @param {object} options
  * @param {string[]} options.mounts the offending paths, as the audit reported them
  * @param {string} options.folder the evaluation folder, for the neutral form of each path
- * @param {'legs'|'trials'} options.who
+ * @param {'legs'|'denied-legs'|'trials'} options.who
  * @returns {string|null}
  */
 function mountRefusal({ mounts, folder, who }) {
@@ -124,9 +124,11 @@ function mountRefusal({ mounts, folder, who }) {
   const named = mounts.slice(0, NAMED_PATHS).map((mount) => `mount outside allowlist: ${neutral(mount)}`);
   const list = `${named.join('; ')}${mounts.length > named.length ? `; and ${mounts.length - named.length} more` : ''}`;
   const finding =
-    who === 'legs'
-      ? `isolation manifest violation: every preflight leg opened ${mounts.length} path(s) outside the allowlist (${list}), so every trial will too, and \`score\` refuses a trial that does (exit 3).`
-      : `isolation manifest violation: the trials opened ${mounts.length} path(s) outside the allowlist, so \`score\` would exit 3 (${list}).`;
+    who === 'denied-legs'
+      ? `isolation manifest violation: every preflight leg attempted access to ${mounts.length} path(s) outside the allowlist (${list}); the kernel refused those accesses (exit 3).`
+      : who === 'legs'
+        ? `isolation manifest violation: every preflight leg opened ${mounts.length} path(s) outside the allowlist (${list}), so every trial will too, and \`score\` refuses a trial that does (exit 3).`
+        : `isolation manifest violation: the trials opened ${mounts.length} path(s) outside the allowlist, so \`score\` would exit 3 (${list}).`;
   return [
     finding,
     'If they are the files of a target that launches from outside its workspace, use one of two setups: make the registry `target` a path inside `launch.root` (for example `node_modules/.bin/tea-skill-runner` over a copy workspace, or a git workspace with `workspace.provision`), or keep the bare name and list the directories it runs from in `systemPaths`, with the bin directory that holds its link on `PATH`.',

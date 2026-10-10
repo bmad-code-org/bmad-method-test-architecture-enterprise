@@ -8102,7 +8102,9 @@ async function checkChanceMounts() {
   // A leg whose read the kernel's log lost leaves no path common to every leg, so a refusal that does not come is a lost report.
   checkReport(
     structural.status === 3 &&
-      /isolation manifest violation: every preflight leg opened \d+ path\(s\) outside the allowlist/.test(structural.output),
+      /isolation manifest violation: every preflight leg (?:opened|attempted access to) \d+ path\(s\) outside the allowlist/.test(
+        structural.output,
+      ),
     `preflight over a target that read a file on every leg exited ${structural.status}; expected 3 naming the paths\n${structural.output}`,
   );
 }

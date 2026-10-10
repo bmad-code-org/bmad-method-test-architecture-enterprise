@@ -2096,6 +2096,8 @@ Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own
 
 ### Where the runner lives
 
+On macOS an undeclared runner outside the read grants cannot load its source. `preflight` names captured denials and the setup below even when its verdict fails. `run` can stop at its verdict before any trial is sealed; `score` then exits 64 because that incomplete run has no trials to score.
+
 A confined trial reads its workspace, the system's own paths and the paths its registry entry lists in `systemPaths`.
 The runner is a program the trial starts, so the audit lists each of its files that lies outside those places.
 `preflight` audits each of its legs, and a path every leg opened is a path every trial opens too, so it refuses the setup with exit 3 before any trial; `run` and `score` refuse the same paths from the trials' manifests, one `isolation manifest violation: mount outside allowlist` line per file.
