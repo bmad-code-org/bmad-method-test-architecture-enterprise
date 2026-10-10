@@ -44,6 +44,13 @@ if (mode !== 'no-checkpoint') {
  const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);
  fs.writeFileSync(checkpoint, '---\\nrunScope: '+(runKey === 'system' ? 'system' : 'epic')+'\\nrunKey: '+runKey+'\\nworkflowStatus: completed\\ntotalSteps: 5\\nstepsCompleted: [step-01-detect-mode, step-02-load-context, step-03-risk-and-testability, step-04-coverage-plan, step-05-generate-output]\\nlastStep: step-05-generate-output\\nnextStep: ""\\n---\\n# Finished\\n');
 }
+if(mode === 'wrong-key' || mode === 'wrong-scope') {
+ const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);
+ let text = fs.readFileSync(checkpoint,'utf8');
+ text = mode === 'wrong-key' ? text.replace('runKey: '+runKey, 'runKey: epic-999') : text.replace('runScope: epic', 'runScope: system');
+ fs.writeFileSync(checkpoint,text);
+}
+if(mode === 'input-mutation') fs.writeFileSync(path.join(process.cwd(),'epic.md'),'# Mutated source input\\n');
 process.stdout.write('raw reply from the agent');
 `,
   );
@@ -558,3 +565,21 @@ test('the final actual public CLI plan satisfies full section, band and priority
   assert.equal(result.riskCount, 5);
   assert.equal(result.coverageCount, 26);
 });
+
+for (const mode of ['wrong-key', 'wrong-scope', 'input-mutation']) {
+  test(`public CLI rejects ${mode} and retains previous reports and fresh failure evidence`, (t) => {
+    const root = project(t);
+    const output = path.join(root, 'published/test-design');
+    fs.mkdirSync(output, { recursive: true });
+    const names = ['test-design-epic-7.md', 'test-design-progress-epic-7.md'];
+    for (const name of names) fs.writeFileSync(path.join(output, name), `preserved ${name}`);
+    const result = execute(root, ['--epic', '7'], mode);
+    assert.equal(result.status, 3, mode + result.stderr);
+    const evidence = result.stderr.match(/; evidence: (.+)/)?.[1];
+    assert.ok(evidence, result.stderr);
+    assert.ok(fs.existsSync(path.join(evidence, 'attempt-1/stdout.txt')));
+    assert.ok(fs.existsSync(path.join(evidence, 'attempt-1/artifacts/test-design/test-design-epic-7.md')));
+    for (const name of names) assert.equal(fs.readFileSync(path.join(output, name), 'utf8'), `preserved ${name}`);
+    assert.match(result.stderr, mode === 'input-mutation' ? /changed an input/ : /does not confirm completion/);
+  });
+}

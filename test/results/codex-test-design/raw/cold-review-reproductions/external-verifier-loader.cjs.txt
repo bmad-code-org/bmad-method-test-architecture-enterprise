@@ -1,0 +1,18 @@
+'use strict';
+const fs = require('node:fs');
+const Module = require('node:module');
+const original = Module._extensions['.js'];
+Module._extensions['.js'] = function (module, file) {
+  let source;
+  if (process.env.TEA_VERIFY_MUTATION === 'design-identity' && file.endsWith('/cli/test-design.js')) {
+    source = fs.readFileSync(file, 'utf8').replace('progress.runKey !== runKey ||', 'false ||').replace('progress.runScope !== context.runScope ||', 'false ||');
+  }
+  if (process.env.TEA_VERIFY_MUTATION === 'design-inputs' && file.endsWith('/cli/test-design.js')) {
+    source = fs.readFileSync(file, 'utf8').replace('if (digest(file) !== expected)', 'if (false)');
+  }
+  if (process.env.TEA_VERIFY_MUTATION === 'framework-python' && file.endsWith('/cli/lib/framework-setup.js')) {
+    source = fs.readFileSync(file, 'utf8').replace("['unittest', /^python[\\d.]*\\s+-m\\s+unittest\\b/", "['unittest', /IMPOSSIBLE_RUNNER_PATTERN/");
+  }
+  if (source !== undefined) module._compile(source, file);
+  else original(module, file);
+};

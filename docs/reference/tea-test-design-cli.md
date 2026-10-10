@@ -3,7 +3,7 @@ title: 'Test Design CLI'
 description: 'Generate verified test plans from project requirements with a headless agent.'
 ---
 
-`tea-test-design` runs the packaged `bmad-testarch-test-design` skill against a consuming project's requirement documents. It writes the skill's plan and progress checkpoint after checking that the current run produced both, that its checkpoint reports completion, and that risk arithmetic and coverage references are valid.
+`tea-test-design` runs the packaged `bmad-testarch-test-design` skill against a consuming project's requirement documents. It writes the skill's plan and progress checkpoint after checking that the current run produced both, that its checkpoint reports completion, and that risk arithmetic, declared score bands and coverage references are valid. It requires populated mandatory sections for the selected full-plan template and a P0/P1/P2/P3 priority on each coverage row.
 
 Install the package and authenticate the vendor CLI you select:
 

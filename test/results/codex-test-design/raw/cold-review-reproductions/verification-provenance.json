@@ -1,0 +1,23 @@
+{
+  "normalCommand": "npm run test:workflow-cli",
+  "normalExitCode": 0,
+  "normalPassed": 31,
+  "mutants": [
+    {
+      "command": "TEA_VERIFY_MUTATION=design-identity NODE_OPTIONS='--require /tmp/tea-verification-mutation.cjs' npm run test:workflow-cli",
+      "exitCode": 1,
+      "failedTests": [
+        "wrong-key",
+        "wrong-scope"
+      ]
+    },
+    {
+      "command": "TEA_VERIFY_MUTATION=design-inputs NODE_OPTIONS='--require /tmp/tea-verification-mutation.cjs' npm run test:workflow-cli",
+      "exitCode": 1,
+      "failedTests": [
+        "input-mutation"
+      ]
+    }
+  ],
+  "mode": "deterministic controlled-agent regression; no paid model call"
+}
