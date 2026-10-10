@@ -96,11 +96,10 @@ function run(argv) {
   const protection = protectSources(projectRoot, [...inputs, ...options.implementation, ...options.evidence]);
   const skillRoot = resolveWorkflowSkill({ projectRoot, skillName: 'bmad-testarch-nfr', skillRoot: options.skillRoot });
   const resolvedConfig = resolveTeaConfig({ projectRoot, skillRoot, skillName: 'bmad-testarch-nfr' });
-  const outputDir = projectPath(
-    projectRoot,
-    options.outputDir || resolvedConfig.configSnapshot.modules.tea.test_artifacts.replaceAll('{project-root}', projectRoot),
-    '--output-dir',
-  );
+  const artifactRoot = options.outputDir ?? resolvedConfig.configSnapshot.modules.tea.test_artifacts;
+  if (typeof artifactRoot !== 'string' || !artifactRoot.trim())
+    throw new WorkflowError('environment-configuration', '--output-dir or TEA test_artifacts must be a nonempty string');
+  const outputDir = projectPath(projectRoot, artifactRoot.replaceAll('{project-root}', projectRoot), '--output-dir');
   const runKey = options.scope === 'system' ? 'system' : `${options.scope}-${options.scopeId}`;
   const filename = `nfr-assessment-${runKey}.md`;
   const destination = projectPath(projectRoot, path.join(outputDir, 'nfr', filename), 'published report');

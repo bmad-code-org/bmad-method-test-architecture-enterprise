@@ -137,6 +137,41 @@ test('evidence run directory may not overlap supplied sources', (t) => {
     run = execute(root, 'none', ['--evidence-dir', 'evidence']);
   assert.equal(run.status, 2, run.stderr);
 });
+test('non-string configured artifact root fails clearly before invoking an agent', (t) => {
+  const root = project(t);
+  fs.mkdirSync(path.join(root, '_bmad'));
+  fs.writeFileSync(path.join(root, '_bmad', 'config.toml'), '[modules.tea]\ntest_artifacts = 42\n');
+  const before = fs.readFileSync(path.join(root, 'requirements.md'), 'utf8');
+  const marker = path.join(root, 'invoked');
+  const agent = path.join(root, 'marker.cjs');
+  fs.writeFileSync(agent, `require('node:fs').writeFileSync(${JSON.stringify(marker)},'invoked');`);
+  const run = spawnSync(
+    process.execPath,
+    [
+      cli,
+      '--project-root',
+      root,
+      '--input',
+      'requirements.md',
+      '--implementation',
+      'src',
+      '--evidence',
+      'evidence',
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      process.execPath,
+      '--agent-arg',
+      agent,
+    ],
+    { encoding: 'utf8', timeout: 15_000 },
+  );
+  assert.equal(run.status, 2, run.stderr);
+  assert.match(run.stderr, /test_artifacts must be a nonempty string/);
+  assert.equal(fs.existsSync(marker), false);
+  assert.equal(fs.existsSync(path.join(root, '.tea-runs')), false);
+  assert.equal(fs.readFileSync(path.join(root, 'requirements.md'), 'utf8'), before);
+});
 test('prompt-only mode activates NFR namespace with exact input roles and scope', (t) => {
   const root = project(t);
   fs.mkdirSync(path.join(root, '_bmad', 'custom'), { recursive: true });
