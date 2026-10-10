@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-test-design-behavioral",
-  "sourceSpecDigest": "sha256:d3b0ad1cdceebddc8b00c46cf039da408135e2e924357f4388feb29b8ba036bf",
+  "sourceSpecDigest": "sha256:9087126435414c389c028343e78c1e76c1f105b0849a687fbea19b7347cb3a9c",
   "behaviors": [
     {
       "id": "B-001",
