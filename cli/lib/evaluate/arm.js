@@ -295,7 +295,7 @@ function foldedText(text, withMap = true) {
   let folded = '';
   const starts = [];
   const ends = [];
-  for (let at = 0; at < text.length; ) {
+  for (let at = 0; at < text.length;) {
     let character = String.fromCodePoint(text.codePointAt(at));
     const unit = character === '\u0130' ? 'i' : character.toLowerCase().toUpperCase().toLowerCase();
     // `İ` lower-cases to `i` and a combining dot above, so the pair folds as the capital does: one `i`, each mark after it covered by it.
@@ -486,7 +486,7 @@ function scrubCutText(text, secrets) {
   // A fold drops the combining dots an `i` carries (any number of them), so the stretch read is widened by every dot it holds:
   // walking back from the end, a dot costs no folded unit and any other character costs one, until the longest form is covered.
   let window = scrubbed.length;
-  for (let covered = 0; window > 0 && covered < longest; ) {
+  for (let covered = 0; window > 0 && covered < longest;) {
     window -= 1;
     if (scrubbed[window] !== '\u0307') covered += 1;
   }

@@ -30,9 +30,7 @@ const opts = buildVerifierOptions({
   provider: 'SampleMoviesAPI',
   port: '3001',
   includeMainAndDeployed: true,
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
   requestFilter: createRequestFilter({
     // tokenGenerator returns raw token — filter adds "Bearer " prefix
     tokenGenerator: () => 'test-auth-token-123',
@@ -78,9 +76,7 @@ const opts = buildVerifierOptions({
   provider: 'SecureAPI',
   port: '3001',
   includeMainAndDeployed: true,
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
   requestFilter,
 });
 ```
@@ -95,9 +91,7 @@ const opts = buildVerifierOptions({
   provider: 'PublicAPI',
   port: '3001',
   includeMainAndDeployed: true,
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
   requestFilter: noOpRequestFilter,
 });
 
@@ -211,9 +205,7 @@ async function setupVerifierOptions() {
     port: '3001',
     includeMainAndDeployed: true,
     requestFilter,
-    stateHandlers: {
-      /* ... */
-    },
+    stateHandlers: {/* ... */},
   });
 }
 
