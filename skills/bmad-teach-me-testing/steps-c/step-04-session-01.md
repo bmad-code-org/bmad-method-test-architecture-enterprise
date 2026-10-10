@@ -188,7 +188,7 @@ Display:
 
 "### ✅ Quick Knowledge Check
 
-Let me ask you 3 questions to validate your understanding. Passing score: ≥70% (2 of 3 correct)."
+Let me ask you 3 questions to validate your understanding. Passing score: ≥70% (3 of 3 correct; 2 of 3 is 66.67%)."
 
 **Question 1:**
 

@@ -103,7 +103,7 @@ You can pause and resume anytime - your progress will be saved automatically aft
 
 ### 4. Create Initial Progress File (New Learner Only)
 
-Load {progressTemplate} and create {progressFile} with:
+Load {progressTemplate} and create {progressFile} as one YAML document. A leading `---` is optional; omit a trailing `---`, which starts another document. Write the following fields:
 
 ```yaml
 ---
@@ -193,7 +193,6 @@ lastContinued: { current_date }
 summary_generated: false
 summary_path: null
 completion_date: null
----
 ```
 
 ### 5. Proceed to Assessment (New Learner Only)

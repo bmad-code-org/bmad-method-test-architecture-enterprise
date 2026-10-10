@@ -78,18 +78,22 @@ function configError(message) {
 }
 
 /** Read configuration from one pinned base commit, or from the working tree. */
-function configSource(projectRoot, baseRef) {
+function configSource(projectRoot, baseRef, inputPaths, inputPatterns) {
   if (baseRef === undefined || baseRef === null) {
     return {
+      recordInput: (file) => inputPaths?.add(file),
       label: (relativePath) => path.join(projectRoot, relativePath),
       list(pattern) {
         try {
-          return globSync(pattern, { cwd: projectRoot, dot: true, nodir: true, follow: false });
+          const matches = globSync(pattern, { cwd: projectRoot, dot: true, nodir: true, follow: false });
+          inputPatterns?.set(pattern, [...matches].sort());
+          return matches;
         } catch (error) {
           throw configError(`Failed to list policy files in ${projectRoot}: ${error.message}`);
         }
       },
       read(relativePath) {
+        inputPaths?.add(path.join(projectRoot, relativePath));
         try {
           return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
         } catch (error) {
@@ -283,6 +287,7 @@ function parseToml(content, label) {
 function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-testarch-test-review') {
   if (!skillRoot) return {};
   const defaultsPath = path.join(skillRoot, 'customize.toml');
+  source.recordInput?.(defaultsPath);
   let merged = {};
   try {
     merged = parseToml(fs.readFileSync(defaultsPath, 'utf8'), defaultsPath);
@@ -489,13 +494,16 @@ const KEY_TO_INSTALLED_FIELD = {
  * @param {string} [options.skillRoot] - Trusted skill defaults for workflow customization.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
+ * @param {Set<string>} [options.inputPaths] - Receives working-tree inputs, including missing optional layers.
+ * @param {Map<string, string[]>} [options.inputPatterns] - Receives policy glob membership used during resolution.
  * @returns {{values: object, sources: object, installed: object, configSnapshot: object, workflowCustomization: object, configCommit: string|null, configPath: string, configPresent: boolean, configFormat: string|null}}
  *   `installed` carries one boolean per library gate, read from the project
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
-function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName }) {
-  const source = configSource(projectRoot, baseRef);
+function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName, inputPaths, inputPatterns }) {
+  const source = configSource(projectRoot, baseRef, inputPaths, inputPatterns);
+  inputPaths?.add(path.join(projectRoot, 'package.json'));
   const file = readTeaConfigFile(projectRoot, baseRef, source);
   const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName);
 

@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T02:52:48.687Z",
+  "mode": "live",
+  "repository": {
+    "commit": "cbcf937135585c072846026ea7cacbcedf74182d",
+    "dirty": false
+  },
+  "suite": {
+    "id": "teach-me-testing",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-teach-me-testing"
+    ],
+    "contracts": [],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:8c09b7f9c0770b47ce65b7d6004240ff15a25d2177ae6c6e6b52a3bbfe1e17f8",
+    "promptDigest": null,
+    "caseIds": [
+      "session-01-first-run-then-fresh-continuation"
+    ],
+    "cases": [
+      {
+        "id": "session-01-first-run-then-fresh-continuation",
+        "promptDigest": null
+      }
+    ],
+    "thresholds": {
+      "placementAccuracy": 1,
+      "correctionRate": 1,
+      "reTeachingRate": 1,
+      "continuationRate": 1,
+      "maxUnearnedMastery": 0
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 1,
+        "completed": 1
+      },
+      "measurements": {
+        "placementAccuracy": 0,
+        "correctionRate": 1,
+        "reTeachingRate": 1,
+        "continuationRate": 1,
+        "maxUnearnedMastery": 0
+      },
+      "durationMs": 507502,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "run 1: placement is null, expected \"Beginner\"",
+        "placementAccuracy"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "session-01-first-run-then-fresh-continuation",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[false,true,true,true,[]]",
+          "metricContributions": {
+            "placement.numerator": 0,
+            "placement.denominator": 1,
+            "placement.threshold": 1,
+            "correction.numerator": 1,
+            "correction.denominator": 1,
+            "correction.threshold": 1,
+            "reTeaching.numerator": 1,
+            "reTeaching.denominator": 1,
+            "reTeaching.threshold": 1,
+            "continuation.numerator": 1,
+            "continuation.denominator": 1,
+            "continuation.threshold": 1,
+            "unearnedMastery": 0,
+            "maxUnearnedMastery": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "placement",
+          "triage": [
+            {
+              "reason": "placement",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "run 1: placement is null, expected \"Beginner\"",
+            "placementAccuracy"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[false,true,true,true,[]]"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 507610,
+  "failureClass": "quality",
+  "exitCode": 1
+}

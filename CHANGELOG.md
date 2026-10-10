@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-teach` runs one learner message through the packaged teaching skill, retains conversation and progress, and verifies caller-owned quiz evidence before publishing completion.
+  Prompt-only previews, explicit progress imports, fresh attempt evidence and atomic state replacement support durable learning from the terminal.
 - `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
@@ -22,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-teach` rejects unpaired saved state and completed sessions whose caller quiz evidence is missing.
+  Configuration and customization inputs are checked for byte, permission, inode and topology changes before publication; completed summaries keep their flags, path, date and exact content.
+  Invalid artifact configuration receives a clear path-type error.
+  The native two-turn CLI assessment capture remains archived with its original source and byte hashes.
+- Teach Me Testing writes its saved progress as one YAML document.
+  Its first two quizzes correctly state that three of three answers are needed to reach the 70 percent passing score.
+  The original Codex baseline and unreadable saved progress remain retained.
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
 - Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
 - Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.
