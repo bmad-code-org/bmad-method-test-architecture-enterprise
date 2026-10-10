@@ -56,11 +56,6 @@ const SNAPSHOT_DEFAULTS = {
   test_framework: 'auto',
 };
 
-const WORKFLOW_CUSTOM_PATHS = [
-  path.join('_bmad', 'custom', 'bmad-testarch-test-review.toml'),
-  path.join('_bmad', 'custom', 'bmad-testarch-test-review.user.toml'),
-];
-
 const PACT_MCP_VALUES = ['mcp', 'none'];
 // step-03-quality-evaluation.md's requestable modes. `auto` asks the capability
 // probe to pick; the other three are honoured as stated.
@@ -285,7 +280,7 @@ function parseToml(content, label) {
 }
 
 /** Resolve trusted skill defaults and project workflow overrides from the same configuration source. */
-function readWorkflowCustomization(source, skillRoot, projectRoot) {
+function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-testarch-test-review') {
   if (!skillRoot) return {};
   const defaultsPath = path.join(skillRoot, 'customize.toml');
   let merged = {};
@@ -294,7 +289,9 @@ function readWorkflowCustomization(source, skillRoot, projectRoot) {
   } catch (error) {
     if (error.code !== 'ENOENT') throw configError(`Failed to load ${defaultsPath}: ${error.message}`);
   }
-  for (const relativePath of WORKFLOW_CUSTOM_PATHS) {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(skillName)) throw configError('Workflow skill name must be a lowercase kebab-case name');
+  const workflowPaths = ['.toml', '.user.toml'].map((suffix) => path.join('_bmad', 'custom', skillName + suffix));
+  for (const relativePath of workflowPaths) {
     const content = source.read(relativePath);
     if (content !== null) merged = mergeTables(merged, parseToml(content, source.label(relativePath)));
   }
@@ -497,10 +494,10 @@ const KEY_TO_INSTALLED_FIELD = {
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
-function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot }) {
+function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName }) {
   const source = configSource(projectRoot, baseRef);
   const file = readTeaConfigFile(projectRoot, baseRef, source);
-  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot);
+  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName);
 
   const values = {};
   const sources = {};
