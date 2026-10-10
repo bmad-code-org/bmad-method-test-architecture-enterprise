@@ -13,7 +13,7 @@ For setup, see [Setup Test Framework](/docs/how-to/workflows/setup-test-framewor
 :::
 
 :::note[Scope]
-TEA's risk, design, NFR, traceability, and gate workflows are stack-neutral and apply to any system under test.
+TEA's risk, design, NFR, traceability, and gate skills are stack-neutral and apply to any system under test.
 Execution support varies by stack: browsers, HTTP services, contracts, and mobile native (Maestro) are covered end to end, while other stacks are covered at shallower tiers.
 [Verification Architecture](/docs/explanation/verification-architecture.md) explains the split; [Execution Targets](/docs/reference/execution-targets.md) publishes the per-target matrix and the known gaps.
 :::
@@ -27,24 +27,32 @@ Execution support varies by stack: browsers, HTTP services, contracts, and mobil
 Choose an adoption path in [Engagement Models](/docs/explanation/engagement-models.md).
 TEA runs in solutioning, implementation, and release gates; the Enterprise track adds compliance evidence.
 
-## TEA Command Catalog
+<a id="tea-command-catalog"></a>
 
-| Command              | Primary Outputs                                                                                   | Notes                                                                                                                                    | With Browser Automation (CLI/MCP)                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `test-design`        | Combined risk assessment, NFR planning, mitigation plan, and coverage strategy                    | Risk scoring + NFR thresholds/evidence plan                                                                                              | **+ Exploratory**: Interactive UI discovery with browser automation (uncover actual functionality)                                   |
-| `framework`          | Stack-specific scaffold and optional CI pipeline                                                  | One setup skill; prompt selects framework, CI, or both                                                                                   | -                                                                                                                                    |
-| `framework` CI phase | CI workflow, selective test scripts, secrets checklist                                            | Configure CI through the framework skill                                                                                                 | -                                                                                                                                    |
-| `atdd`               | Red-phase acceptance test scaffolds + implementation checklist                                    | Automation red mode; verifies intended failures and repairs test issues                                                                  | **+ Recording**: UI selectors verified with live browser; API tests benefit from trace analysis                                      |
-| `automate`           | Prioritized specs, fixtures, README/script updates, DoD summary                                   | Red or expand mode; run and heal on by default, avoid duplicate coverage                                                                 | **+ Healing**: Visual debugging + trace analysis for test fixes; **+ Recording**: Verified selectors (UI) + network inspection (API) |
-| `evaluate`           | A scored behavioral evaluation with named gaps, and a CI plan handed to `framework` with CI scope | Twelve stages, from target inspection to CI wiring; start with [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) | -                                                                                                                                    |
-| `test-review`        | Test quality review report with 0-100 score, violations, fixes                                    | Reviews tests against knowledge base patterns                                                                                            | -                                                                                                                                    |
-| `nfr-assess`         | NFR Evidence Audit report with actions                                                            | Audits implemented evidence against thresholds                                                                                           | -                                                                                                                                    |
-| `trace`              | Phase 1: Coverage matrix, recommendations. Phase 2: Gate decision (PASS/CONCERNS/FAIL)            | Two-phase workflow: traceability + gate decision                                                                                         | -                                                                                                                                    |
+## TEA Skill Catalog
+
+Eight canonical skills have ten direct capability commands, plus the TEA agent. Start with these six skills:
+
+| Skill                                                          | Primary Outputs                                                                                                      | Browser Automation (CLI/MCP)                                      |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Test Review](/docs/how-to/workflows/run-test-review.md)       | Test quality report with 0-100 score, violations, and fixes                                                          | Traces, screenshots, and network evidence                         |
+| [Automate](/docs/how-to/workflows/run-automate.md)             | Red acceptance scaffolds and implementation checklist; expand-mode specs, fixtures, README, and DoD summary          | Recording for skeleton UI in red; healing and recording in expand |
+| [Test Design](/docs/how-to/workflows/run-test-design.md)       | Risk assessment, NFR thresholds and evidence plan, mitigation plan, and coverage strategy                            | Exploratory UI discovery                                          |
+| [Framework](/docs/how-to/workflows/setup-test-framework.md)    | Stack-specific scaffold, CI pipeline, selective testing scripts, secrets checklist, and evaluation jobs as requested | No browser automation required                                    |
+| [NFR](/docs/how-to/workflows/run-nfr-assess.md)                | NFR evidence audit against thresholds, domain statuses, and actions                                                  | Optional evidence capture                                         |
+| [Teach Me Testing](/docs/how-to/workflows/teach-me-testing.md) | Seven learning sessions, quizzes, notes, and saved learner progress                                                  | No browser automation required                                    |
+
+### Additional Skills
+
+| Skill                                                    | Primary Outputs                                                                           |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Trace](/docs/how-to/workflows/run-trace.md)             | Phase 1 coverage matrix and recommendations; Phase 2 gate decision (PASS/CONCERNS/FAIL)   |
+| [Evaluate](/docs/tutorials/evaluate-your-first-skill.md) | Scored behavioral evaluation, named gaps, and a CI plan handed to Framework with CI scope |
 
 Automation uses one skill with two modes: red before implementation and expand after implementation. The ATDD command and `AT` select red by default; automate and `TA` select expand. Your prompt can explicitly select either. Create runs execute and repair tests for up to three rounds while keeping real product defects visible.
 
-Invoke a workflow as `/bmad-testarch-<workflow>` in Claude Code, Cursor, and Windsurf, or `$bmad-testarch-<workflow>` in Codex.
-`nfr-assess` is the workflow's name in prose; the typeable skill is `bmad-testarch-nfr`.
+Invoke a skill as `/bmad-testarch-<skill>` in Claude Code, Cursor, and Windsurf, or `$bmad-testarch-<skill>` in Codex.
+NFR uses `/bmad-testarch-nfr` or `$bmad-testarch-nfr`; its stored identifier is `nfr-assess`. Teach Me Testing uses `/bmad-teach-me-testing` or `$bmad-teach-me-testing`, with no `testarch` segment.
 Inside an active TEA agent session, use the menu codes: `TD`, `TF`, `CI`, `AT`, `TA`, `EV`, `RV`, `NR`, `TR`, plus `TMT` for TEA Academy and `GATE`.
 
 `bmad-testarch-framework` owns both setup phases.
@@ -52,7 +60,9 @@ Request framework only, CI only, or both. It infers scope from the prompt and as
 `bmad-testarch-ci` and `CI` still start its CI setup; `TF` starts framework setup.
 Create starts setup, Resume continues an interrupted run, Validate reports checks without repairing outputs, and Edit revises the selected outputs and checks those changes.
 
-## TEA Workflow Lifecycle
+<a id="tea-workflow-lifecycle"></a>
+
+## TEA Skill Lifecycle
 
 BMad uses a 4-phase methodology with an optional Phase 1 and a documentation prerequisite:
 
@@ -94,13 +104,13 @@ graph TB
         EpicsStories -.-> Phase3Note
     end
 
-    subgraph Phase4["<b>Phase 4: IMPLEMENTATION - Per Epic Cycle</b>"]
+    subgraph Phase4["<b>Phase 4: IMPLEMENTATION: Per Epic Cycle</b>"]
         SprintPlan["<b>SM: sprint-planning</b>"]
         TestDesign["<b>TEA: test-design (per epic)</b>"]
         CreateStory["<b>SM: create-story</b>"]
-        ATDD["<b>TEA: atdd (optional, before dev)</b>"]
+        ATDD["<b>TEA: automate red (optional, before dev)</b>"]
         DevImpl["<b>DEV: implements story</b>"]
-        Automate["<b>TEA: automate</b>"]
+        Automate["<b>TEA: automate expand</b>"]
         TestReview1["<b>TEA: test-review (optional)</b>"]
         Trace1["<b>TEA: trace (refresh coverage)</b>"]
 
@@ -119,7 +129,7 @@ graph TB
     subgraph Gate["<b>EPIC/RELEASE GATE</b>"]
         NFR["<b>TEA: nfr-assess (NFR Evidence Audit)</b>"]
         TestReview2["<b>TEA: test-review (final audit, optional)</b>"]
-        TraceGate["<b>TEA: trace - Phase 2: Gate</b>"]
+        TraceGate["<b>TEA: trace Phase 2: Gate</b>"]
         GateDecision{"<b>Gate Decision</b>"}
 
         NFR --> TestReview2
@@ -145,14 +155,14 @@ graph TB
 
 TEA's Phase 2 work is the Brownfield baseline: run `trace` Phase 1 during planning to record existing coverage.
 Greenfield projects start TEA in Phase 3.
-The Phase 3 workflows run once per project, the Phase 4 workflows run per epic and per story, and the gate workflows run per epic or per release.
+The Phase 3 skills run once per project, the Phase 4 skills run per epic and per story, and the gate skills run per epic or per release.
 `teach-me-testing` sits outside the lifecycle entirely and runs once per learner.
 
 Phase 3 order matters: run `test-design` first so NFR evidence needs can influence infrastructure, then `framework` once architecture and test design have established the stack. Request both setup phases to agree the stack, framework, and test commands, then it can generate the scaffold and pipeline in parallel before validating them together. A CI-only request with no framework offers the framework phase first.
 
 ### `test-design` is dual-mode
 
-Both modes use the same workflow command.
+Both modes use the same skill command.
 Make the scope explicit in your prompt.
 
 - **System-level (Phase 3):** run immediately after architecture/ADR drafting.
@@ -173,7 +183,7 @@ Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md
 
 ```text
 /bmad-testarch-test-design
-Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design/test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for atdd and automate.
+Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design/test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for Automate red and expand modes.
 ```
 
 Codex users run `$bmad-testarch-test-design` with the same scope-setting prompt.
@@ -181,7 +191,7 @@ Codex users run `$bmad-testarch-test-design` with the same scope-setting prompt.
 ## Why TEA Is Different from Other BMM Agents
 
 TEA spans Phase 3, Phase 4, and the release gate.
-Its workflows share testing, fixture, and CI patterns through the [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
+Its skills share testing, fixture, and CI patterns through the [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
 
 ## Library Integrations
 
@@ -197,7 +207,7 @@ Shared Playwright fixtures for API requests, authentication, network handling, a
 
 - Install: `npm install -D @seontechnologies/playwright-utils`
   > `bmad setup tea` asks whether to enable Playwright Utils. Run it again, or edit `tea_use_playwright_utils` under `[modules.tea]` in `_bmad/config.toml`, to change the answer.
-- Impacts: `framework`, `atdd`, `automate`, `test-review`, `ci`
+- Impacts: `framework` (framework and CI), `automate` (red and expand), and `test-review`
 - Utilities: api-request, auth-session, network-recorder, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor, fixtures-composition
 
 ### Pact.js Utils (`@seontechnologies/pactjs-utils`)
@@ -209,7 +219,7 @@ Contract testing utilities that reduce raw Pact.js boilerplate and standardize p
   TEA requires a real consumer-provider boundary before scaffolding contract tests.
   The flag selects the utilities used in those tests.
   Set `false` to have TEA write raw `@pact-foundation/pact`.
-- Impacts: `framework`, `atdd`, `automate`, `test-design`, `test-review`, `ci`
+- Impacts: `framework` (framework and CI phases), `automate` (red and expand modes), `test-design`, and `test-review`
 - Utilities: createProviderState, toJsonMap, setJsonBody, setJsonContent, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
 - Supports the local monorepo flow (`pactUrls`) and the remote broker flow (`PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`)
 
@@ -242,13 +252,13 @@ tea_browser_automation = "auto" # auto | cli | mcp | none
 - CLI: `npm install -g @playwright/cli@latest` (global, one-time) then `playwright-cli install --skills` from the project root
 - MCP: configure MCP servers in your IDE (see [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md))
 
-**Which workflows benefit:** `test-design` (exploratory mode: snapshot pages to discover actual UI elements), `atdd` and `automate` (verify selectors against the live DOM before generating tests), `test-review` (capture traces, screenshots, and network logs as evidence).
+**Which skills benefit:** `test-design` (exploratory mode: snapshot pages to discover actual UI elements), `automate` in red and expand modes (verify selectors against the live DOM before generating tests), `test-review` (capture traces, screenshots, and network logs as evidence).
 
 **To disable:** set `tea_browser_automation: "none"`, or skip both CLI and MCP installation.
 
 ### Pact MCP (SmartBear MCP for PactFlow/Pact Broker)
 
-Optional design-time broker interaction for contract testing workflows.
+Optional design-time broker interaction for contract testing skills.
 
 **Configuration** (`[modules.tea]` in `_bmad/config.toml`):
 
@@ -267,7 +277,7 @@ tea_pact_mcp = "mcp" # none | mcp (default "mcp")
 - Claude Code (global): `claude mcp add-json -s user smartbear '{"type":"stdio","command":"npx","args":["-y","@smartbear/mcp@latest"],"env":{"PACT_BROKER_BASE_URL":"...","PACT_BROKER_TOKEN":"..."}}'`
 - Required broker env vars: `PACT_BROKER_BASE_URL` and token/basic-auth credentials
 
-**Which workflows benefit:** `test-design` (fetch provider states and broker metadata), `automate` (assist pact test generation with broker context), `test-review` (review pact tests against broker-informed practices), `ci` (reference can-i-deploy and matrix checks).
+**Which skills benefit:** `test-design` (fetch provider states and broker metadata), `automate` (assist pact test generation with broker context), `test-review` (review pact tests against broker-informed practices), `framework` CI phase (reference can-i-deploy and matrix checks).
 
 Pact MCP complements `pactjs-utils`: MCP helps at planning and review time, `pactjs-utils` runs inside test code.
 
@@ -280,7 +290,7 @@ Pact MCP complements `pactjs-utils`: MCP helps at planning and review time, `pac
 - [Risk-Based Testing](/docs/explanation/risk-based-testing.md): probability × impact scoring and P0-P3
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md): the Definition of Done and the 100-point rubric
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md): context engineering with `tea-index.csv`
-- [TEA Command Reference](/docs/reference/commands.md): inputs, outputs, phases, and frequency per workflow
+- [TEA Command Reference](/docs/reference/commands.md): inputs, outputs, phases, and frequency per skill
 - [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md): tutorial: score one skill from requirements to an accepted baseline
 - [How Evaluate Works](/docs/explanation/how-evaluate-works.md): the stack, the rules, and the reasons behind an evaluation
 - [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md): why the target of an evaluation runs under file-system confinement

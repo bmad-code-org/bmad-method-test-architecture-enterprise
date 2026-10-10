@@ -31,7 +31,7 @@ This page covers what changes for your own target.
 - **Codex:** `$bmad-testarch-evaluate`
 - **Inside a `/bmad-tea` chat:** `EV`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 Tell the skill what to evaluate, for example:
 

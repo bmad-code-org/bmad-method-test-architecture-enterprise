@@ -102,7 +102,7 @@ Use the following utilities for supported operations:
 | Catching a 4xx/5xx a green UI hides          | the `network-error-monitor` fixture                 | per-spec `page.on('response')` handlers                   |
 
 The following utilities need project setup: `auth-session` needs an auth provider, `network-recorder` a HAR directory, the webhook module a mock provider, and `burn-in` a config file and script.
-TEA scaffolds this wiring when the workflow covers setup, and states any fallback to the vanilla equivalent in its output.
+TEA scaffolds this wiring when the skill covers setup, and states any fallback to the vanilla equivalent in its output.
 
 Use `page.route` directly to block analytics, fonts, or third-party scripts.
 For other package gaps, TEA adds `// playwright-utils deviation: <reason>` and lists the reason in its summary.
@@ -113,7 +113,9 @@ The merged-fixtures module itself imports `mergeTests` and re-exports `expect` f
 **Scope.** The mandate covers JavaScript/TypeScript suites on the Playwright runner, browser and API alike.
 Cypress, Maestro flows, Pact/Vitest contract suites, and backend suites in pytest, JUnit, Go test, xUnit, or RSpec are untouched by it.
 
-### `framework` Workflow
+<a id="framework-workflow"></a>
+
+### `framework` Skill
 
 **Vanilla Playwright:**
 
@@ -173,7 +175,9 @@ test('api test', async ({ apiRequest }) => {
 });
 ```
 
-### Automation Red and Expand Modes
+<a id="automation-red-and-expand-modes"></a>
+
+### Automate Red and Expand Modes
 
 **Without Playwright Utils:**
 
@@ -202,7 +206,9 @@ test('should fetch profile', async ({ apiRequest }) => {
 });
 ```
 
-### `test-review` Workflow
+<a id="test-review-workflow"></a>
+
+### `test-review` Skill
 
 **Without Playwright Utils:**
 Reviews against generic Playwright patterns
@@ -215,7 +221,9 @@ Reviews against playwright-utils best practices:
 - Network-first patterns
 - Structured logging
 
-### `ci` Workflow
+<a id="ci-workflow"></a>
+
+### Framework CI Phase
 
 **Without Playwright Utils:**
 
@@ -661,7 +669,7 @@ TEA generates tests without playwright-utils.
 **Causes:**
 
 1. Config not set: `tea_use_playwright_utils: false`
-2. Workflow run before config change
+2. Skill run before config change
 3. Package not installed
 
 ```bash
@@ -707,9 +715,9 @@ expect(status).toBe(200);
 - [TEA Lite Quickstart Tutorial](/docs/tutorials/tea-lite-quickstart.md): Learn TEA basics
 - [How to Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md): Initial framework setup
 
-**Workflow Guides:**
+**Skill Guides:**
 
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md): Generate tests with utilities
+- [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode): Generate tests with utilities
 - [How to Run Automate](/docs/how-to/workflows/run-automate.md): Expand coverage with utilities
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Review against PW-Utils patterns
 

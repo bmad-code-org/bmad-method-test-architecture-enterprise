@@ -5,7 +5,7 @@ description: Complete reference for TEA configuration options and file locations
 
 # TEA Configuration Reference
 
-TEA configuration keys, defaults, and the workflows they affect.
+TEA configuration keys, defaults, and the skills they affect.
 
 ## Where Configuration Lives
 
@@ -28,8 +28,8 @@ To change an answer, run `bmad setup tea` again: it shows each answer with its v
 You can also edit the TOML directly.
 Skills read the config once at activation, so start a fresh chat after a change.
 
-Every module setup key is read by a workflow.
-The two [Per-Workflow Settings](#per-workflow-settings) live in customization files and are configured separately.
+Every module setup key is read by a skill.
+The two [Per-Skill Settings](#per-skill-settings) live in customization files and are configured separately.
 
 ## Recommended Configuration
 
@@ -78,7 +78,7 @@ Base output folder for TEA-generated artifacts (test designs, reports, traceabil
 **Setup question:** `Where should test artifacts be stored? (test plans, coverage reports, quality audits)`
 
 Skills replace `{project-root}` in the value with the project root, so it can live outside the core output folder.
-Each workflow writes into its own folder under it, as described in [Output Layout](#output-layout).
+Each skill writes into its own folder under it, as described in [Output Layout](#output-layout).
 
 ```toml
 test_artifacts = "{project-root}/docs/testing-artifacts"
@@ -106,25 +106,25 @@ When the flag is `true` and the package is a project dependency, `playwright-uti
 
 A capability outside the utilities' scope can use plain Playwright with a `// playwright-utils deviation: <reason>` comment and an entry in the output summary.
 `auth-session`, `network-recorder`, webhook helpers, and `burn-in` are recommended integrations that need project wiring.
-Workflows describe that wiring when proposing them.
+Skills describe that wiring when proposing them.
 
 With the flag enabled and the package absent, TEA generates plain Playwright, skips the utility review criteria, and recommends running `framework`.
 `tea_use_pactjs_utils` has the same package gate.
 
 The Playwright mandate applies to JavaScript/TypeScript suites on the Playwright runner.
 
-**Affects workflows** (each reads the key and branches on it):
+**Affects skills** (each reads the key and branches on it):
 
-- `atdd` loads the mandate, selects a playwright-utils fragment profile, and passes `use_playwright_utils` to generation workers.
+- `automate` red mode loads the mandate, selects a playwright-utils fragment profile, and passes `use_playwright_utils` to generation workers.
   Red-phase scaffolds are generated in playwright-utils style, since the scaffold is the file the developer un-skips and keeps
-- `automate` same fragment profile and worker flag, plus a `merged-fixtures.ts` entry point and an auth fixture built on `auth-session` during aggregation
+- `automate` expand mode uses the same fragment profile and worker flag, plus a `merged-fixtures.ts` entry point and an auth fixture built on `auth-session` during aggregation
 - `test-design` loads the mandate so every code example in the design document matches what `automate` will generate
 - `test-review` scores registry rows `M9` (a configured utility bypassed with no stated deviation, MEDIUM) and `L9` (a spec importing `test` from `@playwright/test` against a merged-fixtures convention, LOW).
   `M9` also requires the package to be a project dependency: the flag alone never produces a deduction
-- `framework` installs the package, scaffolds `merged-fixtures.ts` and the auth fixture, and generates samples in the mandated style
-- `ci` uses `runBurnIn` for Playwright burn-in selection
+- `framework` framework phase installs the package, scaffolds `merged-fixtures.ts` and the auth fixture, and generates samples in the mandated style
+- `framework` CI phase uses `runBurnIn` for Playwright burn-in selection
 
-The `trace` and `nfr-assess` workflows do not read this key.
+The `trace` and `nfr-assess` skills do not read this key.
 
 ```toml
 tea_use_playwright_utils = "true" # "false" selects plain Playwright
@@ -171,14 +171,14 @@ TEA describes the missing setup when proposing them.
 
 The determinism rules never relax under the mandate: one `addInteraction()` per `it()`, `fileParallelism: false` plus `pool: 'forks'` plus `singleFork: true` on the consumer config, the pool pair on the provider config, and provider scrutiny before any response matcher.
 
-**Affects workflows:**
+**Affects skills:**
 
-- `framework` installs the packages and scaffolds Pact samples when contract testing is relevant
-- `atdd` loads the mandate and generates contract scaffolds in that style
-- `automate` loads the mandate and passes pact config to subagents
+- `framework` framework phase installs the packages and scaffolds Pact samples when contract testing is relevant
+- `automate` red mode loads the mandate and generates contract scaffolds in that style
+- `automate` expand mode loads the mandate and passes pact config to subagents
 - `test-design` loads the mandate so Pact code examples in design documents match what `automate` generates
 - `test-review` scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on the flag plus the package being installed
-- `ci` adds a contract-test stage and quality gates
+- `framework` CI phase adds a contract-test stage and quality gates
 
 Set this to `false` for raw `@pact-foundation/pact` output.
 
@@ -206,7 +206,7 @@ The local monorepo flow needs no broker: the consumer generates pacts and the pr
 
 ### tea_pact_mcp
 
-Pact MCP strategy for broker interaction during contract testing workflows.
+Pact MCP strategy for broker interaction during contract testing skills.
 
 **Type:** `string` · **Default:** `"mcp"` · **Options:** `"mcp"` | `"none"`
 
@@ -218,7 +218,7 @@ Each broker-dependent step checks once whether SmartBear MCP tools are available
 When they are unavailable, it follows `pact-mcp`'s fallback: provider source, then an OpenAPI spec, then the confidence gate if the needed facts remain unknown.
 The report records tool availability and the source used for provider states.
 
-**Affects workflows:** `test-design`, `atdd`, `automate`, `framework`, `test-review`, `ci`.
+**Affects skills:** `test-design`, `automate` (red and expand), `framework` (framework and CI), and `test-review`.
 
 Set it to `none` to disable broker calls, for example in an air-gapped environment.
 
@@ -261,10 +261,10 @@ Controls how TEA interacts with live browsers during test generation.
 | `mcp`  | MCP only. CLI ignored. Same as the old `tea_use_mcp_enhancements: true`.                 |
 | `none` | No browser interaction. Pure AI generation from docs and code.                           |
 
-**Affects workflows:**
+**Affects skills:**
 
 - `test-design` exploratory mode (CLI snapshots for page discovery)
-- Automation red and expand modes: recording for selector verification, plus browser evidence for test repairs when enabled
+- `automate` red and expand modes: recording for selector verification, plus browser evidence for test repairs when enabled
 - `nfr-assess` browser-based evidence collection when the mode is `cli` or `auto`
 - `test-review` evidence collection (CLI for traces and screenshots)
 
@@ -300,13 +300,13 @@ tea_browser_automation = "auto" # "cli" | "mcp" | "none"
 
 ### tea_execution_mode
 
-Execution strategy for orchestration-capable TEA workflows.
+Execution strategy for orchestration-capable TEA skills.
 
 **Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"subagent"` | `"agent-team"` | `"sequential"`
 
 **Setup question:** `How should TEA run multi-step generation and evaluation?`
 
-Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `test-design`, and `trace`.
+Applies to `automate` (red and expand), `test-review`, `nfr-assess`, `framework` (framework and CI), `test-design`, and `trace`.
 `teach-me-testing` does not use this setting.
 
 | Mode         | Behavior                                                                                     |
@@ -316,9 +316,9 @@ Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `
 | `subagent`   | Prefer isolated subagent-style orchestration.                                                |
 | `sequential` | Force one-by-one execution. Most deterministic, typically slowest.                           |
 
-**Per-workflow effect:**
+**Per-skill effect:**
 
-| Workflow                   | Orchestrated unit                              | What the mode changes |
+| Skill                      | Orchestrated unit                              | What the mode changes |
 | -------------------------- | ---------------------------------------------- | --------------------- |
 | `automate` expand mode     | API + E2E/backend/mobile generation workers    | Dispatch style only   |
 | `automate` red mode (ATDD) | failing API + failing E2E workers              | Dispatch style only   |
@@ -381,13 +381,13 @@ Controls CI pipeline generation and framework selection.
 
 Detection checks mobile first: a React Native or Expo project carries `package.json` with react and would otherwise misdetect as `frontend`.
 
-**Affects workflows:**
+**Affects skills:**
 
-- `ci` stack-conditional pipeline stages (browser install, burn-in, device/emulator legs)
-- `framework` scaffold adapts to the stack type
-- `automate` selects which generation workers launch (`mobile` runs the API worker plus the mobile worker)
+- `framework` CI phase uses stack-conditional pipeline stages (browser install, burn-in, device/emulator legs)
+- `framework` framework phase adapts the scaffold to the stack type
+- `automate` expand mode selects which generation workers launch (`mobile` runs the API worker plus the mobile worker)
 - `test-design` scopes the planned test levels to the stack
-- `atdd` picks stack-appropriate failing-test patterns
+- `automate` red mode picks stack-appropriate failing-test patterns
 - `test-review` applies stack-appropriate review criteria
 
 ```toml
@@ -409,7 +409,7 @@ Detected or configured test framework preference.
 Controls which framework patterns TEA uses for code generation.
 With `"auto"`, TEA detects from project configuration files and manifests.
 
-**Affects workflows:** `framework` (scaffold generation), `ci` (test commands in the pipeline), `atdd` and `automate` (test code generation patterns).
+**Affects skills:** `framework` (scaffold generation and CI test commands) and `automate` (red and expand test generation patterns).
 
 ```toml
 test_framework = "playwright"
@@ -425,7 +425,7 @@ Execute generated tests during Create.
 
 **Setup question:** `Run generated tests during Create? true (recommended) or false to report generation without execution.`
 
-**Affects workflows:** `automate` in red and expand modes, including the ATDD entry.
+**Affects skills:** `automate` in red and expand modes, including the ATDD entry.
 
 Set `"false"` to generate tests without executing them, matching the generation-only behavior of version 2.0.0.
 Repair requires execution, so this also disables repairs for the run.
@@ -444,7 +444,7 @@ Repair confirmed defects in generated tests after execution while preserving acc
 
 **Setup question:** `Repair confirmed defects in generated tests after running them? true (recommended) or false to report failures without repairs. Acceptance criteria and real product defects are preserved.`
 
-**Affects workflows:** `automate` Create in red and expand modes, including the ATDD entry.
+**Affects skills:** `automate` Create in red and expand modes, including the ATDD entry.
 
 Requires `auto_validate` to be enabled. Set `"false"` to execute tests and report failures without repairs.
 
@@ -462,7 +462,7 @@ Maximum repair and rerun rounds after the initial execution, from 0 to 3.
 
 **Setup question:** `How many repair rounds may generated tests use? 0 to 3, with 3 recommended.`
 
-**Affects workflows:** `automate` Create and Resume in red and expand modes, including the ATDD entry.
+**Affects skills:** `automate` Create and Resume in red and expand modes, including the ATDD entry.
 
 Set `"0"` to execute tests once and report failures without repairs. Resume retains rounds already used.
 
@@ -480,7 +480,7 @@ Use available browser evidence tools to diagnose generated browser test failures
 
 **Setup question:** `Use available browser evidence tools to diagnose generated browser test failures? true (recommended) or false to use source, runner reports and traces.`
 
-**Affects workflows:** `automate` Create in red and expand modes, including the ATDD entry.
+**Affects skills:** `automate` Create in red and expand modes, including the ATDD entry.
 
 Test execution and repairs also work without MCP. Set `"false"` to diagnose failures from source, runner reports, and traces.
 
@@ -490,9 +490,11 @@ use_mcp_healing = "true"
 
 ---
 
-## Per-Workflow Settings
+<a id="per-workflow-settings"></a>
 
-Each setting below is read by one workflow and lives in its customization file under `[workflow]`.
+## Per-Skill Settings
+
+Each setting below is read by one skill and lives in its customization file under `[workflow]`.
 Put team values in `_bmad/custom/<skill>.toml` and personal values in `_bmad/custom/<skill>.user.toml`.
 The `bmad-customize` skill can write either file.
 
@@ -524,7 +526,7 @@ With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfil
 Any other value skips detection.
 Earlier releases stored this key with the module config; a value there is no longer read.
 
-**Affects workflows:** `framework` when CI is included, and `ci`.
+**Affects skills:** `framework` when CI is included, including the `ci` compatibility entry.
 
 An explicit `ci_platform` override in `_bmad/custom/bmad-testarch-framework.toml` or its `.user.toml` wins, including an explicit `"auto"`.
 Otherwise, existing `_bmad/custom/bmad-testarch-ci.toml` and `.user.toml` values supply the CI setting. The default remains `"auto"`.
@@ -540,7 +542,9 @@ ci_platform = "github-actions"
 
 ---
 
-## Automation Run and Heal
+<a id="automation-run-and-heal"></a>
+
+## Automate Run and Heal
 
 `bmad-testarch-automate` supports `red` and `expand` modes selected by your prompt. The existing ATDD command and `AT` menu code default to red; automate and `TA` default to expand in interactive and unattended runs. Unattended runs state the selected mode in the summary. Resume continues interrupted ATDD or automate progress. A new unattended run starts over by default.
 
@@ -644,19 +648,19 @@ To upgrade, run `bmad migrate` in the assistant chat.
 The v6 installer in bmad-method 6.12 already writes `[modules.tea]` into `_bmad/config.toml`.
 A project with that table can still carry v6 keys.
 If `[modules.tea]` is missing from every config layer, run `bmad setup tea` first, then run the migration.
-The migration keeps the nine current module settings, converts their values to strings, and moves non-default `ci_platform` and `tea_evaluations_folder` values into their workflow customization files.
-It removes both moved keys and all unread keys from every `[modules.tea]` layer, and offers to delete the classic installer's config, help file, and TEA agent or workflow copies under `_bmad/tea/`.
+The migration keeps the nine current module settings, converts their values to strings, and moves non-default `ci_platform` and `tea_evaluations_folder` values into their skill customization files.
+It removes both moved keys and all unread keys from every `[modules.tea]` layer, and offers to delete the classic installer's config, help file, and TEA agent or skill copies under `_bmad/tea/`.
 If answers survive only in the classic YAML while the TOML holds defaults, the migration proposes restoring them for your approval.
 A `_bmad/tea/config.yaml` that is left is not read by any skill.
 The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working.
 See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
 
-The `risk_threshold` key was never read by a workflow and is no longer asked at setup.
-`tea_evaluations_folder` and `ci_platform` moved to [Per-Workflow Settings](#per-workflow-settings).
+The `risk_threshold` key was never read by a skill and is no longer asked at setup.
+`tea_evaluations_folder` and `ci_platform` moved to [Per-Skill Settings](#per-skill-settings).
 
 Earlier releases also declared three FUTURE output-folder keys: `test_design_output`, `test_review_output`, and `trace_output`.
-No workflow ever read them, and they are removed.
-Every workflow now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
+No skill ever read them, and they are removed.
+Every skill now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
 
 ---
 
@@ -678,9 +682,9 @@ A file that exists once per project keeps a plain name: `test-design-architectur
 ### TEA Output Files
 
 Paths are relative to `{test_artifacts}` unless noted.
-Deliverables are declared in the workflow's `workflow.yaml`; resume progress files are declared in the steps or setup resources that write them.
+Deliverables are declared in the skill's `workflow.yaml`; resume progress files are declared in the steps or setup resources that write them.
 
-| Workflow             | Output                                                                                                          |
+| Skill                | Output                                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `test-design`        | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)        |
 | `test-design`        | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
@@ -692,7 +696,7 @@ Deliverables are declared in the workflow's `workflow.yaml`; resume progress fil
 | `framework`          | `framework/framework-setup-progress.md` (Create progress checkpoint)                                            |
 | `framework` CI phase | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
 | `framework` CI phase | `ci/ci-pipeline-progress.md` (Create progress checkpoint)                                                       |
-| `atdd`               | `atdd/atdd-checklist-{story_key}.md`                                                                            |
+| `automate` red mode  | `atdd/atdd-checklist-{story_key}.md`                                                                            |
 | `automate`           | `automate/automation-summary-{run_key}.md`                                                                      |
 | `test-review`        | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
 | `test-review`        | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
@@ -711,7 +715,7 @@ See [Live Verification Results](/docs/reference/live-verification-results.md) fo
 
 ### Run Keys
 
-Each workflow that runs once per scope resolves its `run_key` in its first step, before it writes anything, and records it as `runScope` and `runKey` in the output's frontmatter.
+Each skill that runs once per scope resolves its `run_key` in its first step, before it writes anything, and records it as `runScope` and `runKey` in the output's frontmatter.
 Later steps carry both forward unchanged.
 
 - `system`: the whole project or system, or no narrower scope could be resolved.
@@ -728,7 +732,7 @@ Later steps carry both forward unchanged.
 The slug rule applies to every `{slug}` and to an epic title with no number: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
 For example, release `v1.2.0` becomes `release-v1-2-0`, and the review target `tests/e2e/checkout.spec.ts` becomes `target-tests-e2e-checkout-spec-ts`.
 
-A workflow resolves the scope in this order:
+A skill resolves the scope in this order:
 
 1. The scope you name when you invoke it ("run trace for epic 16").
 2. The scope the loaded artifacts carry: a story file name, an epic document's metadata, heading, or filename, or trace's `gate_type` and its id.
@@ -736,7 +740,7 @@ A workflow resolves the scope in this order:
    A headless or autonomous run never asks: it uses `system`, or `target-{slug}` where a target applies, and says so in its output.
    The one exception is a `test-design` epic plan, which has no system-level fallback: a headless epic-level run whose epic stays ambiguous halts with a message naming the candidate epics.
 
-`atdd` runs once per story, so its checklist is named by `story_key` directly.
+Automate red mode (`atdd` in stored identifiers) runs once per story, so its checklist is named by `story_key` directly.
 `test-design` uses `system` or `epic-{epic_num}`.
 
 ### Re-running a Scope
@@ -764,13 +768,13 @@ Earlier TEA versions wrote everything flat under `{test_artifacts}` with fixed n
 Upgrading leaves those files where they are:
 
 - New runs never treat an old flat file as their own output, so they never rewrite it or append to it.
-- Workflows that read another workflow's output look in the producing workflow's folder first, then at the old root location, and name both.
+- Skills that read another skill's output look in the producing skill's folder first, then at the old root location, and name both.
   For example, `nfr-assess` looks for test-design documents in `test-design/` and then at the root of `{test_artifacts}`, and `automate` looks for ATDD checklists in `atdd/` and then at the root.
 - Resume migrates an old file only while it is still in progress.
   A completed flat file stays where it is.
   Resume first resolves the file's scope.
-  `atdd` recovers the story from the checklist's `storyKey`, a `test-design` checkpoint that already carries a `runKey` (`test-design-progress-{run_key}.md` at the root) keeps it, and for any other old file Resume asks which scope it covers.
-  It then writes the file into the workflow's folder under its scoped name with `runScope` and `runKey` added, deletes the old copy, and continues.
+  Automate red mode recovers the story from the checklist's `storyKey`, a `test-design` checkpoint that already carries a `runKey` (`test-design-progress-{run_key}.md` at the root) keeps it, and for any other old file Resume asks which scope it covers.
+  It then writes the file into the skill's folder under its scoped name with `runScope` and `runKey` added, deletes the old copy, and continues.
   It never writes over a scoped file that already exists for the same scope.
   Framework and CI checkpoints have no story, epic, or release scope to resolve, so they move their root checkpoint into their folder under the same rules.
 
@@ -795,35 +799,35 @@ CI jobs, dashboards, and scripts that read TEA's old flat paths need the new one
 | `test-design-progress.md`                                            | `test-design/test-design-progress-{run_key}.md` (after Resume migrates it) |
 | `ci-pipeline-progress.md`                                            | `ci/ci-pipeline-progress.md`                                               |
 | `framework-setup-progress.md`                                        | `framework/framework-setup-progress.md`                                    |
-| `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` | the same name inside the workflow's folder                                 |
+| `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` | the same name inside the skill's folder                                    |
 
 A job that gates one scope reads that scope's file, for example `trace/gate-decision-epic-16.json` or `trace/gate-decision-release-v1-2-0.json`.
 A job that wants the latest gate of any scope globs `trace/gate-decision-*.json` and picks the file with the newest `evaluated_at`.
 The `run_key` in each file name identifies the scope, and the `target` field inside gives the gate type and target id.
 
-The `tea-test-review` CLI is unaffected: it passes its own `--output` path (default `test-review.md`, resolved under `--project-root`, which defaults to the working directory) as `output_file_override`, which replaces the workflow's default path.
+The `tea-test-review` CLI is unaffected: it passes its own `--output` path (default `test-review.md`, resolved under `--project-root`, which defaults to the working directory) as `output_file_override`, which replaces the skill's default path.
 
 ### Rebinding `{test_artifacts}` From a Customization
 
-Before this layout existed, some projects got per-workflow folders with an `activation_steps_append` rule in `_bmad/custom/bmad-testarch-*.toml` that rebinds `{test_artifacts}` to a subfolder before the first step runs.
+Before this layout existed, some projects got per-skill folders with an `activation_steps_append` rule in `_bmad/custom/bmad-testarch-*.toml` that rebinds `{test_artifacts}` to a subfolder before the first step runs.
 Remove that rule when you upgrade.
-Each workflow already appends its own folder, so a rebound `{test_artifacts}` nests a second level, such as `test-artifacts/traceability/trace/`.
+Each skill already appends its own folder, so a rebound `{test_artifacts}` nests a second level, such as `test-artifacts/traceability/trace/`.
 
-`{test_artifacts}` also locates shared inputs and other workflows' outputs.
+`{test_artifacts}` also locates shared inputs and other skills' outputs.
 Rebinding it can hide trace's live results and waivers, test-design documents, ATDD checklists, and NFR audit reports.
 
 ### Validation Report History
 
 Validate mode preserves every report as a separate artifact.
-The artifact-producing workflows and their named modes write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` into their own folder under `{test_artifacts}`, next to the outputs they validate.
-The workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`; `nfr-assess` reports land in `nfr/`.
+The artifact-producing skills and their named modes write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` into their own folder under `{test_artifacts}`, next to the outputs they validate.
+The stored workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`; `nfr-assess` reports land in `nfr/`.
 
 `validation_scope` identifies what was checked, such as `story-1-2`, `epic-9`, `system`, or `pull-request-123`.
 `run_timestamp` is the UTC start time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format.
 Each report also records the exact project-relative paths of its validated artifacts.
 Concurrent validation runs save separate reports without overwriting earlier results.
 
-The `teach-me-testing` workflow validates its workflow definition.
+The `teach-me-testing` skill validates its skill definition.
 Its reports use `workflow-validation/teach-me-testing-validation-{run_timestamp}.md` under `{test_artifacts}` and follow the same no-overwrite rule.
 
 ---

@@ -178,7 +178,7 @@ exports.EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE = /^\d+\.\d+\.\d+$/.test(evalQuali
 const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fragments.js');
 exports.THIRTY_FIVE_ROWS_MAPPED = registryRows.length === 35 && Object.keys(fragmentManifest).length === registryRows.length;
 
-/** docs/how-to/workflows/run-atdd.md:8, "TEA currently emits these scaffolds with `test.skip()`." */
+/** docs/how-to/workflows/run-automate.md, red mode, "TEA currently emits these scaffolds with `test.skip()`." */
 const atddStepsRoot = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate', 'red', 'steps-c');
 const atddStepFiles = fs.existsSync(atddStepsRoot) ? fs.readdirSync(atddStepsRoot).filter((name) => name.endsWith('.md')) : [];
 if (atddStepFiles.length === 0) refuse(`${atddStepsRoot} has no step files`);
@@ -256,7 +256,7 @@ exports.SETUP_KEYS = SETUP_KEYS;
 const FUTURE_KEYS = SETUP_KEYS.filter((key) => keyIsUnread(key));
 exports.FUTURE_KEYS = FUTURE_KEYS;
 
-/** Every key setup asks is read somewhere in a workflow skill or the knowledge base. */
+/** Every key setup asks is read somewhere in a skill or the knowledge base. */
 exports.EVERY_SETUP_KEY_WIRED = FUTURE_KEYS.length === 0;
 
 /** configuration.md, "no workflow reads it yet": exactly one setup key that nothing reads. */

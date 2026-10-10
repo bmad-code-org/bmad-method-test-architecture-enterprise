@@ -138,18 +138,19 @@ export default defineConfig({
           collapsed: true,
           items: [
             {
-              label: 'Workflows',
+              label: 'Skills',
               items: [
-                { label: 'Teach Me Testing', slug: 'how-to/workflows/teach-me-testing' },
-                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
-                { label: 'Set Up Test Framework', slug: 'how-to/workflows/setup-test-framework' },
-                { label: 'Set Up CI Pipeline', slug: 'how-to/workflows/setup-ci' },
-                { label: 'ATDD', slug: 'how-to/workflows/run-atdd' },
-                { label: 'Automate', slug: 'how-to/workflows/run-automate' },
                 { label: 'Test Review', slug: 'how-to/workflows/run-test-review' },
-                { label: 'NFR Evidence Audit', slug: 'how-to/workflows/run-nfr-assess' },
-                { label: 'Trace', slug: 'how-to/workflows/run-trace' },
+                { label: 'Automate', slug: 'how-to/workflows/run-automate' },
+                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
+                { label: 'Framework', slug: 'how-to/workflows/setup-test-framework' },
+                { label: 'NFR', slug: 'how-to/workflows/run-nfr-assess' },
+                { label: 'Teach Me Testing', slug: 'how-to/workflows/teach-me-testing' },
               ],
+            },
+            {
+              label: 'Additional Skills',
+              items: [{ label: 'Trace', slug: 'how-to/workflows/run-trace' }],
             },
             {
               label: 'Evaluate',

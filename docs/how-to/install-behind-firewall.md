@@ -39,7 +39,7 @@ If your network blocks GitHub, use a local clone or internal Git mirror.
    bmad setup tea
    ```
 
-Setup and every TEA workflow run locally once the skills are installed.
+Setup and every TEA skill run locally once the skills are installed.
 Updates are the exception: `bmad setup` updates through `npx skills update`, which looks for new versions on GitHub.
 To update behind the firewall, pull the new version into your clone or mirror and run step 2 again.
 

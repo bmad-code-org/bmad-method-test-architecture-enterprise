@@ -838,25 +838,25 @@
       },
       {
         "file": "README.md",
-        "claim": "the canonical TEA workflow count",
+        "claim": "the canonical TEA skill count",
         "pattern": {
-          "match": "Its agent, Murat, uses ([a-z-]+) workflows"
+          "match": "Its agent, Murat, uses ([a-z-]+) skills"
         },
         "counts": ["canonicalWorkflowCount"]
       },
       {
         "file": "README.md",
-        "claim": "the preserved command entries and their canonical workflows",
+        "claim": "the preserved command entries and their canonical skills",
         "pattern": {
-          "match": "([A-Za-z-]+) commands start the ([a-z-]+) workflows"
+          "match": "([A-Za-z-]+) commands start the ([a-z-]+) skills"
         },
         "counts": ["workflowCommandCount", "canonicalWorkflowCount"]
       },
       {
         "file": "docs/index.md",
-        "claim": "the canonical TEA workflow count",
+        "claim": "the canonical TEA skill count",
         "pattern": {
-          "match": "Its ([a-z-]+) workflows cover"
+          "match": "Its ([a-z-]+) skills cover"
         },
         "counts": ["canonicalWorkflowCount"]
       }
@@ -2015,7 +2015,7 @@
           "match": "All\\ 35\\ registry\\ rows\\ are\\ mapped\\ to\\ knowledge\\ fragments"
         },
         {
-          "match": "Every\\ module\\ setup\\ key\\ is\\ read\\ by\\ a\\ workflow"
+          "match": "Every\\ module\\ setup\\ key\\ is\\ read\\ by\\ a\\ skill"
         },
         {
           "match": "The\\ lockfile\\ records\\ the\\ installed\\ version"
@@ -2066,7 +2066,7 @@
           "reason": "tools/validate-criteria-fragments.js's own row count and MANIFEST size"
         },
         {
-          "file": "docs/how-to/workflows/run-atdd.md",
+          "file": "docs/how-to/workflows/run-automate.md",
           "key": "emits these scaffolds with `test.skip()`",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
@@ -2082,7 +2082,7 @@
         },
         {
           "file": "docs/reference/configuration.md",
-          "key": "Every module setup key is read by a workflow",
+          "key": "Every module setup key is read by a skill",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVERY_SETUP_KEY_WIRED"

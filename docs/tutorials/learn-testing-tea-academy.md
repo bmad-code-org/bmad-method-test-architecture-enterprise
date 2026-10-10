@@ -15,13 +15,15 @@ For QA engineers, developers, leads, and managers learning testing.
 
 - TEA installed and set up: `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, then `bmad setup tea` in your assistant chat
 
-## Step 1: Start the Workflow
+<a id="step-1-start-the-workflow"></a>
+
+## Step 1: Start the Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-teach-me-testing`
 - **Codex:** `$bmad-teach-me-testing`
 - **Inside a `/bmad-tea` chat:** `TMT`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ## Step 2: Answer the Assessment
 
@@ -43,10 +45,10 @@ The session menu appears next, showing all 7 sessions with completion state and 
 
 Pick **Session 1: Quick Start** (30 minutes):
 
-1. **Teaching.** What TEA is, the TEA Lite 30-minute path, the workflow menu, and the 5 engagement models, with examples matched to the role you gave.
+1. **Teaching.** What TEA is, the TEA Lite 30-minute path, the skill menu, and the 5 engagement models, with examples matched to the role you gave.
 2. **Quiz.** Three questions. 70% or higher passes.
    If you score lower, choose `[R]` to review the content again or `[C]` to continue with the score recorded.
-3. **Session notes.** The workflow writes `session-01-notes.md` with the key takeaways.
+3. **Session notes.** The skill writes `session-01-notes.md` with the key takeaways.
 4. **Back to the menu.** Pick the next session or exit.
    You can jump to any session; they are independent.
 
@@ -64,7 +66,7 @@ _bmad-output/test-artifacts/
         └── session-01-notes.md
 ```
 
-Run the workflow again to see your saved progress and resume.
+Run the skill again to see your saved progress and resume.
 
 ## Next Steps
 

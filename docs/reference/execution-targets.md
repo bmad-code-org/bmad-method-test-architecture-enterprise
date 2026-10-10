@@ -39,7 +39,7 @@ Execution support begins with the Generation tier.
 ## Generation support
 
 TEA detects the stack, scaffolds the framework, and generates tests.
-It has no curated knowledge fragments for these frameworks, so generated tests follow the conventions named in the workflow step plus whatever conventions exist in your repository.
+It has no curated knowledge fragments for these frameworks, so generated tests follow the conventions named in the skill step plus whatever conventions exist in your repository.
 Review scoring is partial: most registry criteria are written against JavaScript and browser constructs.
 
 | Language      | Frameworks                     | Scaffolds                                                                                                                          | Coverage of the six |
@@ -88,7 +88,7 @@ Playwright emulates browser size and device settings; native device coverage use
 
 ## AI and agent evaluation
 
-The `evaluate` workflow builds evaluations for skills, agents, workflows, tool-use systems, AI features, and test-review mechanisms.
+The `evaluate` skill builds evaluations for skills, agents, workflows, tool-use systems, AI features, and test-review mechanisms.
 The `tea-evaluate` runtime runs CLI, MCP, and HTTP targets through a declared registry, scores the evidence, compares baselines, and runs CI tiers.
 This has its own evaluation contract and scoring policy.
 See [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) and the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-cli.md).
@@ -109,7 +109,7 @@ Review the generated install and test commands before merging, especially for a 
 
 ## Known gaps
 
-- **Backend framework patterns:** pytest, JUnit, Go test, xUnit, and RSpec use conventions in the workflow steps and your repository.
+- **Backend framework patterns:** pytest, JUnit, Go test, xUnit, and RSpec use conventions in the skill steps and your repository.
   The knowledge base has no dedicated fragment for those runners.
 - **Review criteria:** the 35-row registry includes four mobile-specific rows (`C7`, `H9`, `M8`, `L8`), two Playwright Utils rows (`M9`, `L9`), and one Pact.js Utils row (`M10`).
   The utility rows require the relevant flag and installed package.
@@ -123,4 +123,4 @@ Review the generated install and test commands before merging, especially for a 
 [Open an issue](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) with the stack, runner, and test file format.
 Review support needs criteria that can identify violations in that format.
 
-To extend TEA yourself, see [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) and [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
+To extend TEA yourself, see [Extend TEA with Custom Skills](/docs/how-to/customization/extend-tea-with-custom-workflows.md) and [Knowledge Base System](/docs/explanation/knowledge-base-system.md).

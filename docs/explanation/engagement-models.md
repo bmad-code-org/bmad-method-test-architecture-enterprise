@@ -8,13 +8,13 @@ description: The five ways to use TEA, from standalone to full BMad Method integ
 TEA is optional.
 There are five engagement models; pick one intentionally and change it later if it stops fitting.
 
-| #   | Model                       | BMad Method required | Workflows used | Best for                         |
-| --- | --------------------------- | -------------------- | -------------- | -------------------------------- |
-| 1   | No TEA                      | No                   | 0              | Teams whose existing suite works |
-| 2   | TEA Solo                    | No                   | 4-6            | Non-BMad projects                |
-| 3   | TEA Lite                    | No                   | 2-3            | Learning TEA                     |
-| 4   | TEA Integrated (Greenfield) | Yes                  | 8              | New projects                     |
-| 5   | TEA Integrated (Brownfield) | Yes                  | 8              | Existing codebases               |
+| #   | Model                       | BMad Method required | Skills used | Best for                         |
+| --- | --------------------------- | -------------------- | ----------- | -------------------------------- |
+| 1   | No TEA                      | No                   | 0           | Teams whose existing suite works |
+| 2   | TEA Solo                    | No                   | 4-6         | Non-BMad projects                |
+| 3   | TEA Lite                    | No                   | 2-3         | Learning TEA                     |
+| 4   | TEA Integrated (Greenfield) | Yes                  | 6           | New projects                     |
+| 5   | TEA Integrated (Brownfield) | Yes                  | 6           | Existing codebases               |
 
 The Enterprise track adds compliance, security, and audit steps to either Integrated model.
 See [Enterprise track deltas](#enterprise-track-deltas).
@@ -26,7 +26,7 @@ See [Learn Testing with TEA Academy](/docs/tutorials/learn-testing-tea-academy.m
 
 ## Model 1: No TEA
 
-Skip all TEA workflows and keep your existing testing approach.
+Skip all TEA skills and keep your existing testing approach.
 
 **Use when** the team has established practices, quality is already high, and TEA solves no problem you have.
 
@@ -34,14 +34,14 @@ Use your existing planning, review, and gate process.
 
 ## Model 2: TEA Solo
 
-Run TEA workflows standalone, without BMad Method planning.
+Run TEA skills standalone, without BMad Method planning.
 
 **Use when** the project is not on BMad Method, you want the quality operating model only, and you can bring your own requirements.
 
 **Typical sequence:**
 
 1. `test-design` (system or epic level)
-2. `atdd` and/or `automate`
+2. `automate` in red or expand mode
 3. `test-review` (optional)
 4. `trace` (coverage matrix, then gate decision)
 
@@ -50,7 +50,7 @@ Both work best after the stack and architecture are decided.
 
 **You bring:** coverage oracle inputs (requirements, specs, external system-of-record pointers, or an analyzable source tree), a development environment, and project context.
 
-**Example:** a Scrum team on Jira exports stories, runs `test-design` on the epic, runs `atdd` per story, implements, then runs `trace` for coverage.
+**Example:** a Scrum team on Jira exports stories, runs `test-design` on the epic, runs Automate red mode per story, implements, then runs `trace` for coverage.
 A consultancy uses the same sequence across clients on Scrum, Kanban, and ad-hoc processes to get one testing approach regardless of the client's methodology.
 
 ## Model 3: TEA Lite
@@ -59,7 +59,7 @@ Use `automate` to test features that already exist.
 
 **Use when** you are learning TEA, are adding tests to existing features, or want to follow the 30-minute tutorial.
 
-**Workflow:**
+**Sequence:**
 
 1. `framework` (set up test infrastructure)
 2. `test-design` (optional risk assessment)
@@ -82,7 +82,7 @@ Model 5 adapts this sequence to an existing codebase.
 | **Phase 3**: Solutioning   | `test-design` (system-level), then `framework` with framework and CI scope | Architect `architecture`, `create-epics-and-stories`, `implementation-readiness` | Testability review, NFR evidence plan, test scaffold, CI pipeline                  |
 | **Phase 4**: Sprint start  | -                                                                          | SM `sprint-planning`                                                             | Sprint status file with all epics and stories                                      |
 | **Phase 4**: Epic planning | `test-design` for THIS epic                                                | Review epic scope                                                                | `test-design/test-design-epic-N.md` with risk assessment and test plan             |
-| **Phase 4**: Story dev     | `atdd` before dev (optional), then `automate`                              | SM `create-story`, DEV implements                                                | Tests, story implementation                                                        |
+| **Phase 4**: Story dev     | `automate` red before dev (optional), then expand                          | SM `create-story`, DEV implements                                                | Tests, story implementation                                                        |
 | **Phase 4**: Story review  | `test-review` (optional), re-run `trace`                                   | Address recommendations, update code and tests                                   | Quality report, refreshed coverage matrix                                          |
 | **Release gate**           | `test-review` (optional), `nfr-assess` (optional), `trace` Phase 2         | Confirm Definition of Done, share release notes                                  | Quality audit, NFR evidence audit, `gate-decision-{run_key}.json`, release summary |
 
@@ -109,7 +109,7 @@ Same lifecycle as Model 4 against an existing codebase, on either the BMad Metho
 
 - **Documentation (prerequisite)**: `document-project` if the codebase is undocumented
 - **Phase 2**: `trace` to baseline existing coverage before planning
-- **Phase 3**: `framework` only if you are modernizing the test infrastructure; `ci` updates the existing pipeline
+- **Phase 3**: `framework` modernizes test infrastructure and updates CI; request either setup phase or both
 - **Phase 4**: `test-design` focuses on regression hotspots (bug-prone areas) and integration risk
 - **Story review**: `test-review` includes legacy tests
 - **Release gate**: include `nfr-assess` when NFR evidence exists and matters to release
@@ -125,7 +125,7 @@ flowchart TD
 
     BMad -->|No| NonBMad{Project Type?}
     NonBMad -->|Learning| Lite[TEA Lite<br/>Just automate<br/>30 min tutorial]
-    NonBMad -->|Serious Project| Solo[TEA Solo<br/>Standalone workflows<br/>Full capabilities]
+    NonBMad -->|Serious Project| Solo[TEA Solo<br/>Standalone skills<br/>Full capabilities]
 
     BMad -->|Yes| WantTEA{Want TEA?}
     WantTEA -->|No| None[No TEA<br/>Use existing approach<br/>Valid choice]
@@ -173,9 +173,9 @@ Start with TEA Lite while learning, or use Integrated if your team already follo
 
 Change the model as your project grows.
 
-**Expand gradually.** To expand TEA Lite into TEA Solo: keep `framework` and `automate`, then add `test-design` for planning, `atdd` for the red phase, `test-review` for audits, and `trace` for coverage.
+**Expand gradually.** To expand TEA Lite into TEA Solo: keep `framework` and `automate`, then add `test-design` for planning, Automate red mode before implementation, `test-review` for audits, and `trace` for coverage.
 To move from Solo to Integrated: install BMad Method, run the planning workflows (PRD, architecture), wire TEA into Phase 3 with system-level `test-design`, then follow the per-epic lifecycle and add the `trace` Phase 2 gate.
-Going the other way is immediate: export the BMad artifacts and keep running TEA workflows standalone.
+Going the other way is immediate: export the BMad artifacts and keep running TEA skills standalone.
 
 **Mix per feature.** Full Integrated for payment and auth, TEA Lite or No TEA for UI tweaks and bug fixes.
 Applying the whole model to a one-line change costs more than it protects.
@@ -186,20 +186,20 @@ The following scenarios illustrate adoption choices.
 
 **Startup, Lite to Integrated.** Month 1: three developers, no QA, manual testing only.
 They run `framework` for a Playwright setup and `automate` for a first batch of tests.
-Month 3: five developers with tests in place, so they add `test-design`, `atdd`, and `test-review`.
+Month 3: five developers with tests in place, so they add `test-design`, Automate red mode, and `test-review`.
 Month 6: eight developers and one QA, testing now business-critical, so they adopt full BMad Method with quality gates before each release and an NFR evidence audit for enterprise customers.
 
 **Enterprise brownfield.** A legacy banking application with a large flaky suite, new features landing, and SOC 2 in scope.
 Phase 2 runs `trace` to record a coverage baseline.
-Phase 3 runs `test-design` to identify regression hotspots, `framework` to modernize the harness, and `ci` to add selective testing.
-Phase 4, per epic: `test-design` covering regression plus new work, fix the worst flaky tests, `atdd` for new features, `automate` for coverage expansion, `test-review` to track quality, and `trace` compared against the baseline.
+Phase 3 runs `test-design` to identify regression hotspots, `framework` to modernize the harness and add selective testing through its CI phase.
+Phase 4, per epic: `test-design` covering regression plus new work, fix the worst flaky tests, Automate red mode for new features and expand mode for coverage expansion, `test-review` to track quality, and `trace` compared against the baseline.
 What the model produces for the audit is the traceability matrix and NFR evidence, whatever the coverage number lands at.
 
 ## Related
 
-- [TEA Overview](/docs/explanation/tea-overview.md): the eight workflows and the phase lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md): the eight skills and the phase lifecycle
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md): why TEA exists
 - [TEA Lite Quickstart](/docs/tutorials/tea-lite-quickstart.md): Model 3 end to end
 - [Using TEA with Existing Tests](/docs/how-to/brownfield/use-tea-with-existing-tests.md): Model 5 in practice
 - [Running TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md): the Enterprise track in practice
-- [TEA Command Reference](/docs/reference/commands.md): every workflow's inputs and outputs
+- [TEA Command Reference](/docs/reference/commands.md): every skill's inputs and outputs

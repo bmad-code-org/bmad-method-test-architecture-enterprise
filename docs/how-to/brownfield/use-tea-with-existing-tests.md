@@ -1,6 +1,6 @@
 ---
 title: 'Using TEA with Existing Tests (Brownfield)'
-description: Apply TEA workflows to legacy codebases with existing test suites
+description: Apply TEA skills to legacy codebases with existing test suites
 ---
 
 # Using TEA with Existing Tests (Brownfield)
@@ -30,7 +30,7 @@ Understand what you have before changing anything.
 
 #### Step 1: Baseline Coverage with `trace`
 
-Run the trace workflow and select Phase 1 (Requirements Traceability):
+Run the trace skill and select Phase 1 (Requirements Traceability):
 
 ```text
 /bmad-testarch-trace
@@ -68,7 +68,7 @@ Run the trace workflow and select Phase 1 (Requirements Traceability):
 
 #### Step 2: Quality Audit with `test-review`
 
-Run the test review workflow and answer `tests/` when it asks for scope:
+Run the test review skill and answer `tests/` when it asks for scope:
 
 ```text
 /bmad-testarch-test-review
@@ -211,11 +211,11 @@ See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright
 
 ### Phase 3: Incremental Improvement
 
-Apply TEA workflows to new work while improving legacy tests.
+Apply TEA skills to new work while improving legacy tests.
 
 #### For New Features (Greenfield Within Brownfield)
 
-**Use the full TEA workflow:**
+**Use the full TEA sequence:**
 
 1. `/bmad-testarch-test-design` (epic-level) to plan tests for the new feature
 2. `/bmad-testarch-atdd` to generate failing tests first
@@ -398,7 +398,7 @@ Measure the result with your suite and runner capacity.
 3. Run the full suite nightly only
 4. Optimize slow tests by removing hard waits and improving selectors
 
-**How `ci` helps:**
+**How Framework CI Setup Helps:**
 
 - Scaffolds CI configuration with parallel sharding examples
 - Provides selective testing script templates
@@ -420,7 +420,11 @@ Tests are so flaky they're ignored.
 3. Quarantine the rest
 4. Re-enable them as you fix them
 
-## Brownfield TEA Workflow
+<a id="brownfield-tea-workflow"></a>
+
+<a id="brownfield-tea-skill"></a>
+
+## Brownfield TEA Sequence
 
 ### Recommended Sequence
 
@@ -446,7 +450,7 @@ On Codex, use `$` for the skill prefix.
 
 ## Related Guides
 
-**Workflow Guides:**
+**Skill Guides:**
 
 - [How to Run Trace](/docs/how-to/workflows/run-trace.md): Baseline coverage analysis
 - [How to Run Test Review](/docs/how-to/workflows/run-test-review.md): Quality audit
@@ -466,7 +470,7 @@ On Codex, use `$` for the skill prefix.
 
 ## Reference
 
-- [TEA Command Reference](/docs/reference/commands.md): Workflow commands
+- [TEA Command Reference](/docs/reference/commands.md): Skill commands
 - [TEA Configuration](/docs/reference/configuration.md): Config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md): Testing patterns
 - [Glossary](/docs/glossary/index.md#test-architect-tea-concepts): TEA terminology

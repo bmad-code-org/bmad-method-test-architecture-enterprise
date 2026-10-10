@@ -13,7 +13,7 @@ The commands below use `.claude/skills/`; substitute your host's folder.
 
 ### TEA Skills Not Found After Installation
 
-**Symptom**: After `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, the TEA agent or workflows are not available.
+**Symptom**: After `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, the TEA agent or skills are not available.
 
 **Cause**: The install did not finish, it went to a different scope (project or global) than the one your host reads, or the host was started before the skills existed.
 
@@ -22,7 +22,7 @@ ls .claude/skills/ | grep -E 'bmad-tea|bmad-testarch|bmad-teach|bmod-tea'
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise   # re-run to add what is missing
 ```
 
-Expect `bmad-tea`, `bmad-teach-me-testing`, nine `bmad-testarch-*` workflows, and `bmod-tea`.
+Expect the `bmad-tea` agent, `bmod-tea` module, and ten direct capability commands: `bmad-teach-me-testing` and nine `bmad-testarch-*` entries. These commands map to eight canonical skills; ATDD belongs to Automate and CI belongs to Framework.
 Restart the host or start a fresh chat after installing.
 
 ### Install Hangs or Cannot Reach GitHub
@@ -62,9 +62,9 @@ Skills find the knowledge base at `../bmod-tea/knowledge` from their own folder,
 
 ### TEA Loads But Commands Don't Work
 
-**Symptom**: The TEA agent loads, but workflow codes (TF, TD, AT, and the rest) do not execute.
+**Symptom**: The TEA agent loads, but skill codes (TF, TD, AT, and the rest) do not execute.
 
-**Cause**: Workflow skills are missing from the install.
+**Cause**: Skills are missing from the install.
 
 ```bash
 ls .claude/skills/ | grep bmad-testarch   # all nine must be present
@@ -73,7 +73,7 @@ ls .claude/skills/ | grep bmad-testarch   # all nine must be present
 # bmad-testarch-ci         bmad-testarch-test-review bmad-testarch-trace
 ```
 
-Try invoking the workflow by its full skill name:
+Try invoking the skill by its full skill name:
 
 ```text
 /bmad-testarch-test-design    # Claude Code, Cursor, Windsurf
@@ -82,31 +82,37 @@ $bmad-testarch-test-design    # Codex
 
 If a skill is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
 
-### Custom TEA Workflow Does Not Appear
+<a id="custom-tea-workflow-does-not-appear"></a>
 
-**Symptom**: A custom workflow that used to appear in the `bmad-tea` menu is gone after an update.
+### Custom TEA Skill Does Not Appear
+
+**Symptom**: A custom skill that used to appear in the `bmad-tea` menu is gone after an update.
 
 **Cause**: TEA is a standalone module.
-Custom workflows are not merged into TEA core automatically.
+Custom skills are not merged into TEA core automatically.
 
-**Fix**: Install the workflow as its own skill, add it to the `bmad-tea` menu with an `[[agent.menu]]` entry in `_bmad/custom/bmad-tea.toml`, then start a fresh chat.
-See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
+**Fix**: Install the custom skill, add it to the `bmad-tea` menu with an `[[agent.menu]]` entry in `_bmad/custom/bmad-tea.toml`, then start a fresh chat.
+See [Extend TEA with Custom Skills](../how-to/customization/extend-tea-with-custom-workflows.md).
 
-## Workflow Execution Issues
+<a id="workflow-execution-issues"></a>
+
+## Skill Execution Issues
 
 ### GitHub Copilot Slash Command Fails with "No such file or directory"
 
-**Symptom**: A workflow launched through GitHub Copilot in VS Code fails with an error such as `can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory`.
+**Symptom**: A skill launched through GitHub Copilot in VS Code fails with an error such as `can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory`.
 
 **Cause**: GitHub Copilot runs skill commands from the workspace root.
 Paths relative to the installed skill under `.github/skills/` therefore fail to resolve.
 
-**Fix**: Shipped TEA workflows already anchor every path with `{skill-root}` or `{project-root}`.
-If you hit this in a workflow you wrote, apply the same anchoring; see [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
+**Fix**: Shipped TEA skills already anchor every path with `{skill-root}` or `{project-root}`.
+If you hit this in a skill you wrote, apply the same anchoring; see [Extend TEA with Custom Skills](../how-to/customization/extend-tea-with-custom-workflows.md).
 
-### Workflow Starts But Produces No Output
+<a id="workflow-starts-but-produces-no-output"></a>
 
-**Symptom**: The workflow runs but generates no test designs, reports, or tests.
+### Skill Starts But Produces No Output
+
+**Symptom**: The skill runs but generates no test designs, reports, or tests.
 
 **Cause**: The output directory is missing or not writable, `test_artifacts` is misconfigured, or the run stopped before its output step.
 
@@ -121,7 +127,7 @@ When a run stops early, the last step it names is where to look.
 
 ### Subagent Fails to Execute
 
-**Symptom**: The workflow reports a subagent failure, for example "API test generation subagent failed".
+**Symptom**: The skill reports a subagent failure, for example "API test generation subagent failed".
 
 **Cause**: A subagent step file is missing, `/tmp` is not writable, the subagent returned an unparseable payload, or the runtime cannot launch parallel workers.
 
@@ -148,7 +154,7 @@ tea_capability_probe = "true"
 
 ### Knowledge Fragments Not Loading
 
-**Symptom**: The workflow runs but never references knowledge base patterns such as `test-quality` or `network-first`.
+**Symptom**: The skill runs but never references knowledge base patterns such as `test-quality` or `network-first`.
 
 **Cause**: The `bmod-tea` skill is missing or not beside the other TEA skills, or `tea-index.csv` or fragment files are missing.
 
@@ -164,7 +170,7 @@ grep -r knowledgeIndex .claude/skills/bmad-testarch-test-design/steps-c/
 # knowledgeIndex: '{tea-knowledge}/tea-index.csv'
 ```
 
-`{tea-knowledge}` is `../bmod-tea/knowledge` from the workflow's own folder.
+`{tea-knowledge}` is `../bmod-tea/knowledge` from the skill's own folder.
 
 ## Configuration Issues
 
@@ -191,14 +197,14 @@ uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea   # th
 
 TEA keys belong under `[modules.tea]`.
 `_bmad/custom/config.user.toml` wins over `_bmad/custom/config.toml`, which wins over `_bmad/config.toml`.
-`evaluations_folder` and `ci_platform` are workflow keys. Put them under `[workflow]` in `_bmad/custom/bmad-testarch-evaluate.toml` and `_bmad/custom/bmad-testarch-framework.toml`, respectively. Existing CI platform overrides in `_bmad/custom/bmad-testarch-ci.toml` remain usable unless the framework customization explicitly overrides them.
+`evaluations_folder` and `ci_platform` are skill keys. Put them under `[workflow]` in `_bmad/custom/bmad-testarch-evaluate.toml` and `_bmad/custom/bmad-testarch-framework.toml`, respectively. Existing CI platform overrides in `_bmad/custom/bmad-testarch-ci.toml` remain usable unless the framework customization explicitly overrides them.
 A `_bmad/tea/config.yaml` from an earlier install is not read by any skill.
 
-If the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the workflow.
+If the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the skill.
 
 ### Playwright Utils Integration Not Working
 
-**Symptom**: Workflows produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
+**Symptom**: Skills produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
 
 ```bash
 grep tea_use_playwright_utils _bmad/config.toml       # should show: "true"
@@ -206,8 +212,8 @@ grep -ic playwright-utils .claude/skills/bmod-tea/knowledge/tea-index.csv   # 19
 npm ls @seontechnologies/playwright-utils              # the package must actually be installed
 ```
 
-Confirm the workflow integrates Playwright Utils at all.
-Framework (TF), Test Design (TD), ATDD (AT), Automate (TA), Test Review (RV), and CI all do.
+Confirm the skill integrates Playwright Utils at all.
+Framework (TF and CI), Test Design (TD), Automate (TA and AT, red and expand), and Test Review (RV) integrate Playwright Utils.
 Trace and NFR Evidence Audit do not.
 
 The same three checks apply to Pact.js Utils, which is also on by default: `grep tea_use_pactjs_utils _bmad/config.toml`, `npm ls @seontechnologies/pactjs-utils`, and `ls .claude/skills/bmod-tea/knowledge/pactjs-utils-mandate.md`.
@@ -294,12 +300,12 @@ import { test, expect } from '../support/merged-fixtures';
 
 ### Pact MCP Reports the Broker as Unreachable
 
-**Symptom**: A workflow says the broker was unreachable and fell back to provider source or an OpenAPI spec.
+**Symptom**: A skill says the broker was unreachable and fell back to provider source or an OpenAPI spec.
 
 **Cause**: `tea_pact_mcp` defaults to `"mcp"`, so TEA probes for the SmartBear MCP tools on any contract-testing step.
-Without a broker, that probe fails and the workflow degrades on purpose.
+Without a broker, that probe fails and the skill degrades on purpose.
 
-The workflow continues with provider source or an OpenAPI spec.
+The skill continues with provider source or an OpenAPI spec.
 To disable the probe, set this under `[modules.tea]`:
 
 ```toml
@@ -356,9 +362,11 @@ See [Configure Browser Automation: MCP Setup](/docs/how-to/customization/configu
 
 ## Performance Issues
 
-### Workflows Taking Too Long
+<a id="workflows-taking-too-long"></a>
 
-**Symptom**: A workflow runs for several minutes without completing.
+### Skills Taking Too Long
+
+**Symptom**: A skill runs for several minutes without completing.
 
 **Cause**: A large codebase to explore, many test files to review, or subagent overhead.
 

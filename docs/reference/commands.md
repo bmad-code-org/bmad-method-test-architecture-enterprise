@@ -1,64 +1,69 @@
 ---
 title: 'TEA Command Reference'
-description: Inputs, outputs, and invocation rules for the eight TEA workflows
+description: Inputs, outputs, and invocation rules for eight canonical TEA skills and ten commands
 ---
 
 # TEA Command Reference
 
-## Invoking a TEA Workflow
+<a id="invoking-a-tea-workflow"></a>
 
-Everything below assumes TEA is installed with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` and set up with `bmad setup tea`.
+## Invoking a TEA Skill
 
-The same workflow skill can be invoked in three ways:
+Eight canonical skills have ten direct capability commands, plus the TEA agent. Everything below assumes TEA is installed with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise` and set up with `bmad setup tea`.
 
-| Surface                         | Form                           | Example                   |
-| ------------------------------- | ------------------------------ | ------------------------- |
-| Claude Code / Cursor / Windsurf | `/bmad-testarch-<workflow>`    | `/bmad-testarch-automate` |
-| Codex                           | `$bmad-testarch-<workflow>`    | `$bmad-testarch-automate` |
-| Inside a `bmad-tea` chat        | the workflow's two-letter code | `TA`                      |
+The same skill can be invoked in three ways:
+
+| Surface                         | Form                     | Example                   |
+| ------------------------------- | ------------------------ | ------------------------- |
+| Claude Code / Cursor / Windsurf | `/bmad-testarch-<skill>` | `/bmad-testarch-automate` |
+| Codex                           | `$bmad-testarch-<skill>` | `$bmad-testarch-automate` |
+| Inside a `bmad-tea` chat        | the skill's menu code    | `TA`                      |
 
 Load the TEA agent with `/bmad-tea` or `$bmad-tea` to use its menu codes and `GATE` router.
-Each workflow also runs directly.
+Each canonical skill and compatibility command also runs directly.
 
 Framework and CI setup share one implementation in `bmad-testarch-framework`.
 Both `bmad-testarch-framework` and `bmad-testarch-ci` commands remain available, along with the `TF` and `CI` menu codes. The CI command starts CI setup with your existing customizations.
 
-Automation also shares one skill, `bmad-testarch-automate`, with `red` and `expand` modes. Your prompt selects the mode. `/bmad-testarch-atdd`, `$bmad-testarch-atdd`, and `AT` default to red; `/bmad-testarch-automate`, `$bmad-testarch-automate`, and `TA` default to expand. An unattended request with unclear mode uses its command default and states it in the summary.
+Automation also shares one skill, `bmad-testarch-automate`, with `red` and `expand` modes. Acceptance scaffolds before implementation select red; coverage for existing code selects expand. A single explicit mode overrides the command default. With no task mode signal, `/bmad-testarch-atdd`, `$bmad-testarch-atdd`, and `AT` default to red; `/bmad-testarch-automate`, `$bmad-testarch-automate`, and `TA` default to expand. Conflicting task mode signals prompt one mode question in an interactive run; an unattended run uses its entry default. Every entry-default fallback states the selected mode in the final summary.
 
-This page uses short workflow names.
+This page uses short skill names.
 Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
 
-| Workflow name      | Command                                                     | Menu code |
-| ------------------ | ----------------------------------------------------------- | --------- |
-| `teach-me-testing` | `/bmad-teach-me-testing` · `$bmad-teach-me-testing`         | `TMT`     |
-| `test-design`      | `/bmad-testarch-test-design` · `$bmad-testarch-test-design` | `TD`      |
-| `framework`        | `/bmad-testarch-framework` · `$bmad-testarch-framework`     | `TF`      |
-| `ci`               | `/bmad-testarch-ci` · `$bmad-testarch-ci`                   | `CI`      |
-| `atdd`             | `/bmad-testarch-atdd` · `$bmad-testarch-atdd`               | `AT`      |
-| `automate`         | `/bmad-testarch-automate` · `$bmad-testarch-automate`       | `TA`      |
-| `evaluate`         | `/bmad-testarch-evaluate` · `$bmad-testarch-evaluate`       | `EV`      |
-| `test-review`      | `/bmad-testarch-test-review` · `$bmad-testarch-test-review` | `RV`      |
-| `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
-| `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
+| Skill or alias     | Canonical owner    | Command                                                     | Menu code |
+| ------------------ | ------------------ | ----------------------------------------------------------- | --------- |
+| `test-review`      | `test-review`      | `/bmad-testarch-test-review` · `$bmad-testarch-test-review` | `RV`      |
+| `automate`         | `automate`         | `/bmad-testarch-automate` · `$bmad-testarch-automate`       | `TA`      |
+| `test-design`      | `test-design`      | `/bmad-testarch-test-design` · `$bmad-testarch-test-design` | `TD`      |
+| `framework`        | `framework`        | `/bmad-testarch-framework` · `$bmad-testarch-framework`     | `TF`      |
+| `nfr-assess`       | `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
+| `teach-me-testing` | `teach-me-testing` | `/bmad-teach-me-testing` · `$bmad-teach-me-testing`         | `TMT`     |
+| `trace`            | `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
+| `evaluate`         | `evaluate`         | `/bmad-testarch-evaluate` · `$bmad-testarch-evaluate`       | `EV`      |
+| `atdd`             | `automate`         | `/bmad-testarch-atdd` · `$bmad-testarch-atdd`               | `AT`      |
+| `ci`               | `framework`        | `/bmad-testarch-ci` · `$bmad-testarch-ci`                   | `CI`      |
 
-Workflow outputs use fixed folders under `{test_artifacts}`. Framework and CI setup save progress so you can resume an interrupted run. A file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`.
+Skill outputs use fixed folders under `{test_artifacts}`. Framework and CI setup save progress so you can resume an interrupted run. A file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`.
 The folders, the run key rules, and what happens to files from earlier TEA versions are in [Output Layout](/docs/reference/configuration.md#output-layout).
 
-To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization.
-See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
+To ship your own skill, package it as custom content and attach it to `bmad-tea` via customization.
+See [Extend TEA with Custom Skills](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Quick Index
 
-- [`teach-me-testing`](#teach-me-testing): Learn testing (TEA Academy)
+- [`test-review`](#test-review): Quality audit
+- [`automate`](#automate): Red acceptance scaffolds and expanded coverage
 - [`test-design`](#test-design): Risk-based test planning
 - [`framework`](#framework): Set up a test framework, CI, or both
-- [`ci`](#ci): Compatibility entry for CI setup
-- [`atdd`](#atdd): Acceptance TDD
-- [`automate`](#automate): Test automation
-- [`evaluate`](#evaluate): Scored behavioral evaluation
-- [`test-review`](#test-review): Quality audit
 - [`nfr-assess`](#nfr-assess): NFR Evidence Audit
+- [`teach-me-testing`](#teach-me-testing): Learn testing (TEA Academy)
+
+Additional skills and compatibility entries:
+
 - [`trace`](#trace): Coverage traceability
+- [`evaluate`](#evaluate): Scored behavioral evaluation
+- [`atdd`](#atdd): Automate red entry
+- [`ci`](#ci): Framework CI entry
 - [`GATE`](#gate-agent-menu-shortcut): Release gate routing helper (agent menu only)
 
 ---
@@ -89,7 +94,7 @@ Learn testing through seven sessions with quizzes and saved progress.
 2. Core Concepts (45 min): Risk-based testing, P0-P3, DoD
 3. Architecture (60 min): Fixtures, network-first, data factories
 4. Test Design (60 min): Risk assessment, coverage planning
-5. ATDD & Automate (60 min): TDD red-green, test generation
+5. ATDD & Automate (60 min): Red acceptance scaffolds, green-phase coverage expansion
 6. Quality & Trace (45 min): Test review, traceability, metrics
 7. Advanced Patterns (ongoing): 59 knowledge fragments exploration
 
@@ -135,7 +140,9 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 - `playwright.config.ts` or `cypress.config.ts`
 - `.env.example`, `.nvmrc`
 - Sample tests with best practices
-- When CI is included: the pipeline, quality gates, evaluation jobs, and CI documentation listed under [`ci`](#ci)
+- When CI is included: platform-specific pipeline (`.github/workflows/test.yml` by default), parallel execution, burn-in loops, and quality gates
+- An `evaluation-<tier>` job per tier named in an existing `ci/evaluation-ci-plan.json`, with an `if: always()` upload of the evaluation folder's `runs/`
+- `docs/ci.md` (pipeline guide) and `docs/ci-secrets-checklist.md` (required secrets)
 
 **How-To Guide:** [Setup Test Framework](/docs/how-to/workflows/setup-test-framework.md)
 
@@ -143,29 +150,9 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 
 ## ci
 
-Start the CI phase of `bmad-testarch-framework`, with selective testing and burn-in.
-The `/bmad-testarch-ci`, `$bmad-testarch-ci`, and `CI` invocations select CI scope and preserve CI-specific customizations.
-Request CI through the framework skill to get the same phase. If the project has no test framework, TEA offers to create it first.
+Compatibility entry for [Framework CI setup](#framework). `/bmad-testarch-ci`, `$bmad-testarch-ci`, and `CI` select CI scope in `bmad-testarch-framework`, preserving CI customizations and saved progress. Create, Resume, Validate, and Edit remain available.
 
-**Phase:** Phase 3 (Solutioning)
-
-**Frequency:** Once per project
-
-**Key Inputs:**
-
-- CI platform (GitHub Actions, GitLab CI, etc.)
-- Sharding strategy, burn-in preferences
-- Any `ci/evaluation-ci-plan.json` an evaluation holds, which the workflow detects and renders
-
-**Key Outputs:**
-
-- Platform-specific CI workflow (`.github/workflows/test.yml` by default, resolved per platform)
-- Parallel execution configuration
-- Burn-in loops for flakiness detection
-- An `evaluation-<tier>` job per tier an evaluation plan places a check on, with an `if: always()` upload of the evaluation folder's `runs/`
-- `docs/ci.md` (pipeline guide) and `docs/ci-secrets-checklist.md` (required secrets)
-
-**How-To Guide:** [Setup CI Pipeline](/docs/how-to/workflows/setup-ci.md)
+**How-To Guide:** [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#ci-setup)
 
 ---
 
@@ -203,7 +190,7 @@ Risk-based test planning with coverage strategy and NFR planning
   - Sprint 0 setup requirements
   - NFR test coverage and evidence plan
 - `{test_artifacts}/test-design/{project_name}-handoff.md`: System-level only.
-  Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
+  Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` skill
 
 **Epic-Level (ONE Document):**
 
@@ -224,27 +211,9 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 ## atdd
 
-Start the automation skill in red mode to generate acceptance test scaffolds before implementation. The existing ATDD command and `AT` menu code select this default mode. Your prompt can explicitly select either mode.
+Compatibility entry for [Automate red mode](#automate). `/bmad-testarch-atdd`, `$bmad-testarch-atdd`, and `AT` default to red. Your prompt can select red or expand. Existing ATDD customizations and interrupted progress keep working.
 
-Create verifies an isolated, activated copy with `tea-atdd-red-check` when the verifier is available and compatible with the project. When it is unavailable or incompatible, Create uses the project's native runner with its original configuration and environment. Verification confirms failures match the missing acceptance behavior and repairs test setup or generation errors for up to three rounds. The saved red scaffolds retain their deliberate skips for the implementation handoff. Validate reports findings; Edit checks its changes. Neither operation runs repair.
-
-**Phase:** Phase 4 (Implementation)
-
-**Frequency:** Per story (optional)
-
-**Key Inputs:**
-
-- Story with acceptance criteria, test design, test levels
-
-**Key Outputs:**
-
-- Red-phase test scaffolds (`tests/api/`, `tests/e2e/`) marked with `test.skip()`
-- Implementation checklist keyed to `story_key`: `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
-- Story metadata / handoff paths for downstream `dev-story` consumption
-
-**Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only; rare)
-
-**How-To Guide:** [Run ATDD](/docs/how-to/workflows/run-atdd.md)
+**How-To Guide:** [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode)
 
 ---
 
@@ -262,13 +231,17 @@ Create executes the generated tests and repairs selector, timing, data, network,
 
 - Feature description, test design, existing tests to avoid duplication
 
-**Key Outputs:**
+**Red Mode Inputs:** Story with acceptance criteria, test design, and test levels. TEA builds a criterion registry, preserves supplied `AC-<n>` IDs, and emits one leaf scaffold per criterion with one criterion ID in each title.
+
+**Red Mode Outputs:** Deliberately skipped acceptance scaffolds (`tests/api/`, `tests/e2e/`), `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`, and story metadata / handoff paths for downstream `dev-story` consumption. Create verifies an activated disposable copy with `tea-atdd-red-check` for compatible browserless loopback tests, or the native project runner with its original configuration and environment. It confirms the exact missing behavior and repairs generation or setup errors for up to three rounds. Saved scaffolds retain their skips for implementation.
+
+**Expand Mode Outputs:**
 
 - Tests for the selected scenarios (`tests/e2e/`, `tests/api/`, or the stack-appropriate folders)
 - Updated fixtures, README
 - `{test_artifacts}/automate/automation-summary-{run_key}.md` (declared `default_output_file`, carries the Definition of Done checklist)
 
-**Browser Automation (CLI/MCP):** Healing + Recording modes (fix tests, verify selectors)
+**Browser Automation (CLI/MCP):** Expand uses Healing + Recording modes (fix tests, verify selectors); red uses Recording for existing skeleton UI.
 
 **How-To Guide:** [Run Automate](/docs/how-to/workflows/run-automate.md)
 
@@ -285,7 +258,7 @@ Identify gaps and produce a CI plan.
 
 **Key Inputs:**
 
-- The target to evaluate, which the workflow inspects
+- The target to evaluate, which the skill inspects
 - Behavioral requirements you confirm
 - The `evaluations_folder` setting in `_bmad/custom/bmad-testarch-evaluate.toml` (default `evals`)
 
@@ -380,7 +353,7 @@ Coverage traceability + quality gate decision
 
 **Frequency:** Baseline, per epic refresh, release gate
 
-**Two-Phase Workflow:**
+**Two-Phase Skill:**
 
 ### Phase 1: Coverage Traceability
 
@@ -413,7 +386,7 @@ The decision runs only when `allow_gate` is true and collection status is COLLEC
 ## GATE (Agent Menu Shortcut)
 
 Release gate routing helper.
-It is not a standalone workflow and produces no artifact of its own.
+It routes to skills and produces no artifact of its own.
 
 **Trigger:** Type `GATE` in chat after loading the TEA agent (`bmad-tea`).
 
@@ -423,7 +396,7 @@ It is not a standalone workflow and produces no artifact of its own.
 2. (Optional) `nfr-assess` for an NFR Evidence Audit
 3. `trace` Phase 2 for the derived PASS/CONCERNS/FAIL gate decision
 
-The agent asks which evidence is available and invokes each needed workflow in sequence.
+The agent asks which evidence is available and invokes each needed skill in sequence.
 
 Use `GATE` as a starting point when preparing a release.
 
@@ -435,9 +408,9 @@ Use `GATE` as a starting point when preparing a release.
 
 - [Learn Testing with TEA Academy](/docs/how-to/workflows/teach-me-testing.md)
 - [Setup Test Framework](/docs/how-to/workflows/setup-test-framework.md)
-- [Setup CI Pipeline](/docs/how-to/workflows/setup-ci.md)
+- [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#ci-setup)
 - [Run Test Design](/docs/how-to/workflows/run-test-design.md)
-- [Run ATDD](/docs/how-to/workflows/run-atdd.md)
+- [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode)
 - [Run Automate](/docs/how-to/workflows/run-automate.md)
 - [Run Test Review](/docs/how-to/workflows/run-test-review.md)
 - [Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md)
@@ -460,7 +433,7 @@ Use `GATE` as a starting point when preparing a release.
 **Explanation:**
 
 - [TEA Overview](/docs/explanation/tea-overview.md): Complete TEA lifecycle
-- [Engagement Models](/docs/explanation/engagement-models.md): When to use which workflows
+- [Engagement Models](/docs/explanation/engagement-models.md): When to use which skills
 
 **Reference:**
 

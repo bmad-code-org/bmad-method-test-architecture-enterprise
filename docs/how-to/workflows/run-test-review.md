@@ -5,7 +5,7 @@ description: Audit test quality using TEA's comprehensive knowledge base and get
 
 # How to Run Test Review with TEA
 
-Use TEA's `test-review` workflow to audit test quality with objective scoring and actionable feedback. TEA reviews tests against its knowledge base of best practices.
+Use TEA's `test-review` skill to audit test quality with objective scoring and actionable feedback. TEA reviews tests against its knowledge base of best practices.
 
 Coverage scoring is intentionally excluded from `test-review`. Use `trace` for requirements coverage analysis and coverage gate decisions.
 
@@ -26,13 +26,15 @@ Coverage scoring is intentionally excluded from `test-review`. Use `trace` for r
 
 ## Steps
 
-### 1. Run the Test Review Workflow
+<a id="1-run-the-test-review-workflow"></a>
+
+### 1. Run the Test Review Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-review`
 - **Codex:** `$bmad-testarch-test-review`
 - **Inside a `/bmad-tea` chat:** `RV`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### 2. Specify Review Scope
 
@@ -438,7 +440,7 @@ Make test review part of release checklist:
 Always review AI-generated tests:
 
 ```text
-1. Run atdd or automate
+1. Run Automate in red or expand mode
 2. Run test-review on generated tests
 3. Fix critical issues
 4. Commit tests
@@ -589,7 +591,7 @@ Don't try to fix everything at once.
 
 ## Related Guides
 
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) - Generate tests to review
+- [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode) - Generate tests to review
 - [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Expand and improve tests before review
 - [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Coverage analysis and gate decisions
 

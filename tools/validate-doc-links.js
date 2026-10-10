@@ -19,6 +19,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const MarkdownIt = require('markdown-it');
+
+const markdown = new MarkdownIt({ html: true });
 
 const DOCS_ROOT = path.resolve(__dirname, '../docs');
 const DRY_RUN = !process.argv.includes('--write');
@@ -98,6 +101,16 @@ function extractAnchors(content) {
       .replaceAll(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .trim();
     anchors.add(headingToAnchor(headingText));
+  }
+
+  // Render Markdown so code samples cannot manufacture compatibility anchors.
+  const rendered = markdown.render(content).replaceAll(/<!--[\s\S]*?-->/g, '');
+  for (const explicit of rendered.matchAll(/<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi)) {
+    for (const attribute of explicit[1].matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+      if (attribute[1].toLowerCase() === 'id') {
+        anchors.add(attribute[2] ?? attribute[3] ?? attribute[4]);
+      }
+    }
   }
 
   return anchors;

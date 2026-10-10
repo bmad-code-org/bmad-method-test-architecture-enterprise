@@ -22,11 +22,13 @@ This guide covers NFR planning, NFR Evidence Audit, audit trails, and evidence c
 - Compliance requirements documented
 - Stakeholders identified (who approves gates)
 
-Every command below is a TEA workflow.
+Every command below is a TEA skill.
 On Codex, swap the leading `/` for `$`.
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
-## Enterprise-Specific TEA Workflows
+<a id="enterprise-specific-tea-workflows"></a>
+
+## Enterprise-Specific TEA Skills
 
 ### NFR Evidence Audit (`/bmad-testarch-nfr`)
 
@@ -394,7 +396,7 @@ TEA organizes test evidence for independent review.
 
 ## Related Guides
 
-**Workflow Guides:**
+**Skill Guides:**
 
 - [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md): Deep dive on evidence auditing
 - [How to Run Trace](/docs/how-to/workflows/run-trace.md): Gate decisions with evidence
@@ -418,7 +420,7 @@ TEA organizes test evidence for independent review.
 
 ## Reference
 
-- [TEA Command Reference](/docs/reference/commands.md): Workflow commands
+- [TEA Command Reference](/docs/reference/commands.md): Skill commands
 - [TEA Configuration](/docs/reference/configuration.md): Enterprise config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md): Testing patterns
 - [Glossary](/docs/glossary/index.md#test-architect-tea-concepts): TEA terminology

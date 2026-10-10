@@ -3,7 +3,7 @@
 [Documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/) · [Getting started](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) · [Contributing](./CONTRIBUTING.md) · [MIT license](./LICENSE)
 
 TEA is a BMad module for test planning, automation, evaluation, and release decisions.
-Its agent, Murat, uses eight workflows and a shared testing knowledge base to turn requirements and risks into tests and evidence.
+Its agent, Murat, uses eight skills and a shared testing knowledge base to turn requirements and risks into tests and evidence.
 You can use TEA on its own or alongside BMad Method.
 
 TEA helps you:
@@ -46,27 +46,30 @@ To install a tagged release, replace `<version>` with the release number:
 npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills
 ```
 
-## Start with one workflow
+<a id="start-with-one-workflow"></a>
 
-Ten commands start the eight workflows: Framework includes CI setup; Automation includes red and expand modes.
+## Start with one skill
+
+Ten commands start the eight skills: Framework includes CI setup; Automate includes red and expand modes.
 
 In Claude Code, Cursor, and Windsurf, type `/bmad-testarch-test-design` in chat.
 In Codex, type `$bmad-testarch-test-design`.
 You can also load `/bmad-tea` or `$bmad-tea` and choose a menu code.
-Each workflow can run directly in a fresh session.
+Each skill can run directly in a fresh session.
 
-| Workflow                                                                                                                           | Command                      | Menu | Use it to                                              |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---- | ------------------------------------------------------ |
-| [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/)    | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                   |
-| [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)          | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence                 |
-| [Framework Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/) | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                   |
-| [CI Setup](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-ci/)                    | `/bmad-testarch-ci`          | CI   | Connect tests and quality checks to CI                 |
-| [Automation: red (ATDD)](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/)      | `/bmad-testarch-atdd`        | AT   | Write acceptance scaffolds before implementation       |
-| [Automation: expand](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)      | `/bmad-testarch-automate`    | TA   | Add coverage to implemented features                   |
-| [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)          | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                  |
-| [NFR Evidence Audit](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)    | `/bmad-testarch-nfr`         | NR   | Assess performance, security, and reliability evidence |
-| [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/)          | `/bmad-testarch-evaluate`    | EV   | Build and run a behavioral evaluation                  |
-| [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/)                      | `/bmad-testarch-trace`       | TR   | Map requirements to tests and decide a release gate    |
+| Skill                                                                                                                           | Command                      | Menu | Use it to                                            |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---- | ---------------------------------------------------- |
+| [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)       | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                |
+| [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)             | `/bmad-testarch-automate`    | TA   | Generate red acceptance scaffolds or expand coverage |
+| [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)       | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence               |
+| [Framework](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/)    | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                 |
+| [NFR](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)                | `/bmad-testarch-nfr`         | NR   | Audit implemented NFR evidence                       |
+| [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/) | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                 |
+
+Additional skills:
+
+- [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/): `/bmad-testarch-trace`, menu `TR`. Map requirements to tests and decide a release gate.
+- [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/): `/bmad-testarch-evaluate`, menu `EV`. Build and run a behavioral evaluation.
 
 Framework and CI setup share one skill, `bmad-testarch-framework`.
 Ask for framework only, CI only, or both; TEA infers the scope from your prompt and asks "Do you want CI too?" once when CI scope is unclear in an interactive session. An unattended request with unclear scope runs framework setup only and states that CI was excluded.
@@ -82,15 +85,15 @@ Choose a starting path:
 
 - [TEA Lite](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/) for an existing project that needs more test coverage.
 - [TEA Academy](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/learn-testing-tea-academy/) to learn testing.
-- [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/) for the lifecycle and workflow order.
+- [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/) for the lifecycle and skill order.
 - [Evaluate Your First Skill](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/) for a runnable evaluation tutorial.
 
 ## How it works
 
-Each workflow loads one step file at a time.
+Each skill loads one step file at a time.
 The steps define the task, the evidence to collect, and when to stop.
 They load the knowledge fragments needed for that task from `skills/bmod-tea/knowledge/tea-index.csv`.
-Workflows can delegate independent tasks when the assistant supports workers; execution mode is configurable.
+Skills can delegate independent tasks when the assistant supports workers; execution mode is configurable.
 
 Review findings use fixed criteria and severity rules.
 Trace applies coverage thresholds and evidence checks to the release decision.
@@ -110,7 +113,7 @@ It requires Node.js 22.20.0 or later:
 npm install --save-dev bmad-method-test-architecture-enterprise
 ```
 
-- [`tea-test-review`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/) runs the review workflow against changed tests and returns a gate verdict.
+- [`tea-test-review`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/) runs the review skill against changed tests and returns a gate verdict.
 - [`tea-evaluate`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-evaluate-cli/) checks, runs, scores, and compares behavioral evaluations.
 
 For `tea-evaluate`, install `eval-quality` alongside TEA in the evaluations folder:
@@ -120,7 +123,7 @@ npm install --prefix evals bmad-method-test-architecture-enterprise eval-quality
 npm exec --prefix evals -- tea-evaluate --help
 ```
 
-The npm package includes the workflow skills used by the tools.
+The npm package includes the skills used by the tools.
 See the [CI examples](./cli/examples/README.md) for test-review integration.
 
 ## Contributing

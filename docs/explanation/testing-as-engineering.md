@@ -1,6 +1,6 @@
 ---
 title: 'AI-Generated Testing: Why Most Approaches Fail'
-description: Why prompt-driven test generation produces unreliable suites, and how standardized utilities, structured workflows, and deterministic interfaces fix it (worked through a JavaScript stack)
+description: Why prompt-driven test generation produces unreliable suites, and how standardized utilities, structured skills, and deterministic interfaces fix it (worked through a JavaScript stack)
 ---
 
 AI-generated tests need planning, execution, and review.
@@ -23,7 +23,7 @@ Common failures include:
 
 ## The Solution: A Three-Part Stack
 
-TEA combines shared utilities, testing workflows, and live verification tools.
+TEA combines shared utilities, testing skills, and live verification tools.
 
 ### 1. Utilities: Playwright-Utils + Pact.js Utils
 
@@ -41,9 +41,9 @@ TEA combines shared utilities, testing workflows, and live verification tools.
 
 ### 2. Process: TEA (Test Architect)
 
-Eight workflows cover learning, planning, test generation, evaluation, and release gates.
+Eight skills cover learning, planning, test generation, evaluation, and release gates.
 
-| Workflow           | Purpose                                                                            |
+| Skill              | Purpose                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------- |
 | `teach-me-testing` | Guided testing education                                                           |
 | `test-design`      | Risk-based planning plus NFR planning                                              |
@@ -54,13 +54,13 @@ Eight workflows cover learning, planning, test generation, evaluation, and relea
 | `nfr-assess`       | NFR Evidence Audit                                                                 |
 | `trace`            | Coverage traceability and gate decisions                                           |
 
-All ten command entries remain available across these eight workflows, including `ci` for CI setup and `atdd` for automation red mode. See the [Command Reference](/docs/reference/commands.md) for commands and menu codes.
+All ten command entries remain available across these eight skills, including `ci` for CI setup and `atdd` for automation red mode. See the [Command Reference](/docs/reference/commands.md) for commands and menu codes.
 
 ### 3. Automation Interfaces: Playwright CLI + MCPs
 
 Automation interfaces enable real-time verification during test generation and review across browser and contract tracks:
 
-- **Playwright CLI**: token-efficient browser automation for stateless execution and fast checks in workflows.
+- **Playwright CLI**: token-efficient browser automation for stateless execution and fast checks in skills.
 - **Playwright MCP**: stateful browser automation with richer context for interactive exploration and DOM validation.
 - **Pact MCP**: broker-aware contract automation for verification matrix queries, provider-state discovery, compatibility analysis, and `can-i-deploy` deployment decisions.
 
@@ -79,7 +79,7 @@ The three components form a quality pipeline:
 | Stage        | Component                                  | Action                                                       |
 | ------------ | ------------------------------------------ | ------------------------------------------------------------ |
 | Standards    | Playwright-Utils + pactjs-utils            | Provides production-ready patterns for UI and contract tests |
-| Process      | TEA Workflows                              | Enforces systematic test planning and review                 |
+| Process      | TEA Skills                                 | Enforces systematic test planning and review                 |
 | Verification | Playwright CLI + Playwright MCP + Pact MCP | Validates tests and contracts against live systems           |
 
 ## Why This Matters
@@ -91,7 +91,7 @@ Traditional AI testing approaches fail because they:
 - Leave generated tests unexecuted
 - Skip quality review
 
-The workflow and tools address these gaps:
+The skill and tools address these gaps:
 
 | Gap             | Solution                                                                 |
 | --------------- | ------------------------------------------------------------------------ |
@@ -102,12 +102,12 @@ The workflow and tools address these gaps:
 
 This approach is sometimes called _context engineering_: loading domain standards into the model's context before it starts work.
 TEA's `tea-index.csv` manifest loads relevant knowledge fragments so the AI doesn't relearn testing patterns each session.
-See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how the manifest selects fragments per workflow.
+See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how the manifest selects fragments per skill.
 
 ## Related
 
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md): the manifest that loads the standards
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md): the Definition of Done those standards encode
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md): the determinism rule in detail
-- [TEA Overview](/docs/explanation/tea-overview.md): the eight workflows in the lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md): the eight skills in the lifecycle
 - [Engagement Models](/docs/explanation/engagement-models.md): the five ways to adopt TEA

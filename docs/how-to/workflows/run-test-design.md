@@ -1,11 +1,11 @@
 ---
 title: 'How to Run Test Design with TEA'
-description: How to create test plans using TEA's test-design workflow
+description: How to create test plans using TEA's test-design skill
 ---
 
 # How to Run Test Design with TEA
 
-Use TEA's `test-design` workflow to plan tests, rank risks, and define NFR evidence requirements.
+Use TEA's `test-design` skill to plan tests, rank risks, and define NFR evidence requirements.
 
 ## When to Use This
 
@@ -30,13 +30,15 @@ Use TEA's `test-design` workflow to plan tests, rank risks, and define NFR evide
 
 ## Steps
 
-### 1. Run the Test Design Workflow
+<a id="1-run-the-test-design-workflow"></a>
+
+### 1. Run the Test Design Skill
 
 - **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design`
 - **Codex:** `$bmad-testarch-test-design`
 - **Inside a `/bmad-tea` chat:** `TD`
 
-Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### 2. Specify the Mode
 
@@ -72,7 +74,7 @@ Each run saves its progress to its own checkpoint under `{test_artifacts}/test-d
 | System-level | `test-design-progress-system.md`   |
 | Epic-level   | `test-design-progress-epic-{N}.md` |
 
-The workflow resolves that name in its first step, from the mode and the epic you named.
+The skill resolves that name in its first step, from the mode and the epic you named.
 Interrupting a run for one epic and then running test design for another epic leaves the first epic's checkpoint untouched, so you can come back to it.
 
 Pick **[R] Resume** to continue.
@@ -91,7 +93,7 @@ It starts an interrupted run of the same scope over, and an epic-level run whose
 
 Every test design document lands in `{test_artifacts}/test-design/`.
 The system-level documents and the handoff exist once per project; each epic gets its own document.
-See [Output Layout](/docs/reference/configuration.md#output-layout) for how every TEA workflow names and places its files.
+See [Output Layout](/docs/reference/configuration.md#output-layout) for how every TEA skill names and places its files.
 
 **System-level outputs:**
 
@@ -141,7 +143,7 @@ Cross-reference shared requirements:
 - **Shift NFRs left**: Define thresholds and planned evidence before implementation
 - **Run epic-level at the start of each epic**: Targeted test planning
 - **Update if ADRs change**: Keep test design aligned
-- **Use output to guide other workflows**: Feeds into `atdd` and `automate`
+- **Use output to guide other skills**: Feeds into Automate red and expand modes
 - **Use `nfr-assess` later**: Audit evidence after tests, scans, metrics, or logs exist
 - **Architecture teams review Architecture doc**: Focus on blockers and mitigation plans
 - **QA teams use QA doc as implementation guide**: Follow test scenarios and Sprint 0 checklist

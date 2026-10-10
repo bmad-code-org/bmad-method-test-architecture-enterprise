@@ -6,7 +6,7 @@ description: Complete index of TEA's 59 knowledge fragments for context engineer
 # TEA Knowledge Base Index
 
 TEA's knowledge base has 59 fragments of testing patterns and standards.
-Workflow steps use `tea-index.csv` to find the fragments their loading rules select.
+Skill steps use `tea-index.csv` to find the fragments their loading rules select.
 See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how this is wired.
 
 This page indexes every manifest row by its `id` and links to the fragment file.
@@ -18,14 +18,14 @@ The `Tier` column records the manifest's priority label; step-specific loading r
 
 Core patterns for test infrastructure and fixture composition.
 
-| Fragment                                                                                                                                                      | Tier     | Description                                                          | Key Topics                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- | -------------------------------------- |
-| [fixture-architecture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/fixture-architecture.md) | core     | Pure function → Fixture → mergeTests composition with auto-cleanup   | Testability, composition, reusability  |
-| [network-first](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/network-first.md)               | core     | Intercept-before-navigate workflow, HAR capture, deterministic waits | Flakiness prevention, network patterns |
-| [playwright-config](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/playwright-config.md)       | extended | Environment switching, timeout standards, artifact outputs           | Configuration, environments, CI        |
-| [fixtures-composition](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/fixtures-composition.md) | extended | mergeTests composition patterns for combining utilities              | Fixture merging, utility composition   |
+| Fragment                                                                                                                                                      | Tier     | Description                                                         | Key Topics                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- | -------------------------------------- |
+| [fixture-architecture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/fixture-architecture.md) | core     | Pure function → Fixture → mergeTests composition with auto-cleanup  | Testability, composition, reusability  |
+| [network-first](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/network-first.md)               | core     | Intercept-before-navigate pattern, HAR capture, deterministic waits | Flakiness prevention, network patterns |
+| [playwright-config](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/playwright-config.md)       | extended | Environment switching, timeout standards, artifact outputs          | Configuration, environments, CI        |
+| [fixtures-composition](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/fixtures-composition.md) | extended | mergeTests composition patterns for combining utilities             | Fixture merging, utility composition   |
 
-**Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`
+**Used in:** `framework`, `test-design`, `automate` red mode, `automate` expand mode, `test-review`
 
 ---
 
@@ -39,7 +39,7 @@ Patterns for test data generation, authentication, and setup.
 | [auth-session](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/auth-session.md)     | core        | Token persistence, multi-user, API/browser authentication    | Auth patterns, session management |
 | [email-auth](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/email-auth.md)         | specialized | Magic link extraction, state preservation, negative flows    | Authentication, email testing     |
 
-**Used in:** `framework`, `atdd`, `automate`, `test-review`
+**Used in:** `framework`, `automate` red mode, `automate` expand mode, `test-review`
 
 ---
 
@@ -54,7 +54,7 @@ Network interception, error handling, and reliability patterns.
 | [error-handling](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/error-handling.md)                 | extended | Scoped exception handling, retry validation, telemetry logging | Error patterns, resilience      |
 | [network-error-monitor](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/network-error-monitor.md)   | extended | HTTP 4xx/5xx detection for UI tests                            | Error detection, monitoring     |
 
-**Used in:** `atdd`, `automate`, `test-review`
+**Used in:** `automate` red mode, `automate` expand mode, `test-review`
 
 ---
 
@@ -68,7 +68,7 @@ CI/CD patterns, burn-in testing, and selective test execution.
 | [burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/burn-in.md)                     | extended | Smart test selection, git diff for CI optimization | Test selection, performance  |
 | [selective-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/selective-testing.md) | extended | Tag/grep usage, spec filters, diff-based runs      | Test filtering, optimization |
 
-**Used in:** `ci`, `test-review`
+**Used in:** `framework` CI phase, `test-review`
 
 ---
 
@@ -86,7 +86,7 @@ Test quality standards, test level selection, TDD patterns, and the generation-s
 | [evidence-integrity](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/evidence-integrity.md)       | core     | Assertions that can detect a failure, three-state diagnostics, probes that use the real client, outcome checks, verified framework behavior, and environment differences | Falsifiability, hollow green, diagnostics |
 | [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/component-tdd.md)                 | extended | Red→green→refactor workflow, provider isolation                                                                                                                          | TDD, component testing                    |
 
-**Used in:** `test-design`, `atdd`, `automate`, `test-review`, `trace`
+**Used in:** `test-design`, `automate` red mode, `automate` expand mode, `test-review`, `trace`
 
 `confidence-gate` covers selectors, endpoints, risk classification, fixtures, schemas, and data factories.
 A generation step records values it cannot establish from the repository as unknown.
@@ -121,7 +121,7 @@ Selector resilience, race condition debugging, and visual debugging.
 | [timing-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/timing-debugging.md)       | extended    | Race condition identification and deterministic fixes | Race conditions, timing issues     |
 | [visual-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/visual-debugging.md)       | specialized | Trace viewer usage, artifact expectations             | Debugging, trace viewer, artifacts |
 
-**Used in:** `atdd`, `automate`, `test-review`
+**Used in:** `automate` red mode, `automate` expand mode, `test-review`
 
 ---
 
@@ -134,7 +134,7 @@ Feature flag testing and pure API testing patterns.
 | [feature-flags](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/feature-flags.md)               | specialized | Enum management, targeting helpers, cleanup, checklists | Feature flags, toggles       |
 | [api-testing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/api-testing-patterns.md) | specialized | Pure API patterns without browser                       | API testing, backend testing |
 
-**Used in:** `test-design`, `atdd`, `automate`
+**Used in:** `test-design`, `automate` red mode, `automate` expand mode
 
 ---
 
@@ -156,7 +156,7 @@ Contract testing fundamentals plus Pact.js Utils, Pact MCP, and broker operation
 | [pact-broker-webhooks](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/pact-broker-webhooks.md)                     | specialized | PactFlow dispatch auth, exact provider target checkout, staleness monitoring, and PAT rotation                                                                            | pact broker, webhooks, CI operations, security  |
 | [pact-consumer-di](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/pact-consumer-di.md)                             | extended    | Dependency-injection pattern for Pact consumer tests using real client code                                                                                               | pact, consumer, DI, contract accuracy           |
 
-**Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (conditioned by `tea_use_pactjs_utils` and `tea_pact_mcp`)
+**Used in:** `framework`, `test-design`, `automate` red mode, `automate` expand mode, `test-review`, `framework` CI phase (conditioned by `tea_use_pactjs_utils` and `tea_pact_mcp`)
 
 An expired PAT on the PactFlow webhook is the most common non-code cause of `can-i-deploy` timing out with `There is no verified pact between ...`.
 `pact-broker-webhooks` carries the rotation runbook.
@@ -177,7 +177,7 @@ Delivery-side testing for asynchronous, eventually-consistent webhook flows usin
 | [webhook-timeout-error](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/webhook-timeout-error.md)       | extended | `WebhookTimeoutError` fields (`templateName`, `timeoutMs`, `totalReceived`, `receivedWebhooks`, `matcherDetails`, `toJSON`) for inspecting what arrived against what was expected | Debugging, errors                          |
 | [webhook-providers](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/webhook-providers.md)               | extended | WireMock (`deleteById` supported), MockServer (`deleteById` no-op), Mockoon (`deleteById` no-op, 100-entry limit), the custom `WebhookProvider` interface                         | Providers, capability differences          |
 
-**Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci`, `trace`
+**Used in:** `framework`, `test-design`, `automate` red mode, `automate` expand mode, `test-review`, `framework` CI phase, `trace`
 
 ---
 
@@ -192,7 +192,7 @@ Loaded when `test_stack_type` is `mobile` or when the review set contains a Maes
 | [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/maestro-flows.md)               | specialized | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, command semantics that differ by platform, `text:` selectors as whole-element regex, taps that report COMPLETED without being handled, visible meaning inside the viewport, checking that the action caused a transition                                                                                                                        | Maestro, selectors, isolation, regex selectors, anti-patterns   |
 | [mobile-ci-device-lab](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/mobile-ci-device-lab.md) | specialized | Build artifact selection including why a debug-variant development build does not solve it, dev-server manifest signing in non-interactive CI, one device profile across local and CI, native modules that degrade silently in a shell, deep links reachable through the shell's routed URL form, emulator snapshot caching, repairing locally created AVDs, per-device identity for sharded runs, runner version pinning, artifact layout and failure diagnosis | Build artifact, emulator, caching, pinning, sharding, artifacts |
 
-**Used in:** `framework`, `automate`, `atdd`, `test-design`, `test-review`, `ci` (when `test_stack_type` is `mobile` or a Maestro flow is present)
+**Used in:** `framework`, `automate` expand mode, `automate` red mode, `test-design`, `test-review`, `framework` CI phase (when `test_stack_type` is `mobile` or a Maestro flow is present)
 
 Mobile loading rules exclude browser fragments such as `network-first`, `playwright-config`, `intercept-network-call`, and `selector-resilience`.
 Maestro flows use device selectors and synchronization.
@@ -207,7 +207,7 @@ CLI and MCP integration for AI-driven browser automation during test generation.
 | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | [playwright-cli](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/skills/bmod-tea/knowledge/playwright-cli.md) | core | Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, browser automation | CLI, browser, agent, automation, snapshot |
 
-**Used in:** `atdd`, `automate`, `test-design`, `test-review`, `nfr-assess` (when `tea_browser_automation` is `cli` or `auto`)
+**Used in:** `automate` red mode, `automate` expand mode, `test-design`, `test-review`, `nfr-assess` (when `tea_browser_automation` is `cli` or `auto`)
 
 ---
 
@@ -227,7 +227,7 @@ Patterns for `@seontechnologies/playwright-utils`.
 
 The package's remaining fragments are indexed under the category that matches what they do: `auth-session` (Data & Setup); `network-recorder`, `intercept-network-call`, and `network-error-monitor` (Network & Reliability); `burn-in` (Test Execution & CI); `fixtures-composition` (Architecture & Fixtures, since `mergeTests` applies to all fixtures); and the seven `webhook-*` fragments (Webhook Testing).
 
-**Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (all gated on `tea_use_playwright_utils: true`)
+**Used in:** `framework`, `test-design`, `automate` red mode, `automate` expand mode, `test-review`, `framework` CI phase (all gated on `tea_use_playwright_utils: true`)
 
 `playwright-utils-mandate` loads first on every one of them.
 It decides how the other fragments are applied: generation follows its substitution table by default, and `test-review` reads its REQUIRED list as the firing predicate for registry rows `M9` and `L9`.
@@ -254,7 +254,7 @@ risk-governance,Risk Governance,"Scoring matrix, category ownership, gate decisi
 
 **Columns:**
 
-- `id`: unique kebab-case identifier used by workflow steps; it can differ from the file stem
+- `id`: unique kebab-case identifier used by skill steps; it can differ from the file stem
 - `name`: human-readable fragment name
 - `description`: what the fragment covers
 - `tags`: comma-separated search tags
@@ -267,7 +267,7 @@ Step-file frontmatter declares `knowledgeIndex: '{tea-knowledge}/tea-index.csv'`
 `{tea-knowledge}` resolves to the `knowledge/` folder of the installed `bmod-tea` skill.
 
 The index contains 59 fragments: 24 core, 19 extended, and 16 specialized.
-Workflow steps select their fragments using explicit loading rules, including stack, runner, installed packages, and configuration.
+Skill steps select their fragments using explicit loading rules, including stack, runner, installed packages, and configuration.
 The framework and test-review steps define closed sets: a tier label alone cannot add a fragment.
 
 Library branches use `tea_use_playwright_utils`, `tea_use_pactjs_utils`, and package checks.
@@ -281,4 +281,4 @@ See [TEA Configuration](/docs/reference/configuration.md).
 
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md): How context engineering works and why
 - [TEA Overview](/docs/explanation/tea-overview.md): How the knowledge base fits in TEA
-- [TEA Command Reference](/docs/reference/commands.md): Workflows that use fragments
+- [TEA Command Reference](/docs/reference/commands.md): Skills that use fragments

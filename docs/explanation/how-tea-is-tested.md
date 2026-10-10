@@ -59,7 +59,7 @@ The `automate` and `framework` suites execute committed test or scaffold fixture
 
 Each suite evaluates a specific skill against concrete artifacts:
 
-- `bmad-tea-routing`: Validates that user intent routes to the correct workflow, declines unsupported requests, and asks clarifying questions when requests are ambiguous.
+- `bmad-tea-routing`: Validates that user intent routes to the correct skill, declines unsupported requests, and asks clarifying questions when requests are ambiguous.
 - `bmad-testarch-automate` red-mode step files: Measures whether generated acceptance tests fail red for declared business criteria. The ATDD evaluation stages the canonical red instructions and reads them directly.
 - `bmad-testarch-test-design`: Checks that identified risks map to valid test levels and stay within fixture risk ceilings.
 - `bmad-testarch-test-review`: Verifies recall of planted anti-patterns without raising false alarms on clean code.
@@ -114,7 +114,7 @@ TEA evaluates runs with strict separation between test failures and infrastructu
 | `1`       | **Quality Failure**     | The runner executed normally, but output missed a quality threshold, missed a seeded defect, or hallucinated evidence.                                                         |
 | `2`       | **Environment Failure** | The harness could not complete measurement due to missing credentials, timeouts, transport errors, or unexpected execution failures. No quality score is awarded or penalized. |
 
-Exit 1 records measured quality failures across workflow, model, harness, corpus, or oracle defects.
+Exit 1 records measured quality failures across skill, model, harness, corpus, or oracle defects.
 Exit 2 records environment or unexpected runtime errors, preventing infrastructure failures from skewing quality metrics.
 The convention is optional and belongs to TEA's own harnesses; [Adopting eval-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/docs/eval-quality-adoption-guide.md#the-012-exit-convention-an-optional-pattern) describes it for a harness of your own.
 
@@ -143,20 +143,20 @@ A recorded run can include infrastructure failures.
 TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles, and acceptance thresholds.
 `eval-quality` supplies reusable contract, probe, validation, sealing, and scoring primitives:
 
-| Responsibility       | Owned by TEA                                                       | Owned by `eval-quality`                                                       |
-| -------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Target understanding | Domain rules, workflow step specifications, and agent instructions | Agnostic to specific target domain                                            |
-| Evaluation design    | Defining domain test plans, ATDD, NFR, or trace expectations       | Providing reusable probe schemas, adapters, and contracts                     |
-| Corpus & oracles     | Authoring fixtures and criterion-to-file truth mappings            | Validating contract schema conformity and oracle logic                        |
-| Evidence & execution | Driving workflow execution and capturing generated artifacts       | Preflighting environments, verifying evidence integrity, and contract sealing |
-| Scoring & strength   | Interpreting domain-specific gaps and triage                       | Mathematical scoring, metric aggregation, and `compareDominance` calculation  |
+| Responsibility       | Owned by TEA                                                    | Owned by `eval-quality`                                                       |
+| -------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Target understanding | Domain rules, skill step specifications, and agent instructions | Agnostic to specific target domain                                            |
+| Evaluation design    | Defining domain test plans, ATDD, NFR, or trace expectations    | Providing reusable probe schemas, adapters, and contracts                     |
+| Corpus & oracles     | Authoring fixtures and criterion-to-file truth mappings         | Validating contract schema conformity and oracle logic                        |
+| Evidence & execution | Driving skill execution and capturing generated artifacts       | Preflighting environments, verifying evidence integrity, and contract sealing |
+| Scoring & strength   | Interpreting domain-specific gaps and triage                    | Mathematical scoring, metric aggregation, and `compareDominance` calculation  |
 
 ## Evaluate
 
-The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is one of TEA's eight workflows.
+The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) is one of TEA's eight skills.
 It takes a described target (a skill, an agent, a workflow, a tool-use system, an AI feature) through a scored development and held-out evaluation built on `eval-quality`, names the gaps the scores expose, helps repair them, and finishes with the CI plan that enforces the evaluation.
 Its runtime, `tea-evaluate`, validates, digests, preflights, runs, scores and compares an evaluation folder and runs its CI tiers ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
-`bmad-testarch-framework`'s CI setup renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
+`bmad-testarch-framework`'s CI setup renders an evaluation's CI plan into a pipeline, and Evaluate's last stage hands the plan to it ([Setup CI](/docs/how-to/workflows/setup-test-framework.md#evaluation-plans)).
 The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks one small skill from requirements to a scored run and an accepted baseline.
 [How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains the stack and the rules behind it.
 Evaluate authored and ran its own suite; `test/evaluations/bmad-testarch-evaluate/` is the reference for an Evaluate-authored evaluation, and TEA's generator-owned suites are the reference for hand-built ones.

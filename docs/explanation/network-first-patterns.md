@@ -145,7 +145,7 @@ Both forms wait for the matching response, then use retrying assertions to check
 When the flag is enabled and the package is installed, TEA generates the utility form and `test-review` checks for bypasses.
 An enabled flag with no package produces one setup recommendation.
 Use `page.route` directly for analytics, fonts, and third-party scripts.
-For an application endpoint the utility cannot handle, add `// playwright-utils deviation: <reason>` on the call and record the reason in the workflow summary.
+For an application endpoint the utility cannot handle, add `// playwright-utils deviation: <reason>` on the call and record the reason in the skill summary.
 The `playwright-utils-mandate` fragment defines the rule.
 
 Seven things the utility changes:
@@ -342,7 +342,7 @@ await expect(page.locator('.success')).toBeVisible();
 
 ## How TEA Applies This
 
-`atdd` and `automate` generate network-first tests by default, in whichever form the project is configured for.
+Automate red and expand modes generate network-first tests by default, in whichever form the project is configured for.
 `test-review` flags hard waits under registry row H1 at HIGH severity:
 
 ```markdown

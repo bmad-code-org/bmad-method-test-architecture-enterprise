@@ -19,6 +19,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const MarkdownIt = require('markdown-it');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'skills', 'bmad-testarch-automate', 'red');
@@ -32,7 +33,7 @@ const FILES = {
   validateMode: path.join(WORKFLOW_ROOT, 'steps-v', 'step-01-validate.md'),
   checklist: path.join(WORKFLOW_ROOT, 'checklist.md'),
   template: path.join(WORKFLOW_ROOT, 'atdd-checklist-template.md'),
-  docs: path.join(PROJECT_ROOT, 'docs', 'how-to', 'workflows', 'run-atdd.md'),
+  docs: path.join(PROJECT_ROOT, 'docs', 'how-to', 'workflows', 'run-automate.md'),
 };
 const PRE_CHANGE_DIAGNOSTICS = path.join(PROJECT_ROOT, 'test', 'results', 'atdd-story-1.2', 'pre-change-diagnostics.json');
 
@@ -50,7 +51,23 @@ function assert(condition, label, detail = '') {
 }
 
 function read(name) {
-  return fs.readFileSync(FILES[name], 'utf8');
+  const body = fs.readFileSync(FILES[name], 'utf8');
+  return name === 'docs' ? redModeSection(body) : body;
+}
+
+function redModeSection(body) {
+  const tokens = new MarkdownIt().parse(body, {});
+  const headings = tokens.flatMap((token, index) =>
+    token.type === 'heading_open' && token.tag === 'h2' ? [{ map: token.map, title: tokens[index + 1].content.trim() }] : [],
+  );
+  const lines = body.split('\n');
+  const red = headings.filter(({ title }) => title === 'Red Mode');
+  if (red.length !== 1) {
+    throw new Error(`Automate docs structure: expected exactly one H2 Red Mode heading; found ${red.length}`);
+  }
+  const start = red[0].map[1];
+  const next = headings.find((token) => token.map[0] >= start);
+  return lines.slice(start, next?.map[0] ?? lines.length).join('\n');
 }
 
 function literalSkipTitles(text) {
@@ -83,6 +100,26 @@ function sha256(file) {
 
 function main() {
   console.log('ATDD workflow guidance for criterion-mapped, intended red failures\n');
+
+  for (const [body, count] of [
+    ['## Expand Mode\n', 0],
+    ['## Red Mode\nfirst\n## Red Mode\nsecond\n', 2],
+  ]) {
+    let message = '';
+    try {
+      redModeSection(body);
+    } catch (error) {
+      message = error.message;
+    }
+    assert(
+      message.includes(`expected exactly one H2 Red Mode heading; found ${count}`),
+      `docs extraction rejects ${count} Red Mode headings clearly`,
+    );
+  }
+  assert(
+    redModeSection('## Red Mode\nred\n```markdown\n## Red Mode\n## Fake Section\n```\n## Next Section\ngreen').endsWith('```'),
+    'docs extraction ignores fenced headings and stops at the next real H2',
+  );
 
   const sources = Object.fromEntries(Object.keys(FILES).map((name) => [name, read(name)]));
   const required = [
