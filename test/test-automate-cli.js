@@ -239,6 +239,8 @@ try {
     test_operation: 'create',
     runScope: 'story',
     runKey: 'saved-scope',
+    cli_story: 'story.md',
+    cli_targets: ['target.json'],
     auto_validate: false,
     auto_heal_failures: false,
     max_healing_iterations: 1,
@@ -249,6 +251,15 @@ try {
   fs.writeFileSync(
     path.join(scratch, '_bmad/config.toml'),
     '[modules.tea]\nauto_validate = true\nauto_heal_failures = true\nmax_healing_iterations = 3\nuse_mcp_healing = true\n',
+  );
+  check(
+    invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint, '--target', 'story.md']).status === 2,
+    'Resume rejects caller targets outside the saved scope before execution',
+  );
+  fs.writeFileSync(path.join(scratch, 'other-story.md'), '# Another story\n');
+  check(
+    invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint, '--story', 'other-story.md']).status === 2,
+    'Resume rejects a caller story outside the saved scope before execution',
   );
   const resumed = invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint]);
   check(
