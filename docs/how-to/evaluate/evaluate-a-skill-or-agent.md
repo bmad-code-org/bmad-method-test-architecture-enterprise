@@ -5,10 +5,14 @@ description: Prove that a skill or an agent behaves as you require, from the Eva
 
 # How to Evaluate a Skill or Agent with TEA
 
-Use the Evaluate skill to get a repeatable score for a skill or an agent.
-Evaluate runs the target in disposable copies of your project, plants known defects, and records whether the evaluation catches them.
-The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) teaches the whole path once.
-This page covers what changes for your own target.
+Start Evaluate in your coding agent and point it at a skill or an agent.
+Confirm the behavior you need to prove, the outputs that count as evidence, and the boundaries it may cross.
+Evaluate builds the checks, runs the target in disposable copies of your project, and plants known defects to see whether the checks catch them.
+You get a scored run that shows what passed and where coverage is weak.
+Your coding agent handles the files and commands below after you confirm the requirements; they are here so you can inspect or repeat the run.
+
+The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks through a prepared example by hand.
+This guide applies that process to your own target.
 
 ## When to Use This
 

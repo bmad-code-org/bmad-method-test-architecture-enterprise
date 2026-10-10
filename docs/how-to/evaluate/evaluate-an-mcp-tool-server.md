@@ -9,7 +9,8 @@ Start Evaluate in your coding agent and point it at a stdio MCP server.
 You confirm which tools it may call and what results count as correct.
 The skill builds the evaluation, runs the server in a disposable copy, and checks whether a planted defect changes its answers.
 The result shows what passed, which defect the evaluation caught, and where coverage is thin.
-The steps below let you inspect or repeat the run.
+In normal use, that one request starts the workflow: your agent asks you to confirm the requirements, then handles the files and commands below.
+They are here so you can inspect or repeat the run.
 A server reached over HTTP follows [How to Evaluate an HTTP API with TEA](/docs/how-to/evaluate/evaluate-an-http-api.md).
 
 The skill writes the probes and contract.

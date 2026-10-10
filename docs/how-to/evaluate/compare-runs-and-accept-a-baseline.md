@@ -5,9 +5,10 @@ description: Compare a scored run with the accepted baseline, read the three out
 
 # How to Compare Runs and Accept a Baseline with TEA
 
-Use `tea-evaluate compare` to set a scored run beside the baseline you accepted earlier.
-The baseline is the committed record of a run you reviewed.
-CI replays it to prove the evaluation still reproduces, and a later run compares against it to show whether the target got stronger or weaker.
+Ask Evaluate to compare a scored run with the baseline you previously accepted.
+It shows whether the evaluation got stronger, weaker, or changed too much for a fair comparison.
+You review the result, decide whether to accept a new baseline, and commit it in a reviewed pull request so CI can replay it.
+The commands below show what your agent normally runs and let you repeat the comparison.
 
 ## When to Use This
 

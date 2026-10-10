@@ -5,9 +5,11 @@ description: Find what a weak evaluation result means, repair the corpus or orac
 
 # How to Read the Gaps and Fix Them with TEA
 
-Use this guide when a run stops early, scores CONCERNS, or leaves a probe class below its floor.
-A gap is a place where the evaluation cannot yet tell a good target from a defective one.
-You read the evidence, name one gap, ask the Evaluate skill to repair it, and rerun.
+When a run stops early or reports weak coverage, tell Evaluate which run to inspect.
+Your coding agent reads the evidence, repairs one gap in the checks, and reruns them to see whether the gap closed.
+A gap means the current checks cannot reliably tell a good target from a defective one.
+The files and commands below show what your agent normally handles and let you repeat its work.
+
 The example follows a command that reviews test files and the two gaps its evaluation had.
 
 ## When to Use This
