@@ -32,7 +32,7 @@ const gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concern
 const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
 const inventory = { total: ledger.length, covered: pct === 0 ? 0 : ledger.length, pct };
 const snapshot = '2026-10-09T00:00:00.000Z';
-const eligible = allowGate && ['contract_static', 'runtime_manifest'].includes(collection) && mode !== 'runtime-inaccessible';
+const eligible = allowGate && ['contract_static', 'runtime_manifest'].includes(collection) && !['runtime-inaccessible', 'contract-static-waived'].includes(mode);
 const summary = {
   schema_version: '0.3.0', snapshot_at: snapshot, collection_mode: collection,
   collection_status: ({ waived: 'WAIVED', restricted: 'RESTRICTED', inaccessible: 'INACCESSIBLE', deferred_shared: 'DEFERRED_SHARED' })[collection] ?? 'COLLECTED',
@@ -57,6 +57,7 @@ if (mode === 'runtime-inaccessible') {
     summary.live_evidence = {requirements_live_only: 0, present: true, freshness: 'unreadable', current_source_sha: sha, failed: 0};
   }
 }
+if (mode === 'contract-static-waived') summary.collection_status = 'WAIVED';
 if (mode === 'concerns') {
   summary.confidence = 'medium';
   summary.oracle.confidence = 'medium';

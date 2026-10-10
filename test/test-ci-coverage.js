@@ -217,6 +217,8 @@ function checkNestedScriptNamesAndMaskedChains() {
   check(!covered().has('test:unit.js'), 'a later line masked a skipped && command');
   scripts['test:root'] = 'npm run test:setup && npm run test:unit.js;';
   check(covered().has('test:unit.js'), 'a trailing separator hid a command required for success');
+  scripts['test:root'] = 'case x in y) npm run test:unit.js;; esac; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'an unmatched case clause counted as CI execution');
 }
 
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {

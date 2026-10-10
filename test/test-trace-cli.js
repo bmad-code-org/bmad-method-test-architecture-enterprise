@@ -160,6 +160,11 @@ try {
     assert.equal(run('concerns').status, 0);
     assert.equal(run('concerns', ['--fail-on', 'concerns']).status, 1);
   });
+  check('contract-static collection cannot suppress its gate', () => {
+    const result = run('contract-static-waived');
+    assert.equal(result.status, 3, result.payload.reason);
+    assert.match(result.payload.reason, /contract_static collection/);
+  });
   check('fresh live failures cap a passing automated gate and preserve stale evidence semantics', () => {
     assert.equal(run('fresh-failure').status, 3);
     assert.equal(run('fresh-invalid-count').status, 3);

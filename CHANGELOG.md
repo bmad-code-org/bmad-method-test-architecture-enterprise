@@ -23,10 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
-- Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, and ignores malformed or duplicate live failures when counting fresh failures.
+- Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
 - Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites outcome assertions once, including status codes that prove the stated result; the gate uses execution reports when available.
 - Trace evaluation removes incomplete attempt directories after capture errors and preserves staging errors during retries.
-- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names, and excludes commands that later statements can skip or mask.
+- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names, and excludes commands in conditional chains or case clauses when execution is uncertain.
 - The test guide's Test Review command now runs only the Test Review CLI suite; `test:cli` still runs both Test Review and Trace CLI suites.
 - Trace preserves source priorities through mapping and coverage arithmetic. The CLI freezes source criteria before agent execution, validates the saved oracle ledger and live evidence, and checks outputs before publication. It rejects malformed artifacts and missing runtime evidence, confines reports to the current attempt, and restores prior reports after failed writes. Mapping records each accepted test declaration and its assertion anchors.
 

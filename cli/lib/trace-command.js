@@ -376,6 +376,8 @@ function validateTraceOutputs({
     collectionMode
   ];
   if (fixedStatus && summary.collection_status !== fixedStatus) throw new Error('Trace summary collection status contradicts its mode.');
+  if (collectionMode === 'contract_static' && summary.collection_status !== 'COLLECTED')
+    throw new Error('Trace summary collection status contradicts contract_static collection.');
   if (requireLiveManifest && collectionMode === 'runtime_manifest') {
     const expectedStatus = liveCapture?.manifest ? 'COLLECTED' : 'INACCESSIBLE';
     if (summary.collection_status !== expectedStatus)

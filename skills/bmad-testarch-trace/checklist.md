@@ -301,7 +301,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 ### Step 2: Evidence Parsing
 
-**Test Results:**
+**Test Results (when execution reports are available):**
 
 - [ ] Total test count extracted
 - [ ] Passed test count extracted
@@ -543,7 +543,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 ### Traceability
 
 - [ ] Gate decision traceable to story/epic/release
-- [ ] Evidence traceable to specific test runs
+- [ ] Evidence traceable to cited tests and to specific runs when execution reports exist
 - [ ] Assessments traceable to workflows that created them
 - [ ] Waiver traceable to approver (if applicable)
 
@@ -560,8 +560,9 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 ### Missing Evidence
 
-- [ ] If no test design doc exists in `{test_artifacts}/test-design/` or the legacy root, decision still possible with test results + trace
-- [ ] If `trace/traceability-matrix-{run_key}.md` missing, decision still possible with test results (but Phase 1 should provide it)
+- [ ] If no test design doc exists in `{test_artifacts}/test-design/` or the legacy root, decision still possible from the Phase 1 matrix
+- [ ] If no test execution report exists, decision follows the Phase 1 matrix and records the missing runtime evidence
+- [ ] If `trace/traceability-matrix-{run_key}.md` is missing, rerun Phase 1 before deciding the automated Trace gate
 - [ ] If no NFR assessment exists in `{test_artifacts}/nfr/` or the legacy root, NFR validation marked as NOT ASSESSED
 - [ ] If code coverage missing, coverage criterion marked as NOT ASSESSED
 - [ ] User acknowledged gaps in evidence or provided alternative proof

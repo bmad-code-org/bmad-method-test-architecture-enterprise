@@ -142,7 +142,7 @@
     "waiverScenarios": {
       "file": "skills/bmad-testarch-trace/checklist.md",
       "section": "Waiver Scenarios",
-      "lines": "583-603",
+      "lines": "584-604",
       "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
     },
     "decisionIntegrity": {

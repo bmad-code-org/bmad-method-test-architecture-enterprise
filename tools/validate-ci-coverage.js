@@ -262,6 +262,7 @@ function nestedNpmRuns(command) {
   let inWord = false;
   let quote = '';
   let escaped = false;
+  let caseDepth = 0;
   const finishWord = () => {
     if (inWord) words.push(word);
     word = '';
@@ -271,9 +272,13 @@ function nestedNpmRuns(command) {
     finishWord();
     let index = 0;
     while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
+    if (words[index] === 'case' || (words[index] === 'then' && words[index + 1] === 'case')) caseDepth++;
     const script =
-      words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:.-]+$/.test(words[index + 2] ?? '') ? words[index + 2] : null;
+      caseDepth === 0 && words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:.-]+$/.test(words[index + 2] ?? '')
+        ? words[index + 2]
+        : null;
     chain.push({ script, separator });
+    if (words[index] === 'esac') caseDepth = Math.max(0, caseDepth - 1);
     words = [];
   };
   const finishChain = (maskedByLaterStatement = false) => {
