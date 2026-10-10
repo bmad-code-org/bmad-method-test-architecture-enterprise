@@ -8080,10 +8080,20 @@ async function checkChanceMounts() {
   const env = { ...some.env, VERDICT_WHEN: 'pristine', VERDICT_DO: 'read-ungranted@alpha', VERDICT_TOUCH: outside };
   const preflight = evaluate(['preflight', '--evaluation', some.folder], env);
   check(
-    preflight.status === 0 &&
-      /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs the audit watched in full did not/.test(
-        preflight.output,
-      ),
+    preflight.status === 0,
+    `preflight over a target that attempted access on some legs exited ${preflight.status}: ${preflight.output}`,
+  );
+  if (process.platform === 'darwin') {
+    const observations = readJson(path.join(runDirectoryOf(some.folder), 'observations.json'));
+    check(
+      JSON.stringify(observations).includes('ungranted-read: refused EPERM'),
+      'the chance-leg fixture did not hit its kernel read denial',
+    );
+  }
+  checkReport(
+    /note: legs? ("[^"]+"(, )?)+ opened \S+ outside the allowlist and the other legs the audit watched in full did not/.test(
+      preflight.output,
+    ),
     `preflight over a target that read a file on some legs exited ${preflight.status}; expected 0 with a note naming the path and the leg\n${preflight.output}`,
   );
   check(!preflight.output.includes('isolation manifest violation'), `preflight refused a path only some legs opened\n${preflight.output}`);
