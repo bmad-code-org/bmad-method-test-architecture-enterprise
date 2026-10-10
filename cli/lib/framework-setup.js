@@ -235,12 +235,31 @@ function testExecutionEvidence(root, command, output) {
   ];
   for (const [runner, detector, summary] of patterns) {
     if (!invocations.some((invocation) => detector.test(invocation))) continue;
-    const match = stripVTControlCharacters(output).match(summary);
+    const plain = stripVTControlCharacters(output);
+    const match = plain.match(summary);
     let passedTests = match ? (runner === 'go' ? [...output.matchAll(/--- PASS:/g)].length : Number(match[1])) : 0;
     if (runner === 'unittest') passedTests -= Number(output.match(/skipped=(\d+)/)?.[1] ?? 0);
-    return { runner, passedTests };
+    const numeric = (pattern) => [...plain.matchAll(pattern)].reduce((total, item) => total + Number(item[1]), 0);
+    let failedTests =
+      numeric(/(?:\b(\d+) (?:failed|failing)\b)/g) + numeric(/\b(?:Failed|Failing|Failures):\s*(\d+)/g) + numeric(/failures=(\d+)/g);
+    let errors =
+      numeric(/\b(\d+) (?:errors?|interrupted|timed out|cancelled)\b/g) + numeric(/\bErrors:\s*(\d+)/g) + numeric(/errors=(\d+)/g);
+    let summaryComplete = Boolean(match);
+    if (runner === 'node-test') {
+      const count = (key) => plain.match(new RegExp(`(?:#|ℹ) ${key} (\\d+)`))?.[1];
+      const required = ['tests', 'pass', 'fail', 'cancelled', 'skipped'];
+      summaryComplete =
+        required.every((key) => count(key) !== undefined) &&
+        Number(count('tests')) === Number(count('pass')) + Number(count('fail')) + Number(count('cancelled')) + Number(count('skipped'));
+      failedTests += Number(count('fail') ?? 0);
+      errors += Number(count('cancelled') ?? 0);
+    }
+    if (runner === 'go' && /(?:--- FAIL:|^FAIL\s)/m.test(plain)) failedTests++;
+    if (runner === 'unittest' && !/^OK(?:\s|$)/m.test(plain)) summaryComplete = false;
+    if (runner === 'unittest') passedTests = Math.max(0, passedTests - failedTests - errors);
+    return { runner, passedTests, failedTests, errors, summaryComplete };
   }
-  return { runner: null, passedTests: 0 };
+  return { runner: null, passedTests: 0, failedTests: 0, errors: 0, summaryComplete: false };
 }
 
 function readJournal(file) {
@@ -531,8 +550,10 @@ function inspectCompletion(request, { evidenceDir, timeoutMs = 1_200_000 } = {})
       }
       executions.push(execution);
       if (failure) issues.push(`Frozen test command failed: ${command} (${failure.message})`);
-      else if (!execution.runner || execution.passedTests < 1)
+      else if (!execution.runner || !execution.summaryComplete || execution.passedTests < 1)
         issues.push(`Frozen command has no positive supported test execution evidence: ${command}`);
+      else if (execution.failedTests > 0 || execution.errors > 0)
+        issues.push(`Frozen native runner reports failed or cancelled tests: ${command}`);
     }
     if (evidenceDir) fs.writeFileSync(path.join(evidenceDir, 'verification.json'), `${JSON.stringify(executions, null, 2)}\n`);
   }

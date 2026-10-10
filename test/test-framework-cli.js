@@ -46,6 +46,7 @@ if (operation === 'validate') {
 }
 if (mode === 'replace-target') {fs.writeFileSync('tests/new.test.cjs', "require('node:test')('new',()=>{});\n");text=text.replace('tests/smoke.test.cjs]', 'tests/new.test.cjs]');}
 if (mode === 'fake-native') text = text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(["node -e \"console.log('x;pytest 1 passed')\""]));
+if (mode === 'masked-failure') {fs.writeFileSync('tests/failing.test.cjs', "require('node:test')('broken',()=>require('node:assert/strict').equal(1,2));\n");text=text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(['node --test || echo masked']));}
 if (mode === 'replace-id') text = text.replace('command-test-run', 'replacement-run');
 if (mode === 'change-contract') text = text.replace('test_commands: [node --test]', 'test_commands: [node --test tests/smoke.test.cjs]');
 if (mode === 'missing-config') text = text.replace('contract:\n', 'contract:\n  config_paths: [missing.config.json]\n');
@@ -298,4 +299,15 @@ test('quoted command separators and runner text cannot fabricate native executio
   const value = JSON.parse(result.stdout);
   assert.equal(value.verification[0].runner, null);
   assert.match(value.issues.join('\n'), /positive supported test execution/);
+});
+
+test('shell masking cannot turn native assertion failures into completed setup', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('masked-failure'));
+  assert.equal(result.status, 1, result.stdout);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.verification[0].exitCode, 0);
+  assert.equal(value.verification[0].passedTests, 1);
+  assert.equal(value.verification[0].failedTests, 1);
+  assert.match(value.issues.join('\n'), /native runner reports failed/);
 });
