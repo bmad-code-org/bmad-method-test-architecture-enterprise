@@ -23,7 +23,7 @@ Replay the retained generation without a model call:
 npm run test:automate-generation-evidence
 ```
 
-This CI check verifies immutable capture hashes, preserves the delivered red skips, and executes the final generated API suite against fresh fixed and mutated service copies. Native execution uses the existing supervised process tree runner and the original project test configuration. Ports are chosen per run. The scorer records actual attempt statuses, runner errors, source hashes and the assertion failures that detect the inclusive boundary regression.
+This CI check verifies immutable capture hashes, preserves the delivered red skips, and executes the final generated API suite against fresh fixed and mutated service copies. Native execution uses the existing supervised process tree runner and the original project test configuration. Ports are chosen per run. The scorer records actual attempt statuses, runner errors, source hashes and the assertion failures that detect the inclusive boundary regression. It saves raw streams and an execution record for timeout/signal outcomes before reporting the blocker, and refuses to overwrite an existing measurement.
 
 To inspect or execute a captured project separately, extract its archive into a new directory and provide its Playwright dependency:
 

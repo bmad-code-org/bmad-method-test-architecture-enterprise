@@ -41,6 +41,15 @@ async function main() {
     assert.equal(score.generationWasInvoked, false, 'replay must disclose that it executes a previously generated suite');
     assert.ok(score.runs.fixed.tests.length >= 7);
     assert.equal(score.protectedSourcePreserved, true);
+    const blocked = path.join(scratch, 'timeout');
+    await assert.rejects(() => scoreGeneratedProject(project, blocked, { timeoutMs: 1 }), /timed out/);
+    for (const stream of ['stdout', 'stderr']) assert.ok(fs.existsSync(path.join(blocked, `fixed-${stream}.txt`)));
+    const failure = JSON.parse(fs.readFileSync(path.join(blocked, 'fixed-execution.json'), 'utf8'));
+    assert.equal(failure.exitCode, null);
+    assert.match(failure.error, /timed out/);
+    const retained = fs.readFileSync(path.join(blocked, 'fixed-execution.json'));
+    await assert.rejects(() => scoreGeneratedProject(project, blocked), /fresh and empty/);
+    assert.deepEqual(fs.readFileSync(path.join(blocked, 'fixed-execution.json')), retained);
     console.log(`Immutable live captures verified; ${score.runs.fixed.tests.length} generated HTTP tests pass and detect the regression.`);
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });

@@ -49,9 +49,10 @@ function leaves(report) {
   return results;
 }
 
-async function scoreGeneratedProject(projectRoot, outputRoot) {
+async function scoreGeneratedProject(projectRoot, outputRoot, { timeoutMs = 60_000 } = {}) {
   const project = fs.realpathSync(projectRoot);
   const output = path.resolve(outputRoot);
+  if (fs.existsSync(output) && fs.readdirSync(output).length > 0) throw new Error('output directory must be fresh and empty');
   fs.mkdirSync(output, { recursive: true });
   for (const file of SOURCE_FILES) {
     if (digest(path.join(project, file)) !== digest(path.join(FIXTURE, file)))
@@ -78,13 +79,14 @@ async function scoreGeneratedProject(projectRoot, outputRoot) {
       const port = await availablePort();
       const argv = [resolvePlaywrightCli([ROOT]), 'test', '--reporter=json'];
       let command;
+      let runnerError;
       try {
         command = runAgent('', {
           agent: 'custom',
           agentCommand: process.execPath,
           agentArgs: argv,
           cwd: staged,
-          timeout: 60_000,
+          timeout: timeoutMs,
           envPass: Object.keys({
             ...process.env,
             PORT: '',
@@ -104,13 +106,19 @@ async function scoreGeneratedProject(projectRoot, outputRoot) {
         });
         command.status = 0;
       } catch (error) {
-        if (error.code !== 'AGENT_FAILED') throw error;
         command = error;
-        command.status = Number(error.message.match(/exited with code (\d+)/)?.[1]);
-        if (!Number.isSafeInteger(command.status)) throw error;
+        runnerError = error;
+        const code = error.message.match(/exited with code (\d+)/)?.[1];
+        command.status = code === undefined ? null : Number(code);
       }
       fs.writeFileSync(path.join(output, `${variant}-stdout.txt`), command.stdout ?? '');
       fs.writeFileSync(path.join(output, `${variant}-stderr.txt`), command.stderr ?? '');
+      fs.writeFileSync(
+        path.join(output, `${variant}-execution.json`),
+        `${JSON.stringify({ command: [process.execPath, ...argv], timeoutMs, exitCode: command.status, error: runnerError?.message ?? null, sourceBefore }, null, 2)}\n`,
+        { flag: 'wx' },
+      );
+      if (runnerError && !Number.isSafeInteger(command.status)) throw runnerError;
       if (!fs.existsSync(reportPath)) throw new Error(`${variant} produced no machine-readable report`);
       const sourceAfter = Object.fromEntries(SOURCE_FILES.map((file) => [file, digest(path.join(staged, file))]));
       if (JSON.stringify(sourceBefore) !== JSON.stringify(sourceAfter))

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Native generated-suite replay retains raw timeout and signal evidence before reporting execution blockers.
 - Codex command-execution runs can start loopback test services through the supported workspace network setting. Read-only and artifact-write capabilities retain their previous network policy; explicit network configuration keeps precedence.
 
 ### Changed
