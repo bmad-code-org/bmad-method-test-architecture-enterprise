@@ -10,6 +10,7 @@ const { createHash } = require('node:crypto');
 const { runAgent } = require('../cli/lib/run-agent');
 const { Command } = require('commander');
 const { resolvePlaywrightCli } = require('../cli/atdd-red-check');
+const { nowIso } = require('./lib/clock');
 
 const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = path.join(__dirname, 'fixtures/automate-eval/voucher-service');
@@ -87,16 +88,12 @@ async function scoreGeneratedProject(projectRoot, outputRoot, { timeoutMs = 60_0
           agentArgs: argv,
           cwd: staged,
           timeout: timeoutMs,
-          envPass: Object.keys({
-            ...process.env,
-            PORT: '',
-            VOUCHER_BASE_URL: '',
-            CI: '',
-            FORCE_COLOR: '',
-            PLAYWRIGHT_JSON_OUTPUT_NAME: '',
-          }),
+          envPass: ['PORT', 'VOUCHER_BASE_URL', 'CI', 'FORCE_COLOR', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_BROWSERS_PATH'],
           sourceEnv: {
-            ...process.env,
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            ...(process.env.PLAYWRIGHT_BROWSERS_PATH ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH } : {}),
+            ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP } : {}),
             PORT: String(port),
             VOUCHER_BASE_URL: `http://127.0.0.1:${port}`,
             CI: '1',
@@ -158,7 +155,7 @@ async function scoreGeneratedProject(projectRoot, outputRoot, { timeoutMs = 60_0
       schemaVersion: 1,
       type: 'executed-generated-suite',
       generationWasInvoked: false,
-      generatedAt: new Date().toISOString(),
+      generatedAt: await nowIso(),
       projectRoot: project,
       mutation: { from: MUTATION_FROM, to: MUTATION_TO },
       protectedSourcePreserved: true,

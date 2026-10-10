@@ -330,7 +330,6 @@
     "cli-evidence/run.json": "b646c1fc5c1a3e5a4b88a127ac26eed61a4d1c8a066480e8d77d4a31b58e5f66",
     "cli-evidence/attempt-1/stdout.txt": "a1fbec3c4660379645619962404b626d8b20033adbce82bfc485ffea4179cb7e",
     "cli-evidence/attempt-1/prompt.txt": "8e6e40fea381fdc7b61ad061c0fb1042c87619d165dde6896ef05ccfac06cc13",
-    "cli-evidence/attempt-1/stderr.txt": "223edbbb73f6b30ecbe8b6643ddce143fd62f920042c510d8cbf0b53ce77f1c3",
     "cli-evidence/attempt-1/attempt.json": "e418c54bf1b6a6ccde6b9065b04607e58aa831a73be46856059d1037745b1424",
     "cli-evidence/attempt-1/generation.json": "64903ce3d2b9d9759735cc5f9627b4e5b64cb1a96b136b2b75d9eb2b8acbe519",
     "independent-execution/score.json": "3d5aaa0c44b6e994eb29c8d0e7882afdd4f0820c2932c2d3fa6d437198a19131",

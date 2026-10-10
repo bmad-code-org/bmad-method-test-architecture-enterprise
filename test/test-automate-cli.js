@@ -33,9 +33,10 @@ const agent = ['--agent', 'custom', '--agent-cmd', STUB, '--env-pass', 'TEA_AUTO
 fs.chmodSync(STUB, 0o755);
 fs.writeFileSync(path.join(scratch, 'story.md'), '# Story\n\nAC-1: promised behavior\n');
 fs.mkdirSync(path.join(scratch, '_bmad/custom'), { recursive: true });
+fs.writeFileSync(path.join(scratch, 'policy.md'), 'STRICT_POLICY_RULE\n');
 fs.writeFileSync(
   path.join(scratch, '_bmad/custom/bmad-testarch-automate.toml'),
-  '[workflow]\npersistent_facts = ["EXPAND ONLY"]\non_complete = "expand hook"\n',
+  '[workflow]\npersistent_facts = ["EXPAND ONLY", "file:{project-root}/policy.md"]\non_complete = "expand hook"\n',
 );
 fs.writeFileSync(
   path.join(scratch, '_bmad/custom/bmad-testarch-atdd.toml'),
@@ -73,8 +74,8 @@ try {
   checks++;
   const dry = invoke(['--agent', 'none', '--target', '.', 'cover the service']);
   check(
-    dry.status === 0 && dry.stdout.includes('EXPAND ONLY') && !dry.stdout.includes('RED ONLY'),
-    'dry expand uses only expand customization',
+    dry.status === 0 && dry.stdout.includes('EXPAND ONLY') && dry.stdout.includes('STRICT_POLICY_RULE') && !dry.stdout.includes('RED ONLY'),
+    'dry expand uses only expand customization and expands file facts',
   );
   check(
     dry.stdout.includes('"auto_validate":true') &&

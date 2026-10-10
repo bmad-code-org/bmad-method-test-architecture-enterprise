@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retained generation artifacts use compact paths so Windows checkouts can clone the repository.
 - Native generated-suite replay retains raw timeout and signal evidence before reporting execution blockers.
 - Codex command-execution runs can start loopback test services through the supported workspace network setting. Read-only and artifact-write capabilities retain their previous network policy; explicit network configuration keeps precedence.
+- Automate uses shared workflow customization loading to expand `file:` persistent facts and validate custom settings.
+- Restrict environment variables forwarded to model-generated test execution in the live generation scorer.
+- Automate generation evaluation uses the clock port for duration and generation timestamps.
+- Prune raw uncompressed terminal stderr streams from live evaluation captures and gitignore evidence stderr logs.
 
 ### Changed
 

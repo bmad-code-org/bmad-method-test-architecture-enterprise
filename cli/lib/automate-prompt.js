@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
-const { readTeaConfigFile, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('./resolve-tea-config');
+const { readTeaConfigFile, readWorkflowCustomization, configSource, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('./resolve-tea-config');
 const { RESULT_KEYS } = require('./automate-result');
 
 const HEALING_DEFAULTS = { auto_validate: true, auto_heal_failures: true, max_healing_iterations: 3, use_mcp_healing: true };
@@ -13,28 +13,6 @@ function boolean(value, key) {
   if (value === true || value === 'true') return true;
   if (value === false || value === 'false') return false;
   throw new Error(`${key} must be true or false`);
-}
-
-function merge(base, override) {
-  if (Array.isArray(base) && Array.isArray(override)) {
-    const key = [...base, ...override].every((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
-      ? ['code', 'id'].find((candidate) => [...base, ...override].every((entry) => Object.hasOwn(entry, candidate)))
-      : undefined;
-    if (!key) return [...base, ...override];
-    const result = [...base];
-    for (const entry of override) {
-      const index = result.findIndex((previous) => previous[key] === entry[key]);
-      if (index === -1) result.push(entry);
-      else result[index] = entry;
-    }
-    return result;
-  }
-  if (base && override && typeof base === 'object' && typeof override === 'object' && !Array.isArray(base) && !Array.isArray(override)) {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(override)) result[key] = merge(result[key], value);
-    return result;
-  }
-  return override;
 }
 
 function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRoot, mode) {
@@ -54,15 +32,8 @@ function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRo
     mode === 'red' && !fs.existsSync(sibling)
       ? path.join(skillRoot, 'red', 'customize.toml')
       : path.join(mode === 'red' ? path.dirname(sibling) : skillRoot, 'customize.toml');
-  let customization = {};
-  for (const candidate of [
-    defaultsPath,
-    path.join(projectRoot, '_bmad', 'custom', `${namespace}.toml`),
-    path.join(projectRoot, '_bmad', 'custom', `${namespace}.user.toml`),
-  ]) {
-    if (fs.existsSync(candidate)) customization = merge(customization, TOML.parse(fs.readFileSync(candidate, 'utf8')));
-  }
-  if (!customization.workflow || typeof customization.workflow !== 'object' || Array.isArray(customization.workflow))
+  const workflowCustomization = readWorkflowCustomization(configSource(projectRoot), path.dirname(defaultsPath), projectRoot, namespace);
+  if (!workflowCustomization || typeof workflowCustomization !== 'object' || Array.isArray(workflowCustomization))
     throw new Error('selected workflow customization must contain a workflow table');
   const settings = { ...HEALING_DEFAULTS };
   for (const key of Object.keys(settings)) {
@@ -88,7 +59,7 @@ function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRo
     }
   }
   return {
-    workflowCustomization: customization.workflow,
+    workflowCustomization,
     configSnapshot: {
       core: { user_name: 'User', communication_language: 'English', document_output_language: 'English', ...file.core },
       modules: { tea: { ...tea, ...settings } },

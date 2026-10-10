@@ -341,7 +341,6 @@
     "cli-evidence/attempt-1/attempt.json": "37aa963e9aae2ef8481e2a2bbe68c9824674290735ce6cd519841cb52ef9a341",
     "cli-evidence/attempt-1/generation.json": "60073dcbe0d7658c27bc2d37ac6e2ac58ab6687e810f44e15d90f67be74f6924",
     "cli-evidence/attempt-1/prompt.txt": "4b747feb739d58425d504dd95a5b6ecfe468bb8f44be067686b43e67bbe21505",
-    "cli-evidence/attempt-1/stderr.txt": "4738b6ff0fda6667f063058617d50d63b11fa5312c9163a58d6df0c65b894d1b",
     "cli-evidence/attempt-1/stdout.txt": "9f3fd3225970dc324198224734284bb9f2aa19fa9b7aa836db0238a6fda1b70e",
     "cli-evidence/run.json": "4aecb3c227bcfd42b8776a761fd4029ca3ba112b6ab979a5e6fb249637dbd365",
     "generated/tests/api/voucher-redemption.spec.ts": "4a632432350f01a397888f8089e802c6d7e99250eaea24da22cf6774e9605cd9",
