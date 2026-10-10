@@ -20,6 +20,27 @@ const {
 } = require('./lib/workflow-cli');
 const collect = (value, previous) => [...previous, value];
 const digest = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+function canonicalDestination(file) {
+  if (fs.existsSync(file)) return fs.realpathSync(file);
+  return path.join(canonicalDestination(path.dirname(file)), path.basename(file));
+}
+function checkPublication(destinations, inputs) {
+  const canonical = destinations.map(canonicalDestination);
+  if (canonical.some((file) => inputs.includes(file)))
+    throw new WorkflowError('usage', 'a published artifact aliases an input document; select a separate --output-dir');
+  if (new Set(canonical).size !== canonical.length)
+    throw new WorkflowError('usage', 'published artifacts alias each other; select a separate --output-dir');
+}
+function validateSections(text, sections, label) {
+  for (const section of sections) {
+    const escaped = section.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    const match = text.match(new RegExp(`^#{2,3} .*${escaped}[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3} |$(?![\\s\\S]))`, 'mi'));
+    if (!match || !match[1].replaceAll(/<!--[^]*?-->/g, '').trim())
+      throw new WorkflowError('environment-parser', `${label} is missing populated section: ${section}`);
+  }
+  if (/<!--\s*TEA will populate|\{(?:Feature Name|project_name|timestamp|test_design_path)\}/i.test(text))
+    throw new WorkflowError('environment-parser', `${label} contains unresolved template placeholders`);
+}
 function readArtifact(attemptDir, file) {
   const target = projectPath(attemptDir, file, 'generated artifact');
   if (!fs.existsSync(target) || !fs.statSync(target).isFile())
@@ -33,6 +54,35 @@ function validateDesign(context) {
   for (const [file, expected] of inputDigests)
     if (digest(file) !== expected) throw new WorkflowError('environment-parser', `the agent changed an input: ${file}`);
   const artifacts = artifactFiles.map((file) => readArtifact(attemptDir, file));
+  if (context.runScope === 'system') {
+    const architecture = artifacts.find((artifact) => path.basename(artifact.path) === 'test-design-architecture.md');
+    const handoff = artifacts.find((artifact) => artifact.path.endsWith('-handoff.md'));
+    validateSections(
+      architecture.text,
+      [
+        'Executive Summary',
+        'Risk Assessment',
+        'NFR Testability Requirements',
+        'Testability Concerns and Architectural Gaps',
+        'Risk Mitigation Plans',
+        'Assumptions and Dependencies',
+      ],
+      'architecture report',
+    );
+    validateSections(
+      handoff.text,
+      [
+        'Purpose',
+        'TEA Artifacts Inventory',
+        'Epic-Level Integration Guidance',
+        'Story-Level Integration Guidance',
+        'Risk-to-Story Mapping',
+        'Recommended BMAD',
+        'Phase Transition Quality Gates',
+      ],
+      'handoff report',
+    );
+  }
   const checkpoint = readArtifact(attemptDir, checkpointFile);
   const match = checkpoint.text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new WorkflowError('environment-parser', 'the progress checkpoint has no YAML frontmatter');
@@ -135,6 +185,10 @@ function run(argv) {
       .replaceAll(/^-|-$/g, '') || 'project';
   const planName = options.scope === 'epic' ? `test-design-epic-${options.epic}.md` : 'test-design-qa.md';
   const publishedNames = options.scope === 'epic' ? [planName] : ['test-design-architecture.md', planName, `${projectName}-handoff.md`];
+  const destinations = [...publishedNames, `test-design-progress-${runKey}.md`].map((name) =>
+    projectPath(projectRoot, path.join(outputDir, 'test-design', name), 'published artifact'),
+  );
+  checkPublication(destinations, inputs);
   const result = runWithEvidence({
     name: 'tea-test-design',
     projectRoot,
@@ -181,6 +235,11 @@ function run(argv) {
     return;
   }
   const published = [];
+  // Recheck after execution: the consuming project is writable during generation.
+  checkPublication(
+    destinations.map((file) => projectPath(projectRoot, file, 'published artifact')),
+    inputs,
+  );
   for (const artifact of result.value.artifacts) {
     const destination = projectPath(projectRoot, path.join(outputDir, 'test-design', path.basename(artifact.path)), 'published artifact');
     fs.mkdirSync(path.dirname(destination), { recursive: true });

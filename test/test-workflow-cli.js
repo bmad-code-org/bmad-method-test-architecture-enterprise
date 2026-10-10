@@ -29,7 +29,9 @@ if (mode === 'missing') { process.stdout.write('done'); process.exit(0); }
 const files = JSON.parse(prompt.match(/Produce these deliverables: (.*)/)[1]);
 const runKey = prompt.match(/run_key=([^;\\n]+)/)[1];
 const plan = '# Test Design\\n\\n## Risk Assessment\\n\\n### Low Risks: Score 1 to 2\\n\\n| Risk ID | Category | Description | Probability | Impact | Score |\\n| --- | --- | --- | --- | --- | --- |\\n| R-001 | DATA | Request handling loses queued input | 1 | 2 | '+(mode === 'bad-score' ? '9' : '2')+' |\\n\\n## Test Coverage Plan\\n\\n### P1\\n\\n| Test ID | Scenario | Test Level | Risk Link |\\n| --- | --- | --- | --- |\\n| T-001 | Keep queued input when sync fails | API | R-001 |\\n';
-for (const file of files) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, /(?:epic-|qa\\.md$)/.test(file) ? plan : '# Completed architecture or handoff\\n'); }
+const architecture = '# Architecture\\n\\n'+['Executive Summary','Risk Assessment','NFR Testability Requirements','Testability Concerns and Architectural Gaps','Risk Mitigation Plans','Assumptions and Dependencies'].map(h => '## '+h+'\\n\\nExplicit design decision.\\n').join('\\n');
+const handoff = '# Handoff\\n\\n'+['Purpose','TEA Artifacts Inventory','Epic-Level Integration Guidance','Story-Level Integration Guidance','Risk-to-Story Mapping','Recommended BMAD → TEA Workflow Sequence','Phase Transition Quality Gates'].map(h => '## '+h+'\\n\\nActionable integration guidance.\\n').join('\\n');
+for (const file of files) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, /(?:epic-|qa\\.md$)/.test(file) ? plan : (mode === 'malformed-system' ? '# Incomplete\\n' : file.endsWith('architecture.md') ? architecture : handoff)); }
 if (mode !== 'no-checkpoint') {
  const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);
  fs.writeFileSync(checkpoint, '---\\nrunScope: '+(runKey === 'system' ? 'system' : 'epic')+'\\nrunKey: '+runKey+'\\nworkflowStatus: completed\\ntotalSteps: 5\\nstepsCompleted: [step-01-detect-mode, step-02-load-context, step-03-risk-and-testability, step-04-coverage-plan, step-05-generate-output]\\nlastStep: step-05-generate-output\\nnextStep: ""\\n---\\n# Finished\\n');
@@ -263,4 +265,48 @@ test('eval artifact retention preserves exact bytes and identifies live observat
   assert.equal(provenance.mode, 'live');
   assert.equal(provenance.requestedModel, 'gpt-5.6-sol');
   assert.equal(provenance.originalWorkspace, workspace);
+});
+
+test('publication refuses direct and symlink input collisions before invoking an agent', (t) => {
+  const root = project(t);
+  const output = path.join(root, 'published', 'test-design');
+  fs.mkdirSync(output, { recursive: true });
+  const input = path.join(output, 'test-design-epic-7.md');
+  fs.writeFileSync(input, '# Protected requirements\n');
+  const direct = execute(root, ['--epic', '7', '--input', input], 'success');
+  assert.equal(direct.status, 2, direct.stderr);
+  assert.equal(fs.readFileSync(input, 'utf8'), '# Protected requirements\n');
+  assert.equal(fs.existsSync(path.join(root, 'captured-prompt.txt')), false);
+  fs.unlinkSync(input);
+  fs.symlinkSync(path.join(root, 'epic.md'), input);
+  const alias = execute(root, ['--epic', '7'], 'success');
+  assert.equal(alias.status, 2, alias.stderr);
+  assert.equal(fs.existsSync(path.join(root, 'captured-prompt.txt')), false);
+});
+
+test('system generation requires populated architecture and handoff sections', (t) => {
+  const root = project(t);
+  const result = execute(root, ['--scope', 'system', '--input', 'architecture.md'], 'malformed-system');
+  assert.equal(result.status, 3, result.stderr);
+  assert.equal(fs.existsSync(path.join(root, 'published')), false);
+});
+
+test('each probe attempt records its own raw observation or fault before retry', async () => {
+  const { captureProbe } = require('./lib/retain-skill-artifacts');
+  const recorded = [];
+  const fault = Object.assign(new Error('lost first attempt'), { code: 'port-failure', detail: 'raw transport detail' });
+  const failed = captureProbe(
+    {
+      probe: async () => {
+        throw fault;
+      },
+    },
+    (value) => recorded.push(value),
+  );
+  await assert.rejects(failed.probe({}, new AbortController().signal), (error) => error === fault);
+  const raw = { kind: 'cli', stdout: 'second exact output', stderr: 'second stderr', exitCode: 0 };
+  const success = captureProbe({ probe: async () => raw }, (value) => recorded.push(value));
+  assert.equal(await success.probe({}, new AbortController().signal), raw);
+  assert.equal(recorded[0].fault.detail, 'raw transport detail');
+  assert.equal(recorded[1], raw);
 });

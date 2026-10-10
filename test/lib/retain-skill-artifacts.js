@@ -3,6 +3,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { writeText } = require('./file-system-port');
+/** Observe each attempt before retry cleanup can discard its workspace. */
+function captureProbe(port, record) {
+  return {
+    async probe(request, signal) {
+      try {
+        const observation = await port.probe(request, signal);
+        record(observation);
+        return observation;
+      } catch (error) {
+        record({ fault: { name: error.name, code: error.code, message: error.message, detail: error.detail } });
+        throw error;
+      }
+    },
+  };
+}
 async function retainSkillArtifacts({ artifactsDir, workspace, caseId, agent, model, repetition, attempt, prompt, observation }) {
   if (!artifactsDir) return null;
   const root = path.resolve(artifactsDir);
@@ -19,4 +34,4 @@ async function retainSkillArtifacts({ artifactsDir, workspace, caseId, agent, mo
   process.stderr.write(`retained skill artifacts: ${destination}\n`);
   return destination;
 }
-module.exports = { retainSkillArtifacts };
+module.exports = { retainSkillArtifacts, captureProbe };

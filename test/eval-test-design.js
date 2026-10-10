@@ -160,7 +160,7 @@ const {
   targetProblems,
 } = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
-const { retainSkillArtifacts } = require('./lib/retain-skill-artifacts');
+const { retainSkillArtifacts, captureProbe } = require('./lib/retain-skill-artifacts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
@@ -1406,6 +1406,7 @@ async function runCase(set, options, agent, runIndex, categories) {
         workspace = await stageWorkspace(set);
       }
       lastAttempt = attempt;
+      rawObservation = undefined;
       const leaked = await assertGroundTruthAbsent(workspace.dir);
       if (leaked.length > 0) {
         return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
@@ -1419,7 +1420,9 @@ async function runCase(set, options, agent, runIndex, categories) {
         // authorization does not permit, so the two lists are built from one source.
         environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
       });
-      return port;
+      return captureProbe(port, (observation) => {
+        rawObservation = observation;
+      });
     };
     const result = await probeCommandWithRetry(
       portForAttempt,
@@ -1433,7 +1436,7 @@ async function runCase(set, options, agent, runIndex, categories) {
       }),
       new AbortController().signal,
     );
-    rawObservation = result.ok ? result.observation : { fault: result };
+    rawObservation ??= result.ok ? result.observation : { fault: result };
     // The declared scope is the workspace. A run that reached the repository
     // instead is outside it, and its document is not read. Checked before the
     // result is, because a killed run may have written before it was killed.
