@@ -366,9 +366,7 @@ test('@P1 @Integration data syncs correctly', async ({ apiRequest }) => {
   await apiRequest({
     method: 'POST',
     path: '/api/seed',
-    body: {
-      /* test data */
-    },
+    body: {/* test data */},
   });
 
   // Validate
