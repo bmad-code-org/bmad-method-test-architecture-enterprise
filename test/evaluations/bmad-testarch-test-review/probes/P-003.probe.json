@@ -63,6 +63,50 @@
                   "literal": "tests/test_checkout.py"
                 }
               ]
+            },
+            {
+              "op": "for-any",
+              "collection": {
+                "pointer": "/interactions/manifest-p-003/stdout/findings"
+              },
+              "predicate": {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/row"
+                      },
+                      {
+                        "literal": "H1"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "set-membership",
+                    "operands": [
+                      {
+                        "pointer": "@/line"
+                      },
+                      {
+                        "literal": [15, 16, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/provenance"
+                      },
+                      {
+                        "literal": "pre_existing"
+                      }
+                    ]
+                  }
+                ]
+              }
             }
           ]
         }
