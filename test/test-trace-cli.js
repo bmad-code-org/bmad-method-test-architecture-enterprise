@@ -364,7 +364,7 @@ try {
     fs.mkdirSync(outside);
     fs.writeFileSync(path.join(outside, 'sentinel.md'), 'external sentinel');
     try {
-      for (const mode of ['late-json-success', 'late-json-failure', 'late-artifact-alias', 'late-artifact-escape']) {
+      for (const mode of ['late-json-success', 'late-json-failure', 'late-artifact-alias', 'late-artifact-escape', 'late-artifact-pair']) {
         const json = path.join(root, 'late-result.json');
         if (fs.existsSync(json)) fs.unlinkSync(json);
         const matrix = path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md');
@@ -374,6 +374,7 @@ try {
         assert.equal(result.payload.status, 'failed');
         assert.deepEqual(fs.readFileSync(target), before);
         assert.equal(fs.readFileSync(path.join(outside, 'sentinel.md'), 'utf8'), 'external sentinel');
+        if (mode === 'late-artifact-pair') assert.equal(fs.readFileSync(matrix, 'utf8'), '# Agent-created matrix sentinel');
       }
       for (const file of [path.join(root, 'late-result.json'), path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')])
         if (fs.existsSync(file)) fs.unlinkSync(file);

@@ -79,6 +79,9 @@ function execute(options, registerOutputGuard = () => {}) {
   const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
   const assertOutputPaths = () => {
     for (const [name, file] of Object.entries(destinations)) projectPath(projectRoot, file, `trace ${name}`);
+    const outputs = Object.values(destinations);
+    if (outputs.some((left, index) => outputs.slice(index + 1).some((right) => aliases(left, right))))
+      throw new Error('Trace artifacts must use separate paths from each other.');
     if (Object.values(destinations).some((output) => inputs.some((input) => aliases(output, input))))
       throw new Error('Trace artifacts must use separate paths from the target, live results, and waiver register.');
     if (!options.json) return;

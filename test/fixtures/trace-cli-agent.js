@@ -111,4 +111,10 @@ if (mode === 'late-artifact-escape') {
   fs.mkdirSync(path.dirname(published), { recursive: true });
   fs.symlinkSync(path.join(`${process.cwd()}-outside`, 'sentinel.md'), published);
 }
+if (mode === 'late-artifact-pair') {
+  const published = path.join(process.cwd(), 'artifacts', 'trace', path.basename(matrixPath));
+  fs.mkdirSync(path.dirname(published), { recursive: true });
+  fs.writeFileSync(published, '# Agent-created matrix sentinel');
+  fs.linkSync(published, path.join(path.dirname(published), path.basename(summaryPath)));
+}
 process.stdout.write('trace fixture agent completed\n');
