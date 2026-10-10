@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "archive": "evidence.json.gz",
+  "sha256": "ba10a66d1546867fb0f5da1d946f7764e9abe16aa84b12bb2b3ae69430f5ff4a",
+  "fileCount": 1192,
+  "manifest": {
+    "confirmationProvenance": {
+      "kind": "live-cli-resume-confirmation",
+      "sourceCommit": "c7075fc0ff35843df554a948f7d45066964ff18b",
+      "criticalSourceSha256": {
+        "cli/framework.js": "5439d3c7bf52535797bdeee6ffa8c0b34cae3a15ab465aefa8189e3388a43c6f",
+        "cli/lib/framework-setup.js": "31591df49349a82da2fb641b4da631747d767d9d8cdb4ee7f5b2e31349c06e04",
+        "cli/lib/workflow-cli.js": "2ca93d2237b1f20cb6e39a694617ba9dbf346c028f4b26ba8da125bb1debbb8e",
+        "cli/lib/resolve-tea-config.js": "4dcc0fd472b23373b75f9d1e73378459f12be1fe0c411089efb3b463ef2693dd",
+        "cli/lib/agent-adapters.js": "2d586ffd0ac44cb2fa6758d239cb7f344b32601ffcb9dc8745aad08118ad67bc"
+      },
+      "agent": "custom",
+      "actualModel": "gpt-5.6-sol",
+      "runnerPolicy": "explicit full access in disposable fixture",
+      "originalDefaultOutcome": "incomplete macOS Chromium sandbox restriction",
+      "interruptedEarlierFullAccess": "No final outcome or raw stdout recovered after process lifetime ended at handoff. Journal snapshot retained."
+    },
+    "schemaVersion": 1,
+    "capturedAt": "2026-10-10T02:11:09.838Z",
+    "model": "gpt-5.6-sol",
+    "baselineSource": "cbcf937135585c072846026ea7cacbcedf74182d",
+    "finalCliSource": "c7075fc0ff35843df554a948f7d45066964ff18b",
+    "limitations": [
+      "Original fixtures had no Git worktree. Baseline generation bypassed the existing Git requirement; this policy finding is separate from assertion scores.",
+      "Early after captures used uncommitted CLI prototypes. Exact prototype source bytes were not captured. Effective prompts and raw streams remain preserved; final controller verification is a separately labeled native replay.",
+      "Default Codex browser Resume remained incomplete because the macOS sandbox denied Chromium launch. The final custom wrapper explicitly used full access in a disposable fixture, with the same pinned model.",
+      "The earlier full-access attempt was interrupted at handoff without recoverable raw stdout or final exit. Its prompt and saved partial journal remain; confirmation is a separate live Resume.",
+      "The initial native browser scorer called a nonexistent baseline npm test script. Its failed invocation logs remain under independent-validation. Final scored execution uses the actual frozen npm run test:e2e command.",
+      "Baseline Python and after Python scores use different checks; equal 9/9 scores establish generated assertion behavior and do not measure a quality uplift."
+    ],
+    "finalParserVerification": {
+      "sourceCommit": "b15420736a2383a9aafd83348af8d24f7988bee5",
+      "criticalSourceSha256": {
+        "cli/framework.js": "5439d3c7bf52535797bdeee6ffa8c0b34cae3a15ab465aefa8189e3388a43c6f",
+        "cli/lib/framework-setup.js": "73ee92402c0231d1f4c4865f1753dbb96e226774b6f2c93efb587405d6f9d668",
+        "cli/lib/workflow-cli.js": "600ed8742945b918b38f410665d8f549c1691c2c1b05162ee61284941f975242",
+        "cli/lib/resolve-tea-config.js": "4dcc0fd472b23373b75f9d1e73378459f12be1fe0c411089efb3b463ef2693dd",
+        "cli/lib/agent-adapters.js": "2d586ffd0ac44cb2fa6758d239cb7f344b32601ffcb9dc8745aad08118ad67bc"
+      },
+      "kind": "controlled-post-capture-native-verification",
+      "projection": "Original journal/checkpoint project-root references projected into a disposable project copy. Original archived capture unchanged. No model call."
+    }
+  }
+}

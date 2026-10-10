@@ -114,6 +114,7 @@ npm install --save-dev bmad-method-test-architecture-enterprise
 ```
 
 - [`tea-test-review`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/) runs the review skill against changed tests and returns a gate verdict.
+- [`tea-framework`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-framework-cli/) creates, resumes, validates, and edits test framework and CI setup with retained run evidence.
 - [`tea-trace`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-trace-cli/) maps requirements to existing evidence and returns a coverage gate.
 - [`tea-evaluate`](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-evaluate-cli/) checks, runs, scores, and compares behavioral evaluations.
 

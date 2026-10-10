@@ -55,6 +55,15 @@ For Create, use the journal's saved next-step position when available. Before di
 
 For Edit, persist each phase's confirmed exact targets, requested changes, evaluation-plan paths/digests, current step/subsection and completed edits. Save target pre-edit digests before writes and actual resulting digests after each applied change. After an interrupted edit, read the actual files and reconcile the requested change against the saved before state before reapplying. A fully applied change advances without rewriting it; an uncertain partial edit halts for the missing decision. Resume uses these saved targets and confirmed requests, skips completed edits, and continues at the saved edit subsection. It never enters a Create resume loader.
 
+For a CLI Edit, keep the exact selected artifacts in `phase_targets` and store `edit_applied.<phase>` as an array of `{path, status, before_sha256, after_sha256, reason}` records.
+Use `status: applied` only when the selected artifact changed; use `status: noop` for an unchanged artifact with an explicit reason.
+The CLI supplies its observed before digests in the prompt and the digest algorithm, including permissions and directory inputs.
+Compute the after digest from the actual selected artifact, then save its outcome before phase completion.
+
 For Validate, save exact selected artifacts, `validation_scope`, `run_timestamp`, the reserved report path, reservation `run_id`, completed criteria/results and the current subsection. Journal the chosen report path before its exclusive-create reservation. After reservation succeeds, save that fact before further validation. If interrupted between those writes, recover the report only when its `run_id` proves this run owns it. Resume continues the same owned report and unfinished checks. It never reserves another report or truncates another run's report. If a saved reservation is missing or its ownership differs, stop and report the inconsistency.
+
+CLI validation reports are nonempty regular Markdown files with YAML frontmatter containing the journal's `run_id`, completed `status: PASS`, `WARN`, or `FAIL`, and `validated_artifacts` naming the exact phase targets.
+Preserve the selected inputs during Validate.
+A fresh operation writes a fresh report; Resume keeps its same-run reserved report.
 
 Dispatch the saved next file/subsection directly for journal-backed Resume. This is a one-way dispatch: do not route back into a phase resume loader or call the shared router recursively. A completed framework checkpoint with pending CI continues to CI under the saved original operation; completed phases keep their checkpoints and hooks. A phase becomes completed after its saved operation's checks and applicable phase hook succeed; a Validate report can complete with a FAIL verdict. Canonical completion is a distinct final journal position.

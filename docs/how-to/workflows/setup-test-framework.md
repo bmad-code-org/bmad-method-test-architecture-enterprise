@@ -48,6 +48,8 @@ Choose [framework setup](#framework-setup), [CI setup](#ci-setup), or both. Exis
 - **Codex:** `$bmad-testarch-framework`
 - **Inside a `/bmad-tea` chat:** `TF`
 
+For unattended runs, use [`tea-framework`](/docs/reference/tea-framework-cli.md): `tea-framework --agent codex --scope both`.
+
 Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 For framework only, add "Set up the test framework only."
