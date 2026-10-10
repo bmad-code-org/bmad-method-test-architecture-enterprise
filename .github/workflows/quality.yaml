@@ -325,6 +325,7 @@ jobs:
           name: evaluate-runs-${{ matrix.shard }}
           path: |
             test/evaluations/bmad-testarch-evaluate/runs
+            test/evaluations/bmad-testarch-test-review/runs
             test/fixtures/evaluate-api/evals/grader/runs
             test/fixtures/evaluate-authoring/ai-feature/evaluation/runs
             test/fixtures/evaluate-authoring/test-review/evaluation/runs
