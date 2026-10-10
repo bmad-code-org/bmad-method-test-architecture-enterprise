@@ -199,7 +199,9 @@ test('empty framework directory cannot establish Create completion', (t) => {
 test('unsupported successful commands cannot establish native test execution', (t) => {
   const f = fixture(t);
   const request = f.prepare();
-  f.journal({ contract: { test_commands: ['node -e "console.log(\'1 passed\')"'], pipeline_target: '.github/workflows/test.yaml' } });
+  f.journal({
+    contract: { test_commands: ['node -e "console.log(\'pytest 1 passed\')"'], pipeline_target: '.github/workflows/test.yaml' },
+  });
   const result = inspectCompletion(request);
   assert.equal(result.completed, false);
   assert.equal(result.executions[0].runner, null);
@@ -268,4 +270,18 @@ test('retained Codex unittest suite executes and detects both application regres
     assert.equal(result.status, 1, result.stderr);
     assert.match(result.stderr, /AssertionError/);
   }
+});
+
+test('Resume preserves reserved Validate report and confirmed Edit request scope', (t) => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.root, 'reserved.md'), '# Reserved report\n');
+  fs.writeFileSync(path.join(f.root, 'replacement.md'), '# Replacement report\n');
+  f.journal({ setup_scope: 'framework', setup_operation: 'validate', validation_reports: { framework: 'reserved.md' } });
+  const validate = f.prepare({ operation: 'resume' });
+  f.journal({ setup_scope: 'framework', setup_operation: 'validate', validation_reports: { framework: 'replacement.md' } });
+  assert.match(inspectCompletion(validate).issues.join('\n'), /validation_reports.framework/);
+  f.journal({ setup_scope: 'framework', setup_operation: 'edit', edit_requests: { framework: 'Change only the test timeout' } });
+  const edit = f.prepare({ operation: 'resume' });
+  f.journal({ setup_scope: 'framework', setup_operation: 'edit', edit_requests: { framework: 'Replace every test' } });
+  assert.match(inspectCompletion(edit).issues.join('\n'), /edit_requests.framework/);
 });

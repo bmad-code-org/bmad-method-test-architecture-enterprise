@@ -90,6 +90,31 @@ function protectResultPath(request, resultPath, state = request.before?.data) {
   }
 }
 
+function journalArtifactPaths(state) {
+  const references = [];
+  const add = (value) => {
+    if (typeof value === 'string') references.push(value);
+    else if (Array.isArray(value)) {
+      for (const item of value) add(item);
+    } else if (value?.path) add(value.path);
+  };
+  for (const phase of ['framework', 'ci']) {
+    add(state?.phase_targets?.[phase]);
+    add(state?.phase_checkpoints?.[phase]);
+    add(state?.validation_reports?.[phase]);
+    add(state?.parallel_workers?.[phase]?.checkpoint);
+  }
+  for (const key of ['config_paths', 'test_directories', 'test_dir', 'pipeline_target', 'lockfile', 'artifact_paths'])
+    add(state?.contract?.[key]);
+  add(state?.pipeline_target);
+  return references;
+}
+
+function validateJournalPaths(request, state) {
+  for (const file of journalArtifactPaths(state))
+    projectPath(request.projectRoot, file.replaceAll('{test_artifacts}', request.artifactsRoot));
+}
+
 /** Recognize native runner summaries after resolving ordinary package or shell-script commands. */
 function testExecutionEvidence(root, command, output) {
   let expanded = command;
@@ -111,21 +136,28 @@ function testExecutionEvidence(root, command, output) {
     const file = projectPath(root, shellFile);
     if (fs.existsSync(file)) expanded += `\n${fs.readFileSync(file, 'utf8')}`;
   }
+  const invocations = expanded.split(/[\n;&|]+/).map((line) =>
+    line
+      .trim()
+      .replace(/^(?:[A-Z_]\w*=\S+\s+)+/, '')
+      .replace(/^(?:npx(?:\s+--(?:yes|no-install))?|(?:npm|pnpm)\s+exec(?:\s+--)?)\s+/, '')
+      .replace(/^[^'"\s]*\/([^\s/]+)/, '$1'),
+  );
   const patterns = [
-    ['node-test', /\bnode(?:\.exe)?\s+(?:--[\w-]+(?:=\S+)?\s+)*--test(?:[=\s]|$)/, /(?:#|ℹ) pass (\d+)/],
-    ['unittest', /\bpython[\d.]*\s+-m\s+unittest\b/, /Ran (\d+) tests?\b/],
-    ['pytest', /\b(?:pytest|python[\d.]*\s+-m\s+pytest)\b/, /(?:^|\s)(\d+) passed\b/],
-    ['playwright', /\bplaywright\s+test\b/, /(?:^|\s)(\d+) passed\b/],
-    ['vitest', /\bvitest\b/, /Tests\s+(\d+) passed\b/],
-    ['jest', /\bjest\b/, /Tests:\s+(\d+) passed\b/],
-    ['cypress', /\bcypress\s+run\b/, /Passing:\s*(\d+)/],
-    ['go', /\bgo\s+test\b/, /--- PASS:/],
-    ['cargo', /\bcargo\s+test\b/, /test result: ok\. (\d+) passed/],
-    ['dotnet', /\bdotnet\s+test\b/, /Passed:\s*(\d+)/],
-    ['phpunit', /\bphpunit\b/, /OK \((\d+) tests?/],
+    ['node-test', /^node(?:\.exe)?\s+(?:--[\w-]+(?:=\S+)?\s+)*--test(?:[=\s]|$)/, /(?:#|ℹ) pass (\d+)/],
+    ['unittest', /^python[\d.]*\s+-m\s+unittest\b/, /Ran (\d+) tests?\b/],
+    ['pytest', /^(?:pytest|python[\d.]*\s+-m\s+pytest)\b/, /(?:^|\s)(\d+) passed\b/],
+    ['playwright', /^playwright\s+test\b/, /(?:^|\s)(\d+) passed\b/],
+    ['vitest', /^vitest\b/, /Tests\s+(\d+) passed\b/],
+    ['jest', /^jest\b/, /Tests:\s+(\d+) passed\b/],
+    ['cypress', /^cypress\s+run\b/, /Passing:\s*(\d+)/],
+    ['go', /^go\s+test\b/, /--- PASS:/],
+    ['cargo', /^cargo\s+test\b/, /test result: ok\. (\d+) passed/],
+    ['dotnet', /^dotnet\s+test\b/, /Passed:\s*(\d+)/],
+    ['phpunit', /^phpunit\b/, /OK \((\d+) tests?/],
   ];
   for (const [runner, detector, summary] of patterns) {
-    if (!detector.test(expanded)) continue;
+    if (!invocations.some((invocation) => detector.test(invocation))) continue;
     const match = stripVTControlCharacters(output).match(summary);
     let passedTests = match ? (runner === 'go' ? [...output.matchAll(/--- PASS:/g)].length : Number(match[1])) : 0;
     if (runner === 'unittest') passedTests -= Number(output.match(/skipped=(\d+)/)?.[1] ?? 0);
@@ -201,7 +233,7 @@ function prepareSetup({ projectRoot, skillRoot, config, options }) {
     if (git.status !== 0 || git.stdout.trim() !== 'true')
       throw problem('Git repository required for CI/CD setup. Initialize the repository before Create.');
   }
-  return {
+  const request = {
     projectRoot,
     skillRoot,
     config,
@@ -218,6 +250,8 @@ function prepareSetup({ projectRoot, skillRoot, config, options }) {
     ciWorkflowCustomization: ciConfig?.workflowCustomization ?? {},
     resumeState: options.operation === 'resume' ? before.data : null,
   };
+  if (before) validateJournalPaths(request, before.data);
+  return request;
 }
 
 function setupPrompt(request, { retry = false } = {}) {
@@ -268,6 +302,7 @@ function inspectCompletion(request, { evidenceDir, timeoutMs = 1_200_000 } = {})
   const issues = [];
   if (!journal) return { completed: false, issues: ['The setup journal was not written'], journal: null, artifacts: [] };
   const state = journal.data;
+  validateJournalPaths(request, state);
   if (state.workflowStatus !== 'completed') issues.push(`Setup journal is ${state.workflowStatus ?? 'missing workflowStatus'}`);
   if (state.setup_scope !== request.scope) issues.push(`Journal scope ${state.setup_scope} does not match ${request.scope}`);
   if (state.setup_operation !== request.savedOperation)
@@ -283,6 +318,13 @@ function inspectCompletion(request, { evidenceDir, timeoutMs = 1_200_000 } = {})
       return saved === current;
     };
     if (!preserves(request.resumeState.contract ?? {}, state.contract)) issues.push('Resume changed the frozen contract');
+    for (const field of ['phase_targets', 'phase_checkpoints', 'validation_reports', 'edit_requests']) {
+      for (const phase of ['framework', 'ci']) {
+        const saved = request.resumeState[field]?.[phase];
+        if (saved && (!Array.isArray(saved) || saved.length > 0) && !preserves(saved, state[field]?.[phase]))
+          issues.push(`Resume changed saved ${field}.${phase}`);
+      }
+    }
     for (const key of request.resumeState.hooks_started ?? [])
       if (
         !state.hooks_started?.includes(key) ||
@@ -317,6 +359,7 @@ function inspectCompletion(request, { evidenceDir, timeoutMs = 1_200_000 } = {})
           : state.phase_targets?.[phase];
     const paths =
       typeof references === 'string' ? [references] : Array.isArray(references) ? references : references?.path ? [references.path] : [];
+    if (request.savedOperation === 'create' && state.phase_checkpoints?.[phase]) paths.push(state.phase_checkpoints[phase]);
     if (paths.length === 0)
       issues.push(`${phase} phase names no ${request.savedOperation === 'validate' ? 'validation report' : 'target artifacts'}`);
     for (const file of paths) {

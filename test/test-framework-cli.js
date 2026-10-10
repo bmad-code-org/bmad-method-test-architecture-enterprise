@@ -44,6 +44,7 @@ if (operation === 'validate') {
  fs.writeFileSync(report, '# FAIL\nMissing assertions\n');
  text += 'validation_reports:\n  framework: '+JSON.stringify(report)+'\n';
 }
+if (mode === 'replace-target') {fs.writeFileSync('tests/new.test.cjs', "require('node:test')('new',()=>{});\n");text=text.replace('tests/smoke.test.cjs]', 'tests/new.test.cjs]');}
 if (mode === 'replace-id') text = text.replace('command-test-run', 'replacement-run');
 if (mode === 'change-contract') text = text.replace('test_commands: [node --test]', 'test_commands: [node --test tests/smoke.test.cjs]');
 if (mode === 'missing-config') text = text.replace('contract:\n', 'contract:\n  config_paths: [missing.config.json]\n');
@@ -194,11 +195,11 @@ test('Resume rejects replaced identity, changed contract and discarded saved hoo
   assert.equal(f.run(f.agent()).status, 0);
   const journal = path.join(f.root, 'artifacts/framework/setup-run-progress.md');
   const original = fs.readFileSync(journal, 'utf8').replace('workflowStatus: completed', 'workflowStatus: in-progress');
-  for (const mode of ['replace-id', 'change-contract']) {
+  for (const mode of ['replace-id', 'change-contract', 'replace-target']) {
     fs.writeFileSync(journal, original);
     const result = f.run([...f.agent(mode), '--operation', 'resume']);
     assert.equal(result.status, 1, result.stdout);
-    assert.match(JSON.parse(result.stdout).issues.join('\n'), /frozen/);
+    assert.match(JSON.parse(result.stdout).issues.join('\n'), /frozen|phase_targets/);
   }
   fs.writeFileSync(
     journal,
@@ -271,5 +272,20 @@ test('retry cannot adopt unchanged completed history after transport failure', (
   const result = f.run([...f.agent('old-retry'), '--retries', '1']);
   assert.equal(result.status, 2, result.stdout);
   assert.match(result.stderr, /no recoverable progress/);
+  assert.equal(fs.readFileSync(journal, 'utf8'), prior);
+});
+
+test('saved checkpoint paths are confined even without a JSON publication flag', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run(f.agent()).status, 0);
+  const journal = path.join(f.root, 'artifacts/framework/setup-run-progress.md');
+  const prior = fs
+    .readFileSync(journal, 'utf8')
+    .replace('workflowStatus: completed', 'workflowStatus: in-progress')
+    .replace('phase_status:', 'phase_checkpoints: {framework: "../foreign-checkpoint.md"}\nphase_status:');
+  fs.writeFileSync(journal, prior);
+  const result = f.run([...f.agent(), '--operation', 'resume']);
+  assert.equal(result.status, 2, result.stdout);
+  assert.match(result.stderr, /outside project root/);
   assert.equal(fs.readFileSync(journal, 'utf8'), prior);
 });
