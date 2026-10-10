@@ -4344,7 +4344,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
-    "corpusDigest": "sha256:4f02479e4af84345e70ff854e81a968bf5820bd2ac0b765dc67a4e248125d5e8",
+    "corpusDigest": "sha256:78eea66ed9512dbcb60eb788afd11c1eb14094ff56e322b49baa0165e67782f6",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -6148,7 +6148,7 @@
   },
   "fragment-selection/bmad-testarch-trace": {
     "contractId": "tea-fragment-selection-trace",
-    "corpusDigest": "sha256:f67f03c25e32bcf4d19d2c22b5988df23f8a41a10e627ab113318b0cad23f608",
+    "corpusDigest": "sha256:31266cb75d7caca95e03353637557de206fb13e06d53d2eb1d9b96f5bb243ad6",
     "probeCount": 2,
     "strength": {
       "defect": null,

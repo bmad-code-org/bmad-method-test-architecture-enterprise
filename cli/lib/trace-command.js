@@ -270,7 +270,7 @@ function matrixInventory(matrix, reference) {
       const heading = tokens[index + 1].content;
       const nextDepth = Number(token.tag.slice(1));
       if (nextDepth <= depth) current = null;
-      const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}\s*:\s/.exec(heading);
+      const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}(?:\s+\(P[0-3]\))?\s*:\s/.exec(heading);
       const priority = /\b(P[0-3])\b/.exec(heading)?.[1] ?? (claim ? ledgerPriorities.get(claim[1]) : null);
       if (!claim || (!priority && !/^[A-Za-z]+-\d+$/.test(claim[1]))) continue;
       if (!priority) throw new Error(`Trace criterion ${claim[1]} has no priority.`);

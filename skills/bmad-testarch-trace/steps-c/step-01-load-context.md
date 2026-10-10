@@ -220,6 +220,7 @@ oracleConfidence: '{resolved oracle_confidence}'
 oracleResolutionMode: '{resolved oracle_resolution_mode}'
 oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
 externalPointerStatus: '{resolved external_pointer_status}'
+oracleLedger: [{ id: '{oracle item id}', requirement: '{requirement text}', priority: '{P0-P3}', source: '{source reference}' }]
 ---
 ```
 

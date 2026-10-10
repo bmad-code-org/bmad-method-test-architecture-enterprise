@@ -85,12 +85,12 @@ The result prints artifact and evidence paths to standard output.
 `--json <path>` also saves the result and must point outside declared inputs and trace artifacts.
 `--evidence-dir` sets the retained attempt root, default `.tea-runs`.
 
-| Exit | Meaning                                                                 |
-| ---- | ----------------------------------------------------------------------- |
-| `0`  | PASS, accepted CONCERNS, coverage without a gate, or prompt inspection. |
-| `1`  | FAIL, or CONCERNS with `--fail-on concerns`.                            |
-| `2`  | Invalid configuration, input, or unavailable agent.                     |
-| `3`  | Agent execution failed or current artifacts failed validation.          |
+| Exit | Meaning                                                                                               |
+| ---- | ----------------------------------------------------------------------------------------------------- |
+| `0`  | PASS, accepted CONCERNS, coverage without a gate, or prompt inspection.                               |
+| `1`  | FAIL, or CONCERNS with `--fail-on concerns`.                                                          |
+| `2`  | Invalid configuration, input, unavailable agent, rejected output path, or report publication failure. |
+| `3`  | Agent execution failed or current artifacts failed validation.                                        |
 
 Before the agent runs, the CLI snapshots supplied inputs and the consuming Git revision.
 It checks input bytes, identity, permissions, and paths again before publication.

@@ -94,10 +94,7 @@ function liveReference(capture, criterionIds) {
           ? 'mixed'
           : 'stale'
       : 'unverifiable',
-    freshFailed: manifest.results.filter((entry) => {
-      const row = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
-      return asString(row.status).toLowerCase() === 'fail' && shaMatches(row.source_sha ?? manifest.source_sha, currentSha);
-    }).length,
+    freshFailed: records.filter((row) => row.disposition === 'fail' && shaMatches(row.sha, currentSha)).length,
   };
 }
 

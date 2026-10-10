@@ -125,6 +125,11 @@ try {
       fs.writeFileSync(file, original);
     }
   });
+  check('matrix accepts a priority in its criterion heading without a table', () => {
+    const result = run('matrix-priority-heading');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.payload.coverage.total, 1);
+  });
   check('computed FAIL exits 1 and remains reviewable', () => {
     const result = run('gap');
     assert.equal(result.status, 1);
@@ -297,8 +302,15 @@ try {
       assert.match(mutation.payload.reason, /changed a supplied input/);
       write([{ id: '1.1-LIVE-003', status: 'fail' }]);
       const ignoredInvalidFailure = run('manifest-invalid-failure-ignored', ['--live-results', 'live.json']);
-      assert.equal(ignoredInvalidFailure.status, 3, ignoredInvalidFailure.stderr);
-      assert.match(ignoredInvalidFailure.payload.reason, /frozen supplied manifest/);
+      assert.equal(ignoredInvalidFailure.status, 0, ignoredInvalidFailure.stderr);
+      assert.equal(ignoredInvalidFailure.payload.gate_status, 'PASS');
+      write([
+        { id: '1.1-LIVE-003', requirement_id: 'AC-1', status: 'pass' },
+        { ...failure, id: '1.1-LIVE-003' },
+      ]);
+      const ignoredDuplicateFailure = run('manifest-invalid-failure-ignored', ['--live-results', 'live.json']);
+      assert.equal(ignoredDuplicateFailure.status, 0, ignoredDuplicateFailure.stderr);
+      assert.equal(ignoredDuplicateFailure.payload.gate_status, 'PASS');
     } finally {
       fs.unlinkSync(live);
     }
