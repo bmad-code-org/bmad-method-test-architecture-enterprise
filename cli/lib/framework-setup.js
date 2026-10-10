@@ -115,34 +115,111 @@ function validateJournalPaths(request, state) {
     projectPath(request.projectRoot, file.replaceAll('{test_artifacts}', request.artifactsRoot));
 }
 
+/** Read simple shell invocations while preserving quoted and escaped argument boundaries. */
+function shellInvocations(command) {
+  const commands = [];
+  let args = [];
+  let word = '';
+  let active = false;
+  let quote = null;
+  let escaped = false;
+  let comment = false;
+  const token = () => {
+    if (active) args.push(word);
+    word = '';
+    active = false;
+  };
+  const finish = () => {
+    token();
+    if (args.length > 0) commands.push(args);
+    args = [];
+  };
+  for (const character of command) {
+    if (comment) {
+      if (character === '\n') {
+        comment = false;
+        finish();
+      }
+      continue;
+    }
+    if (escaped) {
+      if (character !== '\n') word += character;
+      escaped = false;
+      continue;
+    }
+    if (character === '\\' && quote !== "'" && process.platform !== 'win32') {
+      escaped = true;
+      active = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = null;
+      else word += character;
+      continue;
+    }
+    if (["'", '"', '`'].includes(character)) {
+      quote = character;
+      active = true;
+      continue;
+    }
+    if (character === '#' && !active) {
+      comment = true;
+      continue;
+    }
+    if ([';', '&', '|', '\n'].includes(character)) {
+      finish();
+      continue;
+    }
+    if (/\s/.test(character)) {
+      token();
+      continue;
+    }
+    word += character;
+    active = true;
+  }
+  if (quote || escaped) return [];
+  finish();
+  return commands.map((parts) => {
+    while (/^[A-Z_]\w*=/.test(parts[0] ?? '')) parts.shift();
+    if (parts[0] === 'npx') {
+      parts.shift();
+      while (parts[0]?.startsWith('--')) parts.shift();
+    } else if (['npm', 'pnpm'].includes(parts[0]) && parts[1] === 'exec') {
+      parts.splice(0, 2);
+      if (parts[0] === '--') parts.shift();
+    }
+    if (parts[0]) parts[0] = path.basename(parts[0]);
+    return parts;
+  });
+}
+
 /** Recognize native runner summaries after resolving ordinary package or shell-script commands. */
 function testExecutionEvidence(root, command, output) {
   let expanded = command;
   const expandedScripts = new Set();
   for (let depth = 0; depth < 4; depth++) {
-    const npm = [...expanded.matchAll(/\b(?:npm|pnpm|yarn)\s+(?:run\s+)?([\w:-]+)/g)].find(
-      (match) => !expandedScripts.has(match[1]) && !['exec', 'dlx', 'install', 'ci'].includes(match[1]),
+    const invocation = shellInvocations(expanded).find(
+      (parts) =>
+        ['npm', 'pnpm', 'yarn'].includes(parts[0]) &&
+        !expandedScripts.has(parts[1] === 'run' ? parts[2] : parts[1]) &&
+        !['exec', 'dlx', 'install', 'ci'].includes(parts[1]),
     );
-    if (!npm) break;
-    expandedScripts.add(npm[1]);
+    if (!invocation) break;
+    const name = invocation[1] === 'run' ? invocation[2] : invocation[1];
+    expandedScripts.add(name);
     const manifest = path.join(root, 'package.json');
     if (!fs.existsSync(manifest)) break;
-    const script = JSON.parse(fs.readFileSync(manifest, 'utf8')).scripts?.[npm[1]];
+    const script = JSON.parse(fs.readFileSync(manifest, 'utf8')).scripts?.[name];
     if (!script || expanded.includes(script)) break;
     expanded += `\n${script}`;
   }
-  const shellFile = command.match(/^\s*(?:bash|sh)\s+([^\s;&|]+)/)?.[1];
+  const shell = shellInvocations(command)[0];
+  const shellFile = ['bash', 'sh'].includes(shell?.[0]) ? shell[1] : null;
   if (shellFile) {
     const file = projectPath(root, shellFile);
     if (fs.existsSync(file)) expanded += `\n${fs.readFileSync(file, 'utf8')}`;
   }
-  const invocations = expanded.split(/[\n;&|]+/).map((line) =>
-    line
-      .trim()
-      .replace(/^(?:[A-Z_]\w*=\S+\s+)+/, '')
-      .replace(/^(?:npx(?:\s+--(?:yes|no-install))?|(?:npm|pnpm)\s+exec(?:\s+--)?)\s+/, '')
-      .replace(/^[^'"\s]*\/([^\s/]+)/, '$1'),
-  );
+  const invocations = shellInvocations(expanded).map((parts) => parts.join(' '));
   const patterns = [
     ['node-test', /^node(?:\.exe)?\s+(?:--[\w-]+(?:=\S+)?\s+)*--test(?:[=\s]|$)/, /(?:#|ℹ) pass (\d+)/],
     ['unittest', /^python[\d.]*\s+-m\s+unittest\b/, /Ran (\d+) tests?\b/],

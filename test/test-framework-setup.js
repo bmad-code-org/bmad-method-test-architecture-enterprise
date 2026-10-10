@@ -200,7 +200,7 @@ test('unsupported successful commands cannot establish native test execution', (
   const f = fixture(t);
   const request = f.prepare();
   f.journal({
-    contract: { test_commands: ['node -e "console.log(\'pytest 1 passed\')"'], pipeline_target: '.github/workflows/test.yaml' },
+    contract: { test_commands: ['node -e "console.log(\'x;pytest 1 passed\')"'], pipeline_target: '.github/workflows/test.yaml' },
   });
   const result = inspectCompletion(request);
   assert.equal(result.completed, false);

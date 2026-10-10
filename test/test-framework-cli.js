@@ -45,6 +45,7 @@ if (operation === 'validate') {
  text += 'validation_reports:\n  framework: '+JSON.stringify(report)+'\n';
 }
 if (mode === 'replace-target') {fs.writeFileSync('tests/new.test.cjs', "require('node:test')('new',()=>{});\n");text=text.replace('tests/smoke.test.cjs]', 'tests/new.test.cjs]');}
+if (mode === 'fake-native') text = text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(["node -e \"console.log('x;pytest 1 passed')\""]));
 if (mode === 'replace-id') text = text.replace('command-test-run', 'replacement-run');
 if (mode === 'change-contract') text = text.replace('test_commands: [node --test]', 'test_commands: [node --test tests/smoke.test.cjs]');
 if (mode === 'missing-config') text = text.replace('contract:\n', 'contract:\n  config_paths: [missing.config.json]\n');
@@ -288,4 +289,13 @@ test('saved checkpoint paths are confined even without a JSON publication flag',
   assert.equal(result.status, 2, result.stdout);
   assert.match(result.stderr, /outside project root/);
   assert.equal(fs.readFileSync(journal, 'utf8'), prior);
+});
+
+test('quoted command separators and runner text cannot fabricate native execution', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('fake-native'));
+  assert.equal(result.status, 1, result.stdout);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.verification[0].runner, null);
+  assert.match(value.issues.join('\n'), /positive supported test execution/);
 });
