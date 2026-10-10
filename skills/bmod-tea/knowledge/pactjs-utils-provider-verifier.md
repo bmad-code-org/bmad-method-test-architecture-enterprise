@@ -200,9 +200,7 @@ const opts = buildVerifierOptions({
   provider: 'SampleMoviesAPI',
   port: '3001',
   includeMainAndDeployed: !isBreakingChange, // false during breaking changes
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
 });
 // When includeMainAndDeployed is false and consumerBranch is unset:
 //   selectors = [{ matchingBranch: true }]
@@ -400,9 +398,7 @@ const opts: VerifierOptions = {
       ? [{ matchingBranch: true }]
       : [{ matchingBranch: true }, { mainBranch: true }, { deployedOrReleased: true }],
   pactUrls: process.env.PACT_PAYLOAD_URL ? [process.env.PACT_PAYLOAD_URL] : undefined,
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
   requestFilter: (req, res, next) => {
     req.headers['authorization'] = `Bearer ${process.env.TEST_TOKEN}`;
     next();
@@ -418,9 +414,7 @@ const opts = buildVerifierOptions({
   provider: 'my-api',
   port: '3001',
   includeMainAndDeployed: process.env.PACT_BREAKING_CHANGE !== 'true',
-  stateHandlers: {
-    /* ... */
-  },
+  stateHandlers: {/* ... */},
   requestFilter: createRequestFilter({
     tokenGenerator: () => process.env.TEST_TOKEN ?? 'test-token',
   }),
@@ -438,9 +432,7 @@ consumerVersionSelectors: [{ mainBranch: true }, { deployedOrReleased: true }],
 
 ```typescript
 // ✅ Selector strategy adapts to PACT_BREAKING_CHANGE env var
-const opts = buildVerifierOptions({
-  /* ... */
-});
+const opts = buildVerifierOptions({/* ... */});
 // Selectors chosen automatically based on environment
 ```
 
