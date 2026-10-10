@@ -7,6 +7,8 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 const { test } = require('node:test');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
+const { gunzipSync } = require('node:zlib');
 const { prepareSetup, setupPrompt, inspectCompletion, projectPath } = require('../cli/lib/framework-setup');
 
 function fixture(t) {
@@ -212,4 +214,58 @@ test('skip-only Node tests do not establish passing assertion execution', (t) =>
   const result = inspectCompletion(request);
   assert.equal(result.completed, false);
   assert.equal(result.executions[0].passedTests, 0);
+});
+
+test('retained live evaluation preserves original capture bytes and declared outcomes', () => {
+  const dir = path.join(__dirname, 'results/framework-codex-2026-10-09');
+  const index = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'));
+  const bytes = fs.readFileSync(path.join(dir, index.archive));
+  const sha = (value) => createHash('sha256').update(value).digest('hex');
+  assert.equal(sha(bytes), index.sha256);
+  const capture = JSON.parse(gunzipSync(bytes));
+  assert.equal(Object.keys(capture.files).length, index.fileCount);
+  assert.deepEqual(capture.manifest, index.manifest);
+  for (const [name, file] of Object.entries(capture.files)) {
+    assert.equal(sha(Buffer.from(file.base64, 'base64')), file.sha256, name);
+  }
+  const read = (name) => JSON.parse(Buffer.from(capture.files[name].base64, 'base64').toString('utf8'));
+  for (const name of ['before', 'after']) {
+    const score = read(`${name}/score.json`);
+    assert.equal(score.passed, 9);
+    assert.equal(score.total, 9);
+  }
+  assert.equal(read('browser-before/score.json').passed, 6);
+  assert.equal(read('browser-after/resume-result.stdout.json').completed, false);
+  assert.equal(read('browser-after/confirmation-result.stdout.json').completed, true);
+  assert.equal(read('browser-after/score.json').passed, 7);
+  assert.equal(capture.manifest.model, 'gpt-5.6-sol');
+  assert.ok(capture.manifest.limitations.length >= 4);
+});
+
+test('retained Codex unittest suite executes and detects both application regressions', (t) => {
+  const archive = path.join(__dirname, 'results/framework-codex-2026-10-09/evidence.json.gz');
+  const { files } = JSON.parse(gunzipSync(fs.readFileSync(archive)));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-framework-native-replay-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'tests'));
+  const source = Buffer.from(files['after/project/service.py'].base64, 'base64').toString('utf8');
+  fs.writeFileSync(path.join(root, 'tests/test_service.py'), Buffer.from(files['after/project/tests/test_service.py'].base64, 'base64'));
+  const python = ['python3', 'python'].find((candidate) => spawnSync(candidate, ['--version'], { timeout: 5000 }).status === 0);
+  assert.ok(python, 'Native replay requires a Python interpreter');
+  const run = (contents) => {
+    fs.writeFileSync(path.join(root, 'service.py'), contents);
+    return spawnSync(python, ['-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+  };
+  const baseline = run(source);
+  assert.equal(baseline.status, 0, baseline.stderr);
+  assert.match(baseline.stderr, /Ran 2 tests/);
+  for (const mutation of [
+    source.replace('return sum(items)', 'return 0'),
+    source.replace('if any(item < 0 for item in items):', 'if False:'),
+  ]) {
+    assert.notEqual(mutation, source);
+    const result = run(mutation);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /AssertionError/);
+  }
 });
