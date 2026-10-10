@@ -207,7 +207,9 @@ Write JSON to temp file: `/tmp/tea-automate-backend-tests-{run_key}-{{timestamp}
   "success": false,
   "subagent": "backend-tests",
   "error": "Error message describing what went wrong",
-  "partial_output": {/* any tests generated before error */}
+  "partial_output": {
+    /* any tests generated before error */
+  }
 }
 ```
 
