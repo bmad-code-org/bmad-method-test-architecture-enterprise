@@ -124,7 +124,7 @@
     "coverageArithmetic": {
       "file": "skills/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
       "section": "4. Calculate Coverage Statistics",
-      "lines": "472-501",
+      "lines": "476-503",
       "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.round(covered / total * 100), and a priority with no criteria resolves to 100."
     },
     "singleLevelFullPrecedent": {

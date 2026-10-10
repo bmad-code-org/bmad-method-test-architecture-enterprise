@@ -116,6 +116,10 @@ Resolution precedence:
 2. `tea_execution_mode` from config
 3. Runtime capability fallback (when probing enabled)
 
+### 0b. Reconcile the Oracle Ledger
+
+Before classifying gaps, compare every matrix item's ID and priority with Step 1's persisted oracle ledger. Require exactly one matrix item per oracle item and unchanged priorities. Correct any drift from the ledger before using the matrix in Sections 1 and 3. Repeat this check when resuming a saved mapping.
+
 ### 1. Gap Analysis
 
 **Identify uncovered requirements:**
@@ -470,8 +474,6 @@ if (oracleResolutionMode === 'synthetic_source') {
 ---
 
 ### 4. Calculate Coverage Statistics
-
-Before calculating counts, compare every matrix item's ID and priority with Step 1's persisted oracle ledger. Require exactly one matrix item per oracle item and unchanged priorities. Correct any drift from the ledger, then compute the statistics from the corrected matrix. Repeat this check when resuming a saved mapping.
 
 ```javascript
 const totalRequirements = traceabilityMatrix.length;

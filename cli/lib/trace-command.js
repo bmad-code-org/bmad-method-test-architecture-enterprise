@@ -167,7 +167,7 @@ function sourceOracleLedger(text, source) {
           flush();
           pending = {
             id: claim[1],
-            priority: claim[2] ?? /\b(P[0-3])\b/.exec(claim[3])?.[1],
+            priority: claim[2] ?? /\((P[0-3])\)\s*$/.exec(claim[3])?.[1] ?? /\b(P[0-3])\b/.exec(claim[3])?.[1],
             requirement: claim[3],
             line: (token.map?.[0] ?? 0) + offset + 1,
           };
@@ -270,8 +270,12 @@ function matrixInventory(matrix, reference) {
       const heading = tokens[index + 1].content;
       const nextDepth = Number(token.tag.slice(1));
       if (nextDepth <= depth) current = null;
-      const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}(?:\s+\(P[0-3]\))?\s*:\s/.exec(heading);
-      const priority = /\b(P[0-3])\b/.exec(heading)?.[1] ?? (claim ? ledgerPriorities.get(claim[1]) : null);
+      const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}(?:\s*\((P[0-3])\))?\s*:\s/.exec(heading);
+      const priority =
+        claim?.[2] ??
+        /\((P[0-3])\)\s*$/.exec(heading)?.[1] ??
+        (claim ? ledgerPriorities.get(claim[1]) : null) ??
+        /\b(P[0-3])\b/.exec(heading)?.[1];
       if (!claim || (!priority && !/^[A-Za-z]+-\d+$/.test(claim[1]))) continue;
       if (!priority) throw new Error(`Trace criterion ${claim[1]} has no priority.`);
       if (ledgerPriorities.has(claim[1]) && ledgerPriorities.get(claim[1]) !== priority)

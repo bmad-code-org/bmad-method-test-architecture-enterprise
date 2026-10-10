@@ -80,6 +80,7 @@ try {
       ],
     );
     assert.throws(() => sourceOracleLedger(`${source}\nAC-1 (P1): Admin may export.`, 'requirements.md'), /conflicting priorities/);
+    assert.equal(sourceOracleLedger('AC-1: P1 tenants can export (P0)', 'requirements.md')[0].priority, 'P0');
   });
   fs.mkdirSync(path.join(root, 'docs'));
   fs.mkdirSync(path.join(root, 'tests'));
@@ -129,6 +130,20 @@ try {
     const result = run('matrix-priority-heading');
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.payload.coverage.total, 1);
+  });
+  check('matrix accepts compact and trailing source priorities', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file);
+    try {
+      fs.writeFileSync(file, '# Epic 4: Export\n\nAC-1(P0): Admin may export.\n');
+      assert.equal(run('matrix-compact-priority-heading').status, 0);
+      fs.writeFileSync(file, '# Epic 4: Export\n\nAC-1: P1 tenants can export (P0)\n');
+      const result = run('matrix-trailing-priority');
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.payload.coverage.total, 1);
+    } finally {
+      fs.writeFileSync(file, original);
+    }
   });
   check('computed FAIL exits 1 and remains reviewable', () => {
     const result = run('gap');

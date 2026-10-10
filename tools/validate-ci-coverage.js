@@ -256,6 +256,7 @@ function shardRunProblems(run) {
 
 function nestedNpmRuns(command) {
   const found = [];
+  let chain = [];
   let words = [];
   let word = '';
   let inWord = false;
@@ -266,34 +267,66 @@ function nestedNpmRuns(command) {
     word = '';
     inWord = false;
   };
-  const finishCommand = () => {
+  const finishCommand = (separator) => {
     finishWord();
     let index = 0;
     while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
-    if (words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:-]+$/.test(words[index + 2] ?? '')) found.push(words[index + 2]);
+    const script =
+      words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:-]+$/.test(words[index + 2] ?? '') ? words[index + 2] : null;
+    chain.push({ script, separator });
     words = [];
   };
-  for (const char of command) {
+  const finishChain = () => {
+    const hasFallback = chain.some((part) => part.separator === '||');
+    let guaranteed = true;
+    for (const part of chain) {
+      if (guaranteed && part.script) found.push(part.script);
+      if (hasFallback && (part.separator === '&&' || part.separator === '||')) guaranteed = false;
+    }
+    chain = [];
+  };
+  for (let offset = 0; offset < command.length; offset++) {
+    const char = command[offset];
     if (escaped) {
       word += char;
       inWord = true;
       escaped = false;
-    } else if (quote) {
+      continue;
+    }
+    if (quote) {
       if (char === quote) quote = '';
       else if (char === '\\' && quote === '"') escaped = true;
       else word += char;
-    } else if (char === '\\') escaped = true;
-    else if (char === '"' || char === "'") {
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' || char === "'") {
       quote = char;
       inWord = true;
-    } else if (char === '\n' || /[;&|()]/.test(char)) finishCommand();
-    else if (/\s/.test(char)) finishWord();
+      continue;
+    }
+    if (char === '&' || char === '|') {
+      const separator = command[offset + 1] === char ? char + char : char;
+      finishCommand(separator);
+      if (separator.length === 2) offset++;
+      continue;
+    }
+    if (char === '\n' || /[;()]/.test(char)) {
+      finishCommand(char);
+      finishChain();
+      continue;
+    }
+    if (/\s/.test(char)) finishWord();
     else {
       word += char;
       inWord = true;
     }
   }
-  finishCommand();
+  finishCommand('end');
+  finishChain();
   return found;
 }
 

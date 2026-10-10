@@ -178,6 +178,27 @@ function checkShardedChainCoversNestedScripts() {
   );
 }
 
+function checkConditionalFallbackDoesNotCountAsCovered() {
+  const scripts = {
+    'test:cli': 'npm run test:fast || npm run test:orphan; npm run test:always',
+    'test:fast': 'node test/fast.js',
+    'test:orphan': 'node test/orphan.js',
+    'test:always': 'node test/always.js',
+  };
+  const covered = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    covered.has('test:fast') && covered.has('test:always') && !covered.has('test:orphan'),
+    `conditional fallback was counted as guaranteed CI execution: ${JSON.stringify([...covered])}`,
+  );
+  scripts['test:cli'] = 'npm run test:fast && npm run test:maybe || npm run test:orphan; npm run test:always';
+  scripts['test:maybe'] = 'node test/maybe.js';
+  const chained = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    chained.has('test:fast') && chained.has('test:always') && !chained.has('test:maybe') && !chained.has('test:orphan'),
+    `conditional command chain was counted as guaranteed CI execution: ${JSON.stringify([...chained])}`,
+  );
+}
+
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {
   const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(['test:a']), []);
   check(
@@ -430,6 +451,7 @@ function main() {
   checkStaleDeliberatelyLocalEntriesClearsAPresentScript();
   checkShardedChainCoversEveryChainedScript();
   checkShardedChainCoversNestedScripts();
+  checkConditionalFallbackDoesNotCountAsCovered();
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
   checkEveryBypassIsRefused();
