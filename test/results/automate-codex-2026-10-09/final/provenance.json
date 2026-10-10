@@ -340,7 +340,22 @@
     "independent-execution/mutated-playwright.json": "ee6e5e95fd76c932a75603c8b8be15003834b6dea7659df584cdd18599de1fc5",
     "independent-execution/mutated-stdout.txt": "4f81554674c999e6a93b240a43ba960c00c773cb932d63092ea85f07037a65fa",
     "independent-execution/fixed-stdout.txt": "376e7166dc93f9d73847f89fabf7d76e6ee2e4e6a2efaab2f0da8e81b06d1ee1",
-    "workflow-artifacts/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md": "045b073c5e0f7c467213df9d818821c3c4f4c51473bff1d7ccaf55e725bedf9b",
-    "workflow-artifacts/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption-initial.json": "f266cc9cd0be5a14708829cfc8f89b2ead693c6f4fc97ba460ef76e0a66ebe68"
+    "workflow-artifacts/automation-summary-story-6-6-voucher-redemption.md": "045b073c5e0f7c467213df9d818821c3c4f4c51473bff1d7ccaf55e725bedf9b",
+    "workflow-artifacts/story-6-6-voucher-redemption-initial.json": "f266cc9cd0be5a14708829cfc8f89b2ead693c6f4fc97ba460ef76e0a66ebe68"
+  },
+  "artifactPathRelocations": {
+    "reason": "Copied artifacts use compact filenames so Windows can clone the repository. Original project-relative paths remain in raw manifests, summaries and the unchanged portable project archive. Model and runner artifact bytes are unchanged.",
+    "files": [
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md",
+        "relocatedCapturedPath": "workflow-artifacts/automation-summary-story-6-6-voucher-redemption.md",
+        "sha256": "045b073c5e0f7c467213df9d818821c3c4f4c51473bff1d7ccaf55e725bedf9b"
+      },
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption-initial.json",
+        "relocatedCapturedPath": "workflow-artifacts/story-6-6-voucher-redemption-initial.json",
+        "sha256": "f266cc9cd0be5a14708829cfc8f89b2ead693c6f4fc97ba460ef76e0a66ebe68"
+      }
+    ]
   }
 }

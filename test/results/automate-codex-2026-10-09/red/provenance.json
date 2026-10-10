@@ -60,7 +60,22 @@
     "cli-evidence/attempt-1/attempt.json": "75bc139d5ebf52a7b5ece0d27477a40e71368b98c106af48faa67b592a49182b",
     "cli-evidence/attempt-1/generation.json": "ad33738fba58b37b30a8fac27268c036ef92cd3695e86acbda3c8812fe02faca",
     "cli-evidence/attempt-1/red-report-initial.json": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb",
-    "workflow-artifacts/_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9/attempt-1/red-report-initial.json": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb",
-    "workflow-artifacts/_bmad-output/test-artifacts/atdd/atdd-checklist-4-2-reserve-a-locker.md": "4f3b526d8702ba3731911ec5570e2d1ddbb667a93c0c9043b6d967d27e033df5"
+    "workflow-artifacts/red-report-initial.json": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb",
+    "workflow-artifacts/atdd-checklist-4-2-reserve-a-locker.md": "4f3b526d8702ba3731911ec5570e2d1ddbb667a93c0c9043b6d967d27e033df5"
+  },
+  "artifactPathRelocations": {
+    "reason": "Copied artifacts use compact filenames so Windows can clone the repository. Original project-relative paths remain in raw manifests, summaries and the unchanged portable project archive. Model and runner artifact bytes are unchanged.",
+    "files": [
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9/attempt-1/red-report-initial.json",
+        "relocatedCapturedPath": "workflow-artifacts/red-report-initial.json",
+        "sha256": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb"
+      },
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/atdd/atdd-checklist-4-2-reserve-a-locker.md",
+        "relocatedCapturedPath": "workflow-artifacts/atdd-checklist-4-2-reserve-a-locker.md",
+        "sha256": "4f3b526d8702ba3731911ec5570e2d1ddbb667a93c0c9043b6d967d27e033df5"
+      }
+    ]
   }
 }

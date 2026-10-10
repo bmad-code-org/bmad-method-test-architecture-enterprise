@@ -13,6 +13,8 @@ The baseline established that the skill could generate useful boundary coverage.
 
 The remaining coverage limitation is observable in the fixture's public catalog. `FLAT5` subtracts 5 and requires a cart total of at least 20, so an accepted fixed redemption cannot exercise capping a discount at the cart total. Every capture preserves that limitation and production source. Zero healing rounds were needed in these generated suites. The repository's separate generation-healing replay exercises test repairs and preserved product failures.
 
+Copied workflow artifacts use compact filenames for Windows checkout. Their original project paths remain in manifests, summaries and the unchanged archives; provenance records every relocation and its preserved hash.
+
 Each phase contains untouched model output, generated files, workflow artifacts, a portable project archive, SHA-256 provenance, and selected raw tool events. `tool-session-index.json` identifies exact tool call/output lines from every captured Codex session at that consuming-project path. It excludes session metadata, reasoning and account identifiers. Earlier `tool-events.jsonl` selected only function tool events; the supplemental indexes include custom tool events as well. Preliminary `after` and `red` captures identify their controller state explicitly. `after/scorer-development-attempt` retains the scorer's first interrupted interpretation of an expected nonzero mutant result.
 
 `final/provenance.json` records the exact command, CLI source hashes, final output and independent score. Canonical worker-step formatting was normalized during that live run without changing its instructions. The CLI modules remained stable throughout the run.

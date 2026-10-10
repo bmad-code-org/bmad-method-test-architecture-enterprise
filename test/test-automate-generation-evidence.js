@@ -10,6 +10,16 @@ const CAPTURES = path.join(__dirname, 'results/automate-codex-2026-10-09');
 const digest = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 async function main() {
+  const checkout = String.raw`D:\a\bmad-method-test-architecture-enterprise\bmad-method-test-architecture-enterprise`;
+  const inspectPaths = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      const relative = path.relative(path.resolve(__dirname, '..'), file);
+      assert.ok(path.win32.join(checkout, ...relative.split(path.sep)).length < 260, `Windows checkout path is too long: ${relative}`);
+      if (entry.isDirectory()) inspectPaths(file);
+    }
+  };
+  inspectPaths(CAPTURES);
   for (const phase of ['before', 'after', 'red', 'final']) {
     const capture = path.join(CAPTURES, phase);
     const provenance = JSON.parse(fs.readFileSync(path.join(capture, 'provenance.json'), 'utf8'));

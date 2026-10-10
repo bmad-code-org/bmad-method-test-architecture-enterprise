@@ -66,11 +66,26 @@
     "independent-execution/mutated-playwright.json": "cf4f5f6068595c5d22dc7676b83f66d9da3db800f476d69963bd16630c1ed1f5",
     "independent-execution/mutated-stdout.txt": "30a3722b3fa593d6dc6dfcfe66d3d79404ea87599bbfea82d10292366a3d80a0",
     "independent-execution/fixed-stdout.txt": "1f9bd5194c70437d0c4a424c87265d6aeff4ede1fc5ae22154ec5643304837d7",
-    "workflow-artifacts/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md": "10442d4ab2df7ed0e4823be68937b8db158dc9de43cf3bc786f8bb2578cf9d9e",
-    "workflow-artifacts/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json": "5251cadb72b6f8a11e8608d696bca3be298057761a8776c963a1db9f9a262879",
     "scorer-development-attempt/fixed-stderr.txt": "0fbc7efc69d509b7af74833d04dce40c100054ef83209a49cdcdb1e4c2673529",
     "scorer-development-attempt/fixed-playwright.json": "04e33329ca34fbf69ad2fe2dc6a4107a4bc12fc999a7569044a3b254e811dc09",
     "scorer-development-attempt/mutated-playwright.json": "6b997dfe84f28d8dd2bd50a8c44acbed63dc5cf8f4cf4b2a14f6ce9218159de4",
-    "scorer-development-attempt/fixed-stdout.txt": "d9141bccc58312cf5303635649fc047b313f72f9f927a3018a99ddc1945cf8c4"
+    "scorer-development-attempt/fixed-stdout.txt": "d9141bccc58312cf5303635649fc047b313f72f9f927a3018a99ddc1945cf8c4",
+    "workflow-artifacts/automation-summary-story-6-6-voucher-redemption.md": "10442d4ab2df7ed0e4823be68937b8db158dc9de43cf3bc786f8bb2578cf9d9e",
+    "workflow-artifacts/results.json": "5251cadb72b6f8a11e8608d696bca3be298057761a8776c963a1db9f9a262879"
+  },
+  "artifactPathRelocations": {
+    "reason": "Copied artifacts use compact filenames so Windows can clone the repository. Original project-relative paths remain in raw manifests, summaries and the unchanged portable project archive. Model and runner artifact bytes are unchanged.",
+    "files": [
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md",
+        "relocatedCapturedPath": "workflow-artifacts/automation-summary-story-6-6-voucher-redemption.md",
+        "sha256": "10442d4ab2df7ed0e4823be68937b8db158dc9de43cf3bc786f8bb2578cf9d9e"
+      },
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json",
+        "relocatedCapturedPath": "workflow-artifacts/results.json",
+        "sha256": "5251cadb72b6f8a11e8608d696bca3be298057761a8776c963a1db9f9a262879"
+      }
+    ]
   }
 }
