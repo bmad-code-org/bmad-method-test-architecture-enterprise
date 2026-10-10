@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Each Evaluate how-to guide now opens with the action, the reader's decisions, and the result. The openings explain that the coding agent normally handles the detailed steps.
 - The MCP Evaluate guide now explains what the coding agent does, states the expected result upfront, and adds a checkpoint before scoring.
   The architecture page links to `eval-quality` and identifies AgentEvals as an optional evaluator of agent tool calls.
 - The Evaluate tutorial now explains the usual coding-agent workflow before walking through its prepared example by hand.

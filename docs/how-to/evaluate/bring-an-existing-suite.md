@@ -5,10 +5,13 @@ description: Use an AgentEvals or promptfoo suite as the evaluation layer, or le
 
 # How to Bring an Existing Suite into Evaluate with TEA
 
-Use this guide when you already grade your target with a framework such as AgentEvals or promptfoo, or when you want a framework Evaluate has not met before.
-Evaluate uses your framework to grade repeatable trials, including seeded defects and held-out probes.
+Tell Evaluate in your coding agent to use the suite you already have, such as AgentEvals or promptfoo.
+Confirm the framework and version; the skill wraps it and uses your checks to grade repeatable trials, including planted defects and held-out probes.
+You get an Evaluate score and a clear failure if the installed framework changes.
+The files and commands below show what your agent normally handles and let you repeat its work.
 
-The mechanism is a `command` evaluator: an executable in the evaluation folder that wraps the framework, plus three files that make its use repeatable.
+The wrapper is a `command` evaluator: an executable in the evaluation folder, plus three files that make its use repeatable.
+This guide also covers a framework Evaluate has not met before.
 
 ## When to Use This
 

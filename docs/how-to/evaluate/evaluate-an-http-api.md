@@ -5,9 +5,14 @@ description: Evaluate a web application, an AI feature or an HTTP tool server th
 
 # How to Evaluate an HTTP API with TEA
 
-Use the Evaluate skill to prove that an HTTP service answers what you require.
-Evaluate starts the service in a disposable copy of your project, sends it requests through an HTTP port that eval-quality governs, plants known defects in the service's rules or configuration, and records whether the evaluation catches them.
-A web application and an AI feature behind an HTTP endpoint are evaluated this way.
+Start Evaluate in your coding agent and point it at an HTTP service.
+Confirm which requests it may send and which parts of the response count as correct.
+Evaluate starts the service in a disposable project copy, sends the approved requests, and checks whether planted defects change the answers.
+The scored run shows what passed, which defects the checks caught, and where coverage is weak.
+Your coding agent handles the files and commands below after you confirm the requirements; they are here so you can inspect or repeat the run.
+
+A web application or an AI feature behind an HTTP endpoint follows this guide.
+The requests pass through a port governed by eval-quality.
 
 A stdio tool server follows [How to Evaluate an MCP Tool Server with TEA](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md).
 
