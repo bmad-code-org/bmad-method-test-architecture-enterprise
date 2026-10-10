@@ -30,7 +30,13 @@ const mode = process.argv[2];
 if (mode === 'missing') { process.stdout.write('done'); process.exit(0); }
 const files = JSON.parse(prompt.match(/Produce these deliverables: (.*)/)[1]);
 const runKey = prompt.match(/run_key=([^;\\n]+)/)[1];
-const plan = '# Test Design\\n\\n## Risk Assessment\\n\\n### Low Risks: Score 1 to 2\\n\\n| Risk ID | Category | Description | Probability | Impact | Score |\\n| --- | --- | --- | --- | --- | --- |\\n| R-001 | DATA | Request handling loses queued input | 1 | 2 | '+(mode === 'bad-score' ? '9' : '2')+' |\\n\\n## Test Coverage Plan\\n\\n### P1\\n\\n| Test ID | Scenario | Test Level | Risk Link |\\n| --- | --- | --- | --- |\\n| T-001 | Keep queued input when sync fails | API | R-001 |\\n';
+let plan = '# Test Design\\n\\n## Risk Assessment\\n\\n### Low Risks: Score 1 to 2\\n\\n| Risk ID | Category | Description | Probability | Impact | Score |\\n| --- | --- | --- | --- | --- | --- |\\n| R-001 | DATA | Request handling loses queued input | 1 | 2 | '+(mode === 'bad-score' ? '9' : '2')+' |\\n\\n## Test Coverage Plan\\n\\n### P1\\n\\n| Test ID | Scenario | Test Level | Risk Link |\\n| --- | --- | --- | --- |\\n| T-001 | Keep queued input when sync fails | API | R-001 |\\n';
+const sections = ['Executive Summary','Not in Scope','NFR Planning','Entry Criteria','Exit Criteria','Execution Strategy','Resource Estimates','Quality Gate Criteria','Mitigation Plans','Assumptions and Dependencies','Follow-on Workflows','Approval','Interworking & Regression','Appendix','Dependencies & Test Blockers','NFR Test Coverage Plan','QA Effort Estimate','Appendix A: Code Examples & Tagging','Appendix B: Knowledge Base References'];
+if(mode !== 'incomplete-plan') plan += sections.filter(h => mode !== 'empty-execution' || h !== 'Execution Strategy').map(h => '\\n## '+h+'\\n\\nExplicit scope, owner, condition and supporting evidence.\\n').join('');
+if(mode === 'empty-execution') plan += '\\n## Execution Strategy\\n\\n### Empty child\\n<!-- no content -->\\n';
+if(mode === 'misband') plan = plan.replace('| 1 | 2 | 2 |', '| 3 | 3 | 9 |');
+if(mode === 'no-priority') plan = plan.replace('### P1', '### Test Cases');
+if(mode === 'no-band') plan = plan.replace('Low Risks: Score 1 to 2', 'Low Risks');
 const architecture = '# Architecture\\n\\n'+['Executive Summary','Risk Assessment','NFR Testability Requirements','Testability Concerns and Architectural Gaps','Risk Mitigation Plans','Assumptions and Dependencies'].map(h => '## '+h+'\\n\\nExplicit design decision.\\n').join('\\n');
 const handoff = '# Handoff\\n\\n'+['Purpose','TEA Artifacts Inventory','Epic-Level Integration Guidance','Story-Level Integration Guidance','Risk-to-Story Mapping','Recommended BMAD → TEA Workflow Sequence','Phase Transition Quality Gates'].map(h => '## '+h+'\\n\\nActionable integration guidance.\\n').join('\\n');
 for (const file of files) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, /(?:epic-|qa\\.md$)/.test(file) ? plan : (mode === 'malformed-system' ? '# Incomplete\\n' : file.endsWith('architecture.md') ? architecture : handoff)); }
@@ -525,4 +531,30 @@ console.log('retained report replay');
     if (mutation === 'nonzero-numerator') contribution['groundedRiskRecall.numerator'] = 1;
     assert.equal(validateEvalResult(changed).success, false, mutation);
   }
+});
+
+test('full plan publication rejects incomplete sections, contradictory bands and unprioritized coverage', (t) => {
+  for (const mode of ['incomplete-plan', 'empty-execution', 'misband', 'no-band', 'no-priority']) {
+    const root = project(t);
+    const result = execute(root, ['--epic', '7'], mode);
+    assert.equal(result.status, 3, mode + result.stderr);
+    assert.equal(fs.existsSync(path.join(root, 'published')), false, mode);
+  }
+});
+
+test('the final actual public CLI plan satisfies full section, band and priority guards unchanged', () => {
+  const { validateDesign } = require('../cli/test-design');
+  const attemptDir = path.join(__dirname, 'results/codex-test-design/raw/public-cli-attempt-3/evidence/attempt-1');
+  const planFile = 'artifacts/test-design/test-design-epic-7.md';
+  const result = validateDesign({
+    attemptDir,
+    artifactFiles: [planFile],
+    planFile,
+    checkpointFile: 'artifacts/test-design/test-design-progress-epic-7.md',
+    runKey: 'epic-7',
+    runScope: 'epic',
+    inputDigests: [],
+  });
+  assert.equal(result.riskCount, 5);
+  assert.equal(result.coverageCount, 26);
 });

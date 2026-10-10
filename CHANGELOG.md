@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Test Design verifies populated mode-specific full-plan sections, score placement within the declared risk band, and a P0/P1/P2/P3 priority on every coverage row before publication.
+
 - Test Design clean-only evaluations retain null recall, coverage and priority rates when the selected corpus declares zero expectations. Result records verify explicit zero contribution metadata; lost observations and positive-expectation missing measurements still fail.
 
 - Test Design preserves canonical risk IDs, score-band ranges and test levels; recognizes exact empty-band absence markers and observed E2E qualifiers; accepts residual acceptance tables only when every referenced ID belongs to the scored register, preserves existing published reports on replacement failures, rejects input hardlink collisions, and cleans evaluation workspaces even when evidence retention fails. Priority guidance requires a source-backed recovery path before treating a workaround as business recovery.

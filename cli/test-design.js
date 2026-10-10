@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const yaml = require('js-yaml');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
-const { readDesign, RISK_ID_PATTERN } = require('./lib/test-design-parser');
+const { readDesign, RISK_ID_PATTERN, bandFor } = require('./lib/test-design-parser');
 const {
   WorkflowError,
   addAgentOptions,
@@ -42,11 +42,17 @@ function checkPublication(destinations, inputs) {
 }
 /** Require populated workflow sections and reject unresolved template scaffolding. */
 function validateSections(text, sections, label) {
+  const headings = [...text.matchAll(/^(#{2,3})[ \t]+([^\n]+)\n/gm)];
   for (const section of sections) {
     const escaped = section.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-    const match = text.match(new RegExp(`^#{2,3} .*${escaped}[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3} |$(?![\\s\\S]))`, 'mi'));
-    if (!match || !match[1].replaceAll(/<!--[^]*?-->/g, '').trim())
-      throw new WorkflowError('environment-parser', `${label} is missing populated section: ${section}`);
+    const heading = headings.find((entry) => new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(entry[2]));
+    const stop = heading && headings.find((entry) => entry.index > heading.index && entry[1].length <= heading[1].length);
+    const body = heading && text.slice(heading.index + heading[0].length, stop?.index ?? text.length);
+    const content = body
+      ?.replaceAll(/<!--[^]*?-->/g, '')
+      .replaceAll(/^#{1,6}[^\n]*$|^[-*_]{3,}\s*$/gm, '')
+      .trim();
+    if (!content) throw new WorkflowError('environment-parser', `${label} is missing populated section: ${section}`);
   }
   if (/<!--\s*TEA will populate|\{(?:Feature Name|project_name|timestamp|test_design_path)\}/i.test(text))
     throw new WorkflowError('environment-parser', `${label} contains unresolved template placeholders`);
@@ -118,6 +124,42 @@ function validateDesign(context) {
     throw new WorkflowError('environment-parser', 'the progress checkpoint does not confirm completion of this run');
   }
   const report = artifacts.find((artifact) => artifact.path === path.join(attemptDir, planFile));
+  const planSections =
+    context.runScope === 'system'
+      ? [
+          'Executive Summary',
+          'Not in Scope',
+          'Dependencies & Test Blockers',
+          'Risk Assessment',
+          'NFR Test Coverage Plan',
+          'Entry Criteria',
+          'Exit Criteria',
+          'Test Coverage Plan',
+          'Execution Strategy',
+          'QA Effort Estimate',
+          'Interworking & Regression',
+          'Appendix A: Code Examples & Tagging',
+          'Appendix B: Knowledge Base References',
+        ]
+      : [
+          'Executive Summary',
+          'Not in Scope',
+          'Risk Assessment',
+          'NFR Planning',
+          'Entry Criteria',
+          'Exit Criteria',
+          'Test Coverage Plan',
+          'Execution Strategy',
+          'Resource Estimates',
+          'Quality Gate Criteria',
+          'Mitigation Plans',
+          'Assumptions and Dependencies',
+          'Follow-on Workflows',
+          'Approval',
+          'Interworking & Regression',
+          'Appendix',
+        ];
+  validateSections(report.text, planSections, context.runScope === 'system' ? 'QA plan' : 'epic plan');
   const parsed = readDesign({ kind: 'text', value: report.text });
   if (!parsed.ok) throw new WorkflowError('environment-parser', parsed.reason);
   const { risks, coverage } = parsed.design;
@@ -135,18 +177,24 @@ function validateDesign(context) {
     ) {
       throw new WorkflowError('environment-parser', `invalid or duplicate scored risk row: ${risk.rawId}`);
     }
+    const declared = bandFor(risk.headings);
+    if (!declared || risk.score < declared.band.min || risk.score > declared.band.max)
+      throw new WorkflowError('environment-parser', `scored risk ${risk.rawId} has a missing or contradictory score band`);
     ids.add(risk.id);
   }
   if (
     coverage.length === 0 ||
     coverage.some(
-      (row) => !['E2E', 'API', 'Component', 'Integration', 'Unit'].includes(row.level) || row.riskIds.some((id) => !ids.has(id)),
+      (row) =>
+        !['P0', 'P1', 'P2', 'P3'].includes(row.priority) ||
+        !['E2E', 'API', 'Component', 'Integration', 'Unit'].includes(row.level) ||
+        row.riskIds.some((id) => !ids.has(id)),
     ) ||
     risks.some((risk) => !coverage.some((row) => row.riskIds.includes(risk.id)))
   )
     throw new WorkflowError(
       'environment-parser',
-      'the coverage plan is empty, uses invalid levels, carries dangling references or leaves risks uncovered',
+      'the coverage plan is empty, omits valid priorities, uses invalid levels, carries dangling references or leaves risks uncovered',
     );
   return { artifacts: [...artifacts, checkpoint], riskCount: risks.length, coverageCount: coverage.length };
 }

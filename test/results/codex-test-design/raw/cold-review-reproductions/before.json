@@ -1,0 +1,26 @@
+[
+  {
+    "name": "misband",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/misband-RiP8xD",
+    "status": 0,
+    "stdout": "{\"mode\":\"live\",\"runKey\":\"epic-7\",\"evidence\":\"/private/tmp/tea-blind-repro/misband-RiP8xD/.tea-runs/tea-test-design-3RqnsS\",\"artifacts\":[\"/private/tmp/tea-blind-repro/misband-RiP8xD/published/test-design/test-design-epic-7.md\",\"/private/tmp/tea-blind-repro/misband-RiP8xD/published/test-design/test-design-progress-epic-7.md\"],\"riskCount\":1,\"coverageCount\":1}\n",
+    "stderr": ""
+  },
+  {
+    "name": "no-priority",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/no-priority-St7eBy",
+    "status": 0,
+    "stdout": "{\"mode\":\"live\",\"runKey\":\"epic-7\",\"evidence\":\"/private/tmp/tea-blind-repro/no-priority-St7eBy/.tea-runs/tea-test-design-hWn8Ob\",\"artifacts\":[\"/private/tmp/tea-blind-repro/no-priority-St7eBy/published/test-design/test-design-epic-7.md\",\"/private/tmp/tea-blind-repro/no-priority-St7eBy/published/test-design/test-design-progress-epic-7.md\"],\"riskCount\":1,\"coverageCount\":1}\n",
+    "stderr": ""
+  },
+  {
+    "name": "missing-sections",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/missing-sections-UQk5Of",
+    "status": 0,
+    "stdout": "{\"mode\":\"live\",\"runKey\":\"epic-7\",\"evidence\":\"/private/tmp/tea-blind-repro/missing-sections-UQk5Of/.tea-runs/tea-test-design-2V82wZ\",\"artifacts\":[\"/private/tmp/tea-blind-repro/missing-sections-UQk5Of/published/test-design/test-design-epic-7.md\",\"/private/tmp/tea-blind-repro/missing-sections-UQk5Of/published/test-design/test-design-progress-epic-7.md\"],\"riskCount\":1,\"coverageCount\":1}\n",
+    "stderr": ""
+  }
+]
