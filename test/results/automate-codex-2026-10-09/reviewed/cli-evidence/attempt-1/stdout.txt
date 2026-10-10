@@ -1,0 +1,13 @@
+Completed the headless TEA create workflow in explicit expand mode.
+
+- Generated [voucher-redemption.spec.ts](/private/tmp/tea-automate-codex-reviewed/tests/api/voucher-redemption.spec.ts): 9 API tests.
+- Execution: 9 passed, 0 failed, 0 skipped. Healing rounds: 0.
+- Production source and project configuration remained unchanged.
+- Coverage blocker: the public `FLAT5` voucher cannot reach fixed-discount cart-total capping because `amountOff` is 5 and `minimumSpend` is 20.
+- Overall CLI status: `failed`, reflecting that coverage blocker.
+
+Artifacts:
+
+- [Workflow summary](/private/tmp/tea-automate-codex-reviewed/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md)
+- [Final runner report](/private/tmp/tea-automate-codex-reviewed/_bmad-output/test-artifacts/automate/execution/story-6-6-voucher-redemption-final.json)
+- [Generation manifest](/private/tmp/tea-automate-codex-reviewed/_bmad-output/test-artifacts/automate-cli/50cb2295-c976-4a40-b593-4f21f11cce20/tea-automate-pCpQaj/attempt-1/generation.json)

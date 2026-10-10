@@ -1,0 +1,84 @@
+
+Running 9 tests using 1 worker
+F··F····F
+
+  1) tests/api/voucher-redemption.spec.ts:6:7 › Voucher redemption API › [6.6-API-001] [P0] accepts EXPIRED10 on its exact expiry date at its exact minimum spend 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 1,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      14 |
+      15 |     expect(response.status()).toBe(200);
+    > 16 |     expect(await response.json()).toEqual({
+         |                                   ^
+      17 |       accepted: true,
+      18 |       discount: 1,
+      19 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:16:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-c49f7--at-its-exact-minimum-spend/error-context.md
+
+  2) tests/api/voucher-redemption.spec.ts:54:7 › Voucher redemption API › [6.6-API-004] [P0] accepts SAVE10 at its exact minimum spend 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 5,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      62 |
+      63 |     expect(response.status()).toBe(200);
+    > 64 |     expect(await response.json()).toEqual({
+         |                                   ^
+      65 |       accepted: true,
+      66 |       discount: 5,
+      67 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:64:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-4b7e4--at-its-exact-minimum-spend/error-context.md
+
+  3) tests/api/voucher-redemption.spec.ts:134:7 › Voucher redemption API › [6.6-API-009] [P0] grants FLAT5 fixed discount at its exact minimum spend 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 5,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      142 |
+      143 |     expect(response.status()).toBe(200);
+    > 144 |     expect(await response.json()).toEqual({
+          |                                   ^
+      145 |       accepted: true,
+      146 |       discount: 5,
+      147 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:144:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-f39fd--at-its-exact-minimum-spend/error-context.md
+
+  3 failed
+    tests/api/voucher-redemption.spec.ts:6:7 › Voucher redemption API › [6.6-API-001] [P0] accepts EXPIRED10 on its exact expiry date at its exact minimum spend 
+    tests/api/voucher-redemption.spec.ts:54:7 › Voucher redemption API › [6.6-API-004] [P0] accepts SAVE10 at its exact minimum spend 
+    tests/api/voucher-redemption.spec.ts:134:7 › Voucher redemption API › [6.6-API-009] [P0] grants FLAT5 fixed discount at its exact minimum spend 
+  6 passed (867ms)

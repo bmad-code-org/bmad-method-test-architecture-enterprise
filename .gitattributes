@@ -25,3 +25,4 @@ test/results/automate-codex-2026-10-09/before/** -text whitespace=-blank-at-eol,
 test/results/automate-codex-2026-10-09/after/** -text whitespace=-blank-at-eol,-blank-at-eof
 test/results/automate-codex-2026-10-09/red/** -text whitespace=-blank-at-eol,-blank-at-eof
 test/results/automate-codex-2026-10-09/final/** -text whitespace=-blank-at-eol,-blank-at-eof
+test/results/automate-codex-2026-10-09/reviewed/** -text whitespace=-blank-at-eol,-blank-at-eof

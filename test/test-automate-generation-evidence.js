@@ -20,7 +20,7 @@ async function main() {
     }
   };
   inspectPaths(CAPTURES);
-  for (const phase of ['before', 'after', 'red', 'final']) {
+  for (const phase of ['before', 'after', 'red', 'final', 'reviewed']) {
     const capture = path.join(CAPTURES, phase);
     const provenance = JSON.parse(fs.readFileSync(path.join(capture, 'provenance.json'), 'utf8'));
     assert.equal(provenance.schemaVersion, 1);
@@ -45,7 +45,7 @@ async function main() {
   try {
     const project = path.join(scratch, 'project');
     fs.cpSync(path.join(__dirname, 'fixtures/automate-eval/voucher-service'), project, { recursive: true });
-    fs.cpSync(path.join(CAPTURES, 'final/generated/tests'), path.join(project, 'tests'), { recursive: true });
+    fs.cpSync(path.join(CAPTURES, 'reviewed/generated/tests'), path.join(project, 'tests'), { recursive: true });
     const score = await scoreGeneratedProject(project, path.join(scratch, 'execution'));
     assert.equal(score.pass, true, 'captured generation must pass the real HTTP fixture and detect its inclusive-boundary regression');
     assert.equal(score.generationWasInvoked, false, 'replay must disclose that it executes a previously generated suite');
