@@ -1,0 +1,30 @@
+[33mnote[0m: --runs 1 cannot measure stability; use --runs 2 or more.
+[36m========================================
+tea test-design eval harness
+========================================[0m
+
+[32m✓[0m 1 fixture set(s), 5 material risk(s), 4 ruled out, 9 ordering constraint(s); every quote resolves and no matcher overlaps
+[2m1 run(s) per fixture set per agent[0m
+
+[36mcodex[0m
+retained skill artifacts: /tmp/remaining-skills-evidence/test-design-after-schema-recovery/raw/codex-seeded-offline-order-capture-run-1-attempt-1-VwRTwQ
+  [32m✓[0m seeded-offline-order-capture: 6 risk(s), 5/5 grounded, 0 ungrounded, [33munrepeated[0m
+  [2m────────[0m
+  grounded recall     100%   (threshold  80%)
+  risk precision      100%   (threshold  80%)
+  scale compliance    100%   (threshold 100%)
+  score arithmetic    100%   (threshold 100%)
+  category validity   100%   (threshold 100%)
+  band placement      100%   (threshold 100%)
+  risk id well formed 100%   (threshold 100%)
+  risk link resolves  100%   (threshold 100%)
+  priority ordering   100%   (threshold 100%)
+  coverage mapping    100%   (threshold  80%)
+  ungrounded risks       0   (max 0)
+  unscored registers     0   (max 0)
+  top-severity missed    0   (max 0)
+  over the ceiling       0   (max 0)
+  fixture mutations      0   (max 0)
+  [32mall thresholds met[0m
+
+[2mresult written to /tmp/remaining-skills-evidence/test-design-after-schema-recovery/result.json[0m

@@ -1,0 +1,23 @@
+{
+  "name": "tea-test-design",
+  "startedAt": "2026-10-10T02:11:20.323Z",
+  "completedAt": "2026-10-10T02:19:31.560Z",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 491236,
+      "status": "failed",
+      "failureClass": "environment-parser",
+      "message": "invalid or duplicate scored risk row: None",
+      "promptSha256": "d97e6d7625861b5d215a1b1464b2a4561752b8bd225f365eef22a679efa3f35b"
+    }
+  ],
+  "failureClass": "environment-parser"
+}

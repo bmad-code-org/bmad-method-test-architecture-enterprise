@@ -388,7 +388,18 @@ const runnerResultSchema = z
     }
     const mappedMeasurements = new Set(value.diagnostics.flatMap((entry) => entry.mappedMeasurements));
     for (const [name, measurement] of Object.entries(value.measurements)) {
-      if (measurement === null && !OPTIONAL_NULL_MEASUREMENTS.has(name) && !mappedMeasurements.has(name)) {
+      // An explicit zero oracle expectation differs from a missing observation.
+      // Every declared repetition must prove zero expected, numerator and denominator.
+      const noExpectedContribution =
+        value.diagnostics.length > 0 &&
+        value.diagnostics.every(
+          (entry) =>
+            entry.completionState === 'completed' &&
+            entry.metricContributions[`${name}.expected`] === 0 &&
+            entry.metricContributions[`${name}.numerator`] === 0 &&
+            entry.metricContributions[`${name}.denominator`] === 0,
+        );
+      if (measurement === null && !OPTIONAL_NULL_MEASUREMENTS.has(name) && !noExpectedContribution && !mappedMeasurements.has(name)) {
         ctx.addIssue({
           code: 'custom',
           path: ['measurements', name],

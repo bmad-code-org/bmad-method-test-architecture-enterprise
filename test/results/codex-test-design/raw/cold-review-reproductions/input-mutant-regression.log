@@ -1,0 +1,71 @@
+
+> bmad-method-test-architecture-enterprise@2.0.1 test:workflow-cli
+> node test/test-workflow-cli.js
+
+Agent stderr (last 20 lines):
+transport failed
+retry: attempt 1 failed as environment-transport; retrying in a fresh artifact directory
+✔ integer validation refuses partial parses and overflow (0.638166ms)
+✔ paths reject outside destinations and escaping or dangling symlinks (1.421958ms)
+✔ absolute project paths through a filesystem alias resolve inside the canonical root (1.270084ms)
+✔ configuration reads overrides for the selected skill and keeps review defaults isolated (2.115042ms)
+✔ helper keeps raw output and arbitrary validation result (114.000625ms)
+✔ retry preserves failure streams and creates fresh attempt workspace (221.835458ms)
+✔ validation failure preserves evidence and does not retry (114.829791ms)
+✔ epic CLI invokes a custom vendor and publishes only complete, validated artifacts (171.747875ms)
+✔ system CLI requires distinct PRD and architecture documents and publishes its complete artifact set (282.798041ms)
+✔ prompt-only mode saves an actual skill invocation without vendor execution (57.872834ms)
+✔ missing output, incomplete checkpoint and wrong arithmetic fail without publishing (526.147833ms)
+✔ the observed evidence header preserves baseline risk meaning without changing scoring rules (128.698208ms)
+✔ existing published reports cannot satisfy a fresh incomplete attempt (169.809417ms)
+✔ a missing agent is refused before preparing a workflow or allocating evidence (0.72725ms)
+✔ a supervised timeout keeps partial streams and reports its own failure class (191.257125ms)
+retained skill artifacts: /var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-workflow-cli-test-jDmWPg/retained/codex-seeded-example-run-1-attempt-1-24lwQb
+✔ eval artifact retention preserves exact bytes and identifies live observation provenance (11.559291ms)
+✔ publication refuses direct and symlink input collisions before invoking an agent (112.159292ms)
+✔ system generation requires populated architecture and handoff sections (162.951459ms)
+✔ each probe attempt records its own raw observation or fault before retry (0.23825ms)
+✔ the observed residual-risk reference table preserves the canonical scored register (4.1125ms)
+✔ observed empty-band markers describe absence while scored or incomplete rows remain invalid (12.144708ms)
+✔ publication refuses a hardlink onto an input before invoking the agent (53.95825ms)
+✔ a replacement failure restores old reports and removes newly published files (4.392208ms)
+artifact retention failed: retention disk failure
+✔ retention failure always cleans the workspace and preserves a preceding run exception (1.13525ms)
+✔ clean-only evaluation preserves absent rates without failing undeclared expectations (0.397333ms)
+✔ clean fixture selection passes the executable gate with the retained actual report (647.016458ms)
+✔ full plan publication rejects incomplete sections, contradictory bands and unprioritized coverage (847.821791ms)
+✔ the final actual public CLI plan satisfies full section, band and priority guards unchanged (1.934208ms)
+✔ public CLI rejects wrong-key and retains previous reports and fresh failure evidence (168.471ms)
+✔ public CLI rejects wrong-scope and retains previous reports and fresh failure evidence (165.153584ms)
+✖ public CLI rejects input-mutation and retains previous reports and fresh failure evidence (178.678167ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 30
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4361.104958
+
+✖ failing tests:
+
+test at test/test-workflow-cli.js:570:3
+✖ public CLI rejects input-mutation and retains previous reports and fresh failure evidence (178.678167ms)
+  AssertionError [ERR_ASSERTION]: input-mutation
+  
+  0 !== 3
+  
+      at TestContext.<anonymous> (/Users/murat/opensource/_wt/remaining-skills-codex-evaluation/test/test-workflow-cli.js:577:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
+      at Test.postRun (node:internal/test_runner/test:1537:19)
+      at Test.run (node:internal/test_runner/test:1462:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 3,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

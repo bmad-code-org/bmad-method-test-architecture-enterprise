@@ -19,3 +19,6 @@
 # the suite goes on passing over a defence that is no longer tested.
 # Asserted by test/test-test-review-cli.js, Suite 1.
 test/fixtures/test-review-cli/reports/fenced-recommendation-crlf.md text eol=crlf
+
+# The final native Test Design capture retains its original bytes on every platform.
+test/results/codex-test-design/raw/public-cli-attempt-4/** -text whitespace=-blank-at-eol,-blank-at-eof

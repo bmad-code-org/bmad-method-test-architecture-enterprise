@@ -1,0 +1,8 @@
+{
+  "attempt": 1,
+  "elapsedMs": 491236,
+  "status": "failed",
+  "failureClass": "environment-parser",
+  "message": "invalid or duplicate scored risk row: None",
+  "promptSha256": "d97e6d7625861b5d215a1b1464b2a4561752b8bd225f365eef22a679efa3f35b"
+}

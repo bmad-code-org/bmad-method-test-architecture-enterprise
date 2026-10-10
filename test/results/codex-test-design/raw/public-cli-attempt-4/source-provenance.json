@@ -1,0 +1,8 @@
+{
+  "sourceCommit": "e8c7551bfaaa939a9df16f5f98a215af98cd851c",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "defaultAdapter": true,
+  "inputSha256": "15f8163c43f69d5b7d2c27a5e1c3cfe579047383ae926f83ec18b6c4e239abe2",
+  "note": "Ignored dependency link added before launch. Source tracked clean."
+}

@@ -1,0 +1,8 @@
+{
+  "attempt": 1,
+  "elapsedMs": 409466,
+  "status": "failed",
+  "failureClass": "environment-parser",
+  "message": "epic plan is missing populated section: Interworking & Regression",
+  "promptSha256": "6a865b8d395d28671d934dcef0cfc83a33471620a59feb9473e85bfbc79bb89d"
+}

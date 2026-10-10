@@ -1,0 +1,30 @@
+{
+  "kind": "deterministic public custom-agent replay of unchanged model artifacts",
+  "generationWasInvoked": false,
+  "modelSourceCommit": "e8c7551bfaaa939a9df16f5f98a215af98cd851c",
+  "parserSourceBaseCommit": "e8c7551bfaaa939a9df16f5f98a215af98cd851c",
+  "parserSourceSha256": {
+    "cli/test-design.js": "23bf4bf76b73a56d805f68c31fed192d8f0f29501bee784a251f2214e05a843b",
+    "cli/lib/test-design-parser.js": "544c6dd014d571406c844ed6fd562cf0ab1b3ca095ea96fb53d556cc2bc147ce",
+    "cli/lib/workflow-cli.js": "ca28bb3f3237b32399c902846ce3703c4c4624bcc8e13f3cf681dec38573b379"
+  },
+  "before": {
+    "generationWasInvoked": false,
+    "projectRoot": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-xnVYfK",
+    "exitCode": 3,
+    "stdout": "",
+    "stderr": "tea-test-design: epic plan is missing populated section: Interworking & Regression; evidence: /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-xnVYfK/.tea-runs/tea-test-design-5cDcu7\n"
+  },
+  "after": {
+    "generationWasInvoked": false,
+    "projectRoot": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-z5lqIA",
+    "exitCode": 0,
+    "stdout": "{\"mode\":\"live\",\"runKey\":\"epic-7\",\"evidence\":\"/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-z5lqIA/.tea-runs/tea-test-design-9gGb0W\",\"artifacts\":[\"/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-z5lqIA/published/test-design/test-design-epic-7.md\",\"/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-design-heading-replay-z5lqIA/published/test-design/test-design-progress-epic-7.md\"],\"riskCount\":5,\"coverageCount\":23}\n",
+    "stderr": ""
+  },
+  "riskCount": 5,
+  "coverageCount": 23,
+  "originalLiveCliExitCode": 3,
+  "originalLiveFailurePreserved": true,
+  "note": "Custom replay agent copies exact saved plan/checkpoint and invokes no model. The controller calls this transport mode live because it executes a custom process; generationWasInvoked remains false."
+}

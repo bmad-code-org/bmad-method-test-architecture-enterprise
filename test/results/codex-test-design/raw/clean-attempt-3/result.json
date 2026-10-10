@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T02:37:01.195Z",
+  "mode": "live",
+  "repository": {
+    "commit": "aea6103d4bcf4f57e141c2d806f938e20877fd79",
+    "dirty": true
+  },
+  "suite": {
+    "id": "test-design",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-test-design"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/test-design.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+    "promptDigest": "sha256:13dbfe1dd7275f33f5570ed55813201ba555bb9c88a4fb0fdc37e6624c0c4376",
+    "caseIds": [
+      "clean-last-sync-indicator"
+    ],
+    "cases": [
+      {
+        "id": "clean-last-sync-indicator",
+        "promptDigest": "sha256:2d7c2c69e46bfd1b138b7f50c3c6b5216e5832604bcc09cd661f7046d2019b0c"
+      }
+    ],
+    "thresholds": {
+      "groundedRiskRecall": 0.8,
+      "riskPrecision": 0.8,
+      "scaleComplianceAccuracy": 1,
+      "scoreArithmeticAccuracy": 1,
+      "categoryValidityAccuracy": 1,
+      "bandPlacementAccuracy": 1,
+      "riskIdWellFormedAccuracy": 1,
+      "riskLinkResolutionAccuracy": 1,
+      "priorityOrderingAccuracy": 1,
+      "coverageMappingAccuracy": 0.8,
+      "maxUnscoredRiskTables": 0,
+      "maxUngroundedRisks": 0,
+      "maxTopSeverityMissed": 0,
+      "maxRiskCeilingExcess": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 1,
+        "completed": 1
+      },
+      "measurements": {
+        "groundedRiskRecall": null,
+        "riskPrecision": 1,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": null,
+        "coverageMappingAccuracy": null,
+        "ungroundedRisks": 0,
+        "unscoredRiskTables": 0,
+        "topSeverityMissed": 0,
+        "riskCeilingExcess": 0,
+        "unstableCases": null,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 610230,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "groundedRiskRecall (unmeasurable)",
+        "priorityOrderingAccuracy (unmeasurable)",
+        "coverageMappingAccuracy (unmeasurable)"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":3,\"wellFormedIds\":3,\"validCategories\":3,\"inScale\":3,\"arithmeticOk\":3,\"banded\":3,\"bandOk\":3,\"arithmeticTotal\":3},[],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 3,
+            "riskPrecision.denominator": 3,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 3,
+            "scaleComplianceAccuracy.denominator": 3,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 3,
+            "scoreArithmeticAccuracy.denominator": 3,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 3,
+            "categoryValidityAccuracy.denominator": 3,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 3,
+            "bandPlacementAccuracy.denominator": 3,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 3,
+            "riskIdWellFormedAccuracy.denominator": 3,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 8,
+            "riskLinkResolutionAccuracy.denominator": 8,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "groundedRiskRecall; priorityOrderingAccuracy; coverageMappingAccuracy",
+          "triage": [
+            {
+              "reason": "groundedRiskRecall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "priorityOrderingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "coverageMappingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "groundedRiskRecall (unmeasurable)",
+            "priorityOrderingAccuracy (unmeasurable)",
+            "coverageMappingAccuracy (unmeasurable)"
+          ],
+          "mappedMeasurements": [
+            "groundedRiskRecall",
+            "priorityOrderingAccuracy",
+            "coverageMappingAccuracy"
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":3,\"wellFormedIds\":3,\"validCategories\":3,\"inScale\":3,\"arithmeticOk\":3,\"banded\":3,\"bandOk\":3,\"arithmeticTotal\":3},[],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:48446af438bc62e65f06cf32ef40f5e7df451756f93eadbd18b8ea440f675461 --- workflowStatus: 'completed' totalSteps: 5 stepsCompleted: - 'step-01-detect-mode' - 'step-02-load-context' - 'step-03-risk-and-testability' - 'step-04-coverage-plan' - 'step-05-generate-output' lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-09T21:35:04-05:00' runScope: 'epic' runKey: 'epic-9' inputDocuments: - 'docs/epics/epic-9-last-sync-indicator.md' - '_bmad/config.toml' - '../bmod-tea/knowledge/tea-index.csv' - '../bmod-tea/knowledge/risk-governance.md' - '../bmod-tea/knowledge"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 610328,
+  "failureClass": "quality",
+  "exitCode": 1
+}

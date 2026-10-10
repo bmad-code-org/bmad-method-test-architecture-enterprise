@@ -160,6 +160,7 @@ const {
   targetProblems,
 } = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
+const { retainSkillArtifacts, captureProbe, finishSkillAttempt } = require('./lib/retain-skill-artifacts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
@@ -306,6 +307,7 @@ function parseArgs(argv) {
   let agentCmd;
   let model;
   let jsonPath;
+  let artifactsDir;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -361,6 +363,13 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--artifacts-dir': {
+        artifactsDir = argv[index + 1];
+        if (!artifactsDir || artifactsDir.startsWith('--')) fatal(2, '--artifacts-dir requires a directory');
+        artifactsDir = path.resolve(artifactsDir);
+        index += 1;
+        break;
+      }
       case '--json': {
         jsonPath = argv[index + 1];
         if (!jsonPath) fatal(2, '--json requires a file path');
@@ -393,7 +402,7 @@ function parseArgs(argv) {
   if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);
   }
-  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath, artifactsDir };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1221,6 +1230,7 @@ function testDesignDiagnosticProjection(scored, mutations) {
   const ordering = scored.orderingChecks.filter((check) => check.resolvable);
   return {
     groundedRiskRecall: {
+      expected: scored.grounding.declared,
       numerator: scored.grounding.matched,
       denominator: scored.grounding.declared,
       threshold: THRESHOLDS.groundedRiskRecall,
@@ -1261,11 +1271,13 @@ function testDesignDiagnosticProjection(scored, mutations) {
       threshold: THRESHOLDS.riskLinkResolutionAccuracy,
     },
     priorityOrderingAccuracy: {
+      expected: scored.orderingChecks.length,
       numerator: scored.flattenedPriorities ? 0 : ordering.filter((check) => check.ok).length,
       denominator: scored.flattenedPriorities ? 0 : ordering.length,
       threshold: THRESHOLDS.priorityOrderingAccuracy,
     },
     coverageMappingAccuracy: {
+      expected: scored.coverageChecks.length,
       numerator: scored.coverageChecks.filter((check) => check.ok).length,
       denominator: scored.coverageChecks.length,
       threshold: THRESHOLDS.coverageMappingAccuracy,
@@ -1372,15 +1384,34 @@ async function corpusMutations(workspace) {
   return changed + added.length;
 }
 
+/** Run one isolated live attempt and preserve its evidence before cleanup. */
 async function runCase(set, options, agent, runIndex, categories) {
   let workspace = await stageWorkspace(set);
+  let lastAttempt = 1;
+  let rawObservation;
+  let runError;
+  const retain = () =>
+    retainSkillArtifacts({
+      artifactsDir: options.artifactsDir,
+      workspace,
+      caseId: set.id,
+      agent,
+      model: resolveModel(agent, options.model, options.agentArgs),
+      repetition: runIndex + 1,
+      attempt: lastAttempt,
+      prompt: buildPrompt(set),
+      observation: rawObservation,
+    });
   try {
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const portForAttempt = async (attempt) => {
       if (attempt > 1) {
+        await retain();
         fs.rmSync(workspace.dir, { recursive: true, force: true });
         workspace = await stageWorkspace(set);
       }
+      lastAttempt = attempt;
+      rawObservation = undefined;
       const leaked = await assertGroundTruthAbsent(workspace.dir);
       if (leaked.length > 0) {
         return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
@@ -1394,7 +1425,9 @@ async function runCase(set, options, agent, runIndex, categories) {
         // authorization does not permit, so the two lists are built from one source.
         environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
       });
-      return port;
+      return captureProbe(port, (observation) => {
+        rawObservation = observation;
+      });
     };
     const result = await probeCommandWithRetry(
       portForAttempt,
@@ -1408,6 +1441,7 @@ async function runCase(set, options, agent, runIndex, categories) {
       }),
       new AbortController().signal,
     );
+    rawObservation ??= result.ok ? result.observation : { fault: result };
     // The declared scope is the workspace. A run that reached the repository
     // instead is outside it, and its document is not read. Checked before the
     // result is, because a killed run may have written before it was killed.
@@ -1437,8 +1471,11 @@ async function runCase(set, options, agent, runIndex, categories) {
     }
 
     return await interpretObservation(set, observation, workspace, categories);
+  } catch (error) {
+    runError = error;
+    throw error;
   } finally {
-    fs.rmSync(workspace.dir, { recursive: true, force: true });
+    await finishSkillAttempt({ retain, workspace, runError });
   }
 }
 
@@ -1649,6 +1686,39 @@ function runnerRecord(
 /* -------------------------------------------------------------------------- */
 /* Entry point                                                                 */
 /* -------------------------------------------------------------------------- */
+
+/** Apply thresholds only to measurements declared by the selected fixture sets.
+ * @param {object[]} sets Selected corpus fixture sets.
+ * @param {object} measurements Observed rates; absent denominators remain null.
+ * @returns {string[]} Quality failures without turning absent expectations into perfect rates.
+ */
+function measurementFailures(sets, measurements) {
+  const materialDeclared = sets.some((set) => (set.materialRisks ?? []).length > 0);
+  const orderingDeclared = sets.some((set) => orderedPairsFor(set).length > 0);
+  const inapplicable = new Set([
+    ...(materialDeclared ? [] : ['groundedRiskRecall', 'coverageMappingAccuracy']),
+    ...(orderingDeclared ? [] : ['priorityOrderingAccuracy']),
+  ]);
+  const failures = [];
+  for (const key of [
+    'groundedRiskRecall',
+    'riskPrecision',
+    'scaleComplianceAccuracy',
+    'scoreArithmeticAccuracy',
+    'categoryValidityAccuracy',
+    'bandPlacementAccuracy',
+    'riskIdWellFormedAccuracy',
+    'riskLinkResolutionAccuracy',
+    'priorityOrderingAccuracy',
+    'coverageMappingAccuracy',
+  ]) {
+    if (inapplicable.has(key)) continue;
+    const value = measurements[key];
+    if (value === null) failures.push(`${key} (unmeasurable)`);
+    else if (value < THRESHOLDS[key]) failures.push(key);
+  }
+  return failures;
+}
 
 async function main() {
   const startedAt = await nowMs();
@@ -1955,24 +2025,7 @@ async function main() {
     console.log(`  fixture mutations    ${String(totals.mutations).padStart(3)}   (max ${THRESHOLDS.maxFixtureMutations})`);
 
     const failures = [];
-    for (const key of [
-      'groundedRiskRecall',
-      'riskPrecision',
-      'scaleComplianceAccuracy',
-      'scoreArithmeticAccuracy',
-      'categoryValidityAccuracy',
-      'bandPlacementAccuracy',
-      'riskIdWellFormedAccuracy',
-      'riskLinkResolutionAccuracy',
-      'priorityOrderingAccuracy',
-      'coverageMappingAccuracy',
-    ]) {
-      const value = measurements[key];
-      // NaN fails every comparison, so an unmeasurable metric would otherwise clear a
-      // bar it never met. Unmeasurable is a failure, and it says which metric.
-      if (value === null) failures.push(`${key} (unmeasurable)`);
-      else if (value < THRESHOLDS[key]) failures.push(key);
-    }
+    failures.push(...measurementFailures(sets, measurements));
     if (totals.unscoredTables > THRESHOLDS.maxUnscoredRiskTables) {
       failures.push(`${totals.unscoredTables} risk table(s) state no score, so their rows were never scored`);
     }
@@ -2045,6 +2098,7 @@ if (require.main === module) {
 
 module.exports = {
   runnerRecord,
+  measurementFailures,
   parseArgs,
   loadGroundTruth,
   selectSets,

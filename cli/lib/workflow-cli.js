@@ -8,6 +8,7 @@ const { runAgent } = require('./run-agent');
 const { assertAgentReady } = require('./agent-presence');
 const { classOfAgentError } = require('./runner-exit-codes');
 
+/** A classified workflow failure used by caller exit-code policies. */
 class WorkflowError extends Error {
   constructor(failureClass, message, options) {
     super(message, options);
@@ -15,12 +16,14 @@ class WorkflowError extends Error {
   }
 }
 const collect = (value, previous) => [...previous, value];
+/** Parse a bounded whole decimal without accepting partial or unsafe values. */
 function integer(value, name, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
   if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) < min || Number(value) > max) {
     throw new WorkflowError('usage', `${name} must be an integer from ${min} to ${max}`);
   }
   return Number(value);
 }
+/** Add the shared vendor, model, environment and execution controls. */
 function addAgentOptions(program) {
   return program
     .requiredOption(
@@ -34,6 +37,7 @@ function addAgentOptions(program) {
     .option('--timeout-ms <n>', 'wall-clock timeout per attempt in milliseconds', '1200000')
     .option('--retries <n>', 'additional attempts for transport failures or timeouts, from 0 to 3', '1');
 }
+/** Validate command-line controls and resolve the requested adapter invocation. */
 function agentOptions(options, projectRoot) {
   const timeout = integer(options.timeoutMs ?? '1200000', '--timeout-ms', { max: 2_147_483_647 });
   const retries = integer(options.retries ?? '1', '--retries', { min: 0, max: 3 });
@@ -63,6 +67,7 @@ function agentOptions(options, projectRoot) {
     cwd: projectRoot,
   };
 }
+/** Determine whether a resolved path is contained by the supplied root. */
 function inside(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
@@ -85,6 +90,7 @@ function projectPath(projectRoot, value, label = 'path') {
   if (!inside(root, resolved)) throw new WorkflowError('usage', `${label} resolves outside --project-root`);
   return resolved;
 }
+/** Resolve a readable regular input file confined to the consuming project. */
 function readInput(projectRoot, value, label = 'input') {
   const target = projectPath(projectRoot, value, label);
   let stat;
@@ -108,6 +114,7 @@ function resolveWorkflowSkill({ projectRoot, skillName, skillRoot }) {
     throw new WorkflowError('environment-configuration', `${skillName} is unavailable at ${root}: ${error.message}`, { cause: error });
   }
 }
+/** Activate the actual skill using authoritative config and caller run inputs. */
 function headlessPrompt({ skillRoot, projectRoot, resolvedConfig, operation = 'create', requestLines = [] }) {
   return [
     `Run the TEA skill at ${JSON.stringify(skillRoot)} for the project at ${JSON.stringify(projectRoot)}.`,
@@ -125,6 +132,7 @@ function headlessPrompt({ skillRoot, projectRoot, resolvedConfig, operation = 'c
     ...requestLines,
   ].join('\n');
 }
+/** Create a fresh readable JSON evidence record without overwriting a prior one. */
 function jsonFile(target, value) {
   fs.writeFileSync(target, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' });
 }
@@ -232,6 +240,7 @@ function runWithEvidence({
   lastError.runDir = runDir;
   throw lastError;
 }
+/** Print a retained-evidence diagnostic and map failures to public CLI codes. */
 function mainError(name, error) {
   process.stderr.write(`${name}: ${error.message}${error.runDir ? `; evidence: ${error.runDir}` : ''}\n`);
   return ['environment-transport', 'environment-timeout', 'environment-parser'].includes(error.failureClass) ? 3 : 2;

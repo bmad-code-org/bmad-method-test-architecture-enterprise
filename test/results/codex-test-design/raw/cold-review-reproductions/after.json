@@ -1,0 +1,26 @@
+[
+  {
+    "name": "misband",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/misband-n2zDfs",
+    "status": 3,
+    "stdout": "",
+    "stderr": "tea-test-design: epic plan is missing populated section: Executive Summary; evidence: /private/tmp/tea-blind-repro/misband-n2zDfs/.tea-runs/tea-test-design-gANTRo\n"
+  },
+  {
+    "name": "no-priority",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/no-priority-esHocj",
+    "status": 3,
+    "stdout": "",
+    "stderr": "tea-test-design: epic plan is missing populated section: Executive Summary; evidence: /private/tmp/tea-blind-repro/no-priority-esHocj/.tea-runs/tea-test-design-nb0eeI\n"
+  },
+  {
+    "name": "missing-sections",
+    "lane": "design",
+    "dir": "/tmp/tea-blind-repro/missing-sections-zmodEy",
+    "status": 3,
+    "stdout": "",
+    "stderr": "tea-test-design: epic plan is missing populated section: Executive Summary; evidence: /private/tmp/tea-blind-repro/missing-sections-zmodEy/.tea-runs/tea-test-design-9WzGea\n"
+  }
+]

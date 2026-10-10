@@ -270,6 +270,7 @@ function readRisks(tables) {
   // one had the second half vanish with nothing reported. They are counted so the
   // caller can fail on them.
   const unscored = [];
+  const residualReferences = new Map();
   for (const table of tables) {
     if (table.reference) continue;
     const idColumn = columnIndex(table.header, ['Risk ID', 'RiskID', 'ID']);
@@ -279,11 +280,35 @@ function readRisks(tables) {
       scoreColumn === -1 &&
       table.rows.some((row) => RISK_ID_PATTERN.test(String(row[idColumn] ?? '').toUpperCase()))
     ) {
-      unscored.push({ headings: table.headings, rows: table.rows.length });
+      const entry = { headings: table.headings, rows: table.rows.length };
+      unscored.push(entry);
+      const normalized = table.header.map((header) =>
+        String(header)
+          .toLowerCase()
+          .replaceAll(/[^a-z]/g, ''),
+      );
+      if (
+        String(table.headings.at(-1) ?? '')
+          .toLowerCase()
+          .replaceAll(/[^a-z]/g, '')
+          .startsWith('residualrisk') &&
+        normalized.some((header) => header.startsWith('residualrisk')) &&
+        normalized.includes('acceptancecondition') &&
+        !normalized.some((header) => ['category', 'riskcategory', 'probability', 'impact'].includes(header))
+      ) {
+        residualReferences.set(
+          entry,
+          table.rows.map((row) =>
+            String(row[idColumn] ?? '')
+              .trim()
+              .toUpperCase(),
+          ),
+        );
+      }
     }
     if (idColumn === -1 || scoreColumn === -1) continue;
     const categoryColumn = columnIndex(table.header, ['Category', 'Risk Category']);
-    const descriptionColumn = columnIndex(table.header, ['Description', 'Risk', 'Summary']);
+    const descriptionColumn = columnIndex(table.header, ['Description', 'Description and source evidence', 'Risk', 'Summary']);
     const probabilityColumn = columnIndex(table.header, ['Probability']);
     const impactColumn = columnIndex(table.header, ['Impact']);
     for (const row of table.rows) {
@@ -291,6 +316,16 @@ function readRisks(tables) {
       // A template row still carrying its own placeholder describes nothing, and
       // counting it would make an unfilled template score as a register.
       if (rawId === '' || /^\{.*\}$/.test(rawId)) continue;
+      // An explicitly empty band can carry a human-readable absence marker.
+      // Require all numeric cells empty so a scored or incomplete real risk
+      // cannot disappear through this exception.
+      if (
+        /^none$/i.test(rawId) &&
+        /^n\/a$/i.test(row[categoryColumn] ?? '') &&
+        /^no evidence-supported risk scored in this band\.?$/i.test(row[descriptionColumn] ?? '') &&
+        [probabilityColumn, impactColumn, scoreColumn].every((column) => column !== -1 && (row[column] ?? '').trim() === '')
+      )
+        continue;
       const id = rawId.toUpperCase();
       risks.push({
         id,
@@ -304,7 +339,14 @@ function readRisks(tables) {
       });
     }
   }
-  risks.unscoredTables = unscored;
+  const knownIds = new Set(risks.map((risk) => risk.id));
+  // A residual acceptance table may only reference IDs in the scored register.
+  // Its exact heading and columns distinguish it from an additional register;
+  // an unknown ID still reports an unscored table to every caller.
+  risks.unscoredTables = unscored.filter((entry) => {
+    const references = residualReferences.get(entry);
+    return !references || references.length === 0 || references.some((id) => !knownIds.has(id));
+  });
   return risks;
 }
 
@@ -332,7 +374,9 @@ function readCoverage(tables) {
       if (level === '' || /^\{.*\}$/.test(level)) continue;
       const linkCell = linkColumn === -1 ? '' : (row[linkColumn] ?? '');
       rows.push({
-        level,
+        // These observed qualifiers retain the E2E test level. Unknown values
+        // stay unchanged so validators and coverage oracles still reject them.
+        level: ['E2E performance', 'E2E operational'].includes(level) ? 'E2E' : level,
         priority,
         riskIds: [...String(linkCell).toUpperCase().matchAll(RISK_REFERENCE_PATTERN)].map((match) => match[0]),
         linkCell,

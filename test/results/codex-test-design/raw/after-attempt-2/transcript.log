@@ -1,0 +1,47 @@
+[33mnote[0m: --runs 1 cannot measure stability; use --runs 2 or more.
+[36m========================================
+tea test-design eval harness
+========================================[0m
+
+[32m✓[0m 1 fixture set(s), 5 material risk(s), 4 ruled out, 9 ordering constraint(s); every quote resolves and no matcher overlaps
+[2m1 run(s) per fixture set per agent[0m
+
+[36mcodex[0m
+retained skill artifacts: /tmp/remaining-skills-evidence/test-design-after-recovery/raw/codex-seeded-offline-order-capture-run-1-attempt-1-s6V0Vz
+  [32m✓[0m seeded-offline-order-capture: 6 risk(s), 5/5 grounded, 0 ungrounded, [33munrepeated[0m
+        [31muncovered:[0m sec-unencrypted-offline-queue (no coverage row links this risk; levels none)
+        [31muncovered:[0m data-sync-conflict-overwrite (no coverage row links this risk; levels none)
+        [31muncovered:[0m tech-uncapped-retry-loop (no coverage row links this risk; levels none)
+        [31muncovered:[0m perf-backlog-sync-budget (no coverage row links this risk; levels none)
+        [31muncovered:[0m ops-no-release-kill-switch (no coverage row links this risk; levels none)
+        [31mrisk-id-format:[0m E7-R01
+        [31mband:[0m E7-R01
+        [31mrisk-id-format:[0m E7-R02
+        [31mband:[0m E7-R02
+        [31mrisk-id-format:[0m E7-R03
+        [31mband:[0m E7-R03
+        [31mrisk-id-format:[0m E7-R04
+        [31mband:[0m E7-R04
+        [31mrisk-id-format:[0m E7-R05
+        [31mband:[0m E7-R05
+        [31mrisk-id-format:[0m E7-R06
+        [31mband:[0m E7-R06
+  [2m────────[0m
+  grounded recall     100%   (threshold  80%)
+  risk precision      100%   (threshold  80%)
+  scale compliance    100%   (threshold 100%)
+  score arithmetic    100%   (threshold 100%)
+  category validity   100%   (threshold 100%)
+  band placement        0%   (threshold 100%)
+  risk id well formed   0%   (threshold 100%)
+  risk link resolves    n/a   (threshold 100%)
+  priority ordering     n/a   (threshold 100%)
+  coverage mapping      0%   (threshold  80%)
+  ungrounded risks       0   (max 0)
+  unscored registers     0   (max 0)
+  top-severity missed    0   (max 0)
+  over the ceiling       0   (max 0)
+  fixture mutations      0   (max 0)
+  [31mbelow threshold: bandPlacementAccuracy, riskIdWellFormedAccuracy, riskLinkResolutionAccuracy (unmeasurable), priorityOrderingAccuracy (unmeasurable), coverageMappingAccuracy[0m
+
+[2mresult written to /tmp/remaining-skills-evidence/test-design-after-recovery/result.json[0m

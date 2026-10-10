@@ -1,0 +1,43 @@
+
+> bmad-method-test-architecture-enterprise@2.0.1 test:workflow-cli
+> node test/test-workflow-cli.js
+
+Agent stderr (last 20 lines):
+transport failed
+retry: attempt 1 failed as environment-transport; retrying in a fresh artifact directory
+✔ integer validation refuses partial parses and overflow (0.658ms)
+✔ paths reject outside destinations and escaping or dangling symlinks (1.496417ms)
+✔ absolute project paths through a filesystem alias resolve inside the canonical root (1.210333ms)
+✔ configuration reads overrides for the selected skill and keeps review defaults isolated (2.278792ms)
+✔ helper keeps raw output and arbitrary validation result (109.554208ms)
+✔ retry preserves failure streams and creates fresh attempt workspace (217.653959ms)
+✔ validation failure preserves evidence and does not retry (110.168292ms)
+✔ epic CLI invokes a custom vendor and publishes only complete, validated artifacts (175.849416ms)
+✔ system CLI requires distinct PRD and architecture documents and publishes its complete artifact set (276.575167ms)
+✔ prompt-only mode saves an actual skill invocation without vendor execution (53.532042ms)
+✔ missing output, incomplete checkpoint and wrong arithmetic fail without publishing (496.902875ms)
+✔ the observed evidence header preserves baseline risk meaning without changing scoring rules (143.363208ms)
+✔ existing published reports cannot satisfy a fresh incomplete attempt (163.09625ms)
+✔ a missing agent is refused before preparing a workflow or allocating evidence (0.69625ms)
+✔ a supervised timeout keeps partial streams and reports its own failure class (186.860333ms)
+retained skill artifacts: /var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-workflow-cli-test-8Vd1T0/retained/codex-seeded-example-run-1-attempt-1-J3cRFb
+✔ eval artifact retention preserves exact bytes and identifies live observation provenance (11.206292ms)
+✔ publication refuses direct and symlink input collisions before invoking an agent (109.044208ms)
+✔ system generation requires populated architecture and handoff sections (169.127083ms)
+✔ each probe attempt records its own raw observation or fault before retry (0.243875ms)
+✔ the observed residual-risk reference table preserves the canonical scored register (4.190333ms)
+✔ observed empty-band markers describe absence while scored or incomplete rows remain invalid (10.633958ms)
+✔ publication refuses a hardlink onto an input before invoking the agent (59.841875ms)
+✔ a replacement failure restores old reports and removes newly published files (5.32225ms)
+artifact retention failed: retention disk failure
+✔ retention failure always cleans the workspace and preserves a preceding run exception (1.592459ms)
+✔ clean-only evaluation preserves absent rates without failing undeclared expectations (0.4425ms)
+✔ clean fixture selection passes the executable gate with the retained actual report (679.352708ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2994.45375

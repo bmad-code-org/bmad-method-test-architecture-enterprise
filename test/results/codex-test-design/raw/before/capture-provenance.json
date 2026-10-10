@@ -1,0 +1,27 @@
+{
+  "mode": "live",
+  "baselineCommit": "cbcf937135585c072846026ea7cacbcedf74182d",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "command": "NODE_OPTIONS=--require=/tmp/retain-test-design.cjs node test/eval-test-design.js --agent codex --runs 1 --json /tmp/remaining-skills-evidence/test-design-before/result.json",
+  "captureMethod": "External temporary fs.rmSync interceptor copies completed staged workspaces before cleanup; packaged skill and harness bytes unchanged for the baseline.",
+  "stabilityMeasured": false,
+  "artifacts": [
+    {
+      "path": "test/results/codex-test-design/raw/before/seeded-offline-order-capture/test-design-epic-7.md",
+      "sha256": "594843cc3e418a894b51368354da3a6d4ee59c9e67d56d42b765d6f023ee266c"
+    },
+    {
+      "path": "test/results/codex-test-design/raw/before/seeded-offline-order-capture/test-design-progress-epic-7.md",
+      "sha256": "087c0a636f0b3299f0a1dd030e5fb559e9edcecf385cdc894a0b625565881d1d"
+    },
+    {
+      "path": "test/results/codex-test-design/raw/before/clean-last-sync-indicator/test-design-epic-9.md",
+      "sha256": "39b9686f0c95664089062f013ceb2979041b689d606ed0135dc0e695ed6d319c"
+    },
+    {
+      "path": "test/results/codex-test-design/raw/before/clean-last-sync-indicator/test-design-progress-epic-9.md",
+      "sha256": "5628ae0e8b68d833920cca9b885d32549570405dacf1492b2351ec87eeab994a"
+    }
+  ]
+}

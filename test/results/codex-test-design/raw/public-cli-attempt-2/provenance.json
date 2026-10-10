@@ -1,0 +1,10 @@
+{
+  "mode": "live",
+  "sourceCommit": "281ba3db6b5c94c57579b9825a968f817dc51e56",
+  "sourceDirty": false,
+  "command": "node cli/test-design.js --project-root /tmp/remaining-skills-evidence/test-design-cli-recovery/field-order-capture --input /tmp/remaining-skills-evidence/test-design-cli-recovery/field-order-capture/docs/epic-7.md --epic 7 --agent codex --output-dir test-artifacts --evidence-dir .tea-runs --retries 0",
+  "agentExitCode": 0,
+  "cliExitCode": 3,
+  "failure": "Empty-band absence markers interpreted as scored risks",
+  "requestedModel": "gpt-5.6-sol"
+}
