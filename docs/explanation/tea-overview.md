@@ -31,22 +31,26 @@ TEA runs in solutioning, implementation, and release gates; the Enterprise track
 
 ## TEA Skill Catalog
 
-Eight canonical skills have ten direct capability commands, plus the TEA agent. Start with these six skills:
+Eight canonical skills have ten direct capability commands, plus the TEA agent. The documentation sidebar lists these skills in this order:
 
 | Skill                                                          | Primary Outputs                                                                                                      | Browser Automation (CLI/MCP)                                      |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [Test Review](/docs/how-to/workflows/run-test-review.md)       | Test quality report with 0-100 score, violations, and fixes                                                          | Traces, screenshots, and network evidence                         |
 | [Automate](/docs/how-to/workflows/run-automate.md)             | Red acceptance scaffolds and implementation checklist; expand-mode specs, fixtures, README, and DoD summary          | Recording for skeleton UI in red; healing and recording in expand |
+| [Test Review](/docs/how-to/workflows/run-test-review.md)       | Test quality report with 0-100 score, violations, and fixes                                                          | Traces, screenshots, and network evidence                         |
 | [Test Design](/docs/how-to/workflows/run-test-design.md)       | Risk assessment, NFR thresholds and evidence plan, mitigation plan, and coverage strategy                            | Exploratory UI discovery                                          |
 | [Framework](/docs/how-to/workflows/setup-test-framework.md)    | Stack-specific scaffold, CI pipeline, selective testing scripts, secrets checklist, and evaluation jobs as requested | No browser automation required                                    |
 | [NFR](/docs/how-to/workflows/run-nfr-assess.md)                | NFR evidence audit against thresholds, domain statuses, and actions                                                  | Optional evidence capture                                         |
+| [Trace](/docs/how-to/workflows/run-trace.md)                   | Phase 1 coverage matrix and recommendations; Phase 2 gate decision (PASS/CONCERNS/FAIL)                              | Consumes recorded live verification                               |
 | [Teach Me Testing](/docs/how-to/workflows/teach-me-testing.md) | Seven learning sessions, quizzes, notes, and saved learner progress                                                  | No browser automation required                                    |
 
-### Additional Skills
+<a id="additional-skills"></a>
+
+### Evaluate
+
+[Trace](/docs/how-to/workflows/run-trace.md) appears in the Skills list above.
 
 | Skill                                                    | Primary Outputs                                                                           |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [Trace](/docs/how-to/workflows/run-trace.md)             | Phase 1 coverage matrix and recommendations; Phase 2 gate decision (PASS/CONCERNS/FAIL)   |
 | [Evaluate](/docs/tutorials/evaluate-your-first-skill.md) | Scored behavioral evaluation, named gaps, and a CI plan handed to Framework with CI scope |
 
 Automation uses one skill with two modes: red before implementation and expand after implementation. The ATDD command and `AT` select red by default; automate and `TA` select expand. Your prompt can explicitly select either. Create runs execute and repair tests for up to three rounds while keeping real product defects visible.

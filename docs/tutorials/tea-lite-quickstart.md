@@ -1,6 +1,8 @@
 ---
 title: 'Getting Started with Test Architect'
 description: Generate and run Playwright tests for an existing demo app with TEA
+sidebar:
+  order: 2
 ---
 
 **Test Architect (TEA) Lite** uses `automate` to test features that already exist.

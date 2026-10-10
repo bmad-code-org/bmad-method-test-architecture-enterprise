@@ -52,16 +52,20 @@ Menu codes work after loading `bmad-tea`.
 Ten direct capability commands start the eight canonical skills.
 See [Commands](/reference/commands) for every invocation and menu code.
 
-- [Test Review](/how-to/workflows/run-test-review): Audit test quality and score findings.
 - [Automate](/how-to/workflows/run-automate): Generate red acceptance scaffolds or expand coverage.
+- [Test Review](/how-to/workflows/run-test-review): Audit test quality and score findings.
 - [Test Design](/how-to/workflows/run-test-design): Plan risks, coverage, and NFR evidence.
 - [Framework](/how-to/workflows/setup-test-framework): Set up a test framework, CI, or both.
 - [NFR](/how-to/workflows/run-nfr-assess): Audit implemented NFR evidence.
+- [Trace](/how-to/workflows/run-trace): Map requirements to tests and decide a release gate.
 - [Teach Me Testing](/how-to/workflows/teach-me-testing): Learn testing through seven sessions.
 
-### Additional Skills
+<a id="additional-skills"></a>
 
-- [Trace](/how-to/workflows/run-trace) maps requirements to tests and decides a release gate.
+### Evaluate
+
+[Trace](/how-to/workflows/run-trace) appears in the Skills list above.
+
 - [Evaluate](/tutorials/evaluate-your-first-skill) builds and runs a behavioral evaluation.
 
 [Automate red mode](/how-to/workflows/run-automate#red-mode) keeps the ATDD command and `AT` menu code. [Framework CI setup](/how-to/workflows/setup-test-framework#ci-setup) keeps the CI command and `CI` menu code. Existing customizations and progress remain usable.
