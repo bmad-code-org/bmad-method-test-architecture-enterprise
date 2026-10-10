@@ -1,0 +1,84 @@
+
+Running 8 tests using 1 worker
+·FF····F
+
+  1) tests/api/voucher-redemption.spec.ts:22:7 › Voucher redemption API › [P0] 6.6-API-002 accepts a voucher on the exact expiry date 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 1,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      30 |
+      31 |     expect(response.status()).toBe(200);
+    > 32 |     expect(await response.json()).toEqual({
+         |                                   ^
+      33 |       accepted: true,
+      34 |       discount: 1,
+      35 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/mutated/tests/api/voucher-redemption.spec.ts:32:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-0e3f9-er-on-the-exact-expiry-date/error-context.md
+
+  2) tests/api/voucher-redemption.spec.ts:38:7 › Voucher redemption API › [P0] 6.6-API-003 accepts the exact inclusive minimum spend 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 5,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      46 |
+      47 |     expect(response.status()).toBe(200);
+    > 48 |     expect(await response.json()).toEqual({
+         |                                   ^
+      49 |       accepted: true,
+      50 |       discount: 5,
+      51 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/mutated/tests/api/voucher-redemption.spec.ts:48:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-81a58-act-inclusive-minimum-spend/error-context.md
+
+  3) tests/api/voucher-redemption.spec.ts:118:7 › Voucher redemption API › [P0] 6.6-API-008 applies the fixed discount through the public service 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 5,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      126 |
+      127 |     expect(response.status()).toBe(200);
+    > 128 |     expect(await response.json()).toEqual({
+          |                                   ^
+      129 |       accepted: true,
+      130 |       discount: 5,
+      131 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/mutated/tests/api/voucher-redemption.spec.ts:128:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-803bd--through-the-public-service/error-context.md
+
+  3 failed
+    tests/api/voucher-redemption.spec.ts:22:7 › Voucher redemption API › [P0] 6.6-API-002 accepts a voucher on the exact expiry date 
+    tests/api/voucher-redemption.spec.ts:38:7 › Voucher redemption API › [P0] 6.6-API-003 accepts the exact inclusive minimum spend 
+    tests/api/voucher-redemption.spec.ts:118:7 › Voucher redemption API › [P0] 6.6-API-008 applies the fixed discount through the public service 
+  5 passed (862ms)

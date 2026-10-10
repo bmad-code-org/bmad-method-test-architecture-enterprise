@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-codex-generation",
+  "phase": "red",
+  "model": "gpt-5.6-sol",
+  "codexVersion": "0.162.0",
+  "projectRoot": "/private/tmp/tea-automate-codex-red",
+  "exitCode": 0,
+  "captureState": "preliminary-controller-before-independent-review-fixes",
+  "toolEventsSelection": "Exact response_item function_call/function_call_output JSONL lines; other session events omitted.",
+  "cliResult": {
+    "mode": "red",
+    "operation": "create",
+    "executionStatus": "verified red",
+    "summaryPath": "_bmad-output/test-artifacts/atdd/atdd-checklist-4-2-reserve-a-locker.md",
+    "generatedFiles": [
+      "tests/api/locker-reservations.spec.ts",
+      "tests/support/factories/reservation.ts"
+    ],
+    "executionReports": [
+      "_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9/attempt-1/red-report-initial.json"
+    ],
+    "counts": {
+      "initial": {
+        "executed": 5,
+        "passed": 0,
+        "failed": 5,
+        "skipped": 0,
+        "intendedFailures": 5
+      },
+      "final": {
+        "executed": 5,
+        "passed": 0,
+        "failed": 5,
+        "skipped": 0,
+        "intendedFailures": 5
+      }
+    },
+    "healingRoundsUsed": 0,
+    "remainingFailures": [],
+    "evidenceDir": "/private/tmp/tea-automate-codex-red/_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9",
+    "agent": "codex"
+  },
+  "sourceHashes": {
+    "src/server.js": "416b047100c7b1dd079523f964e448289c4fcc4b495817662a416665997a61ad",
+    "package.json": "c954331e833028a549c6c64a6c2921a19e889c481043e88197e8b0ef265bcd54",
+    "playwright.config.ts": "e4d135a1d845b37d7e1599d65e40c131377b216b968e9896ed25077ce16a9072"
+  },
+  "artifacts": {
+    "stdout.txt": "1177b23917104ac2961fe87eb68b43bb797784bd5e6334ad8fa6f61759ae70f2",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "project.tar.gz": "827fc0ec1a24da6b18df4aa55869762e7b52b951457de8db2af9c226a5c1f7dc",
+    "tool-events.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "generated/tests/support/factories/reservation.ts": "8d3dc40e2f022ce4b37c4a2ec3e6e91bbdca3515ebb50aa66e3495f63536fa74",
+    "generated/tests/api/locker-reservations.spec.ts": "f0378f92ff11d64107d1e18386b6ea1a46b8cb15d798674f69f5c03fdeab488d",
+    "cli-evidence/run.json": "0740f6c5f5725943777b7bc0b95d2b23b2b535d2892298dd7626333fc06d59d9",
+    "cli-evidence/attempt-1/stdout.txt": "283ad30469dacd691e26fdd5f843899ccedabca86de265bac503a14937b962ed",
+    "cli-evidence/attempt-1/prompt.txt": "0fb1ce2de90b1d60912619a08a637cdcf0582846d9e870e9fb5550c0aa7ac844",
+    "cli-evidence/attempt-1/attempt.json": "75bc139d5ebf52a7b5ece0d27477a40e71368b98c106af48faa67b592a49182b",
+    "cli-evidence/attempt-1/generation.json": "ad33738fba58b37b30a8fac27268c036ef92cd3695e86acbda3c8812fe02faca",
+    "cli-evidence/attempt-1/red-report-initial.json": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb",
+    "workflow-artifacts/red-report-initial.json": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb",
+    "workflow-artifacts/atdd-checklist-4-2-reserve-a-locker.md": "4f3b526d8702ba3731911ec5570e2d1ddbb667a93c0c9043b6d967d27e033df5"
+  },
+  "artifactPathRelocations": {
+    "reason": "Copied artifacts use compact filenames so Windows can clone the repository. Original project-relative paths remain in raw manifests, summaries and the unchanged portable project archive. Model and runner artifact bytes are unchanged.",
+    "files": [
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9/attempt-1/red-report-initial.json",
+        "relocatedCapturedPath": "workflow-artifacts/red-report-initial.json",
+        "sha256": "90e1e6eca575fb2e72c7cf2c9fd763f7721f346ef96aacfc2f1b62aa6460a7cb"
+      },
+      {
+        "originalCapturedPath": "workflow-artifacts/_bmad-output/test-artifacts/atdd/atdd-checklist-4-2-reserve-a-locker.md",
+        "relocatedCapturedPath": "workflow-artifacts/atdd-checklist-4-2-reserve-a-locker.md",
+        "sha256": "4f3b526d8702ba3731911ec5570e2d1ddbb667a93c0c9043b6d967d27e033df5"
+      }
+    ]
+  }
+}

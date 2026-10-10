@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "selection": "Exact tool call and tool output response_item lines from every Codex session with the recorded cwd; session metadata, reasoning, account IDs and other events omitted.",
+  "sessions": [
+    {
+      "file": "tool-session-01.jsonl",
+      "sourceSession": "rollout-2026-10-09T21-13-52-01a12396-92b7-7891-a3b2-5f1dc97cb590.jsonl",
+      "records": 122,
+      "sha256": "18b87f064bac9ce9240393694d58da51bc868d152e83f6cbb4f6cabc2c585c96",
+      "models": [
+        "gpt-5.6-sol"
+      ]
+    },
+    {
+      "file": "tool-session-02.jsonl",
+      "sourceSession": "rollout-2026-10-09T21-18-03-01a1239a-6425-74c2-953e-987cad81a208.jsonl",
+      "records": 26,
+      "sha256": "1a7c0fe7a29fab6eafd5ce5f87a72771955785f0e54768b2d474b71a9cb63fa6",
+      "models": [
+        "gpt-5.6-sol"
+      ]
+    },
+    {
+      "file": "tool-session-03.jsonl",
+      "sourceSession": "rollout-2026-10-09T21-18-11-01a1239a-8491-7dd3-97ca-d1da1512b167.jsonl",
+      "records": 8,
+      "sha256": "21cc8e65414745f96c62704cf0dc2b3d994806b5b70ffe188324b2649cfa961e",
+      "models": [
+        "gpt-5.6-sol"
+      ]
+    }
+  ]
+}

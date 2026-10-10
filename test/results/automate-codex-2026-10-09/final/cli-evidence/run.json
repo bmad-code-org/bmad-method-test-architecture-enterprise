@@ -1,0 +1,20 @@
+{
+  "name": "tea-automate",
+  "startedAt": "2026-10-10T01:33:22.299Z",
+  "completedAt": "2026-10-10T01:39:13.048Z",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "timeoutMs": 1800000,
+  "capabilities": [
+    "command-execution"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 350748,
+      "status": "completed",
+      "promptSha256": "8e6e40fea381fdc7b61ad061c0fb1042c87619d165dde6896ef05ccfac06cc13"
+    }
+  ]
+}

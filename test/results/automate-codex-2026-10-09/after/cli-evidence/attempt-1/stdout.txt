@@ -1,0 +1,14 @@
+Completed the headless TEA Automate create workflow.
+
+Runner result: 7 executed, 7 passed, 0 skipped, 0 retries. Healing rounds used: 0.
+
+Overall status is `failed` because the fixed discount cart-total cap cannot be exercised through the public catalog. `FLAT5` requires a minimum spend of 20 and discounts only 5. Lower totals are rejected before discount calculation.
+
+Artifacts:
+
+- [Generated API tests](/private/tmp/tea-automate-codex-after/tests/api/voucher-redemption.spec.ts)
+- [Completed workflow summary](/private/tmp/tea-automate-codex-after/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md)
+- [Playwright JSON report](/private/tmp/tea-automate-codex-after/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json)
+- [Generation manifest](/private/tmp/tea-automate-codex-after/_bmad-output/test-artifacts/automate-cli/83f3cc81-a434-4291-9a15-fc4c18341cc6/tea-automate-1lz0xe/attempt-1/generation.json)
+
+Production source and configuration remained unchanged.

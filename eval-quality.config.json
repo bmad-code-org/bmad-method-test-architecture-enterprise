@@ -920,6 +920,7 @@
         "externals": {
           "policy": "allow",
           "modules": [
+            "@babel/parser",
             "ajv/dist/2020",
             "commander",
             "glob",
@@ -936,9 +937,10 @@
             "node:os",
             "node:path",
             "node:string_decoder",
+            "node:util",
             "smol-toml"
           ],
-          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (ajv, commander, glob, js-yaml, markdown-it, minimatch, smol-toml), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
+          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (@babel/parser, ajv, commander, glob, js-yaml, markdown-it, minimatch, smol-toml), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
         }
       },
       {
@@ -1567,6 +1569,14 @@
         {
           "token": "toJSON",
           "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "testMatch",
+          "reason": "a Playwright configuration option for test file matching patterns, not a TEA declaration"
+        },
+        {
+          "token": "testIgnore",
+          "reason": "a Playwright configuration option for test file ignoring patterns, not a TEA declaration"
         },
         {
           "token": "PATH",

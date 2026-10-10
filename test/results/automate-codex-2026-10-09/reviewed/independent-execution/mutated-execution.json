@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+    "test",
+    "--reporter=json"
+  ],
+  "timeoutMs": 60000,
+  "exitCode": 1,
+  "error": "Agent \"/Users/murat/.nvm/versions/node/v24.20.0/bin/node\" exited with code 1.",
+  "sourceBefore": {
+    "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+    "src/vouchers.js": "6dd089850a689119f36dd2f53d2a3149737b580e15e61c0b50bcdc921762cf99",
+    "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+    "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+  }
+}

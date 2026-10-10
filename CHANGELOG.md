@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-automate` CLI for the merged red/expand skill, with Create, Resume, Validate, Edit, default run-and-heal, JSON outcomes, and retained agent/runner evidence.
+- Real Codex generation captures and an independent fixed-versus-mutated voucher-suite scorer, complementing the deterministic AUTOMATE fixture evaluator.
 - `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
@@ -22,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Automate reconciles native Playwright evidence across nested configs, RegExp selectors, CommonJS and ESM source locations, namespace registrations, and merged fixture aliases. Real native full and filtered runs verify complete generated scope for each supported form.
+- Reconcile Automate generated test leaves, files, configured projects, and repetitions with native execution identities; require complete mode progress, preserve disabled healing counters, and protect existing directory inputs and aliases from result publication.
+- Bind Automate CLI results to the current request and selected checkpoint, reject stale generated artifacts and opaque or repeated success evidence, distinguish red assertions from execution failures, and protect input and evidence files from JSON hardlink collisions.
+- Retained generation artifacts use compact paths so Windows checkouts can clone the repository.
+- Native generated-suite replay retains raw timeout and signal evidence before reporting execution blockers.
+- Codex command-execution runs can start loopback test services through the supported workspace network setting. Read-only and artifact-write capabilities retain their previous network policy; explicit network configuration keeps precedence.
+- Automate uses shared workflow customization loading to expand `file:` persistent facts and validate custom settings.
+- Restrict environment variables forwarded to model-generated test execution in the live generation scorer.
+- Automate generation evaluation uses the clock port for duration and generation timestamps.
+- Prune raw uncompressed terminal stderr streams from live evaluation captures and gitignore evidence stderr logs.
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
 - Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
 - Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.

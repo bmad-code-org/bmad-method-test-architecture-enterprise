@@ -1,0 +1,367 @@
+{
+  "config": {
+    "argv": [
+      "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+      "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+      "test",
+      "--reporter=json"
+    ],
+    "configFile": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/fixed/playwright.config.ts",
+    "rootDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/fixed/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/fixed/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-eQb1Dr/fixed/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 15000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "node src/server.js",
+      "url": "http://127.0.0.1:50120/health",
+      "env": {
+        "PORT": "50120"
+      },
+      "reuseExistingServer": false
+    }
+  },
+  "suites": [
+    {
+      "title": "api/voucher-redemption.spec.ts",
+      "file": "api/voucher-redemption.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Voucher redemption API",
+          "file": "api/voucher-redemption.spec.ts",
+          "line": 5,
+          "column": 6,
+          "specs": [
+            {
+              "title": "[P0] 6.6-API-001 rejects a voucher one day after expiry",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 25,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.654Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-167150d0b41d5b24b6b3",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 6,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-002 accepts a voucher on the exact expiry date",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.694Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-9d6e1642e0d19c872281",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 22,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-003 accepts the exact inclusive minimum spend",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.703Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-e62d75920434210963b4",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 38,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-004 rejects a cart strictly below minimum spend",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.710Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-cf5d648ec0027555c672",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 54,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-005 calculates a percentage discount below its cap",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.717Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-78bc54853cd2607155ca",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 70,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-006 preserves the discount at the exact cap boundary",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.725Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-4d1880036989f5853785",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 86,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-007 enforces the percentage maximum above the cap boundary",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.731Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-1a2961e94096ed461a08",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-008 applies the fixed discount through the public service",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:39:34.739Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-0274e6545b468f4a9b94",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 118,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-10T01:39:34.330Z",
+    "duration": 425.22100000000006,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

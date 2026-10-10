@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "/tmp/tea-atdd-story-4-2.YHi8Rm/project",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/locker-reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P0] AC-1 reserves a free locker",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404"
+        },
+        {
+          "title": "[P0] AC-2 rejects a second reservation for an actively reserved locker",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 404"
+        },
+        {
+          "title": "[P0] AC-3 rejects a duration above the allowed maximum",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 422\nReceived: 404"
+        },
+        {
+          "title": "[P0] AC-4 releases an existing reservation",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 204\nReceived: 404"
+        },
+        {
+          "title": "[P1] AC-5 reports an actively reserved locker as reserved",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined"
+        }
+      ]
+    }
+  ]
+}

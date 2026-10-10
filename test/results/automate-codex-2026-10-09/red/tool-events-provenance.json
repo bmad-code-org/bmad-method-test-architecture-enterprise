@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "artifact": "tool-events-all.jsonl",
+  "sha256": "9b3f855c3027577f10793c7ec6b4e85954511b0db3766d785a78a487ed3930b7",
+  "records": 132,
+  "selection": "Exact response_item function_call/function_call_output/custom_tool_call/custom_tool_call_output JSONL lines. This supplements tool-events.jsonl, whose earlier filter selected only function calls and omitted custom tool events. Other session events remain omitted."
+}

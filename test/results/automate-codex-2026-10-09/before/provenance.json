@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "phase": "before",
+  "repositoryRevision": "cbcf937135585c072846026ea7cacbcedf74182d",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "codexVersion": "codex-cli 0.162.0",
+  "command": [
+    "node",
+    "/Users/murat/opensource/_wt/automate-codex-evaluation/cli/skill-runner.js",
+    "--skill-root",
+    "skills/bmad-testarch-automate",
+    "--agent",
+    "codex",
+    "--capability",
+    "command-execution",
+    "--timeout-ms",
+    "1800000"
+  ],
+  "cwd": "/tmp/tea-automate-codex-before",
+  "transport": "stdin",
+  "inAgentExecution": "could not measure",
+  "loopbackError": "listen EPERM 127.0.0.1:4320",
+  "independentExecution": "7 fixed passes; 1 mutation failure on inclusive minimum",
+  "toolEventCapture": "Exact function-call and function-call-output JSONL records from this Codex session; session metadata and other event types are omitted. The runner stdout is its final reply.",
+  "artifacts": {
+    "stdout.txt": "fbed41a49cfa68593476833e72df214407a0b64644c082817943826f32685fd1",
+    "prompt.txt": "caea6b1e071f37b3d63dc461bf48a365199f1c73c60db3afe8c4c6efebf2364c",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "project.tar.gz": "942f1de7612f42e8a852bcf79492924276cf0226999668f9a1d6016d35ec52e4",
+    "tool-events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "independent-execution/score.json": "4b9e6503fad6e3536b0e8fcab9419a93fcb25d2a71019780e95dc13d895da5a9",
+    "independent-execution/fixed-stderr.txt": "7b57878b9d0f876a81e1cd643dd8c14fc09b433605e585543e13d1f29ec6ae18",
+    "independent-execution/mutated-stderr.txt": "e0b96529a0fbfea3be39dd0af36b364ebd59c8d7875ab8d9808aa4e1324df10e",
+    "independent-execution/fixed-playwright.json": "b29780e0d6b59fe108e0b9b14e9d21aa971f315d0150579d58e305c031c45acb",
+    "independent-execution/mutated-playwright.json": "4759672d40fdecfec4bb5a2899cebd1546d47191dc612827ab9a951229267d7f",
+    "independent-execution/mutated-stdout.txt": "94626e8b3736d87670b86ed9095a31218fa9269caa126344564ba6d0bf1b355e",
+    "independent-execution/fixed-stdout.txt": "c9e8d2a01431403b7d446b7a934711ddaed69e8c89ce040e98edfe1f62dda522"
+  }
+}

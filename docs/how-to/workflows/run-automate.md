@@ -11,6 +11,9 @@ Use the Automate skill's `expand` mode to add tests for implemented features. It
 
 Create runs execute the generated tests and repair test issues by default, for up to three rounds. The summary records the repairs and any remaining failures. Real product defects keep their failing assertions and appear as findings.
 
+For unattended generation and JSON outcomes, use the [tea-automate CLI](/docs/reference/tea-automate-cli.md).
+It supports red and expand, saved-run continuation, validation, and edits.
+
 Choose [red mode](#red-mode) before implementation or [expand mode](#expand-mode) for existing code. Both modes support Create, Resume, Validate, and Edit. Each keeps its customization files and saved progress.
 
 ## Expand Mode

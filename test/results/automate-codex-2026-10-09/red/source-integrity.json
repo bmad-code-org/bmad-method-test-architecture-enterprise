@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "files": {
+    "src/server.js": {
+      "fixtureSha256": "416b047100c7b1dd079523f964e448289c4fcc4b495817662a416665997a61ad",
+      "afterSha256": "416b047100c7b1dd079523f964e448289c4fcc4b495817662a416665997a61ad"
+    },
+    "src/lockers.js": {
+      "fixtureSha256": "9b30bb3535be609f1a33d6a00707aaa1d76eae1ab038662dbf997cfb9000d3e7",
+      "afterSha256": "9b30bb3535be609f1a33d6a00707aaa1d76eae1ab038662dbf997cfb9000d3e7"
+    },
+    "package.json": {
+      "fixtureSha256": "c954331e833028a549c6c64a6c2921a19e889c481043e88197e8b0ef265bcd54",
+      "afterSha256": "c954331e833028a549c6c64a6c2921a19e889c481043e88197e8b0ef265bcd54"
+    },
+    "playwright.config.ts": {
+      "fixtureSha256": "e4d135a1d845b37d7e1599d65e40c131377b216b968e9896ed25077ce16a9072",
+      "afterSha256": "e4d135a1d845b37d7e1599d65e40c131377b216b968e9896ed25077ce16a9072"
+    }
+  }
+}

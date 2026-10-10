@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "fixedTests": 8,
+  "detectedRegression": true,
+  "detectingTitles": [
+    "[P0] 6.6-API-002 accepts a voucher on the exact expiry date",
+    "[P0] 6.6-API-003 accepts the exact inclusive minimum spend",
+    "[P0] 6.6-API-008 applies the fixed discount through the public service"
+  ]
+}

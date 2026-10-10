@@ -552,6 +552,8 @@ function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillNa
 module.exports = {
   resolveTeaConfig,
   readTeaConfigFile,
+  readWorkflowCustomization,
+  configSource,
   isPackageInstalled,
   KEY_TO_PACKAGE,
   KEY_TO_INSTALLED_FIELD,

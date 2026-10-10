@@ -50,3 +50,10 @@ _bmad-output/implementation-artifacts/evaluate/story-1.29.md
 
 # Story 1.54's approved matrix is frozen and retains its approved spacing.
 _bmad-output/implementation-artifacts/evaluate/story-1.54.md
+
+# Immutable raw generation and runner measurements.
+test/results/automate-codex-2026-10-09/before/
+test/results/automate-codex-2026-10-09/after/
+test/results/automate-codex-2026-10-09/red/
+test/results/automate-codex-2026-10-09/final/
+test/results/automate-codex-2026-10-09/reviewed/

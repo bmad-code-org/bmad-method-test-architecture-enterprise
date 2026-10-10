@@ -1,0 +1,32 @@
+{
+  "mode": "expand",
+  "operation": "create",
+  "executionStatus": "failed",
+  "summaryPath": "_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md",
+  "generatedFiles": [
+    "tests/api/voucher-redemption.spec.ts"
+  ],
+  "executionReports": [
+    "_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json"
+  ],
+  "counts": {
+    "initial": {
+      "executed": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "intendedFailures": 0
+    },
+    "final": {
+      "executed": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "intendedFailures": 0
+    }
+  },
+  "healingRoundsUsed": 0,
+  "remainingFailures": [
+    "Complete API coverage is blocked for the fixed discount cart-total cap: FLAT5 has amountOff 5 and minimumSpend 20, so every accepted cart exceeds the discount and requests below 20 are rejected before discount calculation."
+  ]
+}

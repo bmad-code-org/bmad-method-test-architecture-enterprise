@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "type": "executed-generated-suite",
+  "generationWasInvoked": false,
+  "generatedAt": "2026-10-10T02:25:42.936Z",
+  "projectRoot": "/private/tmp/tea-automate-codex-reviewed",
+  "mutation": {
+    "from": "const meetsMinimumSpend = cartTotal >= voucher.minimumSpend;",
+    "to": "const meetsMinimumSpend = cartTotal > voucher.minimumSpend;"
+  },
+  "protectedSourcePreserved": true,
+  "allFixedTestsPassed": true,
+  "mutationExecutionComplete": true,
+  "detectedRegression": true,
+  "detectingTitles": [
+    "[6.6-API-001] [P0] accepts EXPIRED10 on its exact expiry date at its exact minimum spend",
+    "[6.6-API-004] [P0] accepts SAVE10 at its exact minimum spend",
+    "[6.6-API-009] [P0] grants FLAT5 fixed discount at its exact minimum spend"
+  ],
+  "runs": {
+    "fixed": {
+      "exitCode": 0,
+      "command": [
+        "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+        "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+        "test",
+        "--reporter=json"
+      ],
+      "environment": {
+        "PORT": "59520",
+        "VOUCHER_BASE_URL": "http://127.0.0.1:59520",
+        "CI": "1"
+      },
+      "errors": [],
+      "tests": [
+        {
+          "title": "[6.6-API-001] [P0] accepts EXPIRED10 on its exact expiry date at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-002] [P0] rejects EXPIRED10 one day after expiry",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-003] [P1] evaluates expiry before minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-004] [P0] accepts SAVE10 at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-005] [P0] rejects SAVE10 one cent below minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-006] [P0] grants SAVE10 percentage discount below the cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-007] [P0] grants SAVE10 maximum discount at the exact cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-008] [P0] caps SAVE10 discount beyond the cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-009] [P0] grants FLAT5 fixed discount at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        }
+      ],
+      "sourceBefore": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "45f9034d9624a2db2cd3dba4d495c48cec92cef973eb7984d01f608d4a88e63a",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      },
+      "sourceAfter": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "45f9034d9624a2db2cd3dba4d495c48cec92cef973eb7984d01f608d4a88e63a",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      }
+    },
+    "mutated": {
+      "exitCode": 1,
+      "command": [
+        "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+        "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+        "test",
+        "--reporter=json"
+      ],
+      "environment": {
+        "PORT": "59561",
+        "VOUCHER_BASE_URL": "http://127.0.0.1:59561",
+        "CI": "1"
+      },
+      "errors": [],
+      "tests": [
+        {
+          "title": "[6.6-API-001] [P0] accepts EXPIRED10 on its exact expiry date at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "failed",
+              "errors": [
+                "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 1,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  14 |\n  15 |     expect(response.status()).toBe(200);\n> 16 |     expect(await response.json()).toEqual({\n     |                                   ^\n  17 |       accepted: true,\n  18 |       discount: 1,\n  19 |     });\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:16:35"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-002] [P0] rejects EXPIRED10 one day after expiry",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-003] [P1] evaluates expiry before minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-004] [P0] accepts SAVE10 at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "failed",
+              "errors": [
+                "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  62 |\n  63 |     expect(response.status()).toBe(200);\n> 64 |     expect(await response.json()).toEqual({\n     |                                   ^\n  65 |       accepted: true,\n  66 |       discount: 5,\n  67 |     });\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:64:35"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-005] [P0] rejects SAVE10 one cent below minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-006] [P0] grants SAVE10 percentage discount below the cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-007] [P0] grants SAVE10 maximum discount at the exact cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-008] [P0] caps SAVE10 discount beyond the cap threshold",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[6.6-API-009] [P0] grants FLAT5 fixed discount at its exact minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "failed",
+              "errors": [
+                "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  142 |\n  143 |     expect(response.status()).toBe(200);\n> 144 |     expect(await response.json()).toEqual({\n      |                                   ^\n  145 |       accepted: true,\n  146 |       discount: 5,\n  147 |     });\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-dWxSv8/mutated/tests/api/voucher-redemption.spec.ts:144:35"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceBefore": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "6dd089850a689119f36dd2f53d2a3149737b580e15e61c0b50bcdc921762cf99",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      },
+      "sourceAfter": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "6dd089850a689119f36dd2f53d2a3149737b580e15e61c0b50bcdc921762cf99",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      }
+    }
+  },
+  "pass": true
+}

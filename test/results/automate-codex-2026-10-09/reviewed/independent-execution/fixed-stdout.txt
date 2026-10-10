@@ -1,0 +1,4 @@
+
+Running 9 tests using 1 worker
+·········
+  9 passed (430ms)
