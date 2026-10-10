@@ -5,10 +5,14 @@ description: Prove that a skill or an agent behaves as you require, from the Eva
 
 # How to Evaluate a Skill or Agent with TEA
 
-Use the Evaluate skill to get a repeatable score for a skill or an agent.
-Evaluate runs the target in disposable copies of your project, plants known defects, and records whether the evaluation catches them.
-The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) teaches the whole path once.
-This page covers what changes for your own target.
+Start Evaluate in your coding agent and point it at a skill or an agent.
+Confirm the behavior you need to prove, the outputs that count as evidence, and the boundaries it may cross.
+Evaluate builds the checks, runs the target in disposable copies of your project, and plants known defects to see whether the checks catch them.
+You get a scored run that shows what passed and where coverage is weak.
+Your coding agent handles the files and commands below after you confirm the requirements; they are here so you can inspect or repeat the run.
+
+The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks through a prepared example by hand.
+This guide applies that process to your own target.
 
 ## When to Use This
 
@@ -180,6 +184,9 @@ Preflight launches the real target in a confined disposable copy.
 It sends two different requests to prove the output depends on the input, then sends the clean request twice to prove the starting state resets.
 Exit 0 means the registry reaches the target and the clean control passes.
 
+`check` has validated the evaluation files, and `preflight` has shown that the target starts and answers from a clean state.
+Next, run the trials and read the score.
+
 ### 5. Run and Score
 
 ```bash
@@ -251,71 +258,24 @@ grep -A8 '"confinement"' evals/stub-skill-preflight/runs/$RUN/run.json
 `confinement` is `seatbelt` on macOS, `bubblewrap` on Linux, or `opt-out` when `evaluation.json` sets `"confinement": false`.
 Only a `bubblewrap` run holds an agent to its `egress` list.
 
-## If `preflight` Exits 3 With `mount outside allowlist`
+<a id="if-preflight-exits-3-with-mount-outside-allowlist"></a>
 
-A confined run grants the trial its workspace.
-A runner that resolves outside the workspace is read outside the trial's grants, and `preflight` refuses it with exit 3 before any trial; `run` and `score` refuse the same paths from the trials' manifests.
-A registry `target` of the bare name `tea-skill-runner`, found through the `evals/node_modules/.bin` that `npm exec` puts on the `PATH`, does this.
-`preflight` audits each leg and refuses the paths every leg opened, with the first three and a count of the rest:
+## If Preflight Reports a Path Outside the Workspace
 
-```text
-tea-evaluate preflight: isolation manifest violation: every preflight leg opened 17 path(s) outside the allowlist (mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-adapters.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor-bounds.js; mount outside allowlist: <project>/evals/node_modules/bmad-method-test-architecture-enterprise/cli/lib/agent-supervisor.js; and 14 more), so every trial will too, and `score` refuses a trial that does (exit 3). If they are the files of a target that launches from outside its workspace, use one of two setups: make the registry `target` a path inside `launch.root` (for example `node_modules/.bin/tea-skill-runner` over a copy workspace, or a git workspace with `workspace.provision`), or keep the bare name and list the directories it runs from in `systemPaths`, with the bin directory that holds its link on `PATH`.
-```
+If `preflight` exits 3 with `mount outside allowlist`, ask Evaluate to inspect the path the target opened.
+For an installed skill runner, the agent can point the registry at its path inside the disposable workspace and rerun `check` and `preflight`.
+Review unexpected access to credentials or other projects before allowing it.
 
-On macOS the audit lists 17 paths, all under two directories: the TeA package and `commander`.
-On Linux it lists 18, the third being the link `node_modules/.bin/tea-skill-runner` in a third directory, `evals/node_modules/.bin`.
-Two repairs work, and the first is the one to prefer:
-
-1. Set the registry `target` to the path inside `launch.root`, `evals/node_modules/.bin/tea-skill-runner`, as step 2 shows.
-2. Keep the bare name and list the install directories the audit names in `systemPaths` on the entry that starts the target, using the narrowest directory that holds each, and the `evals/node_modules/.bin` directory that holds the runner's link (a Linux audit lists it):
-
-```json
-{
-  "systemPaths": [
-    "/work/app/evals/node_modules/bmad-method-test-architecture-enterprise",
-    "/work/app/evals/node_modules/commander",
-    "/work/app/evals/node_modules/.bin"
-  ]
-}
-```
-
-With the bare name, the runner must also be on the target's `PATH`, so start `tea-evaluate` through `npm exec --prefix evals --`.
-Without that, the preflight exits 3 and the leg's observation in `runs/<invocationId>/observations/001-witness-alpha.json` names the cause:
-
-```text
-sandbox-exec: execvp() of 'tea-skill-runner' failed: No such file or directory
-```
-
-A path you did not expect, such as a credential file or another project, points to a target that reads beyond its task.
-A path that only some legs opened is no refusal: `preflight` prints a note naming it and the legs, and a trial that opens it exits `run` with 3.
-A leg whose audit lost reports (the macOS log is lossy under load) is left out of that check and named in a note; when every leg's audit lost reports, `preflight` exits 12 with `the legs yield no audit`, and the fix is to run it again on a quieter host.
-Repair the target, because declaring that path would hide the defect.
-Then run `check` and run the evaluation again.
-The reference describes both setups in [Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) and the audit in [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement).
+[Where the runner lives](/docs/reference/tea-evaluate-cli.md#where-the-runner-lives) has the exact configuration and platform diagnostics.
 
 ## If Your Target Already Has Known Defects
 
-A clean control fails when the target has a defect, and `run` stops with exit 11 and `the clean control's baseline does not pass`.
-To record the starting point before you fix the target, declare each failing control in its probe and run with `--before-state`.
-Begin the control's `qualification.noKnownDefectStatement` with `Known defect at this revision:` and name the defect:
+Ask Evaluate to record a before state when a known defect makes the clean control fail.
+The skill labels the failing control and runs it with `--before-state` so you have a record to compare after the fix.
+That result cannot become a baseline.
+After the target is fixed, ask Evaluate to run it again, then review and accept the clean result.
 
-```json
-{
-  "route": "clean-control",
-  "noKnownDefectStatement": "Known defect at this revision: the review ignores the type checker. This control records the before state."
-}
-```
-
-```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --before-state
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run <invocationId>
-```
-
-`score` reads each known-failing control whose trials violate its oracles as `false-positive` and exits 2; `eval-quality` computes that, and the summary lines say `BEFORE STATE`.
-The flag covers clean controls only, so a seeded probe whose baseline the defect breaks still stops `preflight` with exit 11.
-`compare` and `compare --accept` exit 10 on a before-state result.
-After the fix, change the statement to `No known defect at this revision.`, run without the flag and accept that run.
-[The `run` reference](/docs/reference/tea-evaluate-cli.md#record-a-before-state) lists what changes under the flag.
+[Record a before state](/docs/reference/tea-evaluate-cli.md#record-a-before-state) gives the probe fields, command and exit behavior.
 
 ## How You Know It Worked
 

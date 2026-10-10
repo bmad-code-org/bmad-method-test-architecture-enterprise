@@ -1,0 +1,345 @@
+---
+runScope: 'epic'
+runKey: 'epic-4'
+targetType: 'epic'
+targetId: '4'
+targetLabel: 'Epic 4: Tenant Data Export and Erasure'
+workflowStatus: 'completed'
+stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision']
+lastStep: 'step-05-gate-decision'
+lastSaved: '2026-10-10T01:20:34Z'
+workflowType: 'testarch-trace'
+inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md']
+coverageBasis: 'acceptance_criteria'
+oracleConfidence: 'high'
+oracleResolutionMode: 'formal_requirements'
+oracleSources: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md']
+externalPointerStatus: 'not_used'
+collectionStatus: 'COLLECTED'
+sourceSha: ''
+tempCoverageMatrixPath: '/tmp/tea-trace-coverage-matrix-epic-4-2026-10-10T01-18-55Z.json'
+---
+
+# Traceability Matrix and Gate Decision: Epic 4: Tenant Data Export and Erasure
+
+**Target:** Epic 4: Tenant Data Export and Erasure  
+**Date:** 2026-10-09  
+**Evaluator:** tea-eval-harness  
+**Coverage Oracle:** Acceptance criteria  
+**Oracle Confidence:** High  
+**Oracle Source:** `tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md`
+
+This workflow does not generate tests. Coverage gaps require separate ATDD or automation work.
+
+## Gate Decision: FAIL
+
+**Rationale:** P0 coverage is 50% and requires 100%. One critical requirement is below FULL coverage. Overall coverage is 70%, which also falls below the 80% minimum. The P0 rule determines the decision first.
+
+The release is blocked until AC-2 has countable coverage and the gate is run again. Two waiver requests were reviewed. Their validity does not alter the derived decision.
+
+## Coverage Summary
+
+| Priority | Total Criteria | FULL Coverage | Coverage % | Status |
+| --- | ---: | ---: | ---: | --- |
+| P0 | 2 | 1 | 50% | FAIL |
+| P1 | 5 | 5 | 100% | PASS |
+| P2 | 2 | 1 | 50% | WARN |
+| P3 | 1 | 0 | 0% | INFO |
+| **Total** | **10** | **7** | **70%** | **FAIL** |
+
+Coverage percentages count criteria classified FULL. PARTIAL and NONE criteria remain gaps.
+
+## Detailed Mapping
+
+### AC-1: An admin export request returns a signed download link (P0)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-API-001` at `tests/api/tenant-export.api.spec.ts:15` (API)
+    - **Given:** An administrator requests a full tenant export.
+    - **When:** The job is queried until it reaches `ready`.
+    - **Then:** Its state is `ready`, and its download URL contains a signature.
+  - `4-E2E-001` at `tests/e2e/tenant-export.spec.ts:10` (E2E)
+    - **Given:** An administrator is on the tenant data console.
+    - **When:** The administrator requests a full export.
+    - **Then:** A visible archive download link carries a signature.
+- **Justification:** The API test establishes the complete criterion. The E2E test adds defense in depth for the console path.
+
+### AC-2: Export is denied to a member without the admin role (P0)
+
+- **Coverage:** NONE
+- **Tests:** None.
+- **Gap:** No countable evidence establishes the member-role `403` or verifies that no export job is created. `4-LIVE-001` reports this behavior and has an unverifiable source commit.
+- **Considered and rejected:**
+  - `4-API-002` at `tests/api/tenant-export.api.spec.ts:30` (API): The test uses `ADMIN_TOKEN` and expects `202`. It never exercises a member or asserts `403` or absence of a job.
+- **Recommendation:** Add `4-API-008` using `MEMBER_TOKEN`. Assert `403`, then verify that no export job was created.
+
+### AC-3: The export manifest lists contacts, invoices, and audit entries (P1)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-API-003` at `tests/api/tenant-export.api.spec.ts:40` (API)
+    - **Given:** A completed export manifest is available.
+    - **When:** The latest manifest endpoint is queried.
+    - **Then:** Its section names are exactly `contacts`, `invoices`, and `audit-entries`, and every section carries an integer record count.
+  - `4-UNIT-001` at `tests/unit/export-manifest.spec.ts:10` (Unit)
+    - **Given:** Record counts for contacts, invoices, and audit entries.
+    - **When:** The manifest builder runs.
+    - **Then:** It emits all three named sections with their exact counts.
+- **Justification:** The API and unit tests provide appropriate defense in depth for the endpoint result and the manifest builder.
+
+### AC-4: Erasure requires the tenant slug to be typed exactly (P1)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-E2E-003` at `tests/e2e/tenant-export.spec.ts:33` (E2E)
+    - **Given:** The erasure dialog is open.
+    - **When:** A near-miss slug is entered, followed by the exact tenant slug.
+    - **Then:** The confirm control stays disabled for the near miss and becomes enabled for the exact match.
+- **Justification:** Both conditions stated by the criterion are established.
+
+### AC-5: A queued export can be cancelled before it starts (P1)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-API-004` at `tests/api/tenant-export.api.spec.ts:52` (API)
+    - **Given:** A full export is created with processing paused, leaving it queued.
+    - **When:** The cancellation endpoint is called.
+    - **Then:** Cancellation returns `200`, the job reaches `cancelled`, and its download URL is null.
+- **Justification:** The setup and assertions establish cancellation of a queued export and the absence of a link.
+
+### AC-6: A download link expires 24 hours after it is issued (P1)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-API-005` at `tests/api/tenant-export.api.spec.ts:69` (API)
+    - **Given:** An export has reached `ready` and supplied a download URL.
+    - **When:** The test clock advances 25 hours and the URL is requested.
+    - **Then:** The download request returns `410`.
+- **Justification:** The test crosses the stated time boundary and establishes the required response.
+
+### AC-7: Erasure is irreversible (P1)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-API-006` at `tests/api/tenant-export.api.spec.ts:84` (API)
+    - **Given:** An erasure request has reached `completed`.
+    - **When:** A new export is requested for the erased tenant.
+    - **Then:** The request returns `404`.
+- **Justification:** The test establishes the irreversible outcome stated by the criterion.
+
+### AC-8: The audit log records the actor and the time of every export request (P2)
+
+- **Coverage:** PARTIAL
+- **Tests:**
+  - `4-API-007` at `tests/api/audit-log.api.spec.ts:14` (API)
+    - **Given:** An administrator requests a full export.
+    - **When:** The latest `export.requested` audit entry is retrieved.
+    - **Then:** The action and actor email are asserted.
+- **Gap:** The audit entry timestamp is never asserted.
+- **Recommendation:** Assert a timestamp field and constrain it to the export request interval.
+
+### AC-9: Export progress reaches 100 percent before the download becomes available (P2)
+
+- **Coverage:** FULL
+- **Tests:**
+  - `4-E2E-002` at `tests/e2e/tenant-export.spec.ts:20` (E2E)
+    - **Given:** An export has just been requested from the console.
+    - **When:** Progress moves from 0 to 100.
+    - **Then:** The download link is hidden at 0 and visible at 100.
+- **Justification:** The test establishes the required ordering.
+
+### AC-10: The archive filename carries the tenant slug and the request date (P3)
+
+- **Coverage:** NONE
+- **Tests:** None.
+- **Gap:** No countable evidence asserts the downloaded archive filename. `4-LIVE-002` uses `verified`, which is outside the allowed live status set.
+- **Recommendation:** Add `4-E2E-004` to download the archive and assert the tenant slug and ISO request date in its filename.
+
+## Gap Analysis
+
+### Critical Gaps
+
+1. **AC-2: Export is denied to a member without the admin role**
+   - Current coverage: NONE
+   - Missing test: Member request returns `403`, followed by proof that no export job exists.
+   - Recommended test: `4-API-008` at API level.
+   - Impact: An authorization defect could expose tenant data and initiate unauthorized export work.
+
+### High Priority Gaps
+
+No P1 criterion has NONE coverage.
+
+### Medium Priority Gaps
+
+No P2 criterion has NONE coverage. AC-8 remains PARTIAL because its required timestamp is unasserted.
+
+### Low Priority Gaps
+
+1. **AC-10: The archive filename carries the tenant slug and the request date**
+   - Current coverage: NONE
+   - Recommended test: `4-E2E-004` at E2E level.
+
+## Coverage Heuristics Findings
+
+- Endpoints without direct API tests: 0
+- Authorization negative-path gaps: 1, AC-2
+- Happy-path-only criteria requiring additional error assertions: 0
+- UI journey status: `not_applicable`
+- UI state status: `not_applicable`
+
+## Test Inventory
+
+| Test Level | Accepted Tests | Criteria with Evidence |
+| --- | ---: | ---: |
+| E2E | 3 | 3 |
+| API | 6 | 6 |
+| Component | 0 | 0 |
+| Unit | 1 | 1 |
+| Live | 0 | 0 |
+| Other | 0 | 0 |
+
+- Files: 4
+- Accepted cases: 10
+- Skipped cases: 0
+- Fixme cases: 0
+- Pending cases: 0
+
+The named AC-2 API case is excluded from accepted counts because its assertions establish none of AC-2.
+
+## Live Evidence
+
+- Results file: `tenant-data-export/test-artifacts/live-verification-results.json`
+- Freshness: unverifiable
+- Recorded source SHA: `0123456789abcdef0123456789abcdef01234567`
+- Current source SHA: `unknown`
+- Producer: manual verification by release engineer
+- Counted: 0
+- Unverifiable: 1
+- Invalid: 1
+- Requirements covered only by live evidence: 0
+
+### Live Evidence Blockers
+
+1. `4-LIVE-001`: The current commit SHA could not be resolved, so freshness cannot be established.
+2. `4-LIVE-002`: The status `verified` is invalid. Allowed statuses are `pass`, `fail`, `blocked`, and `skipped`.
+
+## Quality Assessment
+
+- Static quality inspection found no committed skips, pending cases, fixme cases, focused tests, or hard waits.
+- `4-API-002` is rejected evidence because its title claims AC-2 while its setup and assertion exercise the administrator success path.
+- Runtime pass rates, durations, flakiness, and burn-in stability are `unknown` because `collection_mode` is `contract_static` and no execution report is available.
+- NFR evidence and code coverage are `unknown` because no corresponding artifacts exist.
+
+## Decision Criteria Evaluation
+
+| Criterion | Threshold | Actual | Status |
+| --- | --- | --- | --- |
+| P0 coverage | 100% | 50% | NOT_MET |
+| P1 coverage | 90% target, 80% minimum | 100% | MET |
+| Overall coverage | 80% minimum | 70% | NOT_MET |
+
+The collection status is `COLLECTED`, and `allow_gate` is `true`. The run is gate eligible.
+
+## Waiver Register Review
+
+Waivers filed: 2. Valid: 1. Invalid: 1. Waivers do not alter the derived FAIL decision or remove covered gaps from the analysis.
+
+| ID | Covers | Priority | Valid | Failed checks |
+| --- | --- | --- | --- | --- |
+| W-1 | AC-8 | P2 | Yes | none |
+| W-2 | AC-2 | P0 | No | `business_justification`, `approver_authority`, `expiry_present`, `remediation_due_date`, `not_security`, `contract_complete` |
+
+W-1 carries an authorized approver, business justification, an expiry, monitoring, and a dated remediation plan. W-2 relies on technical convenience, has no authorized approver, has no expiry or concrete remediation date, attempts to waive an authorization criterion, and leaves required contract fields without actionable values.
+
+## Critical Issues
+
+| Priority | Issue | Description | Owner | Due Date | Status |
+| --- | --- | --- | --- | --- | --- |
+| P0 | AC-2 authorization coverage | No accepted static test or fresh live result establishes member denial and absence of a job. | unknown | unknown | OPEN |
+
+## Recommendations
+
+### Immediate Actions
+
+1. Add `4-API-008` for AC-2 using a member context. Assert `403`, then verify that no export job exists.
+2. Resolve the repository source SHA before recording fresh live evidence.
+3. Run the trace workflow again after AC-2 coverage is accepted.
+
+### Short-term Actions
+
+1. Extend `4-API-007` with an audit timestamp assertion for AC-8.
+2. Add `4-E2E-004` for the AC-10 archive filename.
+
+### Long-term Actions
+
+1. Run `/bmad-testarch-test-review` for a dedicated test-quality assessment.
+
+## Integrated YAML Snippet
+
+```yaml
+traceability_and_gate:
+  traceability:
+    target: "epic-4"
+    coverage:
+      overall: 70
+      p0: 50
+      p1: 100
+      p2: 50
+      p3: 0
+    gaps:
+      critical: 1
+      high: 0
+      medium: 0
+      low: 1
+  gate_decision:
+    decision: "FAIL"
+    gate_type: "epic"
+    decision_mode: "deterministic"
+    criteria:
+      p0_coverage: 50
+      p1_coverage: 100
+      overall_coverage: 70
+    thresholds:
+      min_p0_coverage: 100
+      min_p1_coverage: 80
+      target_p1_coverage: 90
+      min_coverage: 80
+    evidence:
+      traceability: "tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md"
+      live_results: "tenant-data-export/test-artifacts/live-verification-results.json"
+      nfr_assessment: "unknown"
+      code_coverage: "unknown"
+    next_steps: "Add accepted AC-2 authorization coverage and rerun the gate."
+```
+
+## Related Artifacts
+
+- **Epic:** `tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md`
+- **Live verification:** `tenant-data-export/test-artifacts/live-verification-results.json`
+- **Waiver register:** `tenant-data-export/test-artifacts/gate-waivers.md`
+- **Test directory:** `tenant-data-export/tests`
+- **Machine summary:** `tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json`
+
+## Sign-Off
+
+- Overall coverage: 70%
+- P0 coverage: 50%, FAIL
+- P1 coverage: 100%, PASS
+- Critical gaps: 1
+- Derived decision: FAIL
+- Evaluated at: 2026-10-10T01:20:34Z
+
+<!-- Powered by BMAD-CORE™ -->
+
+## Gate Decision Summary
+
+**GATE DECISION: FAIL**
+
+- P0 coverage: 50%. Required: 100%. Status: NOT_MET.
+- P1 coverage: 100%. Target: 90%. Status: MET.
+- Overall coverage: 70%. Minimum: 80%. Status: NOT_MET.
+- Live evidence freshness: unverifiable. Counted records: 0.
+- Critical gaps: 1.
+- Waivers filed: 2. Valid: 1. Invalid: 1. No waiver was applied.
+- Required action: Add accepted AC-2 authorization coverage and rerun this workflow before release.

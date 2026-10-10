@@ -10,7 +10,7 @@ It plants a defect in your target, runs the evaluation, then restores the origin
 A passing evaluation on the mutated target exposes a blind spot.
 
 Evaluation moves from confirmed requirements to CI in six steps, and three roles carry them.
-The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and `eval-quality` scores it.
+The Evaluate skill authors the evaluation, the `tea-evaluate` command runs it and records the evidence, and [`eval-quality`](https://github.com/bmad-code-org/bmad-eval-quality) scores it.
 You confirm the requirements and accept the baseline, and CI enforces the checks the evaluation chose.
 
 ```mermaid
@@ -81,6 +81,7 @@ Who applies the oracles is the evaluator kind, and `evaluation.json` chooses it:
 - **`command`**.
   Your executable under `evaluator/` receives the sealed brief and the observations and prints judgment rows.
   It suits a skill-specific evaluator or a wrapper around a framework you already use.
+  [AgentEvals](https://github.com/langchain-ai/agentevals) is one optional framework for checking an agent's tool-call trajectory; [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md) shows its wrapper.
 - **`sealed-brief-agent`**.
   An agent reads the sealed brief alone and acts on the target only through a bridge the runtime owns, so the registry still decides what it may call.
   Because the agent chooses its own calls, two runs can differ, so Evaluate runs it several times on each arm first and requires its attempts to agree.

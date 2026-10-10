@@ -35,7 +35,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral eval, `teach-me-testing` | One case, two turns, against a real vendor: turn 1 plays a full first session with a seeded wrong quiz answer and the review it triggers, turn 2 is a fresh process proving progress persisted                                                                                                                                                                                                                                                      | `test/eval-teach-me-testing.js`            |
 | Evaluate-authored eval, `evaluate`  | Evaluate's own suite: five seeded probes (two gap-guide class swaps, one held out, plus the web-interface seed, the dropped exit-table row and the guessed class) and four clean controls, five trials each through the skill runner; `tea-evaluate` runs it and `eval:all` skips it                                                                                                                                                                | `test/evaluations/bmad-testarch-evaluate/` |
 | Behavioral Evaluation Contracts     | Sixteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                                                                                                                                                                                                                                                                                                               | `test/contracts/`                          |
-| Replay corpus                       | A corpus containing 158 cases replayed with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 54 ci runs, 14 test-design documents, 20 replies                                                                                                                                                                                                                                                             | `test/replay/`                             |
+| Replay corpus                       | A corpus containing 159 cases replayed with no model call: 3 selections, 13 atdd reports, 10 verdicts, 16 trace pairs, 29 nfr reports, 54 ci runs, 14 test-design documents, 20 replies                                                                                                                                                                                                                                                             | `test/replay/`                             |
 
 All eleven of TEA's skills now have a suite.
 The eleventh, `bmad-testarch-evaluate`, is covered by the suite Evaluate authored and ran on itself, registered in `test/evals/suite-manifest.json` as `evalType: evaluate-authored`.
@@ -315,7 +315,7 @@ Framework and automate execute deterministic fixtures; their default runs can ne
 ### Replay the scorers without a model
 
 A harness is mostly scoring logic, and scoring logic is code that needs its own regression test.
-`test/replay/` holds 158 cases and `npm run test:eval-replay` replays them with no model call and no network.
+`test/replay/` holds 159 cases and `npm run test:eval-replay` replays them with no model call and no network.
 Some cases assert refusal or missing-artifact behavior and receive no numeric quality score.
 Two rules make the corpus worth having:
 
@@ -327,7 +327,7 @@ Two rules make the corpus worth having:
 Hand-derived expectations found a trace parser defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence.
 The derivation gave 10 citations and the code gave 11.
 
-6 of the 158 stored outputs are real captures, 12 are captured reports and the other 140 are constructed.
+6 of the 159 stored outputs are real captures, 13 are captured reports and the other 140 are constructed.
 
 ## 5. Express the skill as a contract
 

@@ -221,7 +221,7 @@
         "npm run test:eval-test-design-data",
         "npm run test:eval-routing-data",
         "npm run test:eval-automate-data",
-        "npm run test:cli"
+        "npm run test:test-review-cli"
       ]
     },
     "sampleInput": "package.json",
@@ -543,6 +543,13 @@
           "module": "test/lib/doc-count-sources.js",
           "export": "TEACH_ME_TESTING_CALLS"
         }
+      },
+      "replayTraceCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TRACE_CAPTURED_BYTES"
+        }
       }
     },
     "entries": [
@@ -727,10 +734,16 @@
         "file": "test/README.md",
         "claim": "the cases that carry captured bytes and where they come from",
         "pattern": {
-          "match": "([A-Za-z-]+) carry captured bytes: ([a-z-]+) ATDD corpus reports, ([a-z-]+) CLI fixtures, and ([a-z-]+) live CI runs"
+          "match": "([A-Za-z-]+) carry captured bytes: ([a-z-]+) ATDD corpus reports, ([a-z-]+) CLI fixtures, ([a-z-]+) live CI runs, and ([a-z-]+) live Trace run"
         },
         "wrap": true,
-        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"]
+        "counts": [
+          "replayCapturedBytes",
+          "replayAtddCapturedBytes",
+          "replayTestReviewCapturedBytes",
+          "replayCiCapturedBytes",
+          "replayTraceCapturedBytes"
+        ]
       },
       {
         "file": "test/README.md",
@@ -2174,7 +2187,7 @@
           "reason": "Trace probe strength records retain three uncovered whole-body falsifiers; reviewed against the stored expected-strength artifact.",
           "asOf": {
             "subject": "test/probes/expected-strength.json",
-            "hash": "9478c9517b8be26c3bdb2d731687be6ed91b6e83d73f1abfd31931c23ce3977d"
+            "hash": "7239754e56aaba0ea26754760e9d10f6d82ba852a07a58d2b2572c64e2674a8a"
           }
         }
       ]

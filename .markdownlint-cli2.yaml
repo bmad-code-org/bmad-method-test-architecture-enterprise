@@ -10,6 +10,8 @@ ignores:
   - test/eval-artifacts/**
   # Captured live generation output preserves exact model-authored bytes.
   - test/results/automate-codex-2026-10-09/{before,after,red,final,reviewed}/**
+  # Live Trace output preserves the model's original report formatting.
+  - test/replay/trace/seeded-codex-source-priority-drift/test-artifacts/**
   - CODE_OF_CONDUCT.md
   # The BMAD runtime install directory: generated per project, never
   # committed. _bmad-output/ is a sibling, not a match of this pattern: it

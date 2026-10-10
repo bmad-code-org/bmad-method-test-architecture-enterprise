@@ -27,7 +27,7 @@ npm run test:coverage
 # Individual suites
 npm run test:schemas           # test-agent-schema
 npm run test:install           # test-installation-components
-npm run test:cli               # test-test-review-cli
+npm run test:test-review-cli   # test-test-review-cli
 npm run test:knowledge         # test-knowledge-base
 npm run test:release-metadata  # test-release-metadata
 npm run test:eval-data         # eval-fragment-selection --validate-only
@@ -156,7 +156,7 @@ The intents contract contains eleven routes and the controls contract contains e
 `test-eval-replay.js` runs the live parsers and scorers over stored outputs without model calls or network access.
 Cases live under `replay/<suite>/<case>/` with their outputs and an `expected.json` derived by hand.
 
-The 158 cases include fifteen trace pairs, twenty-nine NFR reports, and fifty-four CI runs.
+The 159 cases include sixteen trace pairs, twenty-nine NFR reports, and fifty-four CI runs.
 They cover valid outputs, misleading findings, missing or malformed artifacts, wrong gates and counts, fabricated citations, quoted examples, and fixture mutations.
 Each case records the scoring-input digest and whether its bytes were captured or constructed.
 
@@ -167,9 +167,10 @@ The CI Node-version pair signs identically because a matching literal and `.nvmr
 A changed result at the same `SCORER_VERSION` fails.
 Bump the version deliberately before `--accept` updates only the cases whose results moved.
 
-Of 158 cases, 152 produce a number and 134 of those are constructed.
+Of 159 cases, 153 produce a number and 134 of those are constructed.
 21 CI replays cover the full and minimal projects.
-Eighteen carry captured bytes: twelve ATDD corpus reports, two CLI fixtures, and four live CI runs for `evaluation-plan`, `evaluation-tiers`, `evaluation-edit`, and `evaluation-gate`.
+Nineteen carry captured bytes: twelve ATDD corpus reports, two CLI fixtures, four live CI runs, and one live Trace run.
+The CI captures cover `evaluation-plan`, `evaluation-tiers`, `evaluation-edit`, and `evaluation-gate`.
 The two review captures score zero recall because they report no findings.
 All routing replays are constructed; `test:eval-routing-evidence` checks live Story 1.3 evidence separately.
 
