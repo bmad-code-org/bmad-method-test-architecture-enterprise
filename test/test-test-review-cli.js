@@ -4103,6 +4103,26 @@ async function runTests() {
         'STUB_MODE=fail exits 3 and surfaces the agent stderr tail',
         `status=${failAgentRun.status} stderr=${failAgentRun.stderr}`,
       );
+      const quotaAgentRun = runCli(
+        [
+          '--files',
+          'tests/checkout.spec.ts',
+          '--project-root',
+          fixtureProject,
+          '--output',
+          path.join(tmpRoot, 'quota-agent-run', 'test-review.md'),
+          '--agent-cmd',
+          stubAgent,
+          '--no-isolate',
+          ...stubPass('STUB_MODE'),
+        ],
+        { STUB_MODE: 'quota' },
+      );
+      assert(
+        quotaAgentRun.status === 3 && quotaAgentRun.stderr.includes('Weekly limit reached; try again after reset.'),
+        'a structured Claude quota error explains the failed review',
+        `status=${quotaAgentRun.status} stderr=${quotaAgentRun.stderr}`,
+      );
 
       // ---- --skill-root: explicit trusted skill source ----
 
