@@ -5,6 +5,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
+const { gunzipSync } = require('node:zlib');
+const { tracePaths, validateTraceOutputs } = require('../cli/lib/trace-command');
 
 const cli = path.join(__dirname, '..', 'cli', 'trace.js');
 const agent = path.join(__dirname, 'fixtures', 'trace-cli-agent.js');
@@ -303,6 +306,55 @@ try {
     );
     assert.ok(!fs.existsSync(path.join(directory, 'workspace', 'ground-truth.json')));
   });
+  check('actual Codex public captures retain exact bytes and pass the current artifact validator', () => {
+    const evidence = path.join(__dirname, 'results', 'live-eval-remediation', 'trace-codex-2026-10-09');
+    for (const [name, id, expected] of [
+      ['seeded-tenant-data-export', '4', 'FAIL'],
+      ['clean-api-token-lifecycle', '5', 'PASS'],
+    ]) {
+      const manifest = JSON.parse(fs.readFileSync(path.join(evidence, `public-${name}-manifest.json`), 'utf8'));
+      const archive = fs.readFileSync(path.join(evidence, manifest.archive));
+      assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.archiveSha256);
+      assert.equal(manifest.groundTruthAbsent, true);
+      const captured = JSON.parse(gunzipSync(archive).toString('utf8'));
+      assert.equal(captured.files.length, manifest.files.length);
+      const files = new Map();
+      for (const [index, entry] of captured.files.entries()) {
+        const bytes = Buffer.from(entry.base64, 'base64');
+        const pin = manifest.files[index];
+        assert.equal(entry.path, pin.path);
+        assert.equal(bytes.length, pin.bytes);
+        assert.equal(createHash('sha256').update(bytes).digest('hex'), pin.sha256);
+        files.set(entry.path, bytes);
+      }
+      const result = JSON.parse(files.get('invocation/result.json'));
+      assert.equal(result.exitCode, expected === 'FAIL' ? 1 : 0);
+      assert.equal(result.fixtureMutated, false);
+      const directory = path.join(root, 'capture-validation', name);
+      const target = { type: 'epic', id, runKey: `epic-${id}`, runScope: 'epic' };
+      const paths = tracePaths(directory, target.runKey);
+      fs.mkdirSync(path.dirname(paths.matrix), { recursive: true });
+      for (const [kind, destination] of Object.entries(paths)) {
+        const original = [...files.entries()].find(
+          ([name]) => name.includes('/test-artifacts/trace/') && name.endsWith(path.basename(destination)),
+        );
+        assert.ok(original, `missing captured ${kind}`);
+        if (kind === 'matrix') fs.writeFileSync(destination, original[1]);
+        else {
+          // Relocate only the published link in this temporary validation copy.
+          // The archive and its byte pins retain the original absolute link.
+          const value = JSON.parse(original[1]);
+          value.links.trace_report_path = paths.matrix;
+          fs.writeFileSync(destination, JSON.stringify(value));
+        }
+      }
+      assert.equal(
+        validateTraceOutputs({ paths, target, collectionMode: 'contract_static', allowGate: true }).summary.gate_status,
+        expected,
+      );
+    }
+  });
+
   check('prompt inspection requires no agent and does not replace reports', () => {
     assert.equal(run('pass').status, 0);
     const file = path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json');

@@ -1,0 +1,562 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-public-cli-codex",
+  "sourceCommit": "bcce79b6ff24d311bc95c81e679abb4d50aefc23",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "archive": "public-seeded-tenant-data-export.json.gz",
+  "archiveSha256": "a86f19ad946e552ca841b368c327b60136c370e949e1eb38793aa3f7111d664e",
+  "groundTruthAbsent": true,
+  "files": [
+    {
+      "path": "invocation/invocation.json",
+      "bytes": 973,
+      "sha256": "c980416fc8e0ae01d6877ec6ba6cd7980674ba4dfa620212f903217e1f102948"
+    },
+    {
+      "path": "invocation/result.json",
+      "bytes": 16117,
+      "sha256": "f9444a5f9c63f8f0089faa8a7d718e491d6c84b7149c512aa60c7cef3a65ba45"
+    },
+    {
+      "path": "invocation/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "invocation/stdout.txt",
+      "bytes": 884,
+      "sha256": "4c1cfff5102054e42bc85b65325528f368400f4d3db4e90d7703f473dc8f72dc"
+    },
+    {
+      "path": "workspace/bmod-tea/SKILL.md",
+      "bytes": 388,
+      "sha256": "9c32b8f48d6f6b33ccbd9a3fac89ab43471f1c1a2ecf1e7a9e4039dcb82b4a0d"
+    },
+    {
+      "path": "workspace/bmod-tea/bmod.toml",
+      "bytes": 4354,
+      "sha256": "60eb9280644b612d6b80d37ecf08f87717e1c0b5a301cfd108fb431644b430e2"
+    },
+    {
+      "path": "workspace/bmod-tea/help/help.md",
+      "bytes": 4115,
+      "sha256": "e3b26662d32220235b53e90bcb47d4315bf9de8c2f8fd33d56fcb8cb1fe2fd38"
+    },
+    {
+      "path": "workspace/bmod-tea/help/integrations.md",
+      "bytes": 3131,
+      "sha256": "07ced6bc701e8b04f0e16ec1b2ef354253de2f4693e8f1f44d2fe051a45c8c39"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/adr-quality-readiness-checklist.md",
+      "bytes": 25356,
+      "sha256": "a8129b16c3b2afbc1f58fe5edc73dc8f1291c172c6ca009d92f1947bef1a237e"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/api-request.md",
+      "bytes": 17642,
+      "sha256": "28ef34b911b6d9cde3cb06367ecb6686f893236ed8f67975eaf6737f44f6e698"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/api-testing-patterns.md",
+      "bytes": 27833,
+      "sha256": "5753ac9095991fec29f51f78a4152d7a39b6ba8a80f36f13413a50ef1c19c16d"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/auth-session.md",
+      "bytes": 16501,
+      "sha256": "3b2ba3cdd58cf3decb3d427623ed43e070ff926b1c45abc0e7d0823ea3b85b1f"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/burn-in.md",
+      "bytes": 6525,
+      "sha256": "6ad6b4fb23c9de2085c40e45defc782511b31ba7a0b85fdd6046265048ad17b2"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/ci-burn-in.md",
+      "bytes": 22487,
+      "sha256": "224795cba3b6c5cfe6f4c85e6f99ade801d84a9f6edbff164a8b27fcc52370b1"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/component-tdd.md",
+      "bytes": 18624,
+      "sha256": "265907160c95c8d7b2e9c05304665b68f3267b817920fff8afb131ec04184edb"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/confidence-gate.md",
+      "bytes": 4593,
+      "sha256": "99df7e3ff38b6dd69f1c08de85b0d586aa9ac2dc1a33fcd4db682a78af4b4b67"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/contract-testing.md",
+      "bytes": 42012,
+      "sha256": "da8ceb53fab22cd80270e3317a9fc7683b901c6303ac32a40022d7105f871f80"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/data-factories.md",
+      "bytes": 17449,
+      "sha256": "036572ce6222b98829c681c9c2cebc54fa89d670356e4bc7d50e402af91f587d"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/email-auth.md",
+      "bytes": 24554,
+      "sha256": "157996b68a3232f62a6911dd2cd336ca159098cf2210f991ae3e961f27eabc2c"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/error-handling.md",
+      "bytes": 22960,
+      "sha256": "c941031c7535eb111d0afe53385b68b9f12d1478dea96c44c2b66d0267b8f1ce"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/evidence-integrity.md",
+      "bytes": 25547,
+      "sha256": "864c16573a53b459b8a26c8cae26fc131d9de5056522157a65cf823348a46920"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/feature-flags.md",
+      "bytes": 23215,
+      "sha256": "7e46668d5049933dbb5d60096dd2c3800605582dd4198523b10b4d02586c97dc"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/file-utils.md",
+      "bytes": 13745,
+      "sha256": "7d1092930118fb160b9c0a4a48c398d9b08bb909d1e2432662d8e81e1e3b0087"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/fixture-architecture.md",
+      "bytes": 12414,
+      "sha256": "c0c62381e7a0385fe0d8b59861a3756994d3bbc673e4605ded9607d5217c7e55"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/fixtures-composition.md",
+      "bytes": 11399,
+      "sha256": "cd62666b34894c4130bc0da73503fc24b820094e8a4c3ec2a70a16700d77af5a"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/intercept-network-call.md",
+      "bytes": 13489,
+      "sha256": "ac8213cc28a9f9c452a6fb419356dd1d66ce495d7f29d188fcb1bb51456ba869"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/library-integration-mandate.md",
+      "bytes": 8258,
+      "sha256": "c9f4f598fd2d7cdaa390cdbce4121416eccc03aab020d16c84e5075a0bbd0a2e"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/log.md",
+      "bytes": 11653,
+      "sha256": "ef73615ce4535d4571567191ee9dc382cb87fd1eb75d3ee7e62f8f5dc9ca4c46"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/maestro-flows.md",
+      "bytes": 29447,
+      "sha256": "02b1fff0e463708db474310792fd88a98dc425c621bac9cb3b7b7f1fbd47c3d3"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/mobile-ci-device-lab.md",
+      "bytes": 36206,
+      "sha256": "0d992898bd8e1b1d047285097047bc5078528f2d3f6e6c2f61e6339cca71454e"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/mobile-test-strategy.md",
+      "bytes": 14431,
+      "sha256": "d16495f50c2832acae9b5b0cb3c3b3443d2b7625dc3205076367834c66c7072c"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/network-error-monitor.md",
+      "bytes": 12316,
+      "sha256": "e450d5db937dbc709f0ff7ba292f813cd8c0e7d8a0126b8580521210cf38e548"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/network-first.md",
+      "bytes": 16327,
+      "sha256": "2920e58e145626f5505bcb75e263dbd0e6ac79a8c4c2ec138f5329e06a6ac014"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/network-recorder.md",
+      "bytes": 15499,
+      "sha256": "f86bd52defea901fcf2c3bc2ba78dcb97047e30a49e552a5935bc8452851d33c"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/nfr-criteria.md",
+      "bytes": 26671,
+      "sha256": "77a3a4711aea7a1efb3d4fe82a6842f53d761eeb3a909fd94e97182f781c8ee9"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/overview.md",
+      "bytes": 9801,
+      "sha256": "eb9415d849698671b6fb763740d7b58ef9886911da895110da1ac73e2122c7e4"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pact-broker-webhooks.md",
+      "bytes": 15040,
+      "sha256": "7a54a5d1976e899508467468ed848beee66367f218470811528e9742f1d8daff"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pact-consumer-di.md",
+      "bytes": 12002,
+      "sha256": "8da93042ab11ad2e59ae8e37d44567d7bfec77760bb72467bde0d03987ebadce"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pact-consumer-framework-setup.md",
+      "bytes": 36757,
+      "sha256": "d514f2ee87f6ba64da407881bcb251bc41371794b2e0cfc488d179f380d21d28"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pact-mcp.md",
+      "bytes": 11671,
+      "sha256": "77f7a9fa2ee04f6cdd2af2f654602179f30008505c22e8ba9711e423ff61fc4e"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-consumer-helpers.md",
+      "bytes": 15935,
+      "sha256": "de0efb6edd92e9e8f731132d02280c4edee882c3b58a9a1b37a027e95986b2ca"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-mandate.md",
+      "bytes": 16891,
+      "sha256": "734eeb427b054949372b4454a007e95f0c5e14e2602f3ce95199c8657c64b27c"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-overview.md",
+      "bytes": 12644,
+      "sha256": "7403189c1388e3a4186b90d998b6042561ab73f80b5130cb4c787ca07b5d2ef9"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-provider-verifier.md",
+      "bytes": 22882,
+      "sha256": "1c882c7ce145d7e9d12e6c39306947f7ab9897ad27633b638975502ea51431fd"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-request-filter.md",
+      "bytes": 7278,
+      "sha256": "ca3aa1b6e6b4caa7aa63882b3803bf252f359af32374082c7148095468b1c020"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/pactjs-utils-zod-to-pact.md",
+      "bytes": 11803,
+      "sha256": "a02b0859122ef4f720818ea78a149799202d0baf7852936f05a2f5d0c49935a8"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/playwright-cli.md",
+      "bytes": 16102,
+      "sha256": "f8993bf5c649ff99a534e287f1d99aeef5ad224a8dfd76eb3db775040799f5cd"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/playwright-config.md",
+      "bytes": 21457,
+      "sha256": "6f7cbf42be005165f68d50090bf0e86227cd401b8e0119ad9e65e7cb2a05644e"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/playwright-utils-mandate.md",
+      "bytes": 13570,
+      "sha256": "eb6e300cb76e0438d46d49862495dee6dd16836689aa9f2220b5301fe4f2e62b"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/probability-impact.md",
+      "bytes": 19390,
+      "sha256": "3a73880070a9a1508a3058c7744aaf6b7fb78c844fe368ed6478e59e719cad10"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/recurse.md",
+      "bytes": 13771,
+      "sha256": "cf6e8fa4f0d40098004b36b79262773ae1ebe058a8275b3a6ec3ec4b9c1f6e8c"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/risk-governance.md",
+      "bytes": 21769,
+      "sha256": "0f34292a555d606de2791707a0d751e1f50afda016748db5f8d02df1c2d9babb"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/selective-testing.md",
+      "bytes": 21850,
+      "sha256": "99f72ba9117ecfdc8be51346b12d610bfd6e48ea6b6310575c7be7d0766cb5fd"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/selector-resilience.md",
+      "bytes": 19785,
+      "sha256": "baab01dce68b97e87b27036b207ce10b7429a3e111cead0f1662ab726ec355ca"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/tea-index.csv",
+      "bytes": 15306,
+      "sha256": "a9543ab8ccb3a201f74ff20fa24016344d1cfc3b3a88dcdc154a2b5b7df90305"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/test-healing-patterns.md",
+      "bytes": 11652,
+      "sha256": "90605145ccf06f7aeb065f6806c6c16455b9d31a11e8df97bae05cba1b2655b1"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/test-levels-framework.md",
+      "bytes": 14756,
+      "sha256": "22b76acf805447f5968178e1a8c48f7e7e0d65965f1fe70a8f0f2a765ed0a216"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/test-priorities-matrix.md",
+      "bytes": 12158,
+      "sha256": "45dc87b018586c439d451b7b22c476e4ec70e8cd0ee28e9136dd2eac9fe34bef"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/test-quality.md",
+      "bytes": 37022,
+      "sha256": "82225c204ed84349d694381bb024213848366f32d7838093617d57362a36089d"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/timing-debugging.md",
+      "bytes": 18740,
+      "sha256": "fe0a57f14f154fe0acd898a90ca930197c8ddfb72761ab872c68fe13e669c361"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/visual-debugging.md",
+      "bytes": 17481,
+      "sha256": "4c40d5173d5b933d650884c4206f7e12aea77e7ca6fc0eb22770865b55e6522d"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-module-setup.md",
+      "bytes": 5834,
+      "sha256": "87dd6d7eb4dfd45691ccbb876a0bdf0b8a8b8622351be7539b8fb80504068048"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-providers.md",
+      "bytes": 6440,
+      "sha256": "a71ba2c09c45541d4d262c4db85fb9b2aeb021bb09779c65454a5ed3bd546c63"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-risk-guidance.md",
+      "bytes": 6478,
+      "sha256": "ff8a5b79d3d4e5b9a98eaf346e7efcf685e40bf012e1a8a3e5e1b6c3635be26f"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-template-matchers.md",
+      "bytes": 6011,
+      "sha256": "abf92e617b194199439c60fafe68cb0481b48e9ef09f69c01c8a424429a6009f"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-testing-fundamentals.md",
+      "bytes": 3185,
+      "sha256": "cc1778b9aa95cb6fe00cfbb2115a2238636f71513cf159b7c02cbb3e091541c3"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-timeout-error.md",
+      "bytes": 5730,
+      "sha256": "98313793aac3314653d3e1f543bd6136206132e7cfb9ecb4bea3417587b6d09b"
+    },
+    {
+      "path": "workspace/bmod-tea/knowledge/webhook-waiting-querying.md",
+      "bytes": 7074,
+      "sha256": "d914f3cfa9b3cfbd94fd0d3d057a7b578764cf37cdfc1b29278e03c88c3b06c5"
+    },
+    {
+      "path": "workspace/bmod-tea/migration-1.toml",
+      "bytes": 8217,
+      "sha256": "73c784ac509d371dfa4ed67dca1f9c0e1dec356a400d9e110f4de40297749b92"
+    },
+    {
+      "path": "workspace/bmod-tea/roster.toml",
+      "bytes": 729,
+      "sha256": "6e8862085332e361cbc2eb9c760f49475c11ce639a09f9d9873b329eefc12eaa"
+    },
+    {
+      "path": "workspace/skill/SKILL.md",
+      "bytes": 5475,
+      "sha256": "164ffbe2d7d0307fe5502dc9703a2e76f40a9a80e54d5d90958270137df6f3d4"
+    },
+    {
+      "path": "workspace/skill/bmod.toml",
+      "bytes": 106,
+      "sha256": "ecbbf7b9a5d8c8aabe806f7fe468dae4b8633faf3cae7288912979627a4b90fc"
+    },
+    {
+      "path": "workspace/skill/checklist.md",
+      "bytes": 29157,
+      "sha256": "471d355e0d978930bdd70050e020ed8b60b8e42f2bf7a3317cb96a9748b037a1"
+    },
+    {
+      "path": "workspace/skill/customize.toml",
+      "bytes": 1505,
+      "sha256": "985fa59f35b208eec5ec0fef8cfba3520d42b76d71e2309332abcd02b18b78ed"
+    },
+    {
+      "path": "workspace/skill/instructions.md",
+      "bytes": 1865,
+      "sha256": "81f103a06948849a75f98d75d74c58834f3994b98d61a7ac398e4298add207eb"
+    },
+    {
+      "path": "workspace/skill/resources/live-verification-results.example.json",
+      "bytes": 1319,
+      "sha256": "4e26edafd39607ffce44eb45361b2f7516f4fad67ffcfd810bc00e04e3ccc017"
+    },
+    {
+      "path": "workspace/skill/resources/traceability-matrix.example.md",
+      "bytes": 14105,
+      "sha256": "3b99c534e5e6d651a5f0238021e65cd96e34e6b04e296cb505285ecc05ff4045"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-01-load-context.md",
+      "bytes": 13714,
+      "sha256": "4d943a00a6116bd2100a53f914dfc028988bc3b20df6d78b20201deb3201751f"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-01b-resume.md",
+      "bytes": 8270,
+      "sha256": "549873704e5fb08a5711a82b809c57061451ec39d0ce7d04989a0aa5958fd1bb"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-02-discover-tests.md",
+      "bytes": 13261,
+      "sha256": "9e895007c1fd23e1f757858103cc9c298dc64b80d6c2795fe89f48bae64341a0"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-03-map-criteria.md",
+      "bytes": 9481,
+      "sha256": "cc369ec41d8aaa432421def496c67d8969b121fda8adad58410c6675a7cf6d09"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-04-analyze-gaps.md",
+      "bytes": 33317,
+      "sha256": "013e4e9286235a207373d02aa72d8370e159825f61357e6e4522e5f7d7591574"
+    },
+    {
+      "path": "workspace/skill/steps-c/step-05-gate-decision.md",
+      "bytes": 40734,
+      "sha256": "5de4bea81e40ba976aa53b9a9e944d9aea9037d66baaea66bf28b785fcbcf2de"
+    },
+    {
+      "path": "workspace/skill/steps-e/step-01-assess.md",
+      "bytes": 1920,
+      "sha256": "b74376dadd8deb0937e5ef5c4ffe9b05cf0b0710e3701ba2ce60e58e38ac4e6c"
+    },
+    {
+      "path": "workspace/skill/steps-e/step-02-apply-edit.md",
+      "bytes": 1504,
+      "sha256": "e91adf57c17b5d8f984fe4a1fc1090910ee0a6bb31e81dae19af8ca06e406e0a"
+    },
+    {
+      "path": "workspace/skill/steps-v/step-01-validate.md",
+      "bytes": 4282,
+      "sha256": "da96bb14b84afaff0e906adc18c6e2d22e123c5aaec1c65040458532f06efe5b"
+    },
+    {
+      "path": "workspace/skill/trace-template.md",
+      "bytes": 23446,
+      "sha256": "14d5f2482bfad1df913acd0a882158527fe653b05ed56042ff6b3cda5b2d790e"
+    },
+    {
+      "path": "workspace/skill/workflow.yaml",
+      "bytes": 7601,
+      "sha256": "801f8d51f6a7c98f8d309c2ced0617ca292bef2c4f2b8bc0b03e56ccb5751108"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/attempt.json",
+      "bytes": 153,
+      "sha256": "b5655df59294217b6208e4abc913b51a83cdc3e218c0778253e962efe9440245"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/prompt.txt",
+      "bytes": 5447,
+      "sha256": "23ba7dee431f4c519a171a0802ff2dc5c0855f215546f964466a0b868d395550"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/stderr.txt",
+      "bytes": 1618343,
+      "sha256": "51cf4ebf04cbe3b76c08bd78d44b58e4042a0784435aa9608732f0e1a2386186"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/stdout.txt",
+      "bytes": 1256,
+      "sha256": "49ce89bea6709a513d3658a26765e5ffce1b8a9c70d5a414adc07eabc60f3c5f"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/trace/coverage-matrix-epic-4-2026-10-10T01-53-45Z.json",
+      "bytes": 18400,
+      "sha256": "fd89e584a215e7987272831be057fda1c6115755e54aed053007760c7b0dace8"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/trace/e2e-trace-summary-epic-4.json",
+      "bytes": 6620,
+      "sha256": "141ea9621d8f4398610309f60d13b1f84e4f97d634aad48c162b5dca86357f1f"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/trace/gate-decision-epic-4.json",
+      "bytes": 867,
+      "sha256": "b305b5a5a320c5b3fc15fb51e5a517815455abcbb08d5e7869474701538169f2"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/attempt-1/trace/traceability-matrix-epic-4.md",
+      "bytes": 13365,
+      "sha256": "16a9e904cbd1cfa74d7fdada795ff3795fed8f0292f3bbb9f83ed7e44b7d1540"
+    },
+    {
+      "path": "workspace/tenant-data-export/.tea-runs/tea-trace-oFG3f0/run.json",
+      "bytes": 454,
+      "sha256": "f240940476c785072124fc465594f61300d332e417ee013235f4687a17301a89"
+    },
+    {
+      "path": "workspace/tenant-data-export/_bmad/config.toml",
+      "bytes": 440,
+      "sha256": "6f0f8aedef9c4f0db55e32aa7a560f7ea772541829c68194cccad4cd92b274bb"
+    },
+    {
+      "path": "workspace/tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md",
+      "bytes": 3517,
+      "sha256": "4fa49faca568106337fc22502c520b53c26c254550a35a157fe42b81b3a7b77a"
+    },
+    {
+      "path": "workspace/tenant-data-export/src/exports/manifest.ts",
+      "bytes": 610,
+      "sha256": "a77af24e5f21dfe816e94e994d3fe26266298fae54654665e6a69b2ddf1ad819"
+    },
+    {
+      "path": "workspace/tenant-data-export/test-artifacts/gate-waivers.md",
+      "bytes": 2379,
+      "sha256": "f3463dccc4f2ee1bd89df035367a0b975469f9b4265fc88b6c3491d25e11f3af"
+    },
+    {
+      "path": "workspace/tenant-data-export/test-artifacts/live-verification-results.json",
+      "bytes": 779,
+      "sha256": "62abccab19fb6883b14e610ef8ba4ab4e55dd72f7b0b1af09c9609fdc10bf509"
+    },
+    {
+      "path": "workspace/tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+      "bytes": 7276,
+      "sha256": "e0fd0b961d229405e3097c10b5feac49835dc9cbcc3f3567b2306d3998ba028e"
+    },
+    {
+      "path": "workspace/tenant-data-export/test-artifacts/trace/gate-decision-epic-4.json",
+      "bytes": 845,
+      "sha256": "44fc717596e944c8fa3ca93c8a97c5301c2dbeccaa9ff3164a2b8941f2b994e0"
+    },
+    {
+      "path": "workspace/tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md",
+      "bytes": 13365,
+      "sha256": "16a9e904cbd1cfa74d7fdada795ff3795fed8f0292f3bbb9f83ed7e44b7d1540"
+    },
+    {
+      "path": "workspace/tenant-data-export/tests/api/audit-log.api.spec.ts",
+      "bytes": 1177,
+      "sha256": "5cc4ad123a772d9e75bcc60635d48633439105f42133375b2b47c5252f435611"
+    },
+    {
+      "path": "workspace/tenant-data-export/tests/api/tenant-export.api.spec.ts",
+      "bytes": 3944,
+      "sha256": "b41e75ddab0ce05e0f9b6c74b141be0d4c1897faac5260c877c8897342d622a0"
+    },
+    {
+      "path": "workspace/tenant-data-export/tests/e2e/tenant-export.spec.ts",
+      "bytes": 2088,
+      "sha256": "24470b9032a708b30588887cd9522029c8754ea1acf5e91e495a6f2dd8fdeaf1"
+    },
+    {
+      "path": "workspace/tenant-data-export/tests/unit/export-manifest.spec.ts",
+      "bytes": 832,
+      "sha256": "0a8a1348d215335ccc87a917b3a814b350bdf8fbde74545169ef7278cfbfe9f5"
+    },
+    {
+      "path": "workspace/tenant-data-export/trace-cli-result.json",
+      "bytes": 884,
+      "sha256": "4c1cfff5102054e42bc85b65325528f368400f4d3db4e90d7703f473dc8f72dc"
+    }
+  ]
+}

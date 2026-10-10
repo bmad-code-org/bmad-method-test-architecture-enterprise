@@ -2,7 +2,7 @@
 
 ## Baseline
 
-`before.json` records four live Codex runs: two seeded tenant-export runs and two clean voucher runs. The runner used `codex-cli 0.162.0` and `gpt-5.6-sol` against commit `cbcf937135585c072846026ea7cacbcedf74182d`. The result records `dirty: true`; that provenance is preserved.
+`before.json` records four live Codex runs: two seeded tenant-export runs and two clean API-token lifecycle runs. The runner used `codex-cli 0.162.0` and `gpt-5.6-sol` against commit `cbcf937135585c072846026ea7cacbcedf74182d`. The result records `dirty: true`; that provenance is preserved.
 
 Criterion classification, gate decisions, evidence citations, and oracle resolution passed in all four runs. Coverage arithmetic passed 151 of 156 checks. The first seeded run changed AC-9 from the source document's P2 priority to P1. That changed five priority-bucket calculations and made the seeded repetitions unstable. The second seeded run and both clean runs passed their arithmetic checks. There were zero invented criteria, duplicate criteria, clean false positives, incomplete runs, or fixture mutations.
 
@@ -17,3 +17,9 @@ Trace now records each source criterion's identity and priority in a ledger duri
 The after evaluation uses the same fixtures, model, repetitions, scoring expectations, and thresholds. Its `--artifacts-dir` option preserves each attempt's project, prompt, tagged agent observation, stdout, stderr, and available fault details. The result and artifact provenance will identify the exact source commit evaluated.
 
 These runs use TEA's existing diagnostic harness and independent fixture expectations. Their scores describe this corpus. They provide no sealed eval-quality acceptance decision.
+
+## Public command integration
+
+The two public archives retain actual `tea-trace --agent codex` invocations against the same seeded and clean fixtures at commit `bcce79b6ff24d311bc95c81e679abb4d50aefc23`, with adapter default `gpt-5.6-sol`. The agent workspace excludes ground truth. Each compressed JSON archive stores every file as base64; its manifest pins the archive and each original file's bytes. The filenames keep Windows checkouts within their path budget.
+
+The seeded invocation exited 1 with FAIL, and the clean invocation exited 0 with PASS. Both preserved source and tests. Criterion classification, gate criteria, arithmetic, oracle metadata, citations, rejected evidence, waiver handling, and live-evidence checks passed. The saved diagnostic score records 11 of 12 run-metadata checks per case: the public command uses an absolute published matrix link, while the diagnostic harness expects its relative staging link. The raw score retains this convention difference. These two integrations provide one repetition each; they do not measure stability.
