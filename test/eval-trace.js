@@ -546,6 +546,7 @@ function parseArgs(argv) {
   let agentCmd;
   let model;
   let jsonPath;
+  let artifactsDir;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -607,6 +608,13 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--artifacts-dir': {
+        const value = argv[index + 1];
+        if (!value) fatal(2, '--artifacts-dir requires a directory path');
+        artifactsDir = path.resolve(value);
+        index += 1;
+        break;
+      }
       case '--validate-only': {
         validateOnly = true;
         break;
@@ -633,7 +641,7 @@ function parseArgs(argv) {
   if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);
   }
-  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath, artifactsDir };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2373,12 +2381,32 @@ async function corpusMutations(workspace) {
  */
 async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
   let workspace = await stageWorkspace(set);
+  let attemptIndex = 1;
+  let observation;
+  let fault;
+  const retain = () => {
+    if (!options.artifactsDir) return;
+    fs.mkdirSync(options.artifactsDir, { recursive: true });
+    const destination = fs.mkdtempSync(path.join(options.artifactsDir, `${agent}-${set.id}-run-${runIndex + 1}-attempt-${attemptIndex}-`));
+    fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
+    fs.writeFileSync(path.join(destination, 'prompt.txt'), buildPrompt(set), 'utf8');
+    if (observation) {
+      fs.writeFileSync(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8');
+      fs.writeFileSync(path.join(destination, 'stdout.txt'), observedText(observation.stdout), 'utf8');
+      fs.writeFileSync(path.join(destination, 'stderr.txt'), observedText(observation.stderr), 'utf8');
+    }
+    if (fault) fs.writeFileSync(path.join(destination, 'fault.json'), `${JSON.stringify(fault, null, 2)}\n`, 'utf8');
+  };
   try {
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const portForAttempt = async (attempt) => {
       if (attempt > 1) {
+        retain();
         fs.rmSync(workspace.dir, { recursive: true, force: true });
         workspace = await stageWorkspace(set);
+        attemptIndex = attempt;
+        observation = undefined;
+        fault = undefined;
       }
       const leaked = await assertGroundTruthAbsent(workspace.dir);
       if (leaked.length > 0) {
@@ -2392,7 +2420,18 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
         // exactly what the request below declares.
         environmentKeys: { [TRACE_INTERFACE]: options.envPass },
       });
-      return port;
+      if (!options.artifactsDir) return port;
+      return {
+        async probe(request, signal) {
+          try {
+            observation = await port.probe(request, signal);
+            return observation;
+          } catch (error) {
+            fault = { name: error.name, code: error.code, detail: error.detail, message: error.message };
+            throw error;
+          }
+        },
+      };
     };
     const result = await probeCommandWithRetry(
       portForAttempt,
@@ -2406,6 +2445,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       }),
       new AbortController().signal,
     );
+    observation = result.observation ?? observation;
     // The declared scope is the workspace. A run that reached the repository
     // instead is outside it, and its artifacts are not read. Checked before the
     // result is, because a killed run may have written before it was killed.
@@ -2424,7 +2464,6 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     // A non-zero exit is an observation. The runner spells its failure classes as
     // exit codes for exactly this reason, so the class here is the one it derived
     // from the thrown error, with no second table.
-    const { observation } = result;
     if (observation.exitCode !== 0) {
       // observedText reads the channel by its tag, so a JSON-shaped stderr is kept
       // whole and an empty tail lets the exit code be the reason.
@@ -2483,7 +2522,11 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       artifactEvidence: [...artifactEvidence(paths.summary, summary.summary), ...artifactEvidence(paths.matrix, matrixArtifact.value)],
     };
   } finally {
-    fs.rmSync(workspace.dir, { recursive: true, force: true });
+    try {
+      retain();
+    } finally {
+      fs.rmSync(workspace.dir, { recursive: true, force: true });
+    }
   }
 }
 

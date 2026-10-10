@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tea-trace` runs Trace from a terminal with packaged skills, project configuration, scope-specific reports, recorded live evidence, and CI exit codes. Fresh attempt directories retain prompts and agent output; validation checks current artifacts before publishing them.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
@@ -22,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CodeRabbit now reviews source generators and verification tests; deterministic CI checks cover generated artifacts and captured results.
 
 ### Fixed
+
+- Trace preserves each requirement's stated source priority through mapping and coverage arithmetic. Its checklist now follows the coverage gate rules, reports waivers separately, and requires the slim gate JSON for eligible runs. Diagnostic Trace evaluations can retain their staged projects and full observations with `--artifacts-dir`.
 
 - Desktop documentation pages reserve enough space for the table of contents, keeping its links inside the viewport. Persistent documentation checks verify desktop and mobile layout, numbered step navigation, and rendered compatibility anchors.
 - Setup archives preserve each run's Create checkpoints and verify them before Resume restores saved positions. CI alias replay captures retain runner errors and termination signals for diagnosis.

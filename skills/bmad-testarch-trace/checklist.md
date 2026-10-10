@@ -254,6 +254,8 @@ Knowledge fragments referenced:
 
 ## PHASE 2: QUALITY GATE DECISION
 
+The automated gate applies Step 5's coverage thresholds, oracle-confidence overlay, and live-evidence overlay. Test execution reports, NFR audits, code coverage, and burn-in results supply supporting context when available. Record their findings and missing evidence; these assessments have their own quality decisions. Report filed waivers separately and preserve the automated Trace decision.
+
 **Note**: Phase 2 always emits `{e2e_trace_summary_output}` (`trace/e2e-trace-summary-{run_key}.json`); gate decision fields are populated only when `allow_gate: true` and `collection_status` resolves to `COLLECTED`.
 
 ---
@@ -262,7 +264,7 @@ Knowledge fragments referenced:
 
 ### Evidence Gathering
 
-- [ ] Test execution results obtained (CI/CD pipeline, test framework reports)
+- [ ] Available test execution results read and cited (CI/CD pipeline, test framework reports)
 - [ ] Story/epic/release file identified and read
 - [ ] Test design document discovered in `{test_artifacts}/test-design/` (legacy: the root of `{test_artifacts}`) or explicitly provided (if available)
 - [ ] Traceability matrix discovered or explicitly provided (available from Phase 1)
@@ -274,7 +276,7 @@ Knowledge fragments referenced:
 ### Evidence Validation
 
 - [ ] Evidence freshness validated (warn if >7 days old, recommend re-running workflows)
-- [ ] All required assessments available or user acknowledged gaps
+- [ ] Phase 1 coverage matrix available; missing supporting assessments recorded
 - [ ] Test results are complete (not partial or interrupted runs)
 - [ ] Test results match current codebase (not from outdated branch)
 
@@ -283,7 +285,7 @@ Knowledge fragments referenced:
 - [ ] `risk-governance.md` loaded successfully
 - [ ] `probability-impact.md` loaded successfully
 - [ ] `test-quality.md` loaded successfully
-- [ ] `test-priorities.md` loaded successfully
+- [ ] `test-priorities-matrix.md` loaded successfully
 - [ ] `ci-burn-in.md` loaded (if burn-in results available)
 
 ---
@@ -337,31 +339,28 @@ Knowledge fragments referenced:
 
 **P0 Criteria Evaluation:**
 
-- [ ] P0 test pass rate evaluated (must be 100%)
 - [ ] P0 oracle-item coverage evaluated (must be 100%)
-- [ ] Security issues count evaluated (must be 0)
-- [ ] Critical NFR failures evaluated (must be 0)
-- [ ] Flaky tests evaluated (must be 0 if burn-in enabled)
+- [ ] Available execution, security, NFR, and stability findings recorded as supporting evidence
 - [ ] P0 decision recorded: PASS or FAIL
 
 **P1 Criteria Evaluation:**
 
-- [ ] P1 test pass rate evaluated (threshold: min_p1_pass_rate)
 - [ ] P1 oracle-item coverage evaluated (PASS >=90%, CONCERNS 80-89%, FAIL <80%)
-- [ ] Overall test pass rate evaluated (threshold: min_overall_pass_rate)
 - [ ] Overall oracle coverage evaluated (threshold: >=80%)
 - [ ] Code coverage considered if available (informational unless explicitly required by policy)
-- [ ] P1 decision recorded: PASS or CONCERNS
+- [ ] P1 decision recorded: PASS, CONCERNS, or FAIL
 
 **P2/P3 Criteria Evaluation:**
 
-- [ ] P2 failures tracked (informational, don't block if allow_p2_failures: true)
-- [ ] P3 failures tracked (informational, don't block if allow_p3_failures: true)
+- [ ] P2/P3 coverage included in the overall coverage threshold
+- [ ] Available P2/P3 execution failures recorded as supporting evidence
 - [ ] Residual risks documented
 
 **Final Decision:**
 
-- [ ] Decision determined: PASS / CONCERNS / FAIL / WAIVED
+- [ ] Eligible automated decision determined: PASS / CONCERNS / FAIL
+- [ ] Oracle-confidence and live-evidence overlays applied in Step 5's order
+- [ ] Ineligible runs omit gate signals and record why the gate was skipped
 - [ ] Decision rationale documented
 - [ ] Decision is deterministic (follows rules, not arbitrary)
 
@@ -370,7 +369,7 @@ Knowledge fragments referenced:
 **Gate Decision Document Created:**
 
 - [ ] Story/epic/release info section complete (ID, title, description, links)
-- [ ] Decision clearly stated (PASS / CONCERNS / FAIL / WAIVED)
+- [ ] Automated decision clearly stated (PASS / CONCERNS / FAIL, or gate skipped)
 - [ ] Decision date recorded
 - [ ] Evaluator recorded (user or agent name)
 
@@ -417,12 +416,11 @@ Knowledge fragments referenced:
 
 ### Step 5: Status Updates and Notifications
 
-**Gate YAML Created:**
+**Gate JSON Created When Eligible:**
 
-- [ ] Gate YAML snippet generated with decision and criteria
-- [ ] Evidence references included in YAML
-- [ ] Next steps included in YAML
-- [ ] YAML file saved to output folder
+- [ ] Gate JSON generated with decision and criteria
+- [ ] Evidence references and rationale included in JSON
+- [ ] JSON file saved to `{gate_decision_output}`
 
 **Stakeholder Notification Generated:**
 
@@ -466,12 +464,12 @@ Knowledge fragments referenced:
 - [ ] Stakeholders can understand next steps
 - [ ] Recommendations are actionable
 
-### Gate YAML
+### Gate JSON
 
 **Format:**
 
-- [ ] YAML is valid (no syntax errors)
-- [ ] All required fields present (target, decision, date, evaluator, criteria, evidence)
+- [ ] JSON is valid (no syntax errors)
+- [ ] Schema 0.1.0 fields match Step 5's slim gate contract
 - [ ] Field values are correct data types (numbers, strings, dates)
 
 **Content:**
@@ -487,9 +485,9 @@ Knowledge fragments referenced:
 ### Decision Integrity
 
 - [ ] Decision is deterministic (follows rules, not arbitrary)
-- [ ] P0 failures result in FAIL decision (unless waived)
-- [ ] Security issues result in FAIL decision (unless waived - but should never be waived)
-- [ ] Waivers have business justification and approver (if WAIVED)
+- [ ] P0 coverage below 100% results in FAIL
+- [ ] Fresh live failures cap a passing decision at CONCERNS as Step 5 defines
+- [ ] Filed waivers are validated and reported separately from the derived decision
 - [ ] Residual risks are documented (if CONCERNS or WAIVED)
 
 ### Evidence-Based
@@ -519,8 +517,8 @@ Knowledge fragments referenced:
 
 ### CI/CD Pipeline
 
-- [ ] Gate YAML is CI/CD-compatible
-- [ ] YAML can be parsed by pipeline automation
+- [ ] Gate JSON is CI/CD-compatible
+- [ ] JSON can be parsed by pipeline automation
 - [ ] Decision can be used to block/allow deployments
 - [ ] Evidence references are accessible to pipeline
 

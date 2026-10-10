@@ -39,6 +39,7 @@ Create the traceability matrix linking the resolved oracle items to tests.
 
 For each resolved oracle item (formal requirement, endpoint/spec item, or synthetic journey):
 
+- Copy its ID, requirement text, and priority from Step 1's persisted oracle ledger. Preserve explicit source priorities through every matrix heading and statistics bucket. Keep each mapped test's priority in the test record as a separate field.
 - Map to matching tests
 - Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY. `checklist.md`'s "Coverage Classification" section is the definition; **read it before classifying anything**, and apply the rule it turns on:
   - Classification is decided by what the evidence **establishes** about the criterion. The number of levels the evidence spans does not set the status.

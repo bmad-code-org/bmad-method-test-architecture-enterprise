@@ -741,7 +741,7 @@ fs.writeFileSync('{e2e_trace_summary_output}', JSON.stringify(e2eTraceSummary, n
 console.log(`✅ e2e trace summary written to {e2e_trace_summary_output}`);
 ```
 
-**Optional: emit `gate-decision-{run_key}.json`** to `{gate_decision_output}` for pipelines that only need the gate signal without the full summary:
+**Emit `gate-decision-{run_key}.json` whenever gate-eligible** to `{gate_decision_output}` for pipelines that consume the gate signal:
 
 ```javascript
 // Construct and write only when gate evaluation was performed and produced a meaningful decision.

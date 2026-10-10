@@ -41,6 +41,7 @@
     "tea-skill-runner": "cli/skill-runner.js",
     "tea-test-design-runner": "cli/test-design-runner.js",
     "tea-test-review": "cli/test-review.js",
+    "tea-trace": "cli/trace.js",
     "tea-trace-runner": "cli/trace-runner.js",
     "tea-transcript-runner": "cli/transcript-runner.js"
   },
@@ -100,7 +101,7 @@
     "test:ci-coverage": "node tools/validate-ci-coverage.js",
     "test:ci-coverage-filters": "node test/test-ci-coverage.js",
     "test:ci-qualification": "node test/test-ci-qualification.js",
-    "test:cli": "node test/test-test-review-cli.js",
+    "test:cli": "node test/test-test-review-cli.js && node test/test-trace-cli.js",
     "test:clock-port": "node test/test-clock-port.js",
     "test:compare-dominance": "node test/test-compare-dominance.js",
     "test:compare-eval-runs": "node test/test-compare-eval-runs.js",

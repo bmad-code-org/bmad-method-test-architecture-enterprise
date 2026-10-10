@@ -37,7 +37,7 @@ variables:
 # writes another scope's files. Inputs stay at the root of {test_artifacts}.
 default_output_file: "{test_artifacts}/trace/traceability-matrix-{run_key}.md"
 e2e_trace_summary_output: "{test_artifacts}/trace/e2e-trace-summary-{run_key}.json" # Machine-readable summary consumed by CI/CD and reporting pipelines
-gate_decision_output: "{test_artifacts}/trace/gate-decision-{run_key}.json" # Optional downstream gate signal for CI/CD enforcement
+gate_decision_output: "{test_artifacts}/trace/gate-decision-{run_key}.json" # Required downstream gate signal when gate-eligible
 
 # e2e-trace-summary-{run_key}.json schema (emitted by step-05 to {e2e_trace_summary_output} at workflow completion)
 # schema_version: "0.3.0"   (0.2.0 added the live_evidence block and the by_level.live bucket; 0.3.0 added the waivers block)
@@ -45,7 +45,7 @@ gate_decision_output: "{test_artifacts}/trace/gate-decision-{run_key}.json" # Op
 # repo / collection_mode / collection_status / inventory_basis / gate_basis / source_sha
 # target: { type, id, label } / decision_mode / evaluator / confidence
 # oracle: { resolution_mode, confidence, sources[], external_pointer_status, synthetic }
-# gate_status: PASS | CONCERNS | FAIL | WAIVED   (only when allow_gate is true and collection_status is COLLECTED)
+# gate_status: PASS | CONCERNS | FAIL   (only when allow_gate is true and collection_status is COLLECTED)
 # coverage: { inventory{covered,total,pct}, priority_breakdown{P0..P3}, by_level{e2e,api,component,unit,live,other} }
 # tests: { files, cases, skipped_cases, fixme_cases, pending_cases }
 # risk_summary: { critical_open, high_open, medium_open, low_open }
@@ -87,7 +87,7 @@ gate_decision_output: "{test_artifacts}/trace/gate-decision-{run_key}.json" # Op
 # Required tools
 required_tools:
   - read_file # Read story, test files, BMad artifacts
-  - write_file # Create traceability matrix, gate YAML
+  - write_file # Create traceability matrix, summary JSON, gate JSON
   - list_files # Discover test files
   - search_repo # Find tests by test ID, describe blocks
   - glob # Find test files matching patterns

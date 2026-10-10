@@ -543,6 +543,13 @@
           "module": "test/lib/doc-count-sources.js",
           "export": "TEACH_ME_TESTING_CALLS"
         }
+      },
+      "replayTraceCapturedBytes": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TRACE_CAPTURED_BYTES"
+        }
       }
     },
     "entries": [
@@ -727,10 +734,16 @@
         "file": "test/README.md",
         "claim": "the cases that carry captured bytes and where they come from",
         "pattern": {
-          "match": "([A-Za-z-]+) carry captured bytes: ([a-z-]+) ATDD corpus reports, ([a-z-]+) CLI fixtures, and ([a-z-]+) live CI runs"
+          "match": "([A-Za-z-]+) carry captured bytes: ([a-z-]+) ATDD corpus reports, ([a-z-]+) CLI fixtures, ([a-z-]+) live CI runs, and ([a-z-]+) live Trace run"
         },
         "wrap": true,
-        "counts": ["replayCapturedBytes", "replayAtddCapturedBytes", "replayTestReviewCapturedBytes", "replayCiCapturedBytes"]
+        "counts": [
+          "replayCapturedBytes",
+          "replayAtddCapturedBytes",
+          "replayTestReviewCapturedBytes",
+          "replayCiCapturedBytes",
+          "replayTraceCapturedBytes"
+        ]
       },
       {
         "file": "test/README.md",

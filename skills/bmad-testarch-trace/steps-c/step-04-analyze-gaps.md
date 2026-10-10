@@ -457,6 +457,8 @@ if (oracleResolutionMode === 'synthetic_source') {
 
 ### 4. Calculate Coverage Statistics
 
+Before calculating counts, compare every matrix item's ID and priority with Step 1's persisted oracle ledger. Require exactly one matrix item per oracle item and unchanged priorities. Correct any drift from the ledger, then compute the statistics from the corrected matrix. Repeat this check when resuming a saved mapping.
+
 ```javascript
 const totalRequirements = traceabilityMatrix.length;
 const coveredRequirements = traceabilityMatrix.filter((r) => r.coverage === 'FULL' || r.coverage === 'PARTIAL').length;

@@ -103,8 +103,8 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly.
- * The corpus holds 158 cases and 152 of them produce a number; 134 of those are constructed.
- * 18 cases carry captured bytes: they come from the ATDD fixture corpus, from the CLI parser fixtures and from live eval:ci runs over the evaluation-plan, evaluation-tiers, evaluation-edit and evaluation-gate projects.
+ * The corpus holds 159 cases and 153 of them produce a number; 134 of those are constructed.
+ * 19 cases carry captured bytes: they come from the ATDD fixture corpus, from the CLI parser fixtures, one live Trace run, and from live eval:ci runs over the evaluation-plan, evaluation-tiers, evaluation-edit and evaluation-gate projects.
  * test/lib/doc-count-sources.js derives these counts from the expected.json files, and test:doc-counts holds this paragraph and test/README.md to them.
  * The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
