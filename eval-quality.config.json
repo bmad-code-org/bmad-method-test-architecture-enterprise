@@ -221,7 +221,7 @@
         "npm run test:eval-test-design-data",
         "npm run test:eval-routing-data",
         "npm run test:eval-automate-data",
-        "npm run test:cli"
+        "npm run test:test-review-cli"
       ]
     },
     "sampleInput": "package.json",

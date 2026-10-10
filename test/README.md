@@ -27,7 +27,7 @@ npm run test:coverage
 # Individual suites
 npm run test:schemas           # test-agent-schema
 npm run test:install           # test-installation-components
-npm run test:cli               # test-test-review-cli
+npm run test:test-review-cli   # test-test-review-cli
 npm run test:knowledge         # test-knowledge-base
 npm run test:release-metadata  # test-release-metadata
 npm run test:eval-data         # eval-fragment-selection --validate-only

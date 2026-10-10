@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tea-trace` runs Trace from a terminal with packaged skills, project configuration, scope-specific reports, recorded live evidence, and CI exit codes. Fresh attempt directories retain prompts and agent output; validation checks current artifacts before publishing them.
+- `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt keeps its prompt and agent output until its artifacts pass validation.
 
 ### Changed
 
@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Trace preserves each requirement's stated source priority through mapping and coverage arithmetic. Its checklist follows the coverage gate rules, reports waivers separately, and requires the slim gate JSON for eligible runs. The terminal command freezes explicit source criterion text, references, identities, and priorities, preserves consecutive criteria and wrapped titles, validates the saved Step 1 oracle ledger, and checks supplied live-result metadata against the frozen manifest and consuming revision before capping passing gates when fresh live verification fails, rejects invalid artifact configuration and runtime-only collection claims with missing evidence, reconciles matrix criteria with coverage decisions, confines generated evidence to its current attempt, rechecks input aliases after agent execution, and restores report sets after failed publication writes. Mapping records each accepted test declaration and its observable assertion anchors. Diagnostic Trace evaluations can retain staged projects and full observations outside the repository with `--artifacts-dir`.
+- The test guide's Test Review command now runs only the Test Review CLI suite; `test:cli` still runs both Test Review and Trace CLI suites.
+- Trace preserves source priorities through mapping and coverage arithmetic. The CLI freezes source criteria before agent execution, validates the saved oracle ledger and live evidence, and checks outputs before publication. It rejects malformed artifacts and missing runtime evidence, confines reports to the current attempt, and restores prior reports after failed writes. Mapping records each accepted test declaration and its assertion anchors.
 
 ## [2.0.1] - 2026-10-10
 
