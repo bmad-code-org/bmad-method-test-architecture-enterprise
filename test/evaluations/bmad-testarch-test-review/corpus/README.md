@@ -1,6 +1,6 @@
 # Corpus: bmad-testarch-test-review
 
-The target is TeA's test-review mechanism: the `tea-test-review` CLI driving the `bmad-testarch-test-review` skill with Claude Code.
+The target is TeA's test-review mechanism: the `tea-test-review` CLI driving the `bmad-testarch-test-review` skill with Codex.
 The registry entry is `test/fixtures/test-review-evaluation/review-fixture.mjs`, an adopter-owned wrapper.
 It reads one JSON request on stdin, builds a temporary git repository from a synthetic fixture under `test/fixtures/test-review-evaluation/repos/`, and runs the workspace's own `cli/test-review.js` against it with the workspace's own skill.
 The CLI's exit code and verdict JSON pass through unchanged, so every oracle reads what an adopter's CI reads.
@@ -44,11 +44,11 @@ Each expects an H10 finding inside `test_result_is_covariant` and a Request Chan
 
 ## Before state
 
-The first preflight, on 2026-10-08, measured five clean controls failing on the release this evaluation was authored against: P-001 (old-line findings in a pull request review), P-005 (the self-comparison reported on the unchanged assertion line, classified pre-existing, and approved), P-007 (H3 on a redundant branch), P-008 (H10 on a type-checked covariance test) and P-010 (no `reviewMode` field).
+The first Claude preflight, on 2026-10-08, measured five clean controls failing on the release this evaluation was authored against: P-001 (old-line findings in a pull request review), P-005 (the self-comparison reported on the unchanged assertion line, classified pre-existing, and approved), P-007 (H3 on a redundant branch), P-008 (H10 on a type-checked covariance test) and P-010 (no `reviewMode` field).
 That preflight's evidence is the before state: the clean, mutated and re-run arms of P-003's and P-011's qualification, each a live review of the five steps the plan then held.
 
 TeA 2.0.0 ships the fixes, so every clean control declares `No known defect at this revision.`
-`tea-evaluate run` qualifies every clean control on one clean arm and stops with exit 11 when a control's baseline fails; the first `run` on the fixed release, without `--before-state`, is the one accepted as a baseline.
+`tea-evaluate run` qualifies every clean control on one clean arm and stops with exit 11 when a control's baseline fails; the first Codex `run` on the fixed release, without `--before-state`, is the one accepted as a baseline.
 
 ## Volatile fields
 

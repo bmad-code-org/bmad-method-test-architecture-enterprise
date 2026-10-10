@@ -14,8 +14,8 @@ Run as `tea-test-review` on a pull request, the review gates only on what the pu
 - **B-008, low.** Criteria that do not apply to the repository are absent from the verdict, and wall-clock duration is reported as not measured when nothing executed the tests.
 - **B-009, material.** An explicit full-file review (`--files`) reports every seeded old defect and names its mode as full-file. A pull request review names its mode as pr.
 
-These fail on the current release, as measured by the 2026-10-08 preflight: B-001's report half, B-004, B-006, B-007, and B-009's mode name.
-That preflight is the before state; the first accepted baseline comes after the fixes.
+These failed on the pre-fix release in a 2026-10-08 Claude preflight: B-001's report half, B-004, B-006, B-007, and B-009's mode name.
+That run records the historical before state. The accepted after-fix baseline uses Codex and makes no cross-model improvement claim.
 
 ## Admissible evidence
 
@@ -27,7 +27,7 @@ Agent prose in free-text fields is never evidence.
 
 ## Interfaces and resources in scope
 
-A small adopter-owned wrapper, `test/fixtures/test-review-evaluation/review-fixture.mjs`, builds a disposable git repository from a probe's base and pull-request trees, commits both, and runs `node cli/test-review.js --agent claude --skill-root skills/bmad-testarch-test-review --base <base>` against it, passing the CLI's exit code and stdout through unchanged.
+A small adopter-owned wrapper, `test/fixtures/test-review-evaluation/review-fixture.mjs`, builds a disposable git repository from a probe's base and pull-request trees, commits both, and runs `node cli/test-review.js --agent codex --model gpt-5.6-sol --skill-root skills/bmad-testarch-test-review --base <base>` against it, passing the CLI's exit code and stdout through unchanged.
 The review skill under test is this repository's working copy of `skills/bmad-testarch-test-review/`.
 The agent may read the disposable repository and the skill; the CLI's own isolation stays on.
 Fixture repositories are synthetic.
@@ -45,8 +45,8 @@ One full-file probe carries 12 seeded defects across rows and severities, mirror
 
 ## Operational constraints
 
-Live legs run through the local Claude Code CLI on the owner's subscription, with no API key.
-The model is the CLI's default Claude model for adopters, recorded as a snapshot in `policy/evaluator-conditions.json`.
+Live legs run through the local Codex CLI on the owner's account, with no API key.
+The wrapper pins the Test Review CLI's current default Codex model, recorded in `policy/evaluator-conditions.json`.
 Three trials per probe.
 Each review gets the CLI's own timeout for a one or two file set.
 Estimated live time: about 6 hours for the full corpus, development and held-out partitions together.
@@ -69,4 +69,4 @@ Feared:
 - a narrowed pull request report that drops a real regression whose symptom sits on an unchanged assertion;
 - a report-size reduction that loses findings in full-file mode.
 
-Confirmed by: the owner (Murat), 2026-10-08, as drafted, three trials on the CLI default Claude model; the before-state list and wrapper command corrected to the measured preflight the same day.
+Confirmed by: the owner (Murat), 2026-10-08, for the corpus and three trials; 2026-10-10 for Codex as the after-fix evaluator. The historical before-state preflight used Claude.

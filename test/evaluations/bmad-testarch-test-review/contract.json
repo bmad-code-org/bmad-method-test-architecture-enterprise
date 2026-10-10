@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-test-review",
-  "sourceSpecDigest": "sha256:26deed01868360e9831c25286bb7cd3aa97a3e3484a2ffe8f2deaf6845d11883",
+  "sourceSpecDigest": "sha256:13c1190d08a3d5ecc2333268c5351b1df167445b329a24a9462468f6befc64fc",
   "behaviors": [
     {
       "id": "B-001",
@@ -2291,7 +2291,7 @@
   },
   "safetyLimits": [
     "Every fixture is synthetic: no adopter code, report text or repository name appears in it.",
-    "Live legs run through the local Claude Code CLI on the owner's subscription, with no API key and no metered spend."
+    "Live legs run through the local Codex CLI on the owner's account, with no API key and no metered spend."
   ],
   "requiredEvidence": [
     "The exit code and the verdict JSON on stdout of every review.",
