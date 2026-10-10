@@ -92,6 +92,21 @@ if (
   );
 }
 const priorityBreakdown = stats.priority_breakdown;
+// Check Phase 1 counts again before they become the published summary and gate inputs.
+// Repair the Phase 1 matrix from its requirement rows and rerun this check on mismatch.
+const requirementRows = coverageMatrix.requirements || [];
+const fullRequirementRows = requirementRows.filter((row) => row.coverage === 'FULL');
+const priorityNames = ['P0', 'P1', 'P2', 'P3'];
+if (
+  stats.total_requirements !== requirementRows.length ||
+  stats.fully_covered !== fullRequirementRows.length ||
+  priorityNames.reduce((sum, priority) => sum + priorityBreakdown[priority].covered, 0) !== fullRequirementRows.length ||
+  priorityNames.some(
+    (priority) => priorityBreakdown[priority].covered !== fullRequirementRows.filter((row) => row.priority === priority).length,
+  )
+) {
+  throw new Error('Phase 1 coverage totals disagree with mapped requirement rows; correct the matrix before gate evaluation');
+}
 const p0Coverage = priorityBreakdown.P0.percentage;
 const p1Coverage = priorityBreakdown.P1.percentage;
 const hasP1Requirements = (priorityBreakdown.P1.total || 0) > 0;

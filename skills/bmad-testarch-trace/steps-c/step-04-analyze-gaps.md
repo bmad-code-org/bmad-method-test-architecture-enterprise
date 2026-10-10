@@ -708,7 +708,28 @@ const coverageMatrix = {
 
 **Write to temp file for Phase 2:**
 
+Recount `FULL` rows before saving. The overall count must equal the sum of the four priority counts and the number of `FULL` requirement rows. If any count differs, correct the statistics from the mapped rows and repeat this check. `PARTIAL`, `UNIT-ONLY`, and `INTEGRATION-ONLY` do not count as fully covered.
+
 ```javascript
+const rows = coverageMatrix.requirements;
+const statistics = coverageMatrix.coverage_statistics;
+const priorities = ['P0', 'P1', 'P2', 'P3'];
+const fullRows = rows.filter((row) => row.coverage === 'FULL');
+const countedByPriority = priorities.reduce((count, priority) => count + statistics.priority_breakdown[priority].covered, 0);
+if (
+  statistics.total_requirements !== rows.length ||
+  statistics.fully_covered !== fullRows.length ||
+  statistics.fully_covered !== countedByPriority ||
+  statistics.overall_coverage_percentage !== safePct(fullRows.length, rows.length) ||
+  priorities.some(
+    (priority) =>
+      statistics.priority_breakdown[priority].total !== rows.filter((row) => row.priority === priority).length ||
+      statistics.priority_breakdown[priority].covered !== fullRows.filter((row) => row.priority === priority).length,
+  )
+) {
+  throw new Error('Coverage totals disagree with mapped requirement rows; correct Phase 1 statistics before saving');
+}
+
 const outputPath = '{tempOutputFile}';
 fs.writeFileSync(outputPath, JSON.stringify(coverageMatrix, null, 2), 'utf8');
 
