@@ -65,6 +65,8 @@ Using `risk-governance.md` and `probability-impact.md` (if loaded):
 - Treat controls explicitly described as already satisfied as scope constraints. Verify them with regression assertions in the coverage plan. A hypothetical implementation violating a stated read-only, local-only, privacy, or rollout constraint needs evidence of a new exposure before it becomes a scored risk.
 - Consolidate conditions that share a failure mechanism, consequence, and mitigation into one risk. Keep individual trigger and boundary cases in the coverage plan. For example, a stale cached timestamp and a missed refresh event can be one display-freshness risk; absent-value and disabled-flag rendering can share one conditional-visibility risk when the same visibility guard controls both.
 - Preserve the risk table columns `Risk ID`, `Category`, `Description`, `Probability`, `Impact`, and `Score`. Add a separate source-evidence column when useful. State the failure consequence in `Description` and cite the supporting input.
+- Assign unique canonical IDs `R-001`, `R-002`, and so on. Preserve those IDs in coverage, mitigations, summaries, and handoffs. Keep epic or story identity in the document run key.
+- Preserve explicit score ranges in risk-band headings: high score 6 or greater, medium score 3 to 4, and low score 1 to 2. For a band with no identified risk, state that absence outside the table and leave its table body empty.
 - Classify by category: TECH / SEC / PERF / DATA / BUS / OPS
 - Score Probability (1–3) and Impact (1–3)
 - Calculate Risk Score (P × I)

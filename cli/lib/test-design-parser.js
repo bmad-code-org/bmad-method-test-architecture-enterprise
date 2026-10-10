@@ -316,6 +316,16 @@ function readRisks(tables) {
       // A template row still carrying its own placeholder describes nothing, and
       // counting it would make an unfilled template score as a register.
       if (rawId === '' || /^\{.*\}$/.test(rawId)) continue;
+      // An explicitly empty band can carry a human-readable absence marker.
+      // Require all numeric cells empty so a scored or incomplete real risk
+      // cannot disappear through this exception.
+      if (
+        /^none$/i.test(rawId) &&
+        /^n\/a$/i.test(row[categoryColumn] ?? '') &&
+        /^no evidence-supported risk scored in this band\.?$/i.test(row[descriptionColumn] ?? '') &&
+        [probabilityColumn, impactColumn, scoreColumn].every((column) => column !== -1 && (row[column] ?? '').trim() === '')
+      )
+        continue;
       const id = rawId.toUpperCase();
       risks.push({
         id,
@@ -364,7 +374,9 @@ function readCoverage(tables) {
       if (level === '' || /^\{.*\}$/.test(level)) continue;
       const linkCell = linkColumn === -1 ? '' : (row[linkColumn] ?? '');
       rows.push({
-        level,
+        // These observed qualifiers retain the E2E test level. Unknown values
+        // stay unchanged so validators and coverage oracles still reject them.
+        level: ['E2E performance', 'E2E operational'].includes(level) ? 'E2E' : level,
         priority,
         riskIds: [...String(linkCell).toUpperCase().matchAll(RISK_REFERENCE_PATTERN)].map((match) => match[0]),
         linkCell,

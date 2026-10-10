@@ -1,0 +1,209 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T02:19:17.324Z",
+  "mode": "live",
+  "repository": {
+    "commit": "281ba3db6b5c94c57579b9825a968f817dc51e56",
+    "dirty": true
+  },
+  "suite": {
+    "id": "test-design",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-test-design"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/test-design.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+    "promptDigest": "sha256:61d3a94e79b4ee8f91d7045d8f92edfcbc42b1b66dc32565d3ed3aff0fbabb5c",
+    "caseIds": [
+      "seeded-offline-order-capture"
+    ],
+    "cases": [
+      {
+        "id": "seeded-offline-order-capture",
+        "promptDigest": "sha256:5053f310f168e5f075c0a454b4859f282c64a452a3c87cf042b2388fd7004f7c"
+      }
+    ],
+    "thresholds": {
+      "groundedRiskRecall": 0.8,
+      "riskPrecision": 0.8,
+      "scaleComplianceAccuracy": 1,
+      "scoreArithmeticAccuracy": 1,
+      "categoryValidityAccuracy": 1,
+      "bandPlacementAccuracy": 1,
+      "riskIdWellFormedAccuracy": 1,
+      "riskLinkResolutionAccuracy": 1,
+      "priorityOrderingAccuracy": 1,
+      "coverageMappingAccuracy": 0.8,
+      "maxUnscoredRiskTables": 0,
+      "maxUngroundedRisks": 0,
+      "maxTopSeverityMissed": 0,
+      "maxRiskCeilingExcess": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 1,
+        "completed": 1
+      },
+      "measurements": {
+        "groundedRiskRecall": 1,
+        "riskPrecision": 1,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 0,
+        "riskIdWellFormedAccuracy": 0,
+        "riskLinkResolutionAccuracy": null,
+        "priorityOrderingAccuracy": null,
+        "coverageMappingAccuracy": 0,
+        "ungroundedRisks": 0,
+        "unscoredRiskTables": 0,
+        "topSeverityMissed": 0,
+        "riskCeilingExcess": 0,
+        "unstableCases": null,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 478086,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "bandPlacementAccuracy",
+        "riskIdWellFormedAccuracy",
+        "riskLinkResolutionAccuracy (unmeasurable)",
+        "priorityOrderingAccuracy (unmeasurable)",
+        "coverageMappingAccuracy"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "seeded-offline-order-capture",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":6,\"wellFormedIds\":0,\"validCategories\":6,\"inScale\":6,\"arithmeticOk\":6,\"banded\":6,\"bandOk\":0,\"arithmeticTotal\":6},[{\"id\":\"E7-R01\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R01\",\"check\":\"band\",\"score\":9,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R02\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R02\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R03\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R03\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R04\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R04\",\"check\":\"band\",\"score\":9,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R05\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R05\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R06\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R06\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"}],{\"total\":0,\"resolved\":0,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"E7-R01\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"E7-R02\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"E7-R04\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"E7-R03\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"E7-R06\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"E7-R01\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"E7-R02\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"E7-R04\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"E7-R03\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"E7-R06\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"}],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null}],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.numerator": 5,
+            "groundedRiskRecall.denominator": 5,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 6,
+            "riskPrecision.denominator": 6,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 6,
+            "scaleComplianceAccuracy.denominator": 6,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 6,
+            "scoreArithmeticAccuracy.denominator": 6,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 6,
+            "categoryValidityAccuracy.denominator": 6,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 0,
+            "bandPlacementAccuracy.denominator": 6,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 0,
+            "riskIdWellFormedAccuracy.denominator": 6,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 0,
+            "riskLinkResolutionAccuracy.denominator": 0,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 5,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "bandPlacementAccuracy; riskIdWellFormedAccuracy; riskLinkResolutionAccuracy; priorityOrderingAccuracy; coverageMappingAccuracy",
+          "triage": [
+            {
+              "reason": "bandPlacementAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "riskIdWellFormedAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "riskLinkResolutionAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "priorityOrderingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "coverageMappingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "bandPlacementAccuracy",
+            "riskIdWellFormedAccuracy",
+            "riskLinkResolutionAccuracy (unmeasurable)",
+            "priorityOrderingAccuracy (unmeasurable)",
+            "coverageMappingAccuracy"
+          ],
+          "mappedMeasurements": [
+            "riskLinkResolutionAccuracy",
+            "priorityOrderingAccuracy"
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":6,\"wellFormedIds\":0,\"validCategories\":6,\"inScale\":6,\"arithmeticOk\":6,\"banded\":6,\"bandOk\":0,\"arithmeticTotal\":6},[{\"id\":\"E7-R01\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R01\",\"check\":\"band\",\"score\":9,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R02\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R02\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R03\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R03\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R04\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R04\",\"check\":\"band\",\"score\":9,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R05\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R05\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"},{\"id\":\"E7-R06\",\"check\":\"risk-id-format\"},{\"id\":\"E7-R06\",\"check\":\"band\",\"score\":6,\"heading\":null,\"reason\":\"no enclosing heading declares a score range\"}],{\"total\":0,\"resolved\":0,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"E7-R01\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"E7-R02\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"E7-R04\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"E7-R03\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"E7-R06\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"E7-R01\",\"ok\":false,\"levels\":[],\"reason\":\"no coverage row links this risk\"},{\"riskId\":\"data-sync-conflict-overwrite\",…sha256:3e72f079eeb66234aa39d05220785cbfe0a838c5ede4ccf723b160e61091215c"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-order-capture/test-artifacts/test-design/test-design-epic-7.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:984d214d1d05fc9b3194bf13198ca3bb0642c6c506bd66d44ba6e84e99e870aa --- runScope: 'epic' runKey: 'epic-7' workflowStatus: 'completed' totalSteps: 5 stepsCompleted: - 'step-01-detect-mode' - 'step-02-load-context' - 'step-03-risk-and-testability' - 'step-04-coverage-plan' - 'step-05-generate-output' lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-10T02:16:41Z' inputDocuments: - 'field-order-capture/_bmad/config.toml' - 'field-order-capture/docs/epics/epic-7-offline-order-capture.md' - 'bmod-tea/knowledge/risk-governance.md' - 'bmod-tea/knowledge/probabil"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 478178,
+  "failureClass": "quality",
+  "exitCode": 1
+}

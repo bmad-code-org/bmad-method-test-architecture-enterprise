@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Test Design accepts residual acceptance tables only when every referenced ID belongs to the scored register, preserves existing published reports on replacement failures, rejects input hardlink collisions, and cleans evaluation workspaces even when evidence retention fails. Priority guidance requires a source-backed recovery path before treating a workaround as business recovery.
+- Test Design preserves canonical risk IDs, score-band ranges and test levels; recognizes exact empty-band absence markers and observed E2E qualifiers; accepts residual acceptance tables only when every referenced ID belongs to the scored register, preserves existing published reports on replacement failures, rejects input hardlink collisions, and cleans evaluation workspaces even when evidence retention fails. Priority guidance requires a source-backed recovery path before treating a workaround as business recovery.
 - Test design consolidates related failure mechanisms, uses stated existing controls as regression constraints, preserves canonical table headers, and explains priorities through documented consequences and workarounds. Its parser recognizes the observed `Description and source evidence` header, preserving supported risk descriptions in the evaluation projection. Headless workflow configuration selects the requested skill's customization namespace while preserving the existing test-review default.
 
 ### Changed

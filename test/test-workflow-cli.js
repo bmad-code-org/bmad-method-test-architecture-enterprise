@@ -348,6 +348,38 @@ test('the observed residual-risk reference table preserves the canonical scored 
   assert.equal(readDesign({ kind: 'text', value: unknown }).design.unscoredTables.length, 1);
 });
 
+test('observed empty-band markers describe absence while scored or incomplete rows remain invalid', () => {
+  const { readDesign } = require('../cli/lib/test-design-parser');
+  const { validateDesign } = require('../cli/test-design');
+  const attemptDir = path.join(__dirname, 'results', 'codex-test-design', 'raw', 'public-cli-attempt-2', 'evidence', 'attempt-1');
+  const planFile = path.join('artifacts', 'test-design', 'test-design-epic-7.md');
+  const checkpointFile = path.join('artifacts', 'test-design', 'test-design-progress-epic-7.md');
+  const generated = fs.readFileSync(path.join(attemptDir, planFile), 'utf8');
+  assert.equal(readDesign({ kind: 'text', value: generated }).design.risks.length, 6);
+  const validated = validateDesign({
+    attemptDir,
+    artifactFiles: [planFile],
+    planFile,
+    checkpointFile,
+    runKey: 'epic-7',
+    runScope: 'epic',
+    inputDigests: [],
+  });
+  assert.equal(validated.riskCount, 6);
+  assert.ok(validated.coverageCount > 0);
+  const invalidLevel = readDesign({ kind: 'text', value: generated.replace('E2E performance', 'BrowserUnknown') });
+  assert.ok(invalidLevel.design.coverage.some((row) => row.level === 'BrowserUnknown'));
+  for (const row of [
+    '| None | N/A | No evidence-supported risk scored in this band. | 1 | 1 | 1 |',
+    '| None | N/A | No evidence-supported risk scored in this band. | 1 |  |  |',
+    '| None | DATA | No evidence-supported risk scored in this band. |  |  |  |',
+    '| None | N/A | Queued input can be lost. |  |  |  |',
+  ]) {
+    const changed = generated.replace('| None | N/A | No evidence-supported risk scored in this band. |  |  |  |', row);
+    assert.equal(readDesign({ kind: 'text', value: changed }).design.risks.length, 7);
+  }
+});
+
 test('publication refuses a hardlink onto an input before invoking the agent', (t) => {
   const root = project(t);
   const destination = path.join(root, 'published', 'test-design', 'test-design-epic-7.md');

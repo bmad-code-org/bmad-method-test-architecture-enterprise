@@ -1,0 +1,38 @@
+You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.
+
+The workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it
+names in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.
+
+----- run configuration -----
+Take mode C (Create). Resolve the workflow placeholders to these values:
+
+- `{project-root}`: `field-order-capture`
+- TEA config (`[core]` and `[modules.tea]`): `field-order-capture/_bmad/config.toml`
+- `{test_artifacts}`: `field-order-capture/test-artifacts`
+- `{skill-root}`: `skill`
+- `{tea-knowledge}`: `bmod-tea/knowledge`
+- `mode`: `epic-level`
+- `run_scope`: `epic`
+- `epic_num`: `7`
+- `run_key`: `epic-7`
+- `design_level`: `full`
+- `tea_execution_mode`: `sequential`
+- `tea_capability_probe`: `false`
+
+The epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this
+run; there is no PRD, no architecture document and no sprint status file, and none is missing.
+
+----- what to produce -----
+Write the one deliverable epic-level mode declares:
+
+- `field-order-capture/test-artifacts/test-design/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying
+  the risk assessment and the test coverage plan the template lays out, with each risk row stating its
+  category, probability, impact and score, and each coverage row naming its test level and the risk it
+  covers.
+
+Do not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,
+and it does not generate tests.
+
+Do not stop to ask a question. Every value the workflow would otherwise ask for is stated above.
+
+When you are done, print one line naming the file you wrote. Nothing else you print is read.
