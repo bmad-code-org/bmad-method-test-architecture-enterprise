@@ -6148,7 +6148,7 @@
   },
   "fragment-selection/bmad-testarch-trace": {
     "contractId": "tea-fragment-selection-trace",
-    "corpusDigest": "sha256:17244ce35746cfd1dafc1f6005c054e4aa5cefd2a77935316dc6d9c9b0e4b945",
+    "corpusDigest": "sha256:f67f03c25e32bcf4d19d2c22b5988df23f8a41a10e627ab113318b0cad23f608",
     "probeCount": 2,
     "strength": {
       "defect": null,
