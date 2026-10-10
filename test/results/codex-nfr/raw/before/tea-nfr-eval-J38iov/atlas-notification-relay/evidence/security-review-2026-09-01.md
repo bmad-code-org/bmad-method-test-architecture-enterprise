@@ -28,8 +28,8 @@ different product service; each returns 403 and writes an audit record. Cross-se
 
 - At rest: message bodies and delivery receipts use AES-256 volume encryption; keys rotate every 90
   days through the platform key service.
-- In transit: the relay's ingress terminates TLS 1.3 only, and every outbound webhook is TLS 1.3 only
-  with certificate verification on.
+- In transit: the relay's ingress terminates TLS 1.3 only, and every outbound webhook is TLS 1.2 or
+  better with certificate verification on.
 - Retention: the deletion job runs hourly. The 2026-09-01 audit found no message body older than
   24 hours across 1.2 million delivered messages.
 

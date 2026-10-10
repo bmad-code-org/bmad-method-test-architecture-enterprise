@@ -1,0 +1,26 @@
+{
+  "cwd": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-nfr-eval-AlLTbe",
+  "request": {
+    "probeId": "clean-atlas-notification-relay-run-1",
+    "interfaceId": "tea-nfr-runner",
+    "operationId": "audit-evidence-bundle",
+    "kind": "cli",
+    "executable": "tea-nfr-runner",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {
+        "timeout-ms": "1200000",
+        "agent": "codex"
+      },
+      "environment": {
+        "HOME": "/Users/murat",
+        "USER": "murat"
+      },
+      "stdin": {
+        "kind": "text",
+        "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `atlas-notification-relay/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `atlas-notification-relay`\n- TEA config (`[core]` and `[modules.tea]`): `atlas-notification-relay/_bmad/config.toml`\n- `{test_artifacts}`: `atlas-notification-relay/test-artifacts`\n- `{skill-root}`: `skill`\n- `{tea-knowledge}`: `bmod-tea/knowledge`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `atlas-notification-relay/docs/`. The\nevidence to audit them against is what you find under `atlas-notification-relay/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\nThe audit covers the whole service, so the `run_key` step-01 resolves is `system`.\n\n----- what to produce -----\nWrite `atlas-notification-relay/test-artifacts/nfr/nfr-assessment-system.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `atlas-notification-relay/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `atlas-notification-relay/docs/`, `atlas-notification-relay/evidence/`, or\n`atlas-notification-relay/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+      }
+    }
+  }
+}

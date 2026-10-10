@@ -1,0 +1,20 @@
+{
+  "tool": "k6",
+  "run_id": "atlas-relay-release-2026-09-02",
+  "generated": "2026-09-02T03:08:00Z",
+  "scenario": "Release load profile, 400 virtual users, 30 minutes, production-shaped transport mix",
+  "target_values_supplied": true,
+  "targets": { "response_time_p95_ms": 300, "throughput_rps": 250, "peak_cpu_pct": 70, "peak_heap_pct": 75 },
+  "results": {
+    "requests": 723600,
+    "response_time_ms": { "p50": 74, "p95": 168, "p99": 291 },
+    "throughput_rps": 402,
+    "resource_usage": { "peak_cpu_pct": 51, "peak_heap_pct": 62, "queue_depth_peak": 1840, "queue_depth_ceiling": 20000 }
+  },
+  "verdict": {
+    "response_time_p95_ms": "168 against a 300 target",
+    "throughput_rps": "402 against a 250 target",
+    "peak_cpu_pct": "51 against a 70 target",
+    "peak_heap_pct": "62 against a 75 target"
+  }
+}

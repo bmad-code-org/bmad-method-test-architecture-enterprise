@@ -1,0 +1,236 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T01:53:19.530Z",
+  "mode": "live",
+  "repository": {
+    "commit": "455c0255adf14999fbf7fc0c21d4b9353d222a27",
+    "dirty": false
+  },
+  "suite": {
+    "id": "nfr",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-nfr"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/nfr.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:0cc7e216bf8b377dbd64a5edec96d6779f4d6849c74fa5db061923a8b15ef879",
+    "promptDigest": "sha256:aaeee3e085b45799b4ea0a705d1855a1562d1291b781dd2a5ba39935172782c1",
+    "caseIds": [
+      "gapped-harbor-billing-ledger",
+      "clean-atlas-notification-relay"
+    ],
+    "cases": [
+      {
+        "id": "gapped-harbor-billing-ledger",
+        "promptDigest": "sha256:67785e0108548c3599ab2e7cf3d6840ce785569b65750004e836041f571b5245"
+      },
+      {
+        "id": "clean-atlas-notification-relay",
+        "promptDigest": "sha256:688fe8dafb33a57f08223ecdd09dbebd946d82fd0b0aeee2102e730bea0562b3"
+      }
+    ],
+    "thresholds": {
+      "domainStatusAccuracy": 0.875,
+      "undecidableDomainAccuracy": 1,
+      "thresholdFidelityAccuracy": 0.9,
+      "overallStatusAccuracy": 1,
+      "domainCoverage": 1,
+      "groundedCitationAccuracy": 1,
+      "maxUnsupportedPass": 0,
+      "maxFabricatedEvidence": 0,
+      "maxCleanFalsePositives": 0,
+      "maxDuplicateDomainSections": 0,
+      "maxGateDisagreements": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 2,
+        "completed": 2
+      },
+      "measurements": {
+        "domainStatusAccuracy": 0.875,
+        "undecidableDomainAccuracy": 1,
+        "thresholdFidelityAccuracy": 1,
+        "overallStatusAccuracy": 0.5,
+        "domainCoverage": 1,
+        "groundedCitationAccuracy": 1,
+        "duplicateDomainSections": 0,
+        "gateDisagreements": 0,
+        "unsupportedPass": 0,
+        "fabricatedEvidence": 0,
+        "cleanFalsePositives": 1,
+        "unstableCases": 0,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 913188,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "overallStatusAccuracy",
+        "clean false positives"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "gapped-harbor-billing-ledger",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"evidence/load-test-2026-08-28.json\"],\"security\":[\"evidence/dependency-scan-2026-08-30.json\",\"evidence/security-review-2026-08-29.md\"],\"reliability\":[\"evidence/reliability-2026-08.json\"],\"maintainability\":[\"config/logging.json\"]},4,4,true,[],[],[],[],{\"hits\":3,\"total\":3},[],[\"performance-response-time:\",\"performance-throughput:\",\"performance-resource-usage:\",\"maintainability-test-coverage:\",\"maintainability-code-duplication:\"],\"FAIL\",true,0,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 4,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 2,
+            "undecidableDomainAccuracy.denominator": 2,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 1,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 3,
+            "groundedCitationAccuracy.denominator": 3,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"evidence/load-test-2026-08-28.json\"],\"security\":[\"evidence/dependency-scan-2026-08-30.json\",\"evidence/security-review-2026-08-29.md\"],\"reliability\":[\"evidence/reliability-2026-08.json\"],\"maintainability\":[\"config/logging.json\"]},4,4,true,[],[],[],[],{\"hits\":3,\"total\":3},[],[\"performance-response-time:\",\"performance-throughput:\",\"performance-resource-usage:\",\"maintainability-test-coverage:\",\"maintainability-code-duplication:\"],\"FAIL\",true,0,0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "harbor-billing-ledger/test-artifacts/nfr/nfr-assessment-system.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:1bde4504a2697bca181925887475c0133eb4a78eea49ae7fe00c9cb0ec01eeac --- runScope: 'system' runKey: 'system' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-10-09' workflowType: 'testarch-nfr-assess' inputDocuments: - 'harbor-billing-ledger/_bmad/config.toml' - 'harbor-billing-ledger/docs/tech-spec.md' - 'bmod-tea/knowledge/tea-index.csv' - 'bmod-tea/knowledge/adr-quality-readiness-checklist.md'"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-atlas-notification-relay",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=FAIL/FAIL/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\"],\"security\":[\"evidence/dependency-scan-2026-09-01.json\",\"evidence/security-review-2026-09-01.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\"],\"maintainability\":[\"config/logging.json\",\"evidence/coverage-summary-2026-09-01.json\",\"evidence/dependency-scan-2026-09-01.json\",\"evidence/duplication-report-2026-09-01.json\"]},4,4,true,[],[],[],[],{\"hits\":4,\"total\":4},[],[],\"FAIL\",false,1,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 3,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 0,
+            "undecidableDomainAccuracy.denominator": 0,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 0,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 4,
+            "groundedCitationAccuracy.denominator": 4,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 1,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "overallStatusAccuracy; cleanFalsePositives",
+          "triage": [
+            {
+              "reason": "overallStatusAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "cleanFalsePositives",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "overallStatusAccuracy",
+            "clean false positives"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=FAIL/FAIL/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\"],\"security\":[\"evidence/dependency-scan-2026-09-01.json\",\"evidence/security-review-2026-09-01.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\"],\"maintainability\":[\"config/logging.json\",\"evidence/coverage-summary-2026-09-01.json\",\"evidence/dependency-scan-2026-09-01.json\",\"evidence/duplication-report-2026-09-01.json\"]},4,4,true,[],[],[],[],{\"hits\":4,\"total\":4},[],[],\"FAIL\",false,1,0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "atlas-notification-relay/test-artifacts/nfr/nfr-assessment-system.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:ed561cbc57e838dc831ae38dd8b332380311f64e3e4505fd9a3b5aac5d1deb2c --- runScope: 'system' runKey: 'system' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-10-09' workflowType: 'testarch-nfr-assess' inputDocuments: - '_bmad/config.toml' - 'docs/tech-spec.md' - 'config/logging.json' - 'evidence/coverage-summary-2026-09-01.json' - 'evidence/dependency-scan-2026-09-01.json' - 'evidence/duplication"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 913305,
+  "failureClass": "quality",
+  "exitCode": 1
+}

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `tea-nfr` to run the installed NFR evidence audit with explicit requirement, implementation and evidence inputs; scope-specific report/context validation; retained raw vendor attempts; and transactional publication with source alias guards.
+
+### Fixed
+
+- Corrected the clean NFR evaluation fixture's outbound transport evidence to TLS 1.3, matching its existing requirement. Preserved the original conflicting baseline as historical evidence. NFR evaluator single runs now report unrepeated, with stability unmeasured, and `--artifacts-dir` retains every attempt before retry or cleanup.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
