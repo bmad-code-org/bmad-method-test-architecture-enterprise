@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { gunzipSync } = require('node:zlib');
-const { tracePaths, validateTraceOutputs } = require('../cli/lib/trace-command');
+const { tracePaths, validateTraceOutputs, publishTraceOutputs } = require('../cli/lib/trace-command');
 
 const cli = path.join(__dirname, '..', 'cli', 'trace.js');
 const agent = path.join(__dirname, 'fixtures', 'trace-cli-agent.js');
@@ -162,6 +162,9 @@ try {
       'missing-live-only',
       'ignored-synthetic-basis',
       'contradictory-critical-gaps',
+      'matrix-contradiction',
+      'matrix-missing-priority',
+      'matrix-duplicate',
     ]) {
       const result = run(mode);
       assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
@@ -169,6 +172,51 @@ try {
       assert.ok(result.payload.evidence);
       assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json')), mode);
     }
+  });
+  check('attempt artifacts cannot import stale symlinks or hardlinked evidence', () => {
+    for (const mode of ['attempt-outside-link', 'attempt-stale-link', 'attempt-hardlink']) {
+      const result = run(mode);
+      assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
+      assert.ok(result.payload.evidence);
+      assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')));
+    }
+    fs.unlinkSync(`${root}-old-matrix.md`);
+  });
+  check('late destination directories preserve current failure evidence without partial publication', () => {
+    const result = run('partial-publication');
+    assert.equal(result.status, 2, result.stderr);
+    assert.ok(result.payload.evidence);
+    assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')));
+    fs.rmdirSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json'));
+  });
+  check('publication rolls back a failed second installation and retains recovery copies if rollback fails', () => {
+    const directory = path.join(root, 'transaction');
+    fs.mkdirSync(directory);
+    const destinations = tracePaths(directory, 'epic-4');
+    fs.mkdirSync(path.dirname(destinations.matrix));
+    const value = { matrix: 'new matrix', summary: { links: {} }, gate: null };
+    const old = new Map(Object.values(destinations).map((file) => [file, `original ${path.basename(file)}`]));
+    for (const [file, bytes] of old) fs.writeFileSync(file, bytes);
+    const io = {
+      ...fs,
+      renameSync(source, target) {
+        if (target === destinations.summary && path.basename(source) === 'next') throw new Error('simulated second installation failure');
+        return fs.renameSync(source, target);
+      },
+    };
+    assert.throws(() => publishTraceOutputs(value, destinations, io), /previous reports restored/);
+    for (const [file, bytes] of old) assert.equal(fs.readFileSync(file, 'utf8'), bytes);
+    assert.ok(!fs.readdirSync(path.dirname(destinations.matrix)).some((name) => name.startsWith('.tea-trace-publish-')));
+    const brokenRollback = {
+      ...io,
+      renameSync(source, target) {
+        if (path.basename(source) === 'previous') throw new Error('simulated rollback failure');
+        return io.renameSync(source, target);
+      },
+    };
+    assert.throws(() => publishTraceOutputs(value, destinations, brokenRollback), /recovery backups retained.*rollback failures/);
+    const retained = fs.readdirSync(path.dirname(destinations.matrix)).filter((name) => name.startsWith('.tea-trace-publish-'));
+    assert.ok(retained.some((name) => fs.existsSync(path.join(path.dirname(destinations.matrix), name, 'previous'))));
   });
   check('transport retry uses a fresh directory and preserves the failed attempt', () => {
     fs.unlinkSync(path.join(root, 'agent-attempts.json'));

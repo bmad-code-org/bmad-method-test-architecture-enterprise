@@ -8,7 +8,8 @@ description: 'Run Trace from a terminal and retain the evidence behind its cover
 `tea-trace` runs the [Trace skill](/docs/how-to/workflows/run-trace.md) against existing requirements and tests.
 It publishes a traceability matrix, a coverage summary, and an eligible gate decision as JSON.
 Each attempt keeps its prompt, agent output, and generated files for inspection.
-Before publication, the command checks coverage arithmetic, threshold fields, and the decision's consistency with coverage and confidence.
+Before publication, the command reconciles criterion priorities and coverage in matrix tables, detail sections, and the oracle ledger with the summary.
+It checks coverage arithmetic, threshold fields, and the decision's consistency with coverage and confidence.
 
 Install TEA with Node.js 22.20.0 or later, then install and authenticate the agent you select.
 The command uses the skill and knowledge base shipped in its package.
@@ -69,6 +70,7 @@ Use your agent CLI's existing login; the [Test Review CLI prerequisites](/docs/r
 
 `--agent none` saves and prints the resolved prompt without invoking an agent or replacing published trace reports.
 Every retry uses a fresh artifact directory.
+Generated reports must be independent regular files contained in that attempt; links to older or external reports fail validation.
 Malformed or incomplete artifacts end the run with their diagnostic evidence retained.
 
 ## Outputs and exit codes
@@ -96,6 +98,7 @@ The JSON result prints artifact and evidence paths to standard output.
 
 Before an agent starts, a fresh run clears the previous published files for its own scope.
 A failed attempt keeps its evidence and publishes a failed command result.
+Publication stages the whole report set and rolls back failed writes. If rollback fails, the error identifies retained recovery backups.
 Other scopes keep their reports.
 
 The repository's diagnostic harness accepts `--artifacts-dir <path>` to retain staged projects, prompts, tagged observations, and output streams during before/after evaluations.

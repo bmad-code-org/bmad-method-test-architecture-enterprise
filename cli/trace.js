@@ -78,7 +78,10 @@ function execute(options, registerOutputGuard = () => {}) {
   };
   const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
   const assertOutputPaths = () => {
-    for (const [name, file] of Object.entries(destinations)) projectPath(projectRoot, file, `trace ${name}`);
+    for (const [name, file] of Object.entries(destinations)) {
+      projectPath(projectRoot, file, `trace ${name}`);
+      if (fs.existsSync(file) && !fs.statSync(file).isFile()) throw new Error(`Trace ${name} destination must be a regular file.`);
+    }
     const outputs = Object.values(destinations);
     if (outputs.some((left, index) => outputs.slice(index + 1).some((right) => aliases(left, right))))
       throw new Error('Trace artifacts must use separate paths from each other.');
@@ -134,8 +137,14 @@ function execute(options, registerOutputGuard = () => {}) {
     },
   });
   if (result.dryRun) return { exitCode: 0, prompt: result.context.prompt, evidence: result.runDir };
-  assertOutputPaths();
-  const summary = publishTraceOutputs(result.value, destinations);
+  let summary;
+  try {
+    assertOutputPaths();
+    summary = publishTraceOutputs(result.value, destinations);
+  } catch (error) {
+    error.runDir = result.runDir;
+    throw error;
+  }
   const status = summary.gate_status ?? null;
   const exitCode = status === 'FAIL' || (status === 'CONCERNS' && options.failOn === 'concerns') ? 1 : 0;
   return {
@@ -183,7 +192,10 @@ function main(argv = process.argv) {
     try {
       outputGuard?.();
     } catch (error) {
-      result = { exitCode: 2, payload: { schema_version: '0.1.0', status: 'failed', reason: error.message } };
+      result = {
+        exitCode: 2,
+        payload: { schema_version: '0.1.0', status: 'failed', reason: error.message, evidence: result.payload?.evidence ?? null },
+      };
       process.stderr.write(`${NAME}: ${error.message}\n`);
     }
     const text = `${JSON.stringify(result.payload, null, 2)}\n`;

@@ -92,7 +92,7 @@ if (mode === 'automated-waiver') summary.gate_status = 'WAIVED';
 if (mode === 'missing-criteria') delete summary.gate_criteria;
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
-fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n### AC-1: Example\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`);
+fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n### AC-1: Example (P0)\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`);
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
@@ -117,4 +117,16 @@ if (mode === 'late-artifact-pair') {
   fs.writeFileSync(published, '# Agent-created matrix sentinel');
   fs.linkSync(published, path.join(path.dirname(published), path.basename(summaryPath)));
 }
+if (mode === 'matrix-contradiction') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('FULL', 'NONE'));
+if (mode === 'matrix-missing-priority') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(' (P0)', ''));
+if (mode === 'matrix-duplicate') fs.appendFileSync(matrixPath, '\n### AC-1: Duplicate (P0)\n\n- **Coverage:** FULL\n');
+if (mode.startsWith('attempt-')) {
+  const old = mode === 'attempt-outside-link' ? `${process.cwd()}-old-matrix.md` : path.join(process.cwd(), 'old-matrix.md');
+  fs.copyFileSync(matrixPath, old);
+  fs.utimesSync(old, new Date(0), new Date(0));
+  fs.unlinkSync(matrixPath);
+  if (mode === 'attempt-hardlink') fs.linkSync(old, matrixPath);
+  else fs.symlinkSync(old, matrixPath);
+}
+if (mode === 'partial-publication') fs.mkdirSync(path.join(process.cwd(), 'artifacts', 'trace', path.basename(summaryPath)), { recursive: true });
 process.stdout.write('trace fixture agent completed\n');

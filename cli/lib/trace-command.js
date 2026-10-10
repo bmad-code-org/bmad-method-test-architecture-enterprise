@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
 const MarkdownIt = require('markdown-it');
+const { readInput } = require('./workflow-cli');
 
 const GATE_TYPES = ['story', 'epic', 'release', 'hotfix'];
 const COLLECTION_MODES = [
@@ -102,8 +103,101 @@ function readJson(file) {
   return value;
 }
 
+/** Read criterion claims from Markdown headings and their coverage labels. */
+function matrixInventory(matrix) {
+  const criteria = new Map();
+  const tableClaims = new Map();
+  const ledgerPriorities = new Map();
+  let current = null;
+  let depth = 0;
+  const tokens = new MarkdownIt().parse(matrix, {});
+  for (let index = 0; index < tokens.length; index++) {
+    if (tokens[index].type !== 'table_open') continue;
+    const rows = [];
+    let row = null;
+    while (++index < tokens.length && tokens[index].type !== 'table_close') {
+      if (tokens[index].type === 'tr_open') row = [];
+      else if (tokens[index].type === 'inline' && row) row.push(tokens[index].content.replaceAll(/[*`]/g, '').trim());
+      else if (tokens[index].type === 'tr_close') {
+        rows.push(row);
+        row = null;
+      }
+    }
+    const header = rows.shift() ?? [];
+    const idIndex = header.findIndex((cell) => /^(?:id|criterion|criterion id)$/i.test(cell));
+    const priorityIndex = header.findIndex((cell) => /^priority$/i.test(cell));
+    const coverageIndex = header.findIndex((cell) => /^coverage$/i.test(cell));
+    if (idIndex === -1 || priorityIndex === -1) continue;
+    if (coverageIndex === -1 && !header.some((cell) => /^requirement$/i.test(cell))) continue;
+    for (const cells of rows) {
+      const id = cells[idIndex];
+      const priority = cells[priorityIndex];
+      if (!id || !/^P[0-3]$/.test(priority)) throw new Error('Trace criterion table has missing identity or priority.');
+      if (ledgerPriorities.has(id) && ledgerPriorities.get(id) !== priority)
+        throw new Error(`Trace criterion ${id} has conflicting priorities.`);
+      ledgerPriorities.set(id, priority);
+      if (coverageIndex === -1) continue;
+      if (tableClaims.has(id)) throw new Error(`Trace criterion ${id} is duplicated in the matrix table.`);
+      const status = /^(FULL|PARTIAL|NONE|UNIT-ONLY|INTEGRATION-ONLY)\b/.exec(cells[coverageIndex])?.[1];
+      if (!status) throw new Error(`Trace criterion ${id} has invalid table coverage.`);
+      tableClaims.set(id, { priority, status });
+    }
+  }
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.type === 'heading_open') {
+      const heading = tokens[index + 1].content;
+      const nextDepth = Number(token.tag.slice(1));
+      if (nextDepth <= depth) current = null;
+      const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}\s*:\s/.exec(heading);
+      const priority = /\b(P[0-3])\b/.exec(heading)?.[1] ?? (claim ? ledgerPriorities.get(claim[1]) : null);
+      if (!claim || (!priority && !/^[A-Za-z]+-\d+$/.test(claim[1]))) continue;
+      if (!priority) throw new Error(`Trace criterion ${claim[1]} has no priority.`);
+      if (ledgerPriorities.has(claim[1]) && ledgerPriorities.get(claim[1]) !== priority)
+        throw new Error(`Trace criterion ${claim[1]} detail contradicts its oracle priority.`);
+      if (criteria.has(claim[1])) throw new Error(`Trace criterion ${claim[1]} is duplicated.`);
+      current = { priority, status: null };
+      depth = nextDepth;
+      criteria.set(claim[1], current);
+    } else if (current && token.type === 'inline') {
+      const coverage = /\*\*Coverage:?\*\*\s*:?\s*([A-Z-]+)/i.exec(token.content);
+      if (!coverage) continue;
+      if (current.status !== null) throw new Error('Trace criterion declares coverage more than once.');
+      current.status = coverage[1].toUpperCase();
+    }
+  }
+  for (const [id, criterion] of tableClaims) {
+    if (criteria.has(id)) {
+      const detail = criteria.get(id);
+      if (detail.priority !== criterion.priority || detail.status !== criterion.status)
+        throw new Error(`Trace criterion ${id} table and detail disagree.`);
+    } else criteria.set(id, criterion);
+  }
+  for (const id of ledgerPriorities.keys()) {
+    if (!criteria.has(id)) throw new Error(`Trace oracle criterion ${id} is missing from the matrix.`);
+  }
+  const inventory = Object.fromEntries(['P0', 'P1', 'P2', 'P3'].map((priority) => [priority, { total: 0, covered: 0 }]));
+  for (const [id, criterion] of criteria) {
+    if (!['FULL', 'PARTIAL', 'NONE', 'UNIT-ONLY', 'INTEGRATION-ONLY'].includes(criterion.status))
+      throw new Error(`Trace criterion ${id} has missing or invalid coverage.`);
+    inventory[criterion.priority].total++;
+    if (criterion.status === 'FULL') inventory[criterion.priority].covered++;
+  }
+  return inventory;
+}
+
 /** Check the public artifact contract and Step 5's deterministic gate invariants. */
 function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
+  const attemptRoot = path.dirname(path.dirname(paths.matrix));
+  for (const [name, file] of Object.entries(paths)) {
+    if (name === 'gate' && !fs.existsSync(file)) continue;
+    try {
+      readInput(attemptRoot, file, `current attempt ${name}`);
+    } catch (error) {
+      throw new Error(error.message, { cause: error });
+    }
+    if (fs.statSync(file).nlink !== 1) throw new Error(`Current attempt ${name} must be an independent regular artifact.`);
+  }
   const matrix = fs.readFileSync(paths.matrix, 'utf8');
   const match = matrix.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new Error('Trace matrix is missing progress frontmatter.');
@@ -165,6 +259,12 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
     if (bucket.pct !== expected) throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
   }
   const priorities = ['P0', 'P1', 'P2', 'P3'].map((key) => summary.coverage.priority_breakdown[key]);
+  const declared = matrixInventory(matrix);
+  for (const [priority, counts] of Object.entries(declared)) {
+    const reported = summary.coverage.priority_breakdown[priority];
+    if (reported.total !== counts.total || reported.covered !== counts.covered)
+      throw new Error(`Trace matrix ${priority} coverage contradicts its summary.`);
+  }
   if (
     priorities.reduce((total, bucket) => total + bucket.total, 0) !== summary.coverage.inventory.total ||
     priorities.reduce((total, bucket) => total + bucket.covered, 0) !== summary.coverage.inventory.covered
@@ -270,15 +370,72 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
 }
 
 /** Publish only the validated current attempt, updating the moved report link. */
-function publishTraceOutputs(value, destinations) {
-  fs.mkdirSync(path.dirname(destinations.matrix), { recursive: true });
+function publishTraceOutputs(value, destinations, io = fs) {
   const links = { ...value.summary.links, trace_report_path: destinations.matrix };
   const summary = { ...value.summary, links };
   const gate = value.gate ? { ...value.gate, links } : null;
-  fs.writeFileSync(destinations.matrix, value.matrix, 'utf8');
-  fs.writeFileSync(destinations.summary, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
-  if (gate) fs.writeFileSync(destinations.gate, `${JSON.stringify(gate, null, 2)}\n`, 'utf8');
-  else if (fs.existsSync(destinations.gate)) fs.unlinkSync(destinations.gate);
+  const contents = {
+    matrix: value.matrix,
+    summary: `${JSON.stringify(summary, null, 2)}\n`,
+    gate: gate ? `${JSON.stringify(gate, null, 2)}\n` : null,
+  };
+  const staged = [];
+  let keepBackups = false;
+  try {
+    for (const [name, destination] of Object.entries(destinations)) {
+      io.mkdirSync(path.dirname(destination), { recursive: true });
+      const directory = io.mkdtempSync(path.join(path.dirname(destination), '.tea-trace-publish-'));
+      const item = {
+        destination,
+        directory,
+        previous: path.join(directory, 'previous'),
+        next: path.join(directory, 'next'),
+        existed: io.existsSync(destination),
+        installed: false,
+        remove: contents[name] === null,
+      };
+      staged.push(item);
+      if (item.existed) {
+        if (!io.statSync(destination).isFile()) throw new Error(`Trace destination is not a regular file: ${destination}`);
+        io.copyFileSync(destination, item.previous);
+      }
+      if (!item.remove) {
+        io.writeFileSync(item.next, contents[name], 'utf8');
+        if (item.existed) io.chmodSync(item.next, io.statSync(destination).mode);
+      }
+    }
+    for (const item of staged) {
+      if (item.remove) {
+        if (item.existed) io.unlinkSync(item.destination);
+      } else io.renameSync(item.next, item.destination);
+      item.installed = true;
+    }
+  } catch (error) {
+    const failures = [];
+    for (const item of staged.filter((entry) => entry.installed).toReversed()) {
+      try {
+        if (item.existed) io.renameSync(item.previous, item.destination);
+        else if (!item.remove) io.unlinkSync(item.destination);
+      } catch (error) {
+        failures.push(`${item.destination}: ${error.message}`);
+      }
+    }
+    keepBackups = failures.length > 0;
+    throw new Error(
+      `Trace publication failed: ${error.message}; ${keepBackups ? `recovery backups retained at ${staged.map((item) => item.directory).join(', ')}; rollback failures: ${failures.join('; ')}` : 'previous reports restored'}`,
+      { cause: error },
+    );
+  } finally {
+    if (!keepBackups) {
+      for (const item of staged) {
+        try {
+          io.rmSync(item.directory, { recursive: true, force: true });
+        } catch (error) {
+          process.stderr.write(`Trace publication staging cleanup failed at ${item.directory}: ${error.message}\n`);
+        }
+      }
+    }
+  }
   return summary;
 }
 
