@@ -1568,7 +1568,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The recommendation and findings array of the covariance-no-checker review.",
-        "negativeDomain": "A passing recommendation, or no H10 finding inside the covariance test.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
         "evidenceTargets": [
           "/interactions/covariance-no-checker/stdout/recommendation",
           "/interactions/covariance-no-checker/stdout/findings"
@@ -1611,6 +1611,28 @@
                   ]
                 },
                 {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
+                    }
+                  ]
+                },
+                {
                   "op": "set-membership",
                   "operands": [
                     {
@@ -1641,7 +1663,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The recommendation and findings array of the covariance-config-only review.",
-        "negativeDomain": "A passing recommendation, or no H10 finding inside the covariance test.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
         "evidenceTargets": [
           "/interactions/covariance-config-only/stdout/recommendation",
           "/interactions/covariance-config-only/stdout/findings"
@@ -1684,6 +1706,28 @@
                   ]
                 },
                 {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
+                    }
+                  ]
+                },
+                {
                   "op": "set-membership",
                   "operands": [
                     {
@@ -1714,7 +1758,7 @@
         "polarity": "expects-hold",
         "relation": "all",
         "scope": "The recommendation and findings array of the covariance-checker-excludes-tests review.",
-        "negativeDomain": "A passing recommendation, or no H10 finding inside the covariance test.",
+        "negativeDomain": "A passing recommendation, or no High H10 finding on the covariance test in tests/test_checkout.py.",
         "evidenceTargets": [
           "/interactions/covariance-checker-excludes-tests/stdout/recommendation",
           "/interactions/covariance-checker-excludes-tests/stdout/findings"
@@ -1753,6 +1797,28 @@
                     },
                     {
                       "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    },
+                    {
+                      "literal": "High"
+                    }
+                  ]
+                },
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    },
+                    {
+                      "literal": "tests/test_checkout.py"
                     }
                   ]
                 },
