@@ -51,26 +51,15 @@ It asks which requests may be sent, which parts of a response count as proof, an
 It writes your answers as a requirements statement and stops until you confirm it.
 
 After confirmation the skill designs the probes, authors the contract and writes the registry entry.
-It copies two files into the evaluation folder:
+It also writes the HTTP port and its conformance check:
 
 ```text
 evals/grader-http-service/adapter/http-probe-port.mjs
 evals/grader-http-service/adapter/http-probe-port.conformance.mjs
 ```
 
-The port imports `eval-quality` and the TEA package by name.
-Node finds them in a `node_modules` in the evaluation folder or in a folder above it, so install the private package that the skill creates:
-
-```bash
-npm install --prefix evals
-```
-
-Without that install the port cannot start, and `preflight` exits 10:
-
-```text
-tea-evaluate preflight: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'eval-quality' imported from /work/app/evals/grader-http-service/adapter/http-probe-port.mjs
-tea-evaluate preflight: the evaluation's HTTP port adapter/http-probe-port.mjs ended (exit 1) before it answered: node:internal/modules/package_json_reader:301 (exit 10, /work/app/evals/grader-http-service)
-```
+The skill installs the evaluation's dependencies under `evals/`.
+If preflight reports a missing `eval-quality` package, ask the skill to check that install.
 
 ### 2. Read the Registry Entry the Skill Wrote
 
@@ -102,8 +91,7 @@ tea-evaluate preflight: the evaluation's HTTP port adapter/http-probe-port.mjs e
 - `host`, `addresses`, `methods` and `safeMethods` are the only destinations and verbs the evaluation may use.
   eval-quality decides every request against them, once per request and once per redirect hop.
 - `server` starts the service inside the disposable copy.
-  The run sets the variable named by `portEnvironmentKey` to `0` and sets the variable named by `portFileEnvironmentKey` to a file path.
-  The service binds a free port and writes its number to that file, so no port is guessed.
+  It binds a free port for each run.
 - `auth` sends the value of `GRADER_TOKEN` as the `authorization` header.
 
 The contract declares an operation for each request the plan sends.
@@ -117,23 +105,13 @@ The seeded defect `M-001` replaces `mode: strict` with `mode: lenient` in `rules
 (cd evals/grader-http-service && node adapter/http-probe-port.conformance.mjs)
 ```
 
-```text
-PASS environment-probe conformance for "http-probe-port": 19/19 assertions passed
-pass probe/typed-fault: a mechanism failure rejects with a declared RuntimeFault
-...
-```
-
 The suite starts a loopback stub of its own, so it needs no deployed service and no secret.
-It exits 0 only when every assertion passes.
+It exits 0 when all 19 assertions pass.
 
 ### 4. Check the Folder and Set the Credential
 
 The host must hold the variable that `auth` names.
-Without `GRADER_TOKEN`, `preflight` exits 10:
-
-```text
-tea-evaluate preflight: registry entry "grader" sends its authorization header from GRADER_TOKEN, which this host does not set (exit 10, /work/app/evals/grader-http-service)
-```
+Confirm that `GRADER_TOKEN` is available to the run; the agent should check its presence without printing its value.
 
 Export the variables, then check the folder:
 
@@ -145,6 +123,9 @@ npm exec --prefix evals -- tea-evaluate check --evaluation evals/grader-http-ser
 ```text
 tea-evaluate check: /work/app/evals/grader-http-service has no authoring defects
 ```
+
+The port has passed its conformance check, the credential is available, and `check` has validated the files.
+Next, preflight the service and score its trials.
 
 ### 5. Preflight, Run and Score
 
@@ -158,12 +139,6 @@ SCORE=$(npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-
 If either is empty, read the command's output and resolve the failure before continuing.
 
 ```text
-tea-evaluate preflight: probes/P-002.probe.json: qualified; the restored digest matched and the baseline passed again
-tea-evaluate preflight: leg "witness-alpha": observed
-tea-evaluate preflight: leg "witness-beta": observed
-tea-evaluate preflight: leg "preflight-control-observe": observed
-tea-evaluate preflight: leg "preflight-control-observe-2": observed
-tea-evaluate preflight: leg "manifest-lenient": observed
 tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T092330798Z-925507cf (exit 0, /work/app/evals/grader-http-service/runs/20261007T092330798Z-925507cf)
 ```
 

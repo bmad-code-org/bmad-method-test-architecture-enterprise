@@ -127,13 +127,8 @@ It applies the seeded defect, confirms the server then answers wrongly, restores
 Exit 0 means the server starts, answers through the tools the plan calls and passes the clean control.
 
 A tool that the registry does not list fails here.
-With `grade_answer` removed from `tools`, `check` still passes and the preflight exits 10:
-
-```text
-tea-evaluate preflight: probes/P-002.probe.json: M-001: the baseline arm was denied by the registry (tool-not-authorized): forbidden-target in ProbeRequest: tool "grade_answer" is not among the authorized tools for interface "grader" (exit 10, /work/app/evals/grader-tool-server/runs/20261007T091103278Z-c674ab76)
-```
-
-Add the tool name back to `tools` after you confirm that the evaluation may call it.
+If preflight reports `tool-not-authorized`, confirm that the evaluation may call the named tool.
+The skill can then add it to `tools` and rerun preflight.
 
 `check` has validated the evaluation files.
 `preflight` has shown that the clean server passes and the seeded defect changes its answer.

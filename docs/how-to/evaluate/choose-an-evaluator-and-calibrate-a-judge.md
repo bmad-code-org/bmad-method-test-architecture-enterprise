@@ -49,61 +49,22 @@ Start the Evaluate skill and ask it to choose with you:
 Choose the evaluator for evals/refund-review.
 ```
 
-The skill discusses determinism, whether a model runs, how much of the target's process you need to see, whether oracles compare with reference outputs, rubric needs, language fit, licence, version drift, cost per trial and the CI tier the evaluation belongs in.
+The skill weighs what evidence you need, whether a model must judge it, and whether the choice fits your CI schedule and budget.
 It records the reasons next to the folder.
 
-### 2. Declare the Kind
+### 2. Review the Evaluator Setup
 
-A `command` evaluator names its executable inside the folder:
-
-```json
-{
-  "evaluator": {
-    "kind": "command",
-    "command": "evaluator/autoevals-exact.mjs",
-    "timeoutMs": 30000,
-    "environmentKeys": []
-  }
-}
-```
-
-A sealed-brief agent names its adapter:
-
-```json
-{ "evaluator": { "kind": "sealed-brief-agent", "agent": "claude", "model": "claude-sonnet-5-5", "timeoutMs": 30000 } }
-```
-
-`evaluator.model` selects the model the agent runs, and `evaluator.modelSnapshot` in `policy/evaluator-conditions.json` records it, so both hold the same immutable ID.
-`check` exits 10 when they differ.
-
-A records evaluator names the folder where your harness seals its records:
-
-```json
-{ "evaluator": { "kind": "records", "records": "sealed-records" } }
-```
-
-Run `check` after each change.
-It lists what the chosen kind still needs.
-For a sealed-brief agent without its files, `check` exits 10:
-
-```text
-evaluation.json: [evaluator] evaluation.json's evaluator is a sealed-brief agent, which chooses its own calls, and the file declares no evaluatorQualification (attempts and minimumAgreement); run qualifies the agent on each arm before its verdicts count
-evaluator/mapping.json: [evaluator] evaluation.json's evaluator is sealed-brief-agent, whose judgment rows convert through evaluator/mapping.json, and the folder has none
-policy/evaluator-conditions.json: [evaluator] evaluation.json's evaluator is a sealed-brief agent, and policy/evaluator-conditions.json names no evaluator.modelSnapshot, the model every evaluator call runs and every run records as a fixed condition
-```
-
-For a records evaluator without its folder, `check` exits 10:
-
-```text
-evaluation.json: [evaluator] evaluator.records names sealed-records, which is not a directory the evaluation folder holds, reached through no link; the records evaluator reads the harness's sealed records there
-```
+The skill records the choice in `evaluation.json` and runs `check` to catch missing files or conflicting settings.
+A `command` evaluator names the grading program, a sealed-brief agent names its model, and a `records` evaluator names the output from your own harness.
+Confirm that the selected program, model or records folder is the one you intend to use.
 
 A `command` evaluator that wraps a framework follows [How to Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md).
+[The evaluation layer](/docs/reference/tea-evaluate-cli.md#the-evaluation-layer) lists the fields for each kind.
 
 Rerun `preflight` after the change, then run and score one clean control and one seeded defect.
 Rely on the layer once eval-quality reads the control as `passed-clean-control` and the defect as `caught`.
 
-### 3. Declare the Rubric Judge
+### 3. Review the Rubric Judge
 
 A contract scores a judgment with a rubric.
 Each criterion names the evidence it reads, and each scale level carries an anchor that says what earns it:
@@ -121,7 +82,7 @@ Each criterion names the evidence it reads, and each scale level carries an anch
 }
 ```
 
-With the `deterministic` evaluator, `evaluation.json` wires the judge and the minimum agreement it must reach:
+With the `deterministic` evaluator, confirm the model and the minimum agreement it must reach:
 
 ```json
 {
@@ -130,24 +91,9 @@ With the `deterministic` evaluator, `evaluation.json` wires the judge and the mi
 }
 ```
 
-`policy/evaluator-conditions.json` records the model the judge runs as a fixed condition of every run:
-
-```json
-{
-  "schemaVersion": 1,
-  "modelSnapshot": "none",
-  "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "judge": { "modelSnapshot": "claude-sonnet-5-5" }
-}
-```
-
-`judge.model` selects the model, and `judge.modelSnapshot` records which model that was, so both hold the same provider model ID.
-Give an immutable ID such as `claude-sonnet-5-5`.
-An alias such as `sonnet` follows the provider's current model, so the same scoring version can mean different weights over time.
-Where an adapter's CLI offers only an alias, the alias is the most the run can record, and the scoring is as reproducible as the alias.
-`check` exits 10 when `judge.modelSnapshot` differs from `judge.model`, and its finding names both values.
-
-`check` refuses a `judge` block when the contract declares no rubric, and when the evaluator scores rubrics itself.
+Use an immutable model ID when the provider offers one, so later runs use the same model.
+The skill records that ID with the evaluation and checks that the recorded value matches the model it runs.
+[The rubric judge](/docs/reference/tea-evaluate-cli.md#the-rubric-judge) explains the configuration.
 
 ### 4. Label the Calibration Examples
 
@@ -180,30 +126,9 @@ When agreement falls below your minimum, `run` stops with exit 11:
 tea-evaluate run: judge calibration agreement fell below 0.9; see judge-calibration.json (exit 11, /work/app/evals/verdict-mutation/runs/20261007T091256520Z-703c4c1e)
 ```
 
-`runs/<invocationId>/judge-calibration.json` reports each criterion:
-
-```json
-{
-  "minimumAgreement": 0.9,
-  "criteria": [
-    {
-      "rubricId": "R-101",
-      "criterionId": "RC-101",
-      "agreement": 0.5,
-      "largestLevelDistance": 1,
-      "items": [
-        { "expectedLevel": 1, "actualLevel": 1, "levelDistance": 0 },
-        { "expectedLevel": 1, "actualLevel": 1, "levelDistance": 0 },
-        { "expectedLevel": 0, "actualLevel": 1, "levelDistance": 1 },
-        { "expectedLevel": 0, "actualLevel": 1, "levelDistance": 1 }
-      ]
-    }
-  ]
-}
-```
-
-This report came from a stand-in judge that answers the highest level every time.
-Two of four items match, so agreement is 0.5.
+`judge-calibration.json` shows which examples disagreed with your labels.
+In this example, a stand-in judge gives the highest level to every answer.
+It matches two of four labels, so its agreement is 0.5 against a required 0.9.
 
 Read the items that disagree.
 Each one has a cause you can repair:
@@ -213,17 +138,12 @@ Each one has a cause you can repair:
 - A label is wrong.
   Correct the label with the skill and rerun.
 - The judge model is too weak for the scale.
-  Choose a stronger model, set its immutable ID in `judge.model` in `evaluation.json`, set the same ID in `judge.modelSnapshot` in `policy/evaluator-conditions.json` and rerun.
-  Changing only `judge.modelSnapshot` records a model the judge does not run, and `check` refuses it.
+  Choose a stronger model and ask the skill to update the recorded ID before rerunning.
 
 The calibration file's digest and the minimum agreement join the evaluator configuration, so changing either changes the scoring version.
 A lower `minimumAgreement` accepts a judge that disagrees more often, so lower it only after you decide the labels were too strict.
 
-With a minimum the judge meets, `run` continues into the trials and exits 0:
-
-```text
-tea-evaluate run: 2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T091454931Z-494fa0d8 (exit 0, /work/app/evals/verdict-mutation/runs/20261007T091454931Z-494fa0d8)
-```
+When the judge meets the minimum, `run` continues into the trials.
 
 ## How You Know It Worked
 
