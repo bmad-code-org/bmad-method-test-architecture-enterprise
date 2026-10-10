@@ -164,6 +164,18 @@ function checkShardedChainCoversEveryChainedScript() {
   );
 }
 
+function checkShardedChainCoversNestedScripts() {
+  const scripts = {
+    'test:cli': 'npm run test:test-review-cli && node test/test-trace-cli.js',
+    'test:test-review-cli': 'node test/test-test-review-cli.js',
+  };
+  const covered = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(
+    covered.has('test:cli') && covered.has('test:test-review-cli'),
+    `a sharded command did not count its nested npm script as run in CI: ${JSON.stringify([...covered])}`,
+  );
+}
+
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {
   const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(['test:a']), []);
   check(
@@ -393,7 +405,7 @@ function checkEachWorkflowKeepsTheInstaller() {
 function checkRealRepoIsClean() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   const chained = chainedScripts(manifest);
-  const inCi = scriptsCoveredInCi(chained);
+  const inCi = scriptsCoveredInCi(chained, undefined, undefined, manifest.scripts);
   const install = actionlintInstallProblems();
   check(install.length === 0, `the real actionlint install is refused: ${JSON.stringify(install)}`);
   const notRun = chained.filter((script) => !inCi.has(script));
@@ -415,6 +427,7 @@ function main() {
   checkStaleDeliberatelyLocalEntriesFlagsARemovedScript();
   checkStaleDeliberatelyLocalEntriesClearsAPresentScript();
   checkShardedChainCoversEveryChainedScript();
+  checkShardedChainCoversNestedScripts();
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
   checkEveryBypassIsRefused();

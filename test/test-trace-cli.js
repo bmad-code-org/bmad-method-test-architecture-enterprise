@@ -52,6 +52,35 @@ function check(name, action) {
 }
 
 try {
+  check('source oracle ignores unrelated labels and merges matching table and detail claims', () => {
+    const source = [
+      '# Epic-4: Export',
+      '',
+      '| ID | Description |',
+      '| --- | --- |',
+      '| RISK-1 | Cache expiry |',
+      '',
+      'Phase-1: Setup',
+      'S3: bucket policy',
+      'OAuth2: required',
+      '',
+      '| ID | Requirement | Priority |',
+      '| --- | --- | --- |',
+      '| AC-1 | Admin may export. | P0 |',
+      '',
+      '### AC-1 (P0): Admin may export.',
+      'FR-2: Member access is denied.',
+    ].join('\n');
+    const ledger = sourceOracleLedger(source, 'requirements.md');
+    assert.deepEqual(
+      ledger.map((row) => [row.id, row.priority]),
+      [
+        ['AC-1', 'P0'],
+        ['FR-2', null],
+      ],
+    );
+    assert.throws(() => sourceOracleLedger(`${source}\nAC-1 (P1): Admin may export.`, 'requirements.md'), /conflicting priorities/);
+  });
   fs.mkdirSync(path.join(root, 'docs'));
   fs.mkdirSync(path.join(root, 'tests'));
   fs.mkdirSync(path.join(root, '_bmad', 'custom'), { recursive: true });
@@ -80,6 +109,21 @@ try {
     assert.match(fs.readFileSync(path.join(result.payload.evidence, 'attempt-1', 'stdout.txt'), 'utf8'), /trace fixture agent completed/);
     const summary = JSON.parse(fs.readFileSync(result.payload.artifacts.summary, 'utf8'));
     assert.equal(summary.links.trace_report_path, result.payload.artifacts.matrix);
+  });
+  check('CLI accepts a criterion repeated in a source table and detail heading', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file);
+    try {
+      fs.writeFileSync(
+        file,
+        '# Epic 4: Export\n\n| ID | Requirement | Priority |\n| --- | --- | --- |\n| AC-1 | Admin may export. | P0 |\n\n### AC-1 (P0): Admin may export.\n',
+      );
+      const result = run('pass');
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.payload.coverage.total, 1);
+    } finally {
+      fs.writeFileSync(file, original);
+    }
   });
   check('computed FAIL exits 1 and remains reviewable', () => {
     const result = run('gap');
@@ -180,12 +224,14 @@ try {
     try {
       fs.writeFileSync(file, '# Epic 4: Export\n\n### AC-1 (P0): **Admin may export.**\n');
       assert.equal(run('pass').status, 0);
+      const gate = path.join(root, 'artifacts', 'trace', 'gate-decision-epic-4.json');
+      const previousGate = fs.readFileSync(gate);
       for (const mode of ['source-text-drift', 'source-binding-drift', 'matrix-text-drift', 'missing-oracle-ledger']) {
         const result = run(mode);
         assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
         assert.match(result.payload.reason, /frozen requirement|source binding|oracleLedger/);
         assert.equal(fs.readFileSync(file, 'utf8'), '# Epic 4: Export\n\n### AC-1 (P0): **Admin may export.**\n');
-        assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'gate-decision-epic-4.json')));
+        assert.deepEqual(fs.readFileSync(gate), previousGate);
       }
     } finally {
       fs.writeFileSync(file, original);
@@ -253,6 +299,30 @@ try {
       const ignoredInvalidFailure = run('manifest-invalid-failure-ignored', ['--live-results', 'live.json']);
       assert.equal(ignoredInvalidFailure.status, 3, ignoredInvalidFailure.stderr);
       assert.match(ignoredInvalidFailure.payload.reason, /frozen supplied manifest/);
+    } finally {
+      fs.unlinkSync(live);
+    }
+  });
+  check('a HEAD change during live verification leaves the previous report intact', () => {
+    const current = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const live = path.join(root, 'live.json');
+    const files = Object.values(tracePaths(path.join(root, 'artifacts'), 'epic-4'));
+    const previous = files.map((file) => fs.readFileSync(file));
+    fs.writeFileSync(
+      live,
+      JSON.stringify({
+        schema_version: '0.1.0',
+        source_sha: current,
+        results: [{ id: '1.1-LIVE-001', requirement_id: 'AC-1', status: 'pass' }],
+      }),
+    );
+    try {
+      const result = run('manifest-advance-head', ['--live-results', 'live.json']);
+      assert.equal(result.status, 3, result.stderr);
+      assert.match(result.payload.reason, /source revision changed/);
+      const next = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+      assert.notEqual(next, current);
+      for (const [index, file] of files.entries()) assert.deepEqual(fs.readFileSync(file), previous[index]);
     } finally {
       fs.unlinkSync(live);
     }
@@ -325,6 +395,8 @@ try {
     }
   });
   check('malformed, missing, incomplete, wrong-target, and contradictory artifacts fail', () => {
+    const summary = path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json');
+    const previous = fs.readFileSync(summary);
     for (const mode of [
       'bad-arithmetic',
       'missing-summary',
@@ -354,19 +426,22 @@ try {
       assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
       assert.equal(result.payload.status, 'failed');
       assert.ok(result.payload.evidence);
-      assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json')), mode);
+      assert.deepEqual(fs.readFileSync(summary), previous, mode);
     }
   });
   check('attempt artifacts cannot import stale symlinks or hardlinked evidence', () => {
+    const matrix = path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md');
+    const previous = fs.readFileSync(matrix);
     for (const mode of ['attempt-outside-link', 'attempt-stale-link', 'attempt-hardlink']) {
       const result = run(mode);
       assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
       assert.ok(result.payload.evidence);
-      assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')));
+      assert.deepEqual(fs.readFileSync(matrix), previous);
     }
     fs.unlinkSync(`${root}-old-matrix.md`);
   });
   check('late destination directories preserve current failure evidence without partial publication', () => {
+    for (const file of Object.values(tracePaths(path.join(root, 'artifacts'), 'epic-4'))) if (fs.existsSync(file)) fs.unlinkSync(file);
     const result = run('partial-publication');
     assert.equal(result.status, 2, result.stderr);
     assert.ok(result.payload.evidence);
@@ -411,12 +486,20 @@ try {
     assert.deepEqual(JSON.parse(fs.readFileSync(first, 'utf8')), { stale: true });
     assert.equal(JSON.parse(fs.readFileSync(result.payload.artifacts.summary, 'utf8')).gate_status, 'PASS');
   });
-  check('failed agent cannot publish a previous success', () => {
+  check('failed reruns preserve published reports until a valid replacement is ready', () => {
     assert.equal(run('pass').status, 0);
-    const result = run('fail-agent', ['--json', 'result.json']);
-    assert.equal(result.status, 3);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'result.json'), 'utf8')).status, 'failed');
-    assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json')));
+    const files = Object.values(tracePaths(path.join(root, 'artifacts'), 'epic-4'));
+    const previous = files.map((file) => fs.readFileSync(file));
+    for (const mode of ['fail-agent', 'bad-arithmetic']) {
+      const result = run(mode, ['--json', 'result.json']);
+      assert.equal(result.status, 3, result.stderr);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'result.json'), 'utf8')).status, 'failed');
+      for (const [index, file] of files.entries()) assert.deepEqual(fs.readFileSync(file), previous[index]);
+    }
+    const result = run('gap');
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.payload.gate_status, 'FAIL');
+    for (const [index, file] of files.entries()) assert.notDeepEqual(fs.readFileSync(file), previous[index]);
   });
   check('invalid config and target fail before an agent call', () => {
     const before = fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8');
@@ -718,6 +801,10 @@ try {
         if (fs.existsSync(json)) fs.unlinkSync(json);
         const matrix = path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md');
         if (fs.existsSync(matrix)) fs.unlinkSync(matrix);
+        if (mode === 'late-artifact-pair') {
+          const summary = path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json');
+          if (fs.existsSync(summary)) fs.unlinkSync(summary);
+        }
         const result = run(mode, ['--json', 'late-result.json']);
         assert.equal(result.status, 2, `${mode}: ${result.stderr}`);
         assert.equal(result.payload.status, 'failed');

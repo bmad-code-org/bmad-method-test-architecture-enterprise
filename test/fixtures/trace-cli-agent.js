@@ -105,6 +105,18 @@ if (mode.startsWith('manifest-') && mode !== 'manifest-omitted') {
   if (mode === 'manifest-stale-cap') summary.live_evidence.freshness = 'stale';
   if (mode === 'manifest-input-mutation') fs.writeFileSync(livePath, '{}');
 }
+if (mode === 'manifest-advance-head') {
+  const { spawnSync } = require('node:child_process');
+  const marker = 'trace-revision-marker.txt';
+  fs.writeFileSync(marker, `revision ${attempt}\n`);
+  for (const args of [
+    ['add', marker],
+    ['-c', 'user.name=Trace fixture', '-c', 'user.email=trace@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'advance consuming revision'],
+  ]) {
+    const git = spawnSync('git', args, { encoding: 'utf8' });
+    if (git.status !== 0) throw new Error(git.stderr);
+  }
+}
 if (mode === 'manifest-invalid-failure-ignored') {
   summary.live_evidence.failed = 0;
   summary.live_evidence.fresh_failed = 0;

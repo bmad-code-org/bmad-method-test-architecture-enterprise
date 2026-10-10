@@ -97,7 +97,7 @@ It checks input bytes, identity, permissions, and paths again before publication
 Live results are checked against the frozen manifest and revision.
 A current-revision failure caps a passing gate at CONCERNS, including mixed-freshness manifests.
 
-Runs that invoke an agent clear the previous reports for their scope before the attempt begins.
+Existing reports remain available during a rerun. The CLI replaces them after the new attempt passes validation.
 Failed attempts retain evidence and publish a failed command result.
 Publication stages the report set and restores it after a write failure.
 If rollback fails, the error names retained recovery backups.

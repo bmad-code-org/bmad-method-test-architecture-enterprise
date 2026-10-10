@@ -121,7 +121,15 @@ function sourceOracleLedger(text, source) {
   const tokens = new MarkdownIt().parse(text, {});
   const ledger = new Map();
   const add = (id, priority, requirement, line) => {
-    if (ledger.has(id)) throw inputError(`Source oracle repeats criterion ${id}.`);
+    const existing = ledger.get(id);
+    if (existing) {
+      if (existing.priority && priority && existing.priority !== priority)
+        throw inputError(`Source oracle gives criterion ${id} conflicting priorities.`);
+      if (criterionText(existing.requirement) !== criterionText(requirement))
+        throw inputError(`Source oracle gives criterion ${id} conflicting requirement text.`);
+      existing.priority ||= priority || null;
+      return;
+    }
     ledger.set(id, { id, priority: priority || null, requirement, source: `${source}:${line}` });
   };
   for (let index = 0; index < tokens.length; index++) {
@@ -139,7 +147,7 @@ function sourceOracleLedger(text, source) {
       }
       const header = rows.shift()?.cells ?? [];
       const idIndex = header.findIndex((cell) => /^(?:id|criterion|criterion id|requirement id)$/i.test(cell));
-      const requirementIndex = header.findIndex((cell) => /^(?:requirement|criterion text|description)$/i.test(cell));
+      const requirementIndex = header.findIndex((cell) => /^(?:requirement|criterion text)$/i.test(cell));
       const priorityIndex = header.findIndex((cell) => /^priority$/i.test(cell));
       if (idIndex === -1 || requirementIndex === -1) continue;
       for (const { cells, line } of rows) {
@@ -148,13 +156,13 @@ function sourceOracleLedger(text, source) {
         if (!cells[idIndex] || !cells[requirementIndex]) throw inputError('Source oracle has an incomplete criterion row.');
         add(cells[idIndex], priority, cells[requirementIndex], line);
       }
-    } else if (token.type === 'inline') {
+    } else if (token.type === 'inline' && !(tokens[index - 1]?.type === 'heading_open' && tokens[index - 1].tag === 'h1')) {
       let pending;
       const flush = () => {
         if (pending) add(pending.id, pending.priority, pending.requirement, pending.line);
       };
       for (const [offset, line] of token.content.split('\n').entries()) {
-        const claim = /^([A-Z][A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*)(?:\s*\((P[0-3])\))?\s*:\s*(.+)/.exec(line.replaceAll(/[*`]/g, ''));
+        const claim = /^((?:AC|FR|NFR|REQ)[-_.]?\d+(?:[-_.]\d+)*)(?:\s*\((P[0-3])\))?\s*:\s*(.+)/.exec(line.replaceAll(/[*`]/g, ''));
         if (claim) {
           flush();
           pending = {

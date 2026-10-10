@@ -258,9 +258,18 @@ function shardRunProblems(run) {
  * Every script CI runs: each literal `npm run <script>` in a workflow, plus the
  * whole chain when some job runs tools/test-shards.js over a full shard matrix.
  */
-function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns()) {
+function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns(), scripts = {}) {
   const covered = new Set(inCi);
   if (runs.some((run) => shardRunProblems(run).length === 0)) for (const script of chained) covered.add(script);
+  const pending = [...covered];
+  while (pending.length > 0) {
+    const script = pending.pop();
+    for (const match of (scripts[script] ?? '').matchAll(/\bnpm run ([\w:-]+)/g)) {
+      if (covered.has(match[1])) continue;
+      covered.add(match[1]);
+      pending.push(match[1]);
+    }
+  }
   return covered;
 }
 
@@ -500,7 +509,7 @@ function main() {
     return 1;
   }
 
-  const inCi = scriptsCoveredInCi(chained, scriptsRunInCi(), runs);
+  const inCi = scriptsCoveredInCi(chained, scriptsRunInCi(), runs, manifest.scripts);
   const missing = chained.filter((script) => !inCi.has(script));
 
   if (missing.length > 0) {

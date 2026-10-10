@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
-const { captureLiveResults } = require('./lib/trace-live');
+const { captureLiveResults, assertLiveSourceRevision } = require('./lib/trace-live');
 const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
 const {
   sourceOracleLedger,
@@ -120,10 +120,7 @@ function execute(options, registerOutputGuard = () => {}) {
     projectRoot,
     evidenceRoot: options.evidenceDir,
     options,
-    prepare({ attemptDir, attempt }) {
-      if (attempt === 1 && options.agent !== 'none') {
-        for (const file of Object.values(destinations)) if (fs.existsSync(file)) fs.unlinkSync(file);
-      }
+    prepare({ attemptDir }) {
       const paths = tracePaths(attemptDir, target.runKey);
       const prompt = headlessPrompt({
         skillRoot,
@@ -153,6 +150,7 @@ function execute(options, registerOutputGuard = () => {}) {
       return { prompt, paths };
     },
     validate({ paths }) {
+      assertLiveSourceRevision(liveCapture, projectRoot);
       for (const input of heldInputs) {
         const changed = input.missing
           ? fs.existsSync(input.file)
@@ -185,6 +183,7 @@ function execute(options, registerOutputGuard = () => {}) {
   let summary;
   try {
     assertOutputPaths();
+    assertLiveSourceRevision(liveCapture, projectRoot);
     summary = publishTraceOutputs(result.value, destinations);
   } catch (error) {
     error.runDir = result.runDir;

@@ -124,7 +124,7 @@
     "coverageArithmetic": {
       "file": "skills/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
       "section": "4. Calculate Coverage Statistics",
-      "lines": "458-485",
+      "lines": "472-501",
       "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.round(covered / total * 100), and a priority with no criteria resolves to 100."
     },
     "singleLevelFullPrecedent": {
@@ -142,13 +142,13 @@
     "waiverScenarios": {
       "file": "skills/bmad-testarch-trace/checklist.md",
       "section": "Waiver Scenarios",
-      "lines": "586-606",
+      "lines": "584-604",
       "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
     },
     "decisionIntegrity": {
       "file": "skills/bmad-testarch-trace/checklist.md",
       "section": "Decision Integrity",
-      "lines": "487-494",
+      "lines": "485-492",
       "rule": "The decision follows the rules rather than judgment. P0 failures produce FAIL unless waived. Security issues produce FAIL and should never be waived. A waiver needs a business justification and an approver."
     },
     "p0IsSecurityCritical": {

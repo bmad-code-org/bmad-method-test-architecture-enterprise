@@ -45,6 +45,12 @@ function captureLiveResults(file, projectRoot, enabled) {
   return { manifest, currentSha: currentSourceSha(projectRoot) };
 }
 
+function assertLiveSourceRevision(capture, projectRoot) {
+  if (!capture) return;
+  if (currentSourceSha(projectRoot) !== capture.currentSha)
+    throw new Error('Trace source revision changed during the run; rerun with current live evidence.');
+}
+
 /** Mirror Steps 2-4 dispositions; the fresh-failure cap uses each record's actual SHA. */
 function liveReference(capture, criterionIds) {
   if (!capture) return;
@@ -95,4 +101,4 @@ function liveReference(capture, criterionIds) {
   };
 }
 
-module.exports = { captureLiveResults, liveReference };
+module.exports = { captureLiveResults, assertLiveSourceRevision, liveReference };
