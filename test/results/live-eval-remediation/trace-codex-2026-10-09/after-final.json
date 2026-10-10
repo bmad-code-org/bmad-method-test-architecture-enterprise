@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1.5.0",
   "kind": "suite-result",
-  "generatedAt": "2026-10-10T14:32:32.190Z",
+  "generatedAt": "2026-10-10T17:29:13.569Z",
   "mode": "live",
   "repository": {
-    "commit": "f39d9df7d3aa5aded29408f3fab1bdf4fb783836",
+    "commit": "3af76c5a8ba55cc7d63758bc011637a4af0d241f",
     "dirty": false
   },
   "suite": {
@@ -95,7 +95,7 @@
         "fixtureMutations": 0,
         "waiverRunsNotScored": 0
       },
-      "durationMs": 1824696,
+      "durationMs": 2202515,
       "usage": null,
       "failureClass": "none",
       "failures": [],
@@ -166,7 +166,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:360d435810c3b10c184191030f6509fc42f624588abe007530bae63753e63b07 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T14:07:56Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
+              "value": "sha256:9ba20b7ad28a987b7a6b6bd1268a47b247b52ce25d3dcd28b9bc210dec5fce10 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T16:58:05Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
             },
             {
               "kind": "artifact",
@@ -174,7 +174,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:df870006e26df61df7b5d800cc78c1052dc930e353618c6b32625e9e67dfd9ec --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T14:07:56Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md'] coverageBasis: 'acceptance_cr"
+              "value": "sha256:e003f6063e1c35f9240eb3fb6cc001f97461f65ce23b6b4dcdbe3262ae1052b7 --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T16:59:33Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md', 'tenant-data-export/test-arti"
             }
           ]
         },
@@ -244,7 +244,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:108f5bd5ace4f3ab71dfa3c567f54b4617902cdc524688dab9c2e6232c013f6a {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T14:18:45Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
+              "value": "sha256:fec4b12886f5f6e238e50998e1c907130fe911d94b8243bea19eada07835d921 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T17:08:56Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"4\",\"label\":\"Epic 4: Tenant Data Export and Erasure\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"ten"
             },
             {
               "kind": "artifact",
@@ -252,7 +252,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:85677dc8cb0ffcd7d3e92071e2e72a7a0c4f25816c3fa434e459b2f3c931aad0 --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T14:18:45Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md'] coverageBasis: 'acceptance_cr"
+              "value": "sha256:4a9abe25b55bf67aa56eb4ef5fc8f934c0461bf9d2976de984c3cefdcab5536c --- runScope: 'epic' runKey: 'epic-4' targetType: 'epic' targetId: '4' targetLabel: 'Epic 4: Tenant Data Export and Erasure' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T17:08:56Z' workflowType: 'testarch-trace' inputDocuments: ['tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md'] coverageBasis: 'acceptance_cr"
             }
           ]
         },
@@ -322,7 +322,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:e537dd88dec25c7efb890737229cd9fea6bfdea745bc4ed5c599acb48a8c8a6d {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T14:25:39Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"api-token-life"
+              "value": "sha256:37a05f57908f19e576db9da8e80463c70c43f7053fe8abfe7078a4b5345d7f73 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T17:20:02Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"api-token-life"
             },
             {
               "kind": "artifact",
@@ -330,7 +330,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:875d7e824a893e02db755b29d1877553555829b29055937e575453bff8514db1 --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T14:25:39Z' workflowType: 'testarch-trace' inputDocuments: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md'] coverageBasis: 'acceptance_criteria' oracleConfide"
+              "value": "sha256:8f1b450360335a93a973af1a2510a02edd8f86ec14290b8bedd1030118c0c570 --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10T17:20:02Z' workflowType: 'testarch-trace' inputDocuments: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md'] coverageBasis: 'acceptance_criteria' oracleConfide"
             }
           ]
         },
@@ -400,7 +400,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:73639db906a593ed6e5ae1fc2bef2d7292735a5ac0bd2e68a26f813a67609428 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T14:31:17Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"docs/epics/epi"
+              "value": "sha256:edcb7f7a61b48f9ef3c1ba8c6e6ae0241a96462cbf7eca2557544045c4711110 {\"schema_version\":\"0.3.0\",\"snapshot_at\":\"2026-10-10T17:26:56Z\",\"repo\":\"tidewater-support-desk\",\"collection_mode\":\"contract_static\",\"collection_status\":\"COLLECTED\",\"inventory_basis\":\"acceptance_criteria\",\"gate_basis\":\"priority_thresholds\",\"source_sha\":\"unknown\",\"target\":{\"type\":\"epic\",\"id\":\"5\",\"label\":\"Epic 5: API Token Lifecycle\"},\"decision_mode\":\"deterministic\",\"evaluator\":\"tea-eval-harness\",\"confidence\":\"high\",\"oracle\":{\"resolution_mode\":\"formal_requirements\",\"confidence\":\"high\",\"sources\":[\"api-token-life"
             },
             {
               "kind": "artifact",
@@ -408,7 +408,7 @@
             },
             {
               "kind": "summary",
-              "value": "sha256:3f6e472ade1e4df3fd52dd328e3316cc38c8434152b67989d8a5d7d09b724249 --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10' workflowType: 'testarch-trace' inputDocuments: ['docs/epics/epic-5-api-token-lifecycle.md'] coverageBasis: 'acceptance_criteria' oracleConfidence: 'high' oracleResolutionMo"
+              "value": "sha256:23aab52faf1a01339900f30ecc88edc3021ead9949f9132f41954635d5bd72c0 --- runScope: 'epic' runKey: 'epic-5' targetType: 'epic' targetId: '5' targetLabel: 'Epic 5: API Token Lifecycle' workflowStatus: 'completed' stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision'] lastStep: 'step-05-gate-decision' lastSaved: '2026-10-10' collectionStatus: 'COLLECTED' sourceSha: '' tempCoverageMatrixPath: '/tmp/tea-trace-coverage-matrix-epic-5-2026-10-10T17-25-37Z.json' workflowType: 'testarch-trace' inputDo"
             }
           ]
         }
@@ -416,7 +416,7 @@
     }
   ],
   "suiteDiagnostics": [],
-  "durationMs": 1824816,
+  "durationMs": 2202641,
   "failureClass": "none",
   "exitCode": 0
 }

@@ -24,7 +24,7 @@ All measured accuracy groups passed at 100%, arithmetic passed 156/156 checks, a
 The archive retains each staged workspace, prompt, observation, nonempty stream, and invocation result with per-file hashes.
 This result measures the mapping skill on this corpus; it predates the later CLI checks for source-ledger and live-evidence integrity.
 
-`after-final.json` records four runs at `f39d9df7` after the CLI and review fixes.
+`after-final.json` records four runs at `3af76c5a` after the CLI and review fixes.
 Both seeded runs produced the expected FAIL gate, and both clean runs produced PASS.
 Every measured threshold passed at 100%, with stable results across both fixtures.
 
