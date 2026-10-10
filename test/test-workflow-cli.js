@@ -54,12 +54,20 @@ test('integer validation refuses partial parses and overflow', () => {
 });
 test('paths reject outside destinations and escaping or dangling symlinks', (t) => {
   const root = project(t);
-  assert.throws(() => projectPath(root, '../outside'), /inside/);
+  assert.throws(() => projectPath(root, '../outside'), /outside/);
   fs.symlinkSync(os.tmpdir(), path.join(root, 'escape'));
   assert.throws(() => projectPath(root, 'escape/output.md'), /outside/);
   fs.symlinkSync(path.join(root, 'missing'), path.join(root, 'dangling'));
   assert.throws(() => projectPath(root, 'dangling/output.md'), /dangling/);
   assert.throws(() => readInput(root, '.'), /regular file/);
+});
+test('absolute project paths through a filesystem alias resolve inside the canonical root', (t) => {
+  const root = project(t);
+  const parent = project(t);
+  const alias = path.join(parent, 'project-alias');
+  fs.symlinkSync(root, alias);
+  assert.equal(readInput(root, path.join(alias, 'epic.md')), fs.realpathSync(path.join(root, 'epic.md')));
+  assert.equal(projectPath(root, path.join(alias, 'new', 'report.md')), path.join(fs.realpathSync(root), 'new', 'report.md'));
 });
 test('configuration reads overrides for the selected skill and keeps review defaults isolated', (t) => {
   const root = project(t);
