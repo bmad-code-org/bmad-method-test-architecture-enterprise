@@ -10,7 +10,7 @@ In normal use, you [start Evaluate in your coding agent](/docs/how-to/evaluate/e
 It inspects your target and asks you to confirm the requirements.
 Then it writes the evaluation files, runs the evaluation and scores the result.
 This tutorial uses a prepared `refund-check` example and has you run each command yourself so you can see the files and results.
-A stub agent stands in for the model, so you need no coding agent, model or API key.
+This tutorial needs no coding agent, model or API key; a stub agent stands in for the model.
 
 ## What You'll Build
 
