@@ -93,7 +93,7 @@ const ALLOWLIST_BY_COMMENT = new Map([
   ['eval-automate --validate-only', 'test:eval-automate-data'],
   ['eval-framework-scaffold --validate-only', 'test:eval-framework-scaffold-data'],
   ['test-framework-scaffold-install-isolation', 'test:framework-scaffold-install-isolation'],
-  ['test-test-review-cli', 'test:cli'],
+  ['test-test-review-cli', 'test:test-review-cli'],
 ]);
 
 const ALLOWLISTED_SCRIPTS = new Set(ALLOWLIST_BY_COMMENT.values());

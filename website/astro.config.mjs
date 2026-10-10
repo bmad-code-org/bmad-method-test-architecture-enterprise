@@ -204,6 +204,7 @@ export default defineConfig({
             { label: 'tea-evaluate CLI', slug: 'reference/tea-evaluate-cli' },
             { label: 'tea-teach CLI', slug: 'reference/tea-teach-cli' },
             { label: 'tea-test-review CLI', slug: 'reference/tea-test-review-cli' },
+            { label: 'tea-trace CLI', slug: 'reference/tea-trace-cli' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
           ],
         },

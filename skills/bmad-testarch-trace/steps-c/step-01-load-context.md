@@ -82,6 +82,10 @@ Resolve the oracle in this order:
      - `P2`: secondary workflows and edge scenarios
      - `P3`: low-risk polish or optional flows
 
+Persist `oracleLedger` in this step's progress YAML frontmatter as an array of `{id, requirement, priority, source}` records: one row per item with its stable ID, requirement text, priority, and source reference. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
+
+For local source files, read numbered lines before recording each ledger source reference. When the source declares an item's ID and priority, cite that line. For an inferred item, cite numbered source lines that support its requirement; the generated ID and priority stay in the ledger. Check each source line independently because headings and criteria may span different numbers of lines.
+
 Record the resolved oracle metadata in step output/frontmatter using consistent keys:
 
 - `coverageBasis` (`acceptance_criteria` | `synthetic_requirements` | `openapi_endpoints` | `user_journeys`) — the type of oracle selected for coverage tracing
@@ -218,6 +222,7 @@ oracleConfidence: '{resolved oracle_confidence}'
 oracleResolutionMode: '{resolved oracle_resolution_mode}'
 oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
 externalPointerStatus: '{resolved external_pointer_status}'
+oracleLedger: [{ id: '{oracle item id}', requirement: '{requirement text}', priority: '{P0-P3}', source: '{source reference}' }]
 ---
 ```
 

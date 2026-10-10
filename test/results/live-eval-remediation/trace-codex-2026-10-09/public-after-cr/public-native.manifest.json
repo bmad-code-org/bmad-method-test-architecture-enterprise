@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "7eabcf927a1400b5599c6027da71efdf2aa64dea",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "archive": "public-native.json.gz",
+  "archiveSha256": "02770e75dd126dd08685a2def7deadee73942cafeef30d02ac0293dab8dc6e1b",
+  "expectedCalls": 2,
+  "completedCalls": 2,
+  "nativeExits": [
+    1,
+    0
+  ],
+  "stability": "unmeasured",
+  "files": [
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/attempt.json",
+      "bytes": 153,
+      "sha256": "6866dde094bdc59564b9c42d3daa5d248548166437cfe102ec1ff443a0021eb9"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/prompt.txt",
+      "bytes": 5807,
+      "sha256": "1d4adcd9eb48ff0c4f56ec3863076d303e5e782748730a5e9bba3961a52c09f5"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/stdout.txt",
+      "bytes": 951,
+      "sha256": "c3d94b8e773e2b8ae74729edf9cecf3e524bd97a837129f26666593993f0c2da"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/trace/e2e-trace-summary-epic-5.json",
+      "bytes": 3884,
+      "sha256": "81ee572bcd823ef39182960701a03132d055c6131532979ecc116b085a12ed8f"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/trace/gate-decision-epic-5.json",
+      "bytes": 822,
+      "sha256": "0bc951b305fbf99e07bf6b0c307a2afd5864d266508ecec9e19564a0a4da5e44"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/trace/tea-trace-coverage-matrix-epic-5-2026-10-10T03-42-12Z.json",
+      "bytes": 12136,
+      "sha256": "fa687c0541a0d9c9a89dd7202993a9423f475902eaf69633c5be9499ae4b5dde"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/attempt-1/trace/traceability-matrix-epic-5.md",
+      "bytes": 14711,
+      "sha256": "81b503ffbc3866c68e44dc01c1af15a3c26159c1a1eabbb2d8c364d17e5180d2"
+    },
+    {
+      "path": "clean/.tea-runs/tea-trace-dkC9kr/run.json",
+      "bytes": 454,
+      "sha256": "b3b51071f958c86de9c7c0026ec065424e004fc32aa46884124315d4a041a711"
+    },
+    {
+      "path": "clean/docs/epics/epic-5-api-token-lifecycle.md",
+      "bytes": 2074,
+      "sha256": "4b2cc86ed548e6a45841904be104be9521e8bd085ac08e171b4d83c6c4e215a3"
+    },
+    {
+      "path": "clean/src/tokens/token-list.tsx",
+      "bytes": 649,
+      "sha256": "b98f086429d20e4a45234b02b1b7c379995699d1078da60f70b710e7abdcf06b"
+    },
+    {
+      "path": "clean/test-artifacts/trace/e2e-trace-summary-epic-5.json",
+      "bytes": 4178,
+      "sha256": "a0283176289d4bcd92d9dab2e81d9dd9a8297d4850d4628efc0e6b3384a874a9"
+    },
+    {
+      "path": "clean/test-artifacts/trace/gate-decision-epic-5.json",
+      "bytes": 800,
+      "sha256": "33a753f4f55b36cc193b2eb63d4fe4ba326b764151f41bdd5aa4c8313668cc82"
+    },
+    {
+      "path": "clean/test-artifacts/trace/traceability-matrix-epic-5.md",
+      "bytes": 14711,
+      "sha256": "81b503ffbc3866c68e44dc01c1af15a3c26159c1a1eabbb2d8c364d17e5180d2"
+    },
+    {
+      "path": "clean/tests/api/credential-lifetime.api.spec.ts",
+      "bytes": 1869,
+      "sha256": "99a85b11cdcab6217544fe8cc46cd954e718837645cfe5187221310f52a21a7b"
+    },
+    {
+      "path": "clean/tests/api/token-revocation.api.spec.ts",
+      "bytes": 2188,
+      "sha256": "c62b894c8163602b29dbf855b94c02bb2dfecc7103995b531f27904e8444fd33"
+    },
+    {
+      "path": "clean/tests/component/token-list.spec.tsx",
+      "bytes": 1122,
+      "sha256": "4758c3a1559ba9a97902b5f994110f26772f37c4b6decb498b505f9730f80c8b"
+    },
+    {
+      "path": "clean/tests/e2e/token-management.spec.ts",
+      "bytes": 1187,
+      "sha256": "2fb4b44f00563cfe7cc67fd117ef5cad118e98ea3b509ecc7f4552b9ac28753a"
+    },
+    {
+      "path": "clean-invocation.json",
+      "bytes": 1171,
+      "sha256": "353bbe3a05c98d0d57a6baf9bf0982b6d83f4348fade1e397a346dbc5b8bb159"
+    },
+    {
+      "path": "clean-result.json",
+      "bytes": 102,
+      "sha256": "993a37b217b318f0eb15d79da0fa5ff6091e3a9b5f18d17dc5ab09fa1fa3384d"
+    },
+    {
+      "path": "clean-stdout.json",
+      "bytes": 672,
+      "sha256": "b91cdad12bc5479a59a24bdd453cbc5c9ec08e2542a39dcac2726f15366b0d93"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/attempt.json",
+      "bytes": 153,
+      "sha256": "9b5aa33e975fff7d21874b5035c0f3ae8cf8f10ff777f303594ec492ff941bb0"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/prompt.txt",
+      "bytes": 7012,
+      "sha256": "00cd4e648300988b5e1d09c3bd9f4cc574aa279ce995153d27aac2fa2b1dc9d3"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/stdout.txt",
+      "bytes": 914,
+      "sha256": "e14dcc1854a6b39e1a1c690f4f3b66213a9c7c2d1bd57ead04e815dafe08e60d"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/trace/e2e-trace-summary-epic-4.json",
+      "bytes": 5700,
+      "sha256": "3242758488cd59bbaffb12ffb378d143aa012e98a30c9571dd9e6ae40613819b"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/trace/gate-decision-epic-4.json",
+      "bytes": 754,
+      "sha256": "fe54016454d2f2bd93f0a4c7554d10b88495fae1a30d176f66bfc9f137a764ba"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/trace/tea-trace-coverage-matrix-epic-4-2026-10-10T03-31-34Z.json",
+      "bytes": 15948,
+      "sha256": "0541c58022338cef1a488c82f33f7b23de7e25948fea84324669f72a0ddd6870"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/attempt-1/trace/traceability-matrix-epic-4.md",
+      "bytes": 16327,
+      "sha256": "0a56187f880453193b8eb377de74f6cfb3c5ecd0220080b9ee5a2f6f9a7a8e0b"
+    },
+    {
+      "path": "seeded/.tea-runs/tea-trace-KF2hMr/run.json",
+      "bytes": 454,
+      "sha256": "b59452f48da82afecc16dbb687f350f73de6f0217088d6d2d6f96c281f46b051"
+    },
+    {
+      "path": "seeded/docs/epics/epic-4-tenant-data-export-and-erasure.md",
+      "bytes": 3517,
+      "sha256": "4fa49faca568106337fc22502c520b53c26c254550a35a157fe42b81b3a7b77a"
+    },
+    {
+      "path": "seeded/src/exports/manifest.ts",
+      "bytes": 610,
+      "sha256": "a77af24e5f21dfe816e94e994d3fe26266298fae54654665e6a69b2ddf1ad819"
+    },
+    {
+      "path": "seeded/test-artifacts/gate-waivers.md",
+      "bytes": 2379,
+      "sha256": "f3463dccc4f2ee1bd89df035367a0b975469f9b4265fc88b6c3491d25e11f3af"
+    },
+    {
+      "path": "seeded/test-artifacts/live-verification-results.json",
+      "bytes": 779,
+      "sha256": "62abccab19fb6883b14e610ef8ba4ab4e55dd72f7b0b1af09c9609fdc10bf509"
+    },
+    {
+      "path": "seeded/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+      "bytes": 6418,
+      "sha256": "a20031a748379de27b63e07b71e812e9344283a1a4dfe2ad671066806d935642"
+    },
+    {
+      "path": "seeded/test-artifacts/trace/gate-decision-epic-4.json",
+      "bytes": 732,
+      "sha256": "6665142604e854bd8c79092e84a72201ed3ce2e11231dafc582acba3bcdcdf7d"
+    },
+    {
+      "path": "seeded/test-artifacts/trace/traceability-matrix-epic-4.md",
+      "bytes": 16327,
+      "sha256": "0a56187f880453193b8eb377de74f6cfb3c5ecd0220080b9ee5a2f6f9a7a8e0b"
+    },
+    {
+      "path": "seeded/tests/api/audit-log.api.spec.ts",
+      "bytes": 1177,
+      "sha256": "5cc4ad123a772d9e75bcc60635d48633439105f42133375b2b47c5252f435611"
+    },
+    {
+      "path": "seeded/tests/api/tenant-export.api.spec.ts",
+      "bytes": 3944,
+      "sha256": "b41e75ddab0ce05e0f9b6c74b141be0d4c1897faac5260c877c8897342d622a0"
+    },
+    {
+      "path": "seeded/tests/e2e/tenant-export.spec.ts",
+      "bytes": 2088,
+      "sha256": "24470b9032a708b30588887cd9522029c8754ea1acf5e91e495a6f2dd8fdeaf1"
+    },
+    {
+      "path": "seeded/tests/unit/export-manifest.spec.ts",
+      "bytes": 832,
+      "sha256": "0a8a1348d215335ccc87a917b3a814b350bdf8fbde74545169ef7278cfbfe9f5"
+    },
+    {
+      "path": "seeded-invocation.json",
+      "bytes": 1402,
+      "sha256": "6235417850e78519fe0436d6e37485fb438e169b4d12752775724f9ff832c921"
+    },
+    {
+      "path": "seeded-result.json",
+      "bytes": 102,
+      "sha256": "984dce0ef1e59e1063296bc3d433bf383a39d893bccf4520d7fd99b920c97533"
+    },
+    {
+      "path": "seeded-stdout.json",
+      "bytes": 676,
+      "sha256": "6e4808244e4cdc2e31bca5b0953353231dac6711f0f0cc4ab76afa904576bf02"
+    }
+  ]
+}

@@ -199,9 +199,9 @@ The original nine-item implementation slice is complete:
 1. Added `test/evals/suite-manifest.json` and `test/schema/eval-result.js`.
 2. Registered fragment selection and review with unchanged thresholds and manifest-to-harness checks.
 3. Added deterministic replay and oracle checks.
-   `test:eval-replay` replays a corpus containing 158 cases: 3 fragment selections, 13 ATDD reports, 10 review verdicts, 14 test-design documents, 15 trace pairs, 20 routing replies, 29 NFR reports, and 54 CI runs.
+   `test:eval-replay` replays a corpus containing 159 cases: 3 fragment selections, 13 ATDD reports, 10 review verdicts, 14 test-design documents, 16 trace pairs, 20 routing replies, 29 NFR reports, and 54 CI runs.
    Some cases assert refusal or missing-artifact behavior and receive no numeric quality score.
-   Of the 158 stored outputs, 6 are real captures, 12 are captured reports, and 140 are constructed.
+   Of the 159 stored outputs, 6 are real captures, 13 are captured reports, and 140 are constructed.
    Expected results come from hand-authored ground truth; parser or scorer changes require an intentional scorer-version change.
 4. Generated and compiled the contracts in `test/contracts/`.
    The original nine contracts could not compile against 0.2.0's HTTP-only target model.

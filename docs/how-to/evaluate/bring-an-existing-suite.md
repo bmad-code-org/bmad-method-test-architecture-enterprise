@@ -5,10 +5,13 @@ description: Use an AgentEvals or promptfoo suite as the evaluation layer, or le
 
 # How to Bring an Existing Suite into Evaluate with TEA
 
-Use this guide when you already grade your target with a framework such as AgentEvals or promptfoo, or when you want a framework Evaluate has not met before.
-Evaluate uses your framework to grade repeatable trials, including seeded defects and held-out probes.
+Tell Evaluate in your coding agent to use the suite you already have, such as AgentEvals or promptfoo.
+Confirm the framework and version; the skill wraps it and uses your checks to grade repeatable trials, including planted defects and held-out probes.
+You get an Evaluate score and a clear failure if the installed framework changes.
+The files and commands below show what your agent normally handles and let you repeat its work.
 
-The mechanism is a `command` evaluator: an executable in the evaluation folder that wraps the framework, plus three files that make its use repeatable.
+The wrapper is a `command` evaluator: an executable in the evaluation folder, plus three files that make its use repeatable.
+This guide also covers a framework Evaluate has not met before.
 
 ## When to Use This
 
@@ -77,18 +80,7 @@ evaluator/
 
 `trajectory.mjs` is the wrapper.
 It reads `{ "sealedBrief", "observations" }` as JSON on standard input, runs the framework over what the target printed, and prints `{ "rows": [...] }`.
-The calling agent in this folder prints its tool calls as the text `trajectory:`, one space and a JSON array, and `reference/weather.json` holds the trajectory the agent must produce:
-
-```json
-[
-  { "role": "user", "content": "Weather in Austin" },
-  {
-    "role": "assistant",
-    "content": "",
-    "tool_calls": [{ "id": "call-1", "type": "function", "function": { "name": "get_weather", "arguments": "{\"city\":\"Austin\"}" } }]
-  }
-]
-```
+In this example, `reference/weather.json` holds the tool-call sequence the agent should produce.
 
 `mapping.json` binds each row key the wrapper prints to a contract oracle and behavior:
 
@@ -118,24 +110,14 @@ The calling agent in this folder prints its tool calls as the text `trajectory:`
 
 `LEARNED.md` records the installed `package@version`, the primary sources the wrapper relies on, and a known pass and a known fail that were executed.
 
-`run` reads the installed version before the first trial, before each launch of the evaluator and after each trial.
-A different version, a missing package or a package that changed mid-run stops the run with exit 12 and seals no record for the affected trial.
+`run` checks that the installed version matches the declared one throughout the trials.
+A missing or changed package stops the run before its results count.
 
 ### 4. Check Version Drift
 
 `check` holds `LEARNED.md` and `frameworks.json` to the same version.
-After changing the declared version to 0.0.8 without touching `LEARNED.md`, `check` and `run` exit 10:
-
-```text
-evaluator/LEARNED.md: [evaluator] evaluator/LEARNED.md records agentevals@0.0.7, and evaluator/frameworks.json declares agentevals@0.0.8; update both together when the dependency is upgraded
-tea-evaluate check: 1 authoring defect(s) in /work/app/evals/calling-agent-tool-use
-```
-
-A framework that is not installed stops `run` with exit 12:
-
-```text
-tea-evaluate run: the installed frameworks do not meet evaluator/frameworks.json, so no trial runs: could not read the installed autoevals: the version probe of autoevals (evaluator/installed-version.mjs) exited 1: autoevals version probe could not be read: autoevals is not installed in a node_modules directory above /work/app/evals/pantry-summary/evaluator; see framework-versions.json (exit 12, /work/app/evals/pantry-summary/runs/20261007T093033842Z-c432c324)
-```
+If it reports a mismatch, ask Evaluate to reconcile those files with the installed version.
+If `run` cannot find the framework, ask the skill to install the declared version.
 
 Install the declared version, or upgrade on purpose.
 An upgrade is a deliberate change, including the one that `npm install` at the `latest` spec makes.
@@ -176,19 +158,8 @@ An assertion with no metric, or with a metric that `mapping.json` does not name,
 The wrapper runs promptfoo over the target's captured output and maps each graded assertion to a `pass` or `fail` row.
 It admits assertion types that run no adopter code and call no model: `contains`, `icontains`, `contains-all`, `contains-any`, `icontains-all`, `icontains-any`, `equals`, `starts-with`, `regex` and `is-json`, each also with a `not-` prefix.
 Any other type stops the trial.
-With a `javascript` assertion in `asserts.yaml`, `check` still passes and `run` exits 12:
-
-```text
-tea-evaluate run: trial-clean-1 yields no record: the evaluator evaluator/promptfoo.mjs exited 1, so its answer is not read (exit 12, /work/app/evals/promptfoo-summary/runs/20261007T093023294Z-453ad331)
-```
-
-The evaluator's `stderr` in the run folder, `evaluator/clean/trial-1.stderr`, names the cause:
-
-```text
-Error: promptfoo assertion type "javascript" is refused: only assertions that run no adopter code and call no model are admitted (contains, icontains, contains-all, contains-any, icontains-all, icontains-any, equals, starts-with, regex, is-json, each also with a not- prefix); an assertion that needs code belongs in a command evaluator you own
-```
-
-An assertion that needs code belongs in a `command` evaluator you write yourself, where a crash exits non-zero and stops the trial.
+If you use a `javascript` assertion, ask Evaluate to put that code in a `command` evaluator you own.
+The promptfoo wrapper accepts only the model-free assertion types listed above.
 
 ### 6. Learn a Framework the Skill Has Not Met
 
@@ -201,20 +172,14 @@ For a framework with no starter, the skill learns it before it writes the wrappe
 5. It fills `evaluator/LEARNED.md` with the installed version, each fact with its source, the executed output and any claim that execution contradicted.
 6. It maps each framework result to a row key in `evaluator/mapping.json` and writes the wrapper.
 
-The executed example is a real command, so you can reproduce it.
-For autoevals the skill runs `ExactMatch` over a known pass and a known fail:
-
-```bash
-node --input-type=module -e "import {ExactMatch} from 'autoevals'; const expected='Summary for List pantry: apples, pears\n'; for (const [label,output] of [['known-pass',expected],['known-fail','Summary for List pantry: apples\n']]) { const result=await ExactMatch({output,expected}); console.log(JSON.stringify({label,input:{output,expected},result})); }"
-```
-
-```text
-{"label":"known-pass","input":{"output":"Summary for List pantry: apples, pears\n","expected":"Summary for List pantry: apples, pears\n"},"result":{"name":"ExactMatch","score":1}}
-{"label":"known-fail","input":{"output":"Summary for List pantry: apples\n","expected":"Summary for List pantry: apples, pears\n"},"result":{"name":"ExactMatch","score":0}}
-```
+For example, the skill verifies that autoevals `ExactMatch` scores one known pass as 1 and one known fail as 0.
+It records the executable check and its output in `LEARNED.md` for you to review.
 
 A framework result that carries no grade says only that the framework could not judge the output.
 The wrapper writes no row for it and exits non-zero, so the run stops with exit 12 and a framework error does not count against the target.
+
+The wrapper is ready once the version matches and the known pass and fail produce the expected grades.
+Next, run the target trials and read the score.
 
 ### 7. Run and Score
 

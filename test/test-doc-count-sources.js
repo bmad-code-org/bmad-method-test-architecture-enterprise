@@ -247,10 +247,14 @@ check('the counts of cases that produce a number and of cases that carry capture
     cases.filter((entry) => entry.suiteId === 'test-review' && carriesBytes(entry)).length,
   );
   assert.strictEqual(source.REPLAY_CI_CAPTURED_BYTES, cases.filter((entry) => entry.suiteId === 'ci' && carriesBytes(entry)).length);
+  assert.strictEqual(source.REPLAY_TRACE_CAPTURED_BYTES, cases.filter((entry) => entry.suiteId === 'trace' && carriesBytes(entry)).length);
   assert.strictEqual(
-    source.REPLAY_ATDD_CAPTURED_BYTES + source.REPLAY_TEST_REVIEW_CAPTURED_BYTES + source.REPLAY_CI_CAPTURED_BYTES,
+    source.REPLAY_ATDD_CAPTURED_BYTES +
+      source.REPLAY_TEST_REVIEW_CAPTURED_BYTES +
+      source.REPLAY_CI_CAPTURED_BYTES +
+      source.REPLAY_TRACE_CAPTURED_BYTES,
     source.REPLAY_CAPTURED_BYTES,
-    'the three suites that carry captured bytes account for every such case',
+    'the suites that carry captured bytes account for every such case',
   );
   assert.strictEqual(
     source.REPLAY_CI_FULL_AND_MINIMAL,
