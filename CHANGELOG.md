@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tea-framework` runs packaged framework and CI setup with explicit scope and operation, resolved configuration, bounded vendor execution, retained prompts and streams, JSON and Markdown results, and checks against the saved setup journal before reporting completion. Create reruns the frozen test commands with the existing process supervisor, project environment, and selected timeout.
+
+### Fixed
+
+- Framework and CI Create now require the Git worktree before activation or framework writes. The Codex evaluation exposed a run that skipped this existing CI prerequisite; the user CLI also rejects it before model execution.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.

@@ -91,7 +91,8 @@ function replayProblems(capture, currentSources = sourceDigests()) {
   return problems;
 }
 
-function captureScenario(scenario, { run = spawnSync } = {}) {
+function captureScenario(scenario, { run = spawnSync, agent = 'codex' } = {}) {
+  if (!['codex', 'claude'].includes(agent)) throw new Error('Alias capture agent must be codex or claude');
   const capturedSources = sourceDigests();
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-setup-alias-'));
   for (const name of ['bmad-testarch-ci', 'bmod-tea'])
@@ -142,7 +143,7 @@ function captureScenario(scenario, { run = spawnSync } = {}) {
     '--skill-root',
     'skills/bmad-testarch-ci',
     '--agent',
-    'claude',
+    agent,
     '--capability',
     'command-execution',
     '--timeout-ms',
