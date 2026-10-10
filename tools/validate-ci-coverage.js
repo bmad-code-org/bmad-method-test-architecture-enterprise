@@ -318,6 +318,11 @@ function nestedNpmRuns(command) {
       inWord = true;
       continue;
     }
+    if (char === '&' && (command[offset - 1] === '>' || command[offset - 1] === '<' || command[offset + 1] === '>')) {
+      word += char;
+      inWord = true;
+      continue;
+    }
     if (char === '&' || char === '|') {
       const separator = command[offset + 1] === char ? char + char : char;
       finishCommand(separator);

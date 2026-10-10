@@ -151,7 +151,7 @@ const lowGaps = uncoveredRequirements.filter((req) => req.priority === 'P3');
 
 ### 2. Coverage Heuristics Checks
 
-Use the heuristics inventory from Step 2 and mapped criteria from Step 3 to flag common coverage blind spots:
+Use the heuristics inventory from Step 2 and mapped criteria from Step 3 to flag common coverage blind spots. Carry Step 2's endpoint inventory through unchanged: endpoint reachability comes from API calls and response assertions, while missing permission-denied assertions appear in the auth gap list.
 
 ```javascript
 const endpointCoverageGaps = coverageHeuristics?.endpoints_without_tests || [];

@@ -237,6 +237,12 @@ function checkNestedScriptNamesAndMaskedChains() {
   check(!covered().has('test:unit.js') && covered().has('test:setup'), 'only the last statement should gate CI');
   scripts['test:root'] = 'npm run test:unit.js && npm run test:setup';
   check(covered().has('test:unit.js') && covered().has('test:setup'), 'an unmasked && chain should gate CI');
+  scripts['test:root'] = 'npm run test:unit.js > log 2>&1';
+  check(covered().has('test:unit.js'), 'a file-descriptor redirect hid a nested script from CI coverage');
+  scripts['test:root'] = 'npm run test:unit.js &> log';
+  check(covered().has('test:unit.js'), 'a combined output redirect hid a nested script from CI coverage');
+  scripts['test:root'] = 'npm run test:unit.js 2>&1 &';
+  check(!covered().has('test:unit.js'), 'a background command with redirection counted as a CI gate');
 }
 
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {

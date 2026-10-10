@@ -84,7 +84,7 @@ Resolve the oracle in this order:
 
 Persist `oracleLedger` in this step's progress YAML frontmatter as an array of `{id, requirement, priority, source}` records: one row per item with its stable ID, requirement text, priority, and source reference. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
 
-For local source files, read numbered lines before recording each ledger source reference. Cite the line that contains that item's ID and priority. Do not advance line numbers by a fixed interval; headings and criteria may span different numbers of lines.
+For local source files, read numbered lines before recording each ledger source reference. When the source declares an item's ID and priority, cite that line. For an inferred item, cite numbered source lines that support its requirement; the generated ID and priority stay in the ledger. Check each source line independently because headings and criteria may span different numbers of lines.
 
 Record the resolved oracle metadata in step output/frontmatter using consistent keys:
 

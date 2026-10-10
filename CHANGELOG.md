@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
 - Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
-- Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites outcome assertions once, including status codes that prove the stated result. Source references use numbered lines, and coverage totals are checked against mapped rows before the gate; the gate uses execution reports when available.
+- Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.
 - Trace evaluation removes incomplete attempt directories after capture errors and preserves staging errors during retries.
-- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names, and excludes commands whose execution or failure can be hidden by shell control flow.
+- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names and output redirection, and excludes commands whose execution or failure can be hidden by shell control flow.
 - The test guide's Test Review command now runs only the Test Review CLI suite; `test:cli` still runs both Test Review and Trace CLI suites.
 - Trace preserves source priorities through mapping and coverage arithmetic. The CLI freezes source criteria before agent execution, validates the saved oracle ledger and live evidence, and checks outputs before publication. It rejects malformed artifacts and missing runtime evidence, confines reports to the current attempt, and restores prior reports after failed writes. Mapping records each accepted test declaration and its assertion anchors.
 
