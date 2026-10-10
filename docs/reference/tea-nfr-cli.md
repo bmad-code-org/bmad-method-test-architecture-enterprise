@@ -82,10 +82,6 @@ If replacement fails, it restores the previous files.
 Publication refuses symlink or hardlink aliases onto sources or deliverables.
 Source integrity checks detect file modifications made during execution.
 
-Auditors review document interpretations and audit judgments.
-Source quotations and gate statuses keep findings inspectable.
-A report with four N/A domains indicates that no automated criteria applied.
-
 ## Exit codes
 
 | Code | Meaning                                                                                  |
@@ -95,17 +91,4 @@ A report with four N/A domains indicates that no automated criteria applied.
 | 2    | Invalid configuration, inputs, output collision, agent readiness or publication failure. |
 | 3    | Vendor failure/timeout, incomplete or invalid generated artifacts, or source mutation.   |
 
-For evaluator runs, `node test/eval-nfr.js --agent codex --runs 2 --artifacts-dir /tmp/nfr-observations --json /tmp/nfr-result.json` retains staged inputs, generated reports, raw observations, and provenance before cleanup.
-Single repetitions report stability as unmeasured.
-
-## Retained Codex observations
-
-The pinned original public calls at source `a8225395571b026f194aefc696ca0a18922bf919` returned exit 3.
-The clean run exposed a parser rejection of `PASS ✅`.
-The gapped run exposed rejection of source-backed fenced quotations.
-Original results and raw streams remain under `test/results/codex-nfr/public-cli-original/`.
-
-Controlled parser replays reuse those report bytes with adapted `requestId` and `supplied_project_root` fields.
-The repaired parser accepts the clean report as PASS and publishes the gapped report as FAIL with gate exit 1.
-These replays run without model calls or skill modifications.
-Each original case has one repetition, so stability remains unmeasured.
+The [NFR guide](../how-to/workflows/run-nfr-assess.md) describes the audit workflow.
