@@ -105,6 +105,10 @@ if (mode.startsWith('manifest-') && mode !== 'manifest-omitted') {
   if (mode === 'manifest-stale-cap') summary.live_evidence.freshness = 'stale';
   if (mode === 'manifest-input-mutation') fs.writeFileSync(livePath, '{}');
 }
+if (mode === 'manifest-invalid-failure-ignored') {
+  summary.live_evidence.failed = 0;
+  summary.live_evidence.fresh_failed = 0;
+}
 if (mode === 'fresh-invalid-count') summary.live_evidence = { requirements_live_only: 0, freshness: 'fresh', failed: -1 };
 if (mode === 'source-priority-drift') {
   summary.coverage.priority_breakdown.P1 = summary.coverage.priority_breakdown.P0;

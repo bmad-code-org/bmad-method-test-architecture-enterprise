@@ -249,6 +249,10 @@ try {
       const mutation = run('manifest-input-mutation', ['--live-results', 'live.json']);
       assert.equal(mutation.status, 3, mutation.stderr);
       assert.match(mutation.payload.reason, /changed a supplied input/);
+      write([{ id: '1.1-LIVE-003', status: 'fail' }]);
+      const ignoredInvalidFailure = run('manifest-invalid-failure-ignored', ['--live-results', 'live.json']);
+      assert.equal(ignoredInvalidFailure.status, 3, ignoredInvalidFailure.stderr);
+      assert.match(ignoredInvalidFailure.payload.reason, /frozen supplied manifest/);
     } finally {
       fs.unlinkSync(live);
     }
