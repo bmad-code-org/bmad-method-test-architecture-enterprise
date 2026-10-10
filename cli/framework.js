@@ -65,7 +65,7 @@ function main(argv = process.argv) {
     .exitOverride()
     .configureOutput({ writeErr: () => {} });
   addAgentOptions(program);
-  program.options.find((option) => option.long === '--retries').default('0');
+  program.setOptionValueWithSource('retries', '0', 'default');
   try {
     program.parse(argv);
   } catch (error) {
@@ -134,6 +134,7 @@ function main(argv = process.argv) {
     fs.writeFileSync(path.join(execution.runDir, 'result.json'), serialized);
     fs.writeFileSync(path.join(execution.runDir, 'report.md'), resultReport(result));
     if (jsonPath) {
+      protectResultPath(request, jsonPath, readJournal(projectPath(projectRoot, request.journalPath))?.data);
       fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
       fs.writeFileSync(jsonPath, serialized);
     }
@@ -158,8 +159,13 @@ function main(argv = process.argv) {
       fs.writeFileSync(path.join(error.runDir, 'result.json'), serialized);
       fs.writeFileSync(path.join(error.runDir, 'report.md'), resultReport(failureResult));
       if (jsonPath) {
-        fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
-        fs.writeFileSync(jsonPath, serialized);
+        try {
+          protectResultPath(request, jsonPath, readJournal(projectPath(request.projectRoot, request.journalPath))?.data);
+          fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
+          fs.writeFileSync(jsonPath, serialized);
+        } catch (publicationError) {
+          process.stderr.write(`tea-framework: result publication refused: ${publicationError.message}\n`);
+        }
       }
       process.stdout.write(serialized);
     }

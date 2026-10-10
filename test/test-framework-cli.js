@@ -35,15 +35,36 @@ fs.mkdirSync('tests', { recursive: true });
 fs.mkdirSync('.github/workflows', { recursive: true });
 fs.writeFileSync('tests/README.md', '# Tests\n');
 fs.writeFileSync('tests/smoke.test.cjs', "require('node:test')('smoke', () => require('node:assert/strict').equal(1 + 1, 2));\n");
-fs.writeFileSync('.github/workflows/test.yml', 'name: Tests\non: push\njobs: {}\n');
+fs.writeFileSync('.github/workflows/test.yml', 'name: Tests\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: node --test\n');
 const failed = mode === 'retry' && !fs.existsSync('first-attempt.txt');
-const operation = prompt.includes('headless validate request') ? 'validate' : 'create';
+const operation = prompt.includes('headless validate request') ? 'validate' : prompt.includes('headless edit request') ? 'edit' : 'create';
+const selected = prompt.match(/Exact input artifacts: (\[[^\n]*\])\./);
+const inputs = selected ? JSON.parse(selected[1]).map(file=>path.relative(process.cwd(),file)) : [];
 let text = '---\nrun_id: command-test-run\nworkflowStatus: '+(failed?'in-progress':'completed')+'\nsetup_scope: '+scope+'\nsetup_operation: '+operation+'\nhooks_started: []\nhooks_completed: []\nphase_status:\n  framework: completed\n  ci: completed\nphase_targets:\n  framework: [tests/smoke.test.cjs]\n  ci: [.github/workflows/test.yml]\ncontract:\n  test_commands: [node --test]\n  pipeline_target: .github/workflows/test.yml\n';
 if (operation === 'validate') {
  const report = path.join(path.dirname(journalPath), 'validation.md');
- fs.writeFileSync(report, '# FAIL\nMissing assertions\n');
+ fs.writeFileSync(report, '---\nrun_id: command-test-run\nstatus: FAIL\nvalidated_artifacts: '+JSON.stringify(inputs)+'\n---\n# FAIL\nMissing assertions\n');
+ text = text.replace('framework: [tests/smoke.test.cjs]', 'framework: '+JSON.stringify(inputs));
  text += 'validation_reports:\n  framework: '+JSON.stringify(report)+'\n';
 }
+if(operation==='edit') {
+ text=text.replace('framework: [tests/smoke.test.cjs]', 'framework: '+JSON.stringify(inputs));
+ const digests=JSON.parse(prompt.match(/input digests \(including permissions\): (\{[^\n]*\})\./)[1]);
+ const outcomes=inputs.map(file=>{const absolute=path.resolve(file),before=digests[absolute];if(mode==='edit-applied')fs.appendFileSync(file,'\n// Requested edit applied.\n');const after=require('crypto').createHash('sha256').update(String(fs.statSync(file).mode)).update(fs.readFileSync(file)).digest('hex');return {path:file,status:mode==='edit-applied'?'applied':'noop',before_sha256:before,after_sha256:after,reason:'The selected artifact already satisfies the requested change.'};});
+ text+='edit_applied:\n  framework: '+JSON.stringify(outcomes)+'\n';
+}
+if(mode==='empty-ci') fs.writeFileSync('.github/workflows/test.yml','name: Tests\non: push\njobs: {}\n');
+if(mode==='ci-no-test') fs.writeFileSync('.github/workflows/test.yml','name: Tests\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo done\n');
+if(mode==='multi-summary') {fs.writeFileSync('tests/failing.test.cjs',"require('node:test')('broken',()=>require('node:assert/strict').equal(1,2));\n");text=text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(['node --test tests/smoke.test.cjs; node --test tests/failing.test.cjs || true']));}
+if(mode==='npm-prefix') {fs.mkdirSync('packages/api/tests',{recursive:true});fs.writeFileSync('packages/api/tests/pass.cjs',"require('node:test')('api',()=>{});\n");fs.writeFileSync('packages/api/package.json',JSON.stringify({scripts:{test:'node --test tests/pass.cjs'}}));text=text.replace('test_commands: [node --test]', 'test_commands: [npm --prefix packages/api test]');}
+if(mode==='validate-dir') {fs.unlinkSync(path.join(path.dirname(journalPath),'validation.md'));fs.mkdirSync(path.join(path.dirname(journalPath),'validation.md'));}
+if(mode==='validate-stale') fs.utimesSync(path.join(path.dirname(journalPath),'validation.md'),new Date(0),new Date(0));
+if(mode==='validate-foreign') {const file=path.join(path.dirname(journalPath),'validation.md');fs.writeFileSync(file,fs.readFileSync(file,'utf8').replace('command-test-run','foreign-run'));}
+if(mode==='validate-scope') {const file=path.join(path.dirname(journalPath),'validation.md');fs.writeFileSync(file,fs.readFileSync(file,'utf8').replace('validated_artifacts: '+JSON.stringify(inputs),'validated_artifacts: [tests/smoke.test.cjs]'));}
+if(mode==='edit-unrelated') text=text.replace('framework: '+JSON.stringify(inputs),'framework: [tests/smoke.test.cjs]').replace(/edit_applied:[\s\S]*/,'');
+if(mode==='edit-unrecorded') text=text.replace(/edit_applied:[\s\S]*/,'');
+if(mode==='late-failure') {fs.linkSync('package.json','result.json');process.stderr.write('transport interruption');process.exit(1);}
+if(mode.startsWith('python-')) {fs.writeFileSync('tests/test_demo.py',"import unittest\nclass Example(unittest.TestCase):\n def test_example(self):\n  self.assertEqual(1, "+(mode==='python-fail'?'2':'1')+")\n"+(mode==='python-skip'?"Example.test_example=unittest.skip('pending')(Example.test_example)\n":""));text=text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify([process.argv[3]+' -B -m unittest discover -s tests -p test_demo.py']));text=text.replace('framework: [tests/smoke.test.cjs]','framework: [tests/test_demo.py]');}
 if (mode === 'replace-target') {fs.writeFileSync('tests/new.test.cjs', "require('node:test')('new',()=>{});\n");text=text.replace('tests/smoke.test.cjs]', 'tests/new.test.cjs]');}
 if (mode === 'fake-native') text = text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(["node -e \"console.log('x;pytest 1 passed')\""]));
 if (mode === 'masked-failure') {fs.writeFileSync('tests/failing.test.cjs', "require('node:test')('broken',()=>require('node:assert/strict').equal(1,2));\n");text=text.replace('test_commands: [node --test]', 'test_commands: '+JSON.stringify(['node --test || echo masked']));}
@@ -310,4 +331,88 @@ test('shell masking cannot turn native assertion failures into completed setup',
   assert.equal(value.verification[0].passedTests, 1);
   assert.equal(value.verification[0].failedTests, 1);
   assert.match(value.issues.join('\n'), /native runner reports failed/);
+});
+
+test('CI completion requires runnable pipeline jobs that execute the frozen test command', (t) => {
+  for (const mode of ['empty-ci', 'ci-no-test']) {
+    const f = fixture(t);
+    const result = f.run([...f.agent(mode), '--scope', 'both']);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(JSON.parse(result.stdout).issues.join('\n'), /Pipeline has no runnable/);
+  }
+});
+
+test('every native Node summary contributes failures even when a later suite is shell-masked', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('multi-summary'));
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.verification[0].passedTests, 1);
+  assert.equal(value.verification[0].failedTests, 1);
+  assert.equal(value.verification[0].summaryComplete, true);
+  assert.match(value.issues.join('\n'), /native runner reports failed/);
+});
+
+test('npm prefix resolves a passing subproject native runner through the public CLI', (t) => {
+  const f = fixture(t);
+  const result = f.run(f.agent('npm-prefix'));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.completed, true);
+  assert.equal(value.verification[0].runner, 'node-test');
+  assert.equal(value.verification[0].passedTests, 1);
+});
+
+test('Validate rejects directories, stale reports, foreign run ownership and unrelated scope', (t) => {
+  for (const mode of ['validate-dir', 'validate-stale', 'validate-foreign', 'validate-scope']) {
+    const f = fixture(t);
+    const result = f.run([...f.agent(mode), '--operation', 'validate', '--input', 'agent.cjs']);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.equal(JSON.parse(result.stdout).completed, false);
+    assert.match(JSON.parse(result.stdout).issues.join('\n'), /Validation report/);
+  }
+});
+
+test('selected Edit targets require an actual recorded change or an explicit no-op', (t) => {
+  for (const mode of ['edit-applied', 'edit-noop', 'edit-unrelated', 'edit-unrecorded']) {
+    const f = fixture(t);
+    fs.writeFileSync(path.join(f.root, 'selected.config.cjs'), 'module.exports = {};\n');
+    fs.writeFileSync(path.join(f.root, 'instructions.md'), 'Add the requested config comment.\n');
+    const result = f.run([...f.agent(mode), '--operation', 'edit', '--input', 'selected.config.cjs', '--instructions', 'instructions.md']);
+    assert.equal(result.status, ['edit-applied', 'edit-noop'].includes(mode) ? 0 : 1, result.stdout + result.stderr);
+    const value = JSON.parse(result.stdout);
+    if (mode === 'edit-applied') assert.match(fs.readFileSync(path.join(f.root, 'selected.config.cjs'), 'utf8'), /Requested edit applied/);
+    if (mode === 'edit-unrelated') assert.match(value.issues.join('\n'), /exact selected artifacts/);
+    if (mode === 'edit-unrecorded') assert.match(value.issues.join('\n'), /no verified applied change/);
+  }
+});
+
+test('transport failure result publication preserves a late hard-linked package manifest with zero default retries', (t) => {
+  const f = fixture(t);
+  const original = '{"name":"preserve-package","private":true}\n';
+  fs.writeFileSync(path.join(f.root, 'package.json'), original);
+  const result = f.run([...f.agent('late-failure'), '--json', 'result.json']);
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.equal(fs.readFileSync(path.join(f.root, 'package.json'), 'utf8'), original);
+  assert.match(result.stderr, /result publication refused/);
+  const value = JSON.parse(result.stdout);
+  const run = JSON.parse(fs.readFileSync(path.join(value.runDirectory, 'run.json')));
+  assert.equal(run.attempts.length, 1);
+  assert.equal(fs.existsSync(path.join(value.runDirectory, 'attempt-2')), false);
+});
+
+test('current public completion recognizer executes real unittest successes, failures and skipped-only results', (t) => {
+  const python = ['python3', 'python'].find((candidate) => spawnSync(candidate, ['--version'], { timeout: 5000 }).status === 0);
+  assert.ok(python, 'Native completion requires a Python interpreter');
+  for (const mode of ['python-pass', 'python-fail', 'python-skip']) {
+    const f = fixture(t);
+    const result = f.run([...f.agent(mode), '--agent-arg', python]);
+    assert.equal(result.status, mode === 'python-pass' ? 0 : 1, result.stdout + result.stderr);
+    const value = JSON.parse(result.stdout);
+    assert.equal(value.completed, mode === 'python-pass');
+    assert.equal(value.verification[0].runner, 'unittest');
+    assert.equal(value.verification[0].passedTests, mode === 'python-pass' ? 1 : 0);
+    assert.equal(value.verification[0].failedTests, mode === 'python-fail' ? 1 : 0);
+    assert.match(fs.readFileSync(value.verification[0].stderr, 'utf8'), /Ran 1 test/);
+  }
 });

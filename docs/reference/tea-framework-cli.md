@@ -9,6 +9,9 @@ description: Run test framework and CI setup without an interactive chat
 Choose framework setup, CI setup, or both, then select Create, Resume, Validate, or Edit.
 It keeps the prompt and agent output for each attempt and checks the skill's saved journal before reporting completion.
 Create also reruns the frozen test commands through the process supervisor.
+CI completion requires a pipeline with runnable jobs that invoke a frozen test command.
+Every native summary contributes its failure and cancellation counts, including separate suites in one shell command.
+Package scripts resolve from their selected directory, including `npm --prefix` subprojects.
 
 ```bash
 npm install -g bmad-method-test-architecture-enterprise
@@ -47,6 +50,9 @@ Resume restores the saved scope and original Create, Edit, or Validate operation
 Omit new input and instruction flags when resuming.
 Validate completes its report even when that report contains failing checks.
 Read the report's findings before using the validated artifacts.
+Completion requires a fresh, nonempty report owned by the current journal and covering the exact selected artifacts.
+Resume preserves the reserved report and its original ownership.
+Edit accounts for each selected target through an applied change or an explicit no-op reason.
 
 ## Configuration and options
 
@@ -74,6 +80,7 @@ Framework and CI customizations keep their existing scope and hook rules.
 | `--no-use-pactjs-utils`                      | Disable the optional Pact utilities                                             |
 
 Input and output paths stay inside the selected project, including through symlinks.
+Result publication checks protected inputs again after agent execution, including when a failed run writes its diagnostic result.
 An explicit retry retains the previous attempt and requests Resume when a shared journal exists.
 The journal's hook ledger prevents repeating completed hooks.
 

@@ -22,7 +22,10 @@ function fixture(t) {
     "require('node:test')('smoke', () => require('node:assert/strict').equal(1 + 1, 2));\n",
   );
   fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.github', 'workflows', 'test.yaml'), 'name: tests\n');
+  fs.writeFileSync(
+    path.join(root, '.github', 'workflows', 'test.yaml'),
+    'name: tests\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: node --test\n',
+  );
   const config = { configSnapshot: { modules: { tea: { test_artifacts: '{project-root}/test-artifacts' } } } };
   const journalPath = path.join(root, 'test-artifacts', 'framework', 'setup-run-progress.md');
   function journal(overrides = {}) {
@@ -38,6 +41,15 @@ function fixture(t) {
       contract: { test_commands: ['node --test'], pipeline_target: '.github/workflows/test.yaml' },
       ...overrides,
     };
+    if (state.setup_operation === 'create' && state.contract?.test_commands)
+      fs.writeFileSync(
+        path.join(root, '.github/workflows/test.yaml'),
+        yaml.dump({
+          name: 'tests',
+          on: 'push',
+          jobs: { test: { 'runs-on': 'ubuntu-latest', steps: state.contract.test_commands.map((command) => ({ run: command })) } },
+        }),
+      );
     fs.writeFileSync(journalPath, `---\n${yaml.dump(state)}---\n# Setup\n`);
   }
   const prepare = (options = {}) =>
@@ -71,7 +83,32 @@ test('agent success without a new journal cannot reuse previous Create completio
 test('Resume restores saved both scope and original Edit operation', (t) => {
   const f = fixture(t);
   assert.throws(() => f.prepare({ operation: 'resume' }), /Resume requires/);
-  f.journal({ setup_operation: 'edit' });
+  const target = 'tests/smoke.test.cjs';
+  const digest = createHash('sha256')
+    .update(String(fs.statSync(path.join(f.root, target)).mode))
+    .update(fs.readFileSync(path.join(f.root, target)))
+    .digest('hex');
+  const pipeline = '.github/workflows/test.yaml';
+  const pipelineDigest = createHash('sha256')
+    .update(String(fs.statSync(path.join(f.root, pipeline)).mode))
+    .update(fs.readFileSync(path.join(f.root, pipeline)))
+    .digest('hex');
+  f.journal({
+    setup_operation: 'edit',
+    phase_targets: { framework: [target], ci: [pipeline] },
+    edit_applied: {
+      framework: [{ path: target, status: 'noop', before_sha256: digest, after_sha256: digest, reason: 'Already satisfies the request.' }],
+      ci: [
+        {
+          path: pipeline,
+          status: 'noop',
+          before_sha256: pipelineDigest,
+          after_sha256: pipelineDigest,
+          reason: 'Already satisfies the request.',
+        },
+      ],
+    },
+  });
   const request = f.prepare({ operation: 'resume', scope: 'ci' });
   assert.equal(request.scope, 'both');
   assert.equal(request.savedOperation, 'edit');
@@ -100,13 +137,16 @@ test('unfinished hook, mismatched scope and missing targets prevent completion',
 
 test('Validate completes with a failing quality report while requiring that report', (t) => {
   const f = fixture(t);
-  fs.writeFileSync(path.join(f.root, 'test-artifacts/framework/validation.md'), '# FAIL\nObserved missing tests.\n');
   const request = f.prepare({ operation: 'validate', scope: 'framework', input: ['tests'] });
   f.journal({
     setup_scope: 'framework',
     setup_operation: 'validate',
     validation_reports: { framework: 'test-artifacts/framework/validation.md' },
   });
+  fs.writeFileSync(
+    path.join(f.root, 'test-artifacts/framework/validation.md'),
+    '---\nrun_id: run-1\nstatus: FAIL\nvalidated_artifacts: [tests]\n---\n# FAIL\nObserved missing tests.\n',
+  );
   assert.equal(inspectCompletion(request).completed, true);
   fs.unlinkSync(path.join(f.root, 'test-artifacts/framework/validation.md'));
   assert.equal(inspectCompletion(request).completed, false);
@@ -298,4 +338,86 @@ test('Resume preserves reserved Validate report and confirmed Edit request scope
   const edit = f.prepare({ operation: 'resume' });
   f.journal({ setup_scope: 'framework', setup_operation: 'edit', edit_requests: { framework: 'Replace every test' } });
   assert.match(inspectCompletion(edit).issues.join('\n'), /edit_requests.framework/);
+});
+
+test('supported CI platforms require an executable job wired to the frozen test command', (t) => {
+  const command = 'node --test tests/smoke.test.cjs';
+  for (const [platform, file, pipeline] of [
+    [
+      'github-actions',
+      '.github/workflows/test.yml',
+      { name: 'Tests', on: 'push', jobs: { test: { 'runs-on': 'ubuntu-latest', steps: [{ run: command }] } } },
+    ],
+    ['gitlab-ci', '.gitlab-ci.yml', { test: { script: [command] } }],
+    [
+      'circle-ci',
+      '.circleci/config.yml',
+      {
+        version: 2.1,
+        jobs: { test: { docker: [{ image: 'node:24' }], steps: [{ run: command }] } },
+        workflows: { tests: { jobs: ['test'] } },
+      },
+    ],
+    ['azure-devops', 'azure-pipelines.yml', { trigger: ['main'], pool: { vmImage: 'ubuntu-latest' }, steps: [{ script: command }] }],
+    [
+      'harness',
+      '.harness/test.yaml',
+      {
+        pipeline: {
+          name: 'Tests',
+          identifier: 'tests',
+          stages: [{ stage: { type: 'CI', spec: { execution: { steps: [{ step: { type: 'Run', spec: { command } } }] } } } }],
+        },
+      },
+    ],
+    ['jenkins', 'Jenkinsfile', "pipeline { agent any; stages { stage('Tests') { steps { sh '" + command + "' } } } }"],
+  ]) {
+    const f = fixture(t);
+    const request = f.prepare();
+    fs.mkdirSync(path.dirname(path.join(f.root, file)), { recursive: true });
+    fs.writeFileSync(path.join(f.root, file), typeof pipeline === 'string' ? pipeline : yaml.dump(pipeline));
+    f.journal({
+      phase_targets: { framework: ['tests'], ci: [file] },
+      contract: { ci_platform: platform, pipeline_target: file, test_commands: [command] },
+    });
+    const result = inspectCompletion(request);
+    assert.equal(result.completed, true, platform + ': ' + result.issues.join('\n'));
+    fs.writeFileSync(
+      path.join(f.root, file),
+      typeof pipeline === 'string'
+        ? pipeline.replace(command, 'echo done')
+        : yaml.dump(JSON.parse(JSON.stringify(pipeline).replaceAll(command, 'echo done'))),
+    );
+    assert.match(inspectCompletion(request).issues.join('\n'), /no runnable step for a frozen test command/, platform);
+  }
+});
+
+test('Resume preserves completed Edit outcomes and their original artifact digests', (t) => {
+  const f = fixture(t);
+  const file = 'tests/smoke.test.cjs';
+  const digest = () =>
+    createHash('sha256')
+      .update(String(fs.statSync(path.join(f.root, file)).mode))
+      .update(fs.readFileSync(path.join(f.root, file)))
+      .digest('hex');
+  const before = digest();
+  const outcome = {
+    path: file,
+    status: 'noop',
+    before_sha256: before,
+    after_sha256: before,
+    reason: 'Already satisfies the selected edit.',
+  };
+  const state = {
+    setup_scope: 'framework',
+    setup_operation: 'edit',
+    phase_targets: { framework: [file] },
+    edit_applied: { framework: [outcome] },
+  };
+  f.journal(state);
+  const request = f.prepare({ operation: 'resume' });
+  assert.equal(inspectCompletion(request).completed, true);
+  fs.appendFileSync(path.join(f.root, file), '\n// An unrelated change during Resume.\n');
+  f.journal({ ...state, edit_applied: { framework: [{ ...outcome, status: 'applied', after_sha256: digest() }] } });
+  assert.match(inspectCompletion(request).issues.join('\n'), /changed a completed Edit outcome/);
 });
