@@ -29,7 +29,7 @@ function inventory(projectRoot, values) {
     const target = projectPath(projectRoot, value, 'supplied source');
     const link = fs.lstatSync(lexical);
     const stat = fs.statSync(target);
-    topology.push([lexical, link.isSymbolicLink() ? fs.readlinkSync(lexical) : '', target, stat.dev, stat.ino]);
+    topology.push([lexical, link.isSymbolicLink() ? fs.readlinkSync(lexical) : '', target, stat.dev, stat.ino, link.mode, stat.mode]);
     if (stat.isFile()) files.add(target);
     else if (stat.isDirectory()) {
       directories.add(target);

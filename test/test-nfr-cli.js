@@ -7,6 +7,7 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { publishArtifacts, protectSources } = require('../cli/lib/workflow-publication');
 const cli = path.join(__dirname, '..', 'cli', 'nfr.js');
+const { readNativeArchive, stageNativeCase, digest } = require('./lib/nfr-native-archive');
 /** A consuming project supplies requirements, implementation and actual measured evidence. */
 function project(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-nfr-cli-'));
@@ -26,7 +27,7 @@ function execute(root, mode = 'pass', args = []) {
   const agent = path.join(root, 'agent.cjs');
   fs.writeFileSync(
     agent,
-    `const fs=require('node:fs'),path=require('node:path');const prompt=fs.readFileSync(0,'utf8');const mode=process.argv[2];if(mode==='transport'){process.stdout.write('partial raw');process.stderr.write('vendor failed');process.exit(1);}if(mode==='timeout'){setTimeout(()=>{},5000);return;}if(mode==='missing'){process.stdout.write('done');process.exit(0);}const audit=require(${JSON.stringify(path.join(__dirname, 'lib', 'nfr-cli-fixture'))}).buildAudit(prompt,mode);fs.mkdirSync(path.dirname(audit.reportPath),{recursive:true});fs.writeFileSync(audit.reportPath,audit.report);fs.writeFileSync(audit.contextPath,JSON.stringify(audit.context));if(mode==='input-mutation')fs.writeFileSync('requirements.md','mutated');if(mode==='directory-mutation')fs.writeFileSync('src/new.js','added');if(mode==='hardlink-report'){fs.unlinkSync(audit.reportPath);fs.linkSync('requirements.md',audit.reportPath);}process.stdout.write('raw vendor output');process.stderr.write('raw diagnostic');`,
+    `const fs=require('node:fs'),path=require('node:path');const prompt=fs.readFileSync(0,'utf8');const mode=process.argv[2];if(mode==='transport'){process.stdout.write('partial raw');process.stderr.write('vendor failed');process.exit(1);}if(mode==='timeout'){setTimeout(()=>{},5000);return;}if(mode==='missing'){process.stdout.write('done');process.exit(0);}const audit=require(${JSON.stringify(path.join(__dirname, 'lib', 'nfr-cli-fixture'))}).buildAudit(prompt,mode);fs.mkdirSync(path.dirname(audit.reportPath),{recursive:true});fs.writeFileSync(audit.reportPath,audit.report);fs.writeFileSync(audit.contextPath,JSON.stringify(audit.context));if(mode==='input-mutation')fs.writeFileSync('requirements.md','mutated');if(mode==='directory-mutation')fs.writeFileSync('src/new.js','added');if(mode==='source-chmod')fs.chmodSync('src/service.js',0o755);if(mode==='directory-chmod')fs.chmodSync('src',0o700);if(mode==='hardlink-report'){fs.unlinkSync(audit.reportPath);fs.linkSync('requirements.md',audit.reportPath);}process.stdout.write('raw vendor output');process.stderr.write('raw diagnostic');`,
   );
   return spawnSync(
     process.execPath,
@@ -283,3 +284,115 @@ test('clean corpus transport evidence matches its declared TLS requirement', () 
   assert.match(evidence, /TLS 1\.3[^\n]*outbound|outbound[^\n]*TLS 1\.3/);
   assert.doesNotMatch(evidence, /TLS 1\.2/);
 });
+
+for (const mode of ['source-chmod', 'directory-chmod', 'tilde-example']) {
+  test(`second cold review regression refuses ${mode}`, (t) => {
+    const root = project(t);
+    const previous = path.join(root, 'published', 'nfr', 'nfr-assessment-system.md');
+    fs.mkdirSync(path.dirname(previous), { recursive: true });
+    fs.writeFileSync(previous, 'previous accepted report');
+    const run = execute(root, mode);
+    assert.equal(run.status, 3, run.stderr);
+    assert.equal(fs.readFileSync(previous, 'utf8'), 'previous accepted report');
+  });
+}
+test('native approved PASS decoration remains the canonical enum', (t) => {
+  const run = execute(project(t), 'decorated-pass');
+  assert.equal(run.status, 0, run.stderr);
+});
+for (const [mode, status] of [
+  ['decorated-concerns', 1],
+  ['decorated-fail', 1],
+  ['decorated-na', 0],
+  ['recorded-display-case', 0],
+  ['tilde-yaml', 0],
+  ['inline-actual', 0],
+  ['fenced-actual', 0],
+  ['multiple-fenced-actual', 0],
+  ['unknown-gap-display', 1],
+]) {
+  test(`approved native display ${mode} preserves its gate`, (t) => {
+    const run = execute(project(t), mode);
+    assert.equal(run.status, status, run.stderr);
+  });
+}
+for (const mode of [
+  'ambiguous-status',
+  'wrong-status-glyph',
+  'extra-status-decoration',
+  'prefix-status',
+  'recorded-wrong-category',
+  'long-tilde-example',
+  'long-backtick-example',
+  'invented-second-actual',
+  'empty-fenced-actual',
+  'literal-status',
+  'unknown-gap-invalid',
+]) {
+  test(`ambiguous display or literal example ${mode} remains rejected`, (t) => {
+    const run = execute(project(t), mode);
+    assert.equal(run.status, 3, run.stderr);
+  });
+}
+
+test('actual Codex public failures retain their original byte pins and exit codes', () => {
+  const { manifest, files } = readNativeArchive();
+  assert.equal(manifest.completedCalls, 2);
+  for (const type of ['clean', 'gapped']) {
+    const result = JSON.parse(files.get(type + '-result.json'));
+    assert.equal(result.status, 3);
+    assert.deepEqual(result.changedInputs, []);
+    assert.match(files.get(type + '-stderr.txt').toString(), /tea-nfr:/);
+  }
+});
+for (const [type, expectedExit, expectedStatus] of [
+  ['clean', 0, 'PASS'],
+  ['gapped', 1, 'FAIL'],
+]) {
+  test(`unchanged actual ${type} report passes controlled parser replay with gate ${expectedStatus}`, (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-nfr-native-replay-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    stageNativeCase(root, type);
+    const source = path.join(root, 'original-native');
+    const originalReport = fs.readFileSync(path.join(source, 'nfr-assessment-system.md'));
+    const run = spawnSync(
+      process.execPath,
+      [
+        cli,
+        '--project-root',
+        root,
+        '--input',
+        'docs/tech-spec.md',
+        '--implementation',
+        'config/logging.json',
+        '--evidence',
+        'evidence',
+        '--evidence',
+        'config/logging.json',
+        '--output-dir',
+        'published',
+        '--agent',
+        'custom',
+        '--agent-cmd',
+        process.execPath,
+        '--agent-arg',
+        path.join(__dirname, 'lib', 'nfr-native-replay-agent.js'),
+        '--agent-arg',
+        source,
+      ],
+      { encoding: 'utf8', timeout: 15_000 },
+    );
+    assert.equal(run.status, expectedExit, run.stderr);
+    const result = JSON.parse(run.stdout);
+    assert.equal(result.status, expectedStatus);
+    assert.equal(digest(fs.readFileSync(result.report)), digest(originalReport));
+    const originalContext = JSON.parse(fs.readFileSync(path.join(source, 'nfr-context-system.json')));
+    const context = JSON.parse(fs.readFileSync(result.context));
+    for (const field of ['requestId', 'supplied_project_root']) {
+      delete context[field];
+      delete originalContext[field];
+    }
+    assert.deepEqual(context, originalContext);
+    assert.match(fs.readFileSync(path.join(result.evidence, 'attempt-1', 'stdout.txt'), 'utf8'), /Controlled parser replay/);
+  });
+}

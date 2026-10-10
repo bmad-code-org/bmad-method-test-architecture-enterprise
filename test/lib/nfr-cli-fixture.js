@@ -4,6 +4,10 @@ const yaml = require('js-yaml');
 const { DOMAINS, criterionId } = require('../../cli/lib/nfr-report');
 /** Build an actual-shaped NFR report/context from the CLI's explicit contract. */
 function buildAudit(prompt, mode) {
+  const displayMode = mode;
+  if (['decorated-concerns', 'unknown-gap-display', 'unknown-gap-invalid'].includes(mode)) mode = 'unknown';
+  if (mode === 'decorated-fail') mode = 'fail';
+  if (mode === 'decorated-na') mode = 'na';
   const context = JSON.parse(
     prompt.match(/Required shape \(empty arrays are shape examples, fill all actual declared criteria\): (.*)\./)[1],
   );
@@ -66,6 +70,8 @@ function buildAudit(prompt, mode) {
         assessment_mode: 'recorded-only',
       },
     ];
+  if (displayMode === 'unknown-gap-display') context.domain_assessments.security.evidence_gaps[0].message += ' gap';
+  if (displayMode === 'unknown-gap-invalid') context.domain_assessments.security.evidence_gaps[0].message += ' ignored';
   const steps = [
     'step-01-load-context',
     'step-02-define-thresholds',
@@ -149,6 +155,28 @@ function buildAudit(prompt, mode) {
   report += '\n## Gate YAML Snippet\n\n```yaml\n' + yaml.dump({ nfr_assessment: gate }) + '```\n';
   if (mode === 'native-checkpoint')
     report = report.replaceAll(/^\*\*(Status|Threshold|Threshold Source|Actual|Evidence|Supports):/gm, '- **$1:');
+  if (mode === 'tilde-example') report = report.replace(/^(---\n[\s\S]*?\n---\n)/, '$1~~~markdown\n') + '\n~~~\n';
+  if (mode === 'decorated-pass') report = report.replaceAll('**Status:** PASS', '**Status:** PASS ✅');
+  if (displayMode === 'decorated-concerns') report = report.replaceAll('**Status:** CONCERNS', '**Status:** CONCERNS ⚠️');
+  if (displayMode === 'decorated-fail') report = report.replaceAll('**Status:** FAIL', '**Status:** FAIL ❌');
+  if (displayMode === 'decorated-na') report = report.replaceAll('**Status:** N/A', '**Status:** N/A ➖');
+  if (mode === 'ambiguous-status') report = report.replace('**Status:** PASS', '**Status:** PASS / FAIL');
+  if (mode === 'wrong-status-glyph') report = report.replace('**Status:** PASS', '**Status:** PASS ❌');
+  if (mode === 'extra-status-decoration') report = report.replace('**Status:** PASS', '**Status:** PASS ✅ ✅');
+  if (mode === 'prefix-status') report = report.replace('**Status:** PASS', '**Status:** ✅ PASS');
+  if (mode === 'recorded-display-case') report = report.replace('| deployability |', '| Deployability |');
+  if (mode === 'recorded-wrong-category') report = report.replace('| deployability |', '| Reliability |');
+  if (mode === 'tilde-yaml') report = report.replace('```yaml', '~~~yaml').replace('```\n', '~~~\n');
+  if (mode === 'long-tilde-example') report = report.replace(/^(---\n[\s\S]*?\n---\n)/, '$1~~~~markdown\n') + '\n~~~~\n';
+  if (mode === 'long-backtick-example') report = report.replace(/^(---\n[\s\S]*?\n---\n)/, '$1````markdown\n') + '\n````\n';
+  if (mode === 'inline-actual') report = report.replace('**Actual:** TLS 1.3', '**Actual:** `TLS 1.3`');
+  if (mode === 'fenced-actual') report = report.replace('**Actual:** TLS 1.3', '**Actual:**\n```text\nTLS 1.3\n```');
+  if (mode === 'multiple-fenced-actual')
+    report = report.replace('**Actual:** TLS 1.3', '**Actual:**\n```text\nTLS 1.3\n```\n\n```text\nTLS 1.3\n```');
+  if (mode === 'invented-second-actual')
+    report = report.replace('**Actual:** TLS 1.3', '**Actual:**\n```text\nTLS 1.3\n```\n\n```text\ninvented unsupported measurement\n```');
+  if (mode === 'empty-fenced-actual') report = report.replace('**Actual:** TLS 1.3', '**Actual:**\n```text\n\n```');
+  if (mode === 'literal-status') report = report.replace('**Status:** PASS', '```text\n**Status:** PASS\n```');
   return { context, report, reportPath, contextPath };
 }
 module.exports = { buildAudit };

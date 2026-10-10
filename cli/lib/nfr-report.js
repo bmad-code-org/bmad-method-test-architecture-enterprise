@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
+const MarkdownIt = require('markdown-it');
 const { WorkflowError } = require('./workflow-cli');
 const DOMAINS = ['security', 'performance', 'reliability', 'maintainability'];
 const STATUSES = new Set(['PASS', 'CONCERNS', 'FAIL', 'N/A']);
@@ -17,7 +18,45 @@ const bad = (message) => {
   throw new WorkflowError('environment-parser', message);
 };
 const normalized = (value) => String(value).replaceAll(/\s+/g, ' ').trim();
+const categoryLabel = (value) =>
+  value
+    .toLowerCase()
+    .replaceAll(/[-\s]+/g, ' ')
+    .trim();
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const markdown = new MarkdownIt({ html: true });
+const DECORATIONS = { PASS: ['✅', '✔', '✔️'], CONCERNS: ['⚠', '⚠️'], FAIL: ['❌', '✖', '✖️'], 'N/A': ['➖'] };
+/** Read visible inline text, preserving code excerpts while discarding formatting delimiters. */
+function inlineText(token) {
+  return (token?.children || [])
+    .filter((child) => ['text', 'code_inline'].includes(child.type))
+    .map((child) => child.content)
+    .join('')
+    .trim();
+}
+/** Normalize one complete display enum with an optional matching approved decoration. */
+function displayStatus(value) {
+  const match = String(value)
+    .trim()
+    .match(/^(PASS|CONCERNS|FAIL|N\/A)(?:[ \t]+(\S+))?$/i);
+  if (!match) bad('report status must contain one complete enum and an optional approved decoration');
+  const status = match[1].toUpperCase();
+  if (match[2] && !DECORATIONS[status].includes(match[2])) bad('report status decoration contradicts or ambiguously labels its enum');
+  return status;
+}
+/** Preserve a quoted source excerpt when Markdown renders it as a single inline code value. */
+function literalValue(value) {
+  const blocks = markdown.parse(value, {});
+  if (blocks.length === 1 && blocks[0].type === 'fence') return blocks[0].content.trim();
+  const children = markdown.parseInline(value, {})[0]?.children || [];
+  return children.length === 1 && children[0].type === 'code_inline' ? children[0].content : value;
+}
+/** Preserve one or more complete fenced source quotations as separate actual observations. */
+function actualValues(value) {
+  const blocks = markdown.parse(value, {});
+  if (blocks.length > 0 && blocks.every((token) => token.type === 'fence')) return blocks.map((token) => token.content.trim());
+  return [literalValue(value)];
+}
 /** The workflow's worst-status rollup excludes nonapplicable domains. */
 function worst(values) {
   if (values.includes('FAIL')) return 'FAIL';
@@ -62,14 +101,28 @@ function excerpt(value, source, label) {
 }
 /** Extract populated Markdown sections without matching headings inside fenced examples. */
 function sections(text, level) {
-  const visible = text.replaceAll(/^```[^\n]*\n[\s\S]*?^```[ \t]*$/gm, (block) => block.replaceAll(/[^\n]/g, ' '));
-  const headings = [...visible.matchAll(/^(#{1,6})[ \t]+([^\n]+)\n/gm)];
+  const lines = text.split(/\r?\n/);
+  const tokens = markdown.parse(text, {});
+  const headings = tokens.flatMap((token, index) => {
+    if (token.type !== 'heading_open' || token.level !== 0 || !token.map) return [];
+    const label = inlineText(tokens[index + 1]);
+    return [{ level: Number(token.tag.slice(1)), label, start: token.map[0], end: token.map[1] }];
+  });
   return headings
-    .filter((heading) => heading[1].length === level)
+    .filter((heading) => heading.level === level)
     .map((heading) => {
-      const next = headings.find((other) => other.index > heading.index && other[1].length <= level);
-      return { label: heading[2].trim(), body: text.slice(heading.index + heading[0].length, next?.index ?? text.length) };
+      const next = headings.find((other) => other.start > heading.start && other.level <= level);
+      return { label: heading.label, body: lines.slice(heading.end, next?.start ?? lines.length).join('\n') };
     });
+}
+/** Remove literal block examples before interpreting bold report fields. */
+function reportFields(text) {
+  const lines = text.split(/\r?\n/);
+  for (const token of markdown.parse(text, {})) {
+    if (['fence', 'code_block', 'html_block'].includes(token.type) && token.map)
+      for (let line = token.map[0]; line < token.map[1]; line++) lines[line] = lines[line].replaceAll(/[^\n]/g, ' ');
+  }
+  return lines.join('\n');
 }
 /** Read a unique bold report field, including multiline evidence lists. */
 function field(body, name) {
@@ -77,8 +130,11 @@ function field(body, name) {
     `^[ \\t]*(?:-[ \\t]+)?\\*\\*${name}:?\\*\\*[ \\t]*:?[ \\t]*([^]*?)(?=^[ \\t]*(?:-[ \\t]+)?\\*\\*[A-Za-z]|$(?![\\s\\S]))`,
     'gim',
   );
-  const values = [...body.matchAll(expression)].map((match) => match[1].trim());
-  if (values.length !== 1) bad(`criterion must contain exactly one ${name} field`);
+  const values = [...reportFields(body).matchAll(expression)].map((match) => {
+    const start = match.index + match[0].length - match[1].length;
+    return body.slice(start, match.index + match[0].length).trim();
+  });
+  if (values.length !== 1 || !values[0]) bad(`criterion must contain exactly one populated ${name} field`);
   return values[0];
 }
 /** Validate the fresh canonical context, exact ledger bindings, report and gate together. */
@@ -196,8 +252,10 @@ function readNfrReport(text, context, request) {
   )
     bad('the report checkpoint does not confirm this completed run');
   const gates = [];
-  for (const block of text.matchAll(/^```ya?ml[^\n]*\n([\s\S]*?)^```[ \t]*$/gm)) {
-    const value = parseYaml(block[1], 'gate');
+  const reportBody = text.slice(frontmatter[0].length);
+  for (const token of markdown.parse(reportBody, {})) {
+    if (token.type !== 'fence' || token.level !== 0 || !['yaml', 'yml'].includes(token.info.trim().toLowerCase())) continue;
+    const value = parseYaml(token.content, 'gate');
     if (value && Object.hasOwn(value, 'nfr_assessment')) gates.push(value.nfr_assessment);
   }
   if (gates.length !== 1) bad('report must carry exactly one nfr_assessment gate');
@@ -211,7 +269,7 @@ function readNfrReport(text, context, request) {
     )
   )
     bad('gate issue counts and blockers flag must be typed');
-  const reportSections = sections(text, 2);
+  const reportSections = sections(reportBody, 2);
   for (const name of [
     'Executive Summary',
     'Quick Wins',
@@ -274,18 +332,23 @@ function readNfrReport(text, context, request) {
         expectedGaps.push({ criterion_id: criterion.id, message: `${criterion.label}: UNKNOWN threshold` });
       const body = reportFindings[index].body;
       if (
-        field(body, 'Status') !== finding.status ||
-        normalized(field(body, 'Threshold')) !== normalized(criterion.threshold) ||
+        displayStatus(field(body, 'Status')) !== finding.status ||
+        normalized(literalValue(field(body, 'Threshold'))) !== normalized(criterion.threshold) ||
         field(body, 'Threshold Source') !== `\`${criterion.threshold_source}\``
       )
         bad(`${criterion.id} report fields contradict its canonical criterion`);
-      const actual = field(body, 'Actual');
-      if (finding.status === 'PASS' && actual === 'UNKNOWN') bad(`${criterion.id} claims PASS without a known actual measurement`);
-      if (
-        actual !== 'UNKNOWN' &&
-        !evidence.some((entry) => sourceText(entry.path, projectRoot, evidenceFiles, 'actual evidence').includes(normalized(actual)))
-      )
-        bad(`${criterion.id} actual is unsupported by supplied evidence`);
+      const actual = actualValues(field(body, 'Actual'));
+      if (finding.status === 'PASS' && actual.includes('UNKNOWN')) bad(`${criterion.id} claims PASS without a known actual measurement`);
+      for (const observation of actual) {
+        if (
+          !normalized(observation) ||
+          (observation !== 'UNKNOWN' &&
+            !evidence.some((entry) =>
+              sourceText(entry.path, projectRoot, evidenceFiles, 'actual evidence').includes(normalized(observation)),
+            ))
+        )
+          bad(`${criterion.id} actual is unsupported by supplied evidence`);
+      }
       const evidenceText = field(body, 'Evidence');
       const paths = [...evidenceText.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
       if (!same([...new Set(paths)], [...new Set(evidence.map((entry) => entry.path))]))
@@ -293,17 +356,28 @@ function readNfrReport(text, context, request) {
       const supports = field(body, 'Supports');
       for (const entry of evidence)
         if (!normalized(supports).includes(normalized(entry.supports))) bad(`${criterion.id} report omits a bound observation`);
-      if (evidence.length === 0 && (evidenceText !== 'None' || supports !== 'None' || actual !== 'UNKNOWN'))
+      if (evidence.length === 0 && (evidenceText !== 'None' || supports !== 'None' || !same(actual, ['UNKNOWN'])))
         bad(`${criterion.id} claims unsupported implementation evidence`);
       concerns += finding.status === 'CONCERNS' ? 1 : 0;
     }
-    if (!same(assessment.evidence_gaps, expectedGaps)) bad(`${domain} evidence gaps contradict its declared criteria`);
+    const displayedGaps = Array.isArray(assessment.evidence_gaps)
+      ? assessment.evidence_gaps.map((gap) => {
+          const criterion = criteria.get(gap.criterion_id);
+          if (criterion?.threshold === 'UNKNOWN' && gap.message === `${criterion.label}: UNKNOWN threshold gap`)
+            return { ...gap, message: `${criterion.label}: UNKNOWN threshold` };
+          return gap;
+        })
+      : assessment.evidence_gaps;
+    if (!same(displayedGaps, expectedGaps)) bad(`${domain} evidence gaps contradict its declared criteria`);
     gaps += expectedGaps.length;
     const status = worst(assessment.findings.map((finding) => finding.status));
-    const prelude = section.body.split(/^### /m)[0];
-    const domainStatuses = [
-      ...prelude.matchAll(/^[ \t]*(?:-[ \t]+)?\*\*(?:Domain )?Status:?\*\*[ \t]*:?[ \t]*(PASS|CONCERNS|FAIL|N\/A)[ \t]*$/gim),
-    ].map((match) => match[1].toUpperCase());
+    const firstFinding = markdown
+      .parse(section.body, {})
+      .find((token) => token.type === 'heading_open' && token.level === 0 && token.tag === 'h3');
+    const prelude = reportFields(section.body.split(/\r?\n/).slice(0, firstFinding?.map?.[0]).join('\n'));
+    const domainStatuses = [...prelude.matchAll(/^[ \t]*(?:-[ \t]+)?\*\*(?:Domain )?Status:?\*\*[ \t]*:?[ \t]*([^\n]+)$/gim)].map((match) =>
+      displayStatus(match[1]),
+    );
     const domainStatus = domainStatuses.length === 1 ? domainStatuses[0] : null;
     if (assessment.status !== status || domainStatus !== status || gate.audited_domains[domain] !== status)
       bad(`${domain} status contradicts its finding rollup`);
@@ -318,19 +392,30 @@ function readNfrReport(text, context, request) {
   const tables = reportSections.filter((section) => section.label === 'Recorded-Only NFR Criteria');
   if (tables.length > 1 || (recorded.size > 0 && tables.length !== 1)) bad('declared recorded-only criteria require one report table');
   if (tables.length === 1) {
-    const rows = tables[0].body
-      .split('\n')
-      .filter((row) => /^\|/.test(row))
-      .map((row) =>
-        row
-          .split('|')
-          .slice(1, -1)
-          .map((cell) => cell.trim().replaceAll('`', '')),
-      )
-      .filter((cells) => cells[0] !== 'ID' && !cells.every((cell) => /^:?-+:?$/.test(cell)));
+    const tokens = markdown.parse(tables[0].body, {});
+    const rows = [];
+    let row;
+    for (const [index, token] of tokens.entries()) {
+      if (token.type === 'tr_open') {
+        row = [];
+        // Markdown silently drops cells beyond the header width. Keep those extras invalid.
+        const raw = tables[0].body
+          .split(/\r?\n/)
+          .slice(...token.map)
+          .join('\n')
+          .trim();
+        const cells = raw.split(/(?<!\\)(?:\\\\)*\|/);
+        const count = cells.length - (cells[0].trim() === '' ? 1 : 0) - (cells.at(-1).trim() === '' ? 1 : 0);
+        if (count !== 6) bad('recorded-only table must contain exactly six cells per row');
+      }
+      if (token.type === 'td_open') row?.push(inlineText(tokens[index + 1]));
+      if (token.type === 'tr_close' && row?.length > 0) rows.push(row);
+    }
+    // Categories are display labels; their identity remains the canonical criterion ID.
+    for (const row of rows) if (typeof row[1] === 'string') row[1] = categoryLabel(row[1]);
     const expectedRows = context.recorded_only_nfr_criteria.map((criterion) => [
       criterion.id,
-      criterion.domain,
+      categoryLabel(criterion.domain),
       criterion.label,
       criterion.threshold,
       criterion.threshold_source,
