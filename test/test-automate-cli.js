@@ -152,7 +152,7 @@ try {
     'mixed-report',
   ])
     check(invoke([...agent, 'coverage'], scenario).status === 3, `${scenario} manifest exits 3`);
-  for (const scenario of ['opaque', 'invalid-json', 'mixed-pass', 'wrong-request', 'wrong-scope'])
+  for (const scenario of ['opaque', 'invalid-json', 'mixed-pass', 'wrong-request', 'wrong-scope', 'duplicate-report-hardlink'])
     check(
       invoke([...agent, 'coverage'], scenario).status === 3,
       `${scenario} cannot establish successful native execution or request scope`,

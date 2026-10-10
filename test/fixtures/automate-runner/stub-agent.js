@@ -57,6 +57,13 @@ if (scenario === 'opaque') fs.writeFileSync('_bmad-output/test-artifacts/automat
 if (scenario === 'invalid-json') fs.writeFileSync('_bmad-output/test-artifacts/automate/runner.json', '{invalid');
 if (['timed-out-red', 'interrupted-red', 'nonassertion-red'].includes(scenario)) fs.writeFileSync('_bmad-output/test-artifacts/automate/runner.json', JSON.stringify({suites:[{specs:[{tests:[{results:[{status:scenario === 'timed-out-red' ? 'timedOut' : scenario === 'interrupted-red' ? 'interrupted' : 'failed',errors:[{message:'Infrastructure unavailable'}]}]}]}]}],errors:[]}));
 if (scenario === 'stale-report') fs.utimesSync('_bmad-output/test-artifacts/automate/runner.json', new Date(0), new Date(0));
+if (scenario === 'duplicate-report-hardlink') {
+  const alias = '_bmad-output/test-artifacts/automate/runner-alias.json';
+  if (fs.existsSync(alias)) fs.unlinkSync(alias);
+  fs.linkSync(result.executionReports[0], alias);
+  result.executionReports.push(alias);
+  for (const counts of Object.values(result.counts)) { counts.executed *= 2; counts.passed *= 2; }
+}
 if (scenario === 'wrong-mode') result.mode = mode === 'red' ? 'expand' : 'red';
 if (scenario === 'wrong-request') result.requestId = 'another-request';
 if (scenario === 'wrong-scope') {

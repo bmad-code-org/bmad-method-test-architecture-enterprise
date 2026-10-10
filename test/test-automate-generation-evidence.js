@@ -6,6 +6,8 @@ const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
 const { scoreGeneratedProject } = require('./eval-automate-generation');
+const { parseResult } = require('../cli/lib/automate-result');
+const { HEALING_DEFAULTS } = require('../cli/lib/automate-prompt');
 const CAPTURES = path.join(__dirname, 'results/automate-codex-2026-10-09');
 const digest = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
@@ -44,8 +46,27 @@ async function main() {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-generated-evidence-'));
   try {
     const project = path.join(scratch, 'project');
+    const startedAtMs = Date.now();
     fs.cpSync(path.join(__dirname, 'fixtures/automate-eval/voucher-service'), project, { recursive: true });
     fs.cpSync(path.join(CAPTURES, 'reviewed/generated/tests'), path.join(project, 'tests'), { recursive: true });
+    const manifestPath = path.join(CAPTURES, 'reviewed/cli-evidence/attempt-1/generation.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    for (const relative of [manifest.summaryPath, ...manifest.executionReports]) {
+      const target = path.join(project, relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(path.join(CAPTURES, 'reviewed/workflow-artifacts', path.basename(relative)), target);
+    }
+    const validated = parseResult({
+      manifestPath,
+      projectRoot: project,
+      mode: 'expand',
+      operation: 'create',
+      settings: HEALING_DEFAULTS,
+      startedAtMs,
+      requestId: manifest.requestId,
+      story: 'docs/stories/6-6-voucher-redemption.md',
+    });
+    assert.equal(validated.counts.final.passed, 9, 'retained request-bound manifest passes the current parser');
     const score = await scoreGeneratedProject(project, path.join(scratch, 'execution'));
     assert.equal(score.pass, true, 'captured generation must pass the real HTTP fixture and detect its inclusive-boundary regression');
     assert.equal(score.generationWasInvoked, false, 'replay must disclose that it executes a previously generated suite');

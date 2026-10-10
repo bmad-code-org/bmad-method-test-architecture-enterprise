@@ -149,8 +149,13 @@ function parseResult({
   const actual = { executed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, assertionFailures: 0 };
   const successful = ['passed', 'verified red'].includes(result.executionStatus);
   let recognizedReports = 0;
+  const reportIdentities = new Set();
   for (const file of result.executionReports) {
     const absolute = path.join(projectRoot, file);
+    const stat = fs.statSync(absolute, { bigint: true });
+    const identity = `${stat.dev}:${stat.ino}`;
+    if (reportIdentities.has(identity)) throw new Error('executionReports repeats the same physical evidence through an alias');
+    reportIdentities.add(identity);
     if (
       (['create', 'resume'].includes(operation) || successful) &&
       startedAtMs !== undefined &&
