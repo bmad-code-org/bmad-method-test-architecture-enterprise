@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `tea-nfr` to run the installed NFR evidence audit with explicit requirement, implementation and evidence inputs; scope-specific report/context validation; retained raw vendor attempts; and transactional publication with source alias guards.
 - `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
@@ -22,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- NFR publication now detects supplied file and directory permission/type changes and parses actual Markdown headings and YAML fences. Valid native enum decorations and source-backed code quotations preserve canonical status and evidence checks. Retained both original Codex parser failures and separate controlled replay regressions.
+- Corrected the clean NFR evaluation fixture's outbound transport evidence to TLS 1.3, matching its existing requirement. Preserved the original conflicting baseline as historical evidence. NFR evaluator single runs now report unrepeated, with stability unmeasured, and `--artifacts-dir` retains every attempt before retry or cleanup.
+- NFR CLI rejects an invalid configured artifact root with a clear configuration error before invoking an agent.
+- Synchronize test chain count and isolate boundary helper naming in NFR test tooling.
+- Publish validated artifact text directly and preserve workflow error failure classes during publication rollback.
 - Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
 - Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
 - Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.

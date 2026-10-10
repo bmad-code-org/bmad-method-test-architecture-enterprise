@@ -1,0 +1,12 @@
+{
+  "tool": "npm audit",
+  "generated": "2026-08-30T06:12:00Z",
+  "build": "ledger@4.8.2",
+  "summary": { "critical": 0, "high": 0, "moderate": 3, "low": 7, "info": 0, "total": 10 },
+  "findings": [
+    { "id": "GHSA-7q4w-2m8x-3h2c", "severity": "moderate", "package": "markdown-render", "fixed_in": "3.2.1", "path": "statement-pdf" },
+    { "id": "GHSA-6c9v-4p2r-8k1d", "severity": "moderate", "package": "tar-stream", "fixed_in": "4.0.3", "path": "archive-export" },
+    { "id": "GHSA-2h8n-5r3q-9w4t", "severity": "moderate", "package": "iso-currency", "fixed_in": "2.9.0", "path": "ledger-core" }
+  ],
+  "note": "Moderate and low findings are tracked in the dependency backlog and do not block a release under the tech spec."
+}

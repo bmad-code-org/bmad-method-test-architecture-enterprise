@@ -447,5 +447,6 @@ Use `GATE` as a starting point when preparing a release.
 **Reference:**
 
 - [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md): Evaluate runtime
+- [tea-nfr CLI](/docs/reference/tea-nfr-cli.md): Audit existing implementation evidence with a verified report and canonical context
 - [TEA Configuration](/docs/reference/configuration.md): Config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md): Pattern fragments

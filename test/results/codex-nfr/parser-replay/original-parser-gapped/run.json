@@ -1,0 +1,23 @@
+{
+  "name": "tea-nfr",
+  "startedAt": "2026-10-10T04:08:13.947Z",
+  "completedAt": "2026-10-10T04:08:14.068Z",
+  "agent": "custom",
+  "model": null,
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 119,
+      "status": "failed",
+      "failureClass": "environment-parser",
+      "message": "security-authentication actual is unsupported by supplied evidence",
+      "promptSha256": "4b2fcc7e7ddfa95c7a609d505e145d568857aa18a0bb2cb2fdff6364eda35457"
+    }
+  ],
+  "failureClass": "environment-parser"
+}

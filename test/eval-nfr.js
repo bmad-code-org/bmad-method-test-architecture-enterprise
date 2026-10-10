@@ -169,6 +169,7 @@
  */
 
 const fs = require('node:fs');
+const { retainSkillArtifacts, captureProbe, finishSkillAttempt } = require('./lib/retain-skill-artifacts');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -451,6 +452,7 @@ function parseArgs(argv) {
   let agentCmd;
   let model;
   let jsonPath;
+  let artifactsDir;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -506,6 +508,13 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--artifacts-dir': {
+        artifactsDir = argv[index + 1];
+        if (!artifactsDir) fatal(2, '--artifacts-dir requires a directory');
+        artifactsDir = path.resolve(artifactsDir);
+        index += 1;
+        break;
+      }
       case '--json': {
         jsonPath = argv[index + 1];
         if (!jsonPath) fatal(2, '--json requires a file path');
@@ -538,7 +547,7 @@ function parseArgs(argv) {
   if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);
   }
-  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath, artifactsDir };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2298,13 +2307,31 @@ async function bundleMutations(workspace) {
 
 async function runCase(set, options, agent, runIndex) {
   let workspace = await stageWorkspace(set);
+  let lastAttempt = 1;
+  let rawObservation;
+  let runError;
+  const retain = () =>
+    retainSkillArtifacts({
+      artifactsDir: options.artifactsDir,
+      workspace,
+      caseId: set.id,
+      agent,
+      model: resolveModel(agent, options.model, options.agentArgs),
+      repetition: runIndex + 1,
+      attempt: lastAttempt,
+      prompt: buildPrompt(set),
+      observation: rawObservation,
+    });
   try {
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const portForAttempt = async (attempt) => {
       if (attempt > 1) {
+        await retain();
         fs.rmSync(workspace.dir, { recursive: true, force: true });
         workspace = await stageWorkspace(set);
       }
+      lastAttempt = attempt;
+      rawObservation = undefined;
       const leaked = await assertGroundTruthAbsent(workspace.dir);
       if (leaked.length > 0) {
         return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
@@ -2317,7 +2344,9 @@ async function runCase(set, options, agent, runIndex) {
         // exactly what the request below declares.
         environmentKeys: { [NFR_INTERFACE]: options.envPass },
       });
-      return port;
+      return captureProbe(port, (observation) => {
+        rawObservation = observation;
+      });
     };
     const result = await probeCommandWithRetry(
       portForAttempt,
@@ -2331,6 +2360,7 @@ async function runCase(set, options, agent, runIndex) {
       }),
       new AbortController().signal,
     );
+    rawObservation ??= result.ok ? result.observation : { fault: result };
     // The declared scope is the workspace. A run that reached the repository
     // instead is outside it, and its artifact is not read. Checked before the
     // result is, because a killed run may have written before it was killed.
@@ -2383,8 +2413,11 @@ async function runCase(set, options, agent, runIndex) {
       mutations: await bundleMutations(workspace),
       artifactEvidence: artifactEvidence(nfrArtifactPaths(set).report, report.text),
     };
+  } catch (error) {
+    runError = error;
+    throw error;
   } finally {
-    fs.rmSync(workspace.dir, { recursive: true, force: true });
+    await finishSkillAttempt({ retain, workspace, runError });
   }
 }
 
@@ -2705,13 +2738,13 @@ async function main() {
 
       const first = caseScores[0];
       const complete = caseScores.length === runs;
-      const stable = signatures.size === 1 && complete;
+      const stable = runs >= 2 && signatures.size === 1 && complete;
       const clean = first.domainResults.every((item) => item.ok) && first.overall.ok;
       console.log(
         `  ${clean ? `${colors.green}✓${colors.reset}` : `${colors.yellow}•${colors.reset}`} ${set.id}: ` +
           `${first.domainResults.filter((item) => item.ok).length}/${first.domainResults.length} domains, ` +
           `overall ${first.overall.actual ?? 'none'} (expected ${first.overall.expected}), ` +
-          `${stable ? 'stable' : complete ? `${colors.red}${signatures.size} different answers on identical input${colors.reset}` : `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}`}`,
+          `${runs < 2 ? 'unrepeated' : stable ? 'stable' : complete ? `${colors.red}${signatures.size} different answers on identical input${colors.reset}` : `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}`}`,
       );
       for (const item of first.domainResults.filter((entry) => !entry.ok)) {
         const flag = item.undecidable ? `${colors.red} (undecidable)${colors.reset}` : '';
@@ -2725,7 +2758,7 @@ async function main() {
       for (const entry of first.fabricated) console.log(`        ${colors.red}fabricated evidence:${colors.reset} ${entry}`);
       for (const entry of first.ungroundedCitations) console.log(`        ${colors.red}ungrounded citation:${colors.reset} ${entry}`);
       if (!complete) incompleteCases += 1;
-      else if (!stable) unstableCases += 1;
+      else if (runs >= 2 && !stable) unstableCases += 1;
     }
 
     const measurements = {
@@ -2740,7 +2773,7 @@ async function main() {
       unsupportedPass: totals.unsupportedPass,
       fabricatedEvidence: totals.fabricated,
       cleanFalsePositives: totals.cleanFalsePositives,
-      unstableCases: incompleteCases > 0 ? null : unstableCases,
+      unstableCases: runs < 2 || incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };

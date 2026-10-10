@@ -1,0 +1,27 @@
+{
+  "sha256": {
+    "result.json": "5f00b7e8b6777415d69f187a4e42e67f3b0f1b79ddd3085c6d03be7e45081f60",
+    "transcript.log": "0246061db3d7e11038c6da1c02b492c09bb96a66ae54f201ea73e1db49f3728e",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/evidence/load-test-2026-08-28.json": "46098cf7fc00c2af83c74f3e54bc4b0b307512cd4f56e8272496561ebf93c698",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/evidence/dependency-scan-2026-08-30.json": "16fa5eaab88117f30e30020c465dcf314b311668ac67dd63814c2b8e08367766",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/evidence/security-review-2026-08-29.md": "4228a267b94a91297c48c9667a35aa323cabab6f5b16af88212a12c08c879231",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/evidence/reliability-2026-08.json": "9a3fff22d30cb030cd91599a58c81653c75a24ff2d6f741b56c3c5db0bd83ab6",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/config/logging.json": "8730b427345b2b6bdc19db74eee979426a1be29086d2f63c226c80132e6715a5",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/_bmad/config.toml": "5a60622f68c982f0662cadffc8a6b4ed055a4ae352cb7e34da2044662b25dd93",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/docs/tech-spec.md": "a61fdb0b668ed16cc90e127613b8390141db2796795e9836e08afa9ea66d1d43",
+    "tea-nfr-eval-Ai3Cnd/harbor-billing-ledger/test-artifacts/nfr/nfr-assessment-system.md": "349519f4ae27fd2aca228d8cfab5791bc02788780fd13dfc8bce38218165244f",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/duplication-report-2026-09-01.json": "907b01b7642083dc1c99f0540ac60ed1a1b9316f341559bcd98a4c16a54b389a",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/dependency-scan-2026-09-01.json": "e91ac6795540aefe33502ab65aa2d451892f4e3d0faa78f8e28366e0a0089cf9",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/coverage-summary-2026-09-01.json": "3494a162418b4140977899e426fbdec6c6cee880fd35eade9c953e64cbb72a23",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/security-review-2026-09-01.md": "a57fd5ccee7a0851dd48a73291c6982763df9756e5eeb6744c7fd9a6c2070e62",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/load-test-2026-09-02.json": "f8d2530317b45f14d8f9db87c49302f55497f038d59c8913973cd68e7891412b",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/evidence/reliability-2026-09.json": "4057fff548d6db6d7d07503edacccfde32beee7ae4916c368b89b963941b39bb",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/config/logging.json": "50664edaec4679b9bb4fa4994a1eac215dba61a2cd8c89dfcc2e25ebb08408db",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/_bmad/config.toml": "43261112d626c23ab3eb898afd10d364c24b78ff646ad20213725e1abf069a25",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/docs/tech-spec.md": "0ec4be1fa312d588f9530365eb39a28f534ab1004b7d1b304e81df33ec5dc810",
+    "tea-nfr-eval-J38iov/atlas-notification-relay/test-artifacts/nfr/nfr-assessment-system.md": "d01df0afa25be5ff91760c6ec391c1a5130db32b2831ebe1487022ba62e0291e"
+  },
+  "sourceDirectory": "/tmp/remaining-skills-evidence/nfr-before",
+  "captureKind": "byte-preserving copy of live captured project sources, reports and available probe streams",
+  "omittedWorkspaceContent": "skill and knowledge duplicates; original external full workspace capture remains at sourceDirectory"
+}

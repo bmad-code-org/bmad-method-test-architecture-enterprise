@@ -1,0 +1,23 @@
+{
+  "name": "tea-nfr",
+  "startedAt": "2026-10-10T04:08:13.756Z",
+  "completedAt": "2026-10-10T04:08:13.874Z",
+  "agent": "custom",
+  "model": null,
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 117,
+      "status": "failed",
+      "failureClass": "environment-parser",
+      "message": "security-authentication report fields contradict its canonical criterion",
+      "promptSha256": "037d8a75c13c9e57a959ee7cbe9affb9201919afadb79f68d81f3734307a3e93"
+    }
+  ],
+  "failureClass": "environment-parser"
+}

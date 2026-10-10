@@ -1,0 +1,20 @@
+{
+  "name": "tea-nfr",
+  "startedAt": "2026-10-10T04:08:14.363Z",
+  "completedAt": "2026-10-10T04:08:14.502Z",
+  "agent": "custom",
+  "model": null,
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 138,
+      "status": "completed",
+      "promptSha256": "3b0cb28559a0f918c0e704764174063a4b9ab923e9bc1a5808f20594daecbee8"
+    }
+  ]
+}

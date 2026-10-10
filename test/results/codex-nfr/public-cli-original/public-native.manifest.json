@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "a8225395571b026f194aefc696ca0a18922bf919",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "archive": "public-native.json.gz",
+  "archiveSha256": "d796e4467c6bd4b4fc7ff0eba5210f6b3595ed015563dbac75450a31f64362c1",
+  "expectedCalls": 2,
+  "completedCalls": 2,
+  "nativeExits": [
+    3,
+    3
+  ],
+  "stability": "unmeasured",
+  "files": [
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/artifacts/nfr/nfr-assessment-system.md",
+      "bytes": 19621,
+      "sha256": "5356e68ed8aa0ee0dedfab8f5674928a95da7e4244a728f1a5b2a7d438dd430f"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/artifacts/nfr/nfr-context-system.json",
+      "bytes": 25624,
+      "sha256": "350f6e33e9a989f3f0ed03073ea00420e81575718d6574504d8dd2a9d24508a7"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/attempt.json",
+      "bytes": 279,
+      "sha256": "437e0202ee3736c2ab9bb4aba3c681c141f8b8640c4636a72c817fee1f750523"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/prompt.txt",
+      "bytes": 6683,
+      "sha256": "bf03cc893275a3704a78dbc1ed474ffe7afe448707c4ce1751810299e46dd7d2"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/stderr.txt",
+      "bytes": 1844022,
+      "sha256": "eb5b20fcb1f2207a1ace878efc5be312ade1beb2cfc62e4d6efb927f6dbc02ff"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/attempt-1/stdout.txt",
+      "bytes": 687,
+      "sha256": "eff16eef4f31d8af8fc69556322e731034a4488d9e8f59bfe3bd69cba8f842fe"
+    },
+    {
+      "path": "clean/.tea-runs/tea-nfr-Waf6UB/run.json",
+      "bytes": 626,
+      "sha256": "5fd3a915bf7c575928e93bc50bc3475629624ed98ca37a6f3e2a50314489272f"
+    },
+    {
+      "path": "clean/config/logging.json",
+      "bytes": 683,
+      "sha256": "50664edaec4679b9bb4fa4994a1eac215dba61a2cd8c89dfcc2e25ebb08408db"
+    },
+    {
+      "path": "clean/docs/tech-spec.md",
+      "bytes": 2816,
+      "sha256": "0ec4be1fa312d588f9530365eb39a28f534ab1004b7d1b304e81df33ec5dc810"
+    },
+    {
+      "path": "clean/evidence/coverage-summary-2026-09-01.json",
+      "bytes": 562,
+      "sha256": "3494a162418b4140977899e426fbdec6c6cee880fd35eade9c953e64cbb72a23"
+    },
+    {
+      "path": "clean/evidence/dependency-scan-2026-09-01.json",
+      "bytes": 466,
+      "sha256": "e91ac6795540aefe33502ab65aa2d451892f4e3d0faa78f8e28366e0a0089cf9"
+    },
+    {
+      "path": "clean/evidence/duplication-report-2026-09-01.json",
+      "bytes": 490,
+      "sha256": "907b01b7642083dc1c99f0540ac60ed1a1b9316f341559bcd98a4c16a54b389a"
+    },
+    {
+      "path": "clean/evidence/load-test-2026-09-02.json",
+      "bytes": 824,
+      "sha256": "f8d2530317b45f14d8f9db87c49302f55497f038d59c8913973cd68e7891412b"
+    },
+    {
+      "path": "clean/evidence/reliability-2026-09.json",
+      "bytes": 1076,
+      "sha256": "4057fff548d6db6d7d07503edacccfde32beee7ae4916c368b89b963941b39bb"
+    },
+    {
+      "path": "clean/evidence/security-review-2026-09-01.md",
+      "bytes": 2056,
+      "sha256": "4c6e0370d3e0ab7adbba461ef00f680e6e9cf361d5a3d8d388f8e1470db9ce8c"
+    },
+    {
+      "path": "clean-invocation.json",
+      "bytes": 1412,
+      "sha256": "10ea8beff0ac8dfaf7a368ff533cd7f70257f4732399fec9c7625d8ae6559a54"
+    },
+    {
+      "path": "clean-result.json",
+      "bytes": 102,
+      "sha256": "059d48fc24709a119087312dd690cfc17426cce8b5d4d487f6fdaad4d7a4f11a"
+    },
+    {
+      "path": "clean-stderr.txt",
+      "bytes": 161,
+      "sha256": "454b5bd88b206bb61cc678e701863472a56dc8fa282118784b11e1e6fc877eb3"
+    },
+    {
+      "path": "clean-stdout.json",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/artifacts/nfr/nfr-assessment-system.md",
+      "bytes": 22350,
+      "sha256": "2d9898f2b11a644bea227b47145ed6a20458725912c3cb8e7f81c1af89134a8d"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/artifacts/nfr/nfr-context-system.json",
+      "bytes": 19446,
+      "sha256": "0a8c2facb12b641fb380f4f1a71996f8869a2e195cc5364159db6d98c23c071d"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/attempt.json",
+      "bytes": 273,
+      "sha256": "ff5629d0f0c4c120cb9a7b6553446795a0c6c384cc0a78c06e621fe1e8589443"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/prompt.txt",
+      "bytes": 6520,
+      "sha256": "2bd894e228358958a28a2f98db0354281c13575142d89a570f976844a23ff880"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/stderr.txt",
+      "bytes": 2900361,
+      "sha256": "4ed454549421df8caa22b715c5cec92df0f2a1c80137fc340db9560a3c3f3082"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/attempt-1/stdout.txt",
+      "bytes": 796,
+      "sha256": "c1bc8badf9c9ce88d94195476c3f057596e9f178216ad342577e39427c214048"
+    },
+    {
+      "path": "gapped/.tea-runs/tea-nfr-zjPTgJ/run.json",
+      "bytes": 620,
+      "sha256": "81203bd5afd89674f2abe6398108d40cd6c3f5673958f3f942ff338fce522f63"
+    },
+    {
+      "path": "gapped/config/logging.json",
+      "bytes": 645,
+      "sha256": "8730b427345b2b6bdc19db74eee979426a1be29086d2f63c226c80132e6715a5"
+    },
+    {
+      "path": "gapped/docs/tech-spec.md",
+      "bytes": 3023,
+      "sha256": "a61fdb0b668ed16cc90e127613b8390141db2796795e9836e08afa9ea66d1d43"
+    },
+    {
+      "path": "gapped/evidence/dependency-scan-2026-08-30.json",
+      "bytes": 731,
+      "sha256": "16fa5eaab88117f30e30020c465dcf314b311668ac67dd63814c2b8e08367766"
+    },
+    {
+      "path": "gapped/evidence/load-test-2026-08-28.json",
+      "bytes": 903,
+      "sha256": "46098cf7fc00c2af83c74f3e54bc4b0b307512cd4f56e8272496561ebf93c698"
+    },
+    {
+      "path": "gapped/evidence/reliability-2026-08.json",
+      "bytes": 1074,
+      "sha256": "9a3fff22d30cb030cd91599a58c81653c75a24ff2d6f741b56c3c5db0bd83ab6"
+    },
+    {
+      "path": "gapped/evidence/security-review-2026-08-29.md",
+      "bytes": 2002,
+      "sha256": "4228a267b94a91297c48c9667a35aa323cabab6f5b16af88212a12c08c879231"
+    },
+    {
+      "path": "gapped-invocation.json",
+      "bytes": 1177,
+      "sha256": "5f47c95fb4773427fab67eaa528d7eefe498a0c18e566ebe52e6d13d7dfc4f09"
+    },
+    {
+      "path": "gapped-result.json",
+      "bytes": 102,
+      "sha256": "469c1cf0802040c67170c895a152d79fb7995da38b5873c6b3867718e1f22ff0"
+    },
+    {
+      "path": "gapped-stderr.txt",
+      "bytes": 156,
+      "sha256": "cd83b459442eeccac885921fda21c01750527d2c15d5119ef9281870a31e57b9"
+    },
+    {
+      "path": "gapped-stdout.json",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

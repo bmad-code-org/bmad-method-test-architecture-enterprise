@@ -6,6 +6,7 @@ description: Audit non-functional requirement evidence for security, performance
 # How to Run NFR Evidence Audit with TEA
 
 Use TEA's `nfr-assess` skill to audit non-functional requirement (NFR) evidence across security, performance, reliability, and maintainability.
+For unattended audits and JSON results, use the [tea-nfr CLI](/docs/reference/tea-nfr-cli.md).
 
 Use `test-design` before implementation to define NFR thresholds, planned validation, and expected evidence.
 Use `nfr-assess` after evidence exists to decide PASS/CONCERNS/FAIL, or N/A for findings that do not apply.

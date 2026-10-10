@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "controlled-parser-replay",
+  "generatedByModel": false,
+  "sourceCommit": "1debdc1112ef51a7adf4ba7c956e3bfe0c3db9da",
+  "originalNativeSourceCommit": "a8225395571b026f194aefc696ca0a18922bf919",
+  "originalNativeExit": 3,
+  "case": "gapped",
+  "phase": "repaired-parser",
+  "exitCode": 1,
+  "status": "FAIL",
+  "command": [
+    "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+    "/Users/murat/opensource/_wt/nfr-codex-evaluation/cli/nfr.js",
+    "--project-root",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-XsySNT",
+    "--input",
+    "docs/tech-spec.md",
+    "--implementation",
+    "config/logging.json",
+    "--evidence",
+    "evidence",
+    "--evidence",
+    "config/logging.json",
+    "--output-dir",
+    "published",
+    "--agent",
+    "custom",
+    "--agent-cmd",
+    "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+    "--agent-arg",
+    "/Users/murat/opensource/_wt/nfr-codex-evaluation/test/lib/nfr-native-replay-agent.js",
+    "--agent-arg",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-XsySNT/original-native"
+  ],
+  "adaptedContextFields": [
+    "requestId",
+    "supplied_project_root"
+  ],
+  "reportSha256": "2d9898f2b11a644bea227b47145ed6a20458725912c3cb8e7f81c1af89134a8d",
+  "changedInputs": [],
+  "suppliedInputs": [
+    {
+      "path": "docs/tech-spec.md",
+      "sha256": "a61fdb0b668ed16cc90e127613b8390141db2796795e9836e08afa9ea66d1d43"
+    },
+    {
+      "path": "config/logging.json",
+      "sha256": "8730b427345b2b6bdc19db74eee979426a1be29086d2f63c226c80132e6715a5"
+    },
+    {
+      "path": "evidence/dependency-scan-2026-08-30.json",
+      "sha256": "16fa5eaab88117f30e30020c465dcf314b311668ac67dd63814c2b8e08367766"
+    },
+    {
+      "path": "evidence/load-test-2026-08-28.json",
+      "sha256": "46098cf7fc00c2af83c74f3e54bc4b0b307512cd4f56e8272496561ebf93c698"
+    },
+    {
+      "path": "evidence/reliability-2026-08.json",
+      "sha256": "9a3fff22d30cb030cd91599a58c81653c75a24ff2d6f741b56c3c5db0bd83ab6"
+    },
+    {
+      "path": "evidence/security-review-2026-08-29.md",
+      "sha256": "4228a267b94a91297c48c9667a35aa323cabab6f5b16af88212a12c08c879231"
+    }
+  ],
+  "retainedWorkspace": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-XsySNT",
+  "stability": "unmeasured"
+}

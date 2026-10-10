@@ -1,0 +1,14 @@
+{
+  "format": "json",
+  "level": "info",
+  "required_fields": ["timestamp", "level", "message", "tenant_id", "trace_id", "event_type"],
+  "schema": "config/logging.json is the schema of record; every ledger log line is validated against it in the logging middleware test",
+  "assertion": "ledger/test/observability/log-format.spec.ts asserts every required field on a sampled line",
+  "error_tracking": {
+    "provider": "sentry",
+    "enabled": true,
+    "dsn": "injected by the deploy pipeline; no value is stored in the repository",
+    "captures": ["unhandled_rejection", "uncaught_exception", "http_5xx"],
+    "release_tagging": true
+  }
+}

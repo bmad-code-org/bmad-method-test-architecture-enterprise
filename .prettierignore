@@ -50,3 +50,8 @@ _bmad-output/implementation-artifacts/evaluate/story-1.29.md
 
 # Story 1.54's approved matrix is frozen and retains its approved spacing.
 _bmad-output/implementation-artifacts/evaluate/story-1.54.md
+
+# Immutable live NFR observations.
+test/results/codex-nfr/raw/
+test/results/codex-nfr/public-cli-original/
+test/results/codex-nfr/parser-replay/

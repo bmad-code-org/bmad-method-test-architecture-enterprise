@@ -1,0 +1,14 @@
+{
+  "format": "json",
+  "level": "info",
+  "required_fields": ["timestamp", "level", "message", "service_id", "trace_id", "transport"],
+  "schema": "config/logging.json is the schema of record; every relay log line is validated against it in the logging middleware test",
+  "assertion": "relay/test/observability/log-format.spec.ts asserts every required field on a sampled line and fails the build when one is missing",
+  "error_tracking": {
+    "provider": "sentry",
+    "enabled": true,
+    "dsn": "injected by the deploy pipeline; no value is stored in the repository",
+    "captures": ["unhandled_rejection", "uncaught_exception", "http_5xx"],
+    "release_tagging": true
+  }
+}
