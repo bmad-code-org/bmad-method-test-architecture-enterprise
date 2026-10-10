@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { gunzipSync } = require('node:zlib');
-const { tracePaths, validateTraceOutputs, publishTraceOutputs } = require('../cli/lib/trace-command');
+const { sourceOracleLedger, tracePaths, validateTraceOutputs, publishTraceOutputs } = require('../cli/lib/trace-command');
 
 const cli = path.join(__dirname, '..', 'cli', 'trace.js');
 const agent = path.join(__dirname, 'fixtures', 'trace-cli-agent.js');
@@ -90,6 +90,86 @@ try {
   check('CONCERNS enforcement is explicit', () => {
     assert.equal(run('concerns').status, 0);
     assert.equal(run('concerns', ['--fail-on', 'concerns']).status, 1);
+  });
+  check('fresh live failures cap a passing automated gate and preserve stale evidence semantics', () => {
+    assert.equal(run('fresh-failure').status, 3);
+    assert.equal(run('fresh-invalid-count').status, 3);
+    const concerns = run('fresh-failure-concerns');
+    assert.equal(concerns.status, 0, concerns.stderr);
+    assert.equal(concerns.payload.gate_status, 'CONCERNS');
+    assert.equal(run('fresh-failure-concerns', ['--fail-on', 'concerns']).status, 1);
+    assert.equal(run('stale-failure').payload.gate_status, 'PASS');
+  });
+  check('Step 5 executable rules cap fresh failures without lifting existing FAIL decisions', () => {
+    const step = fs.readFileSync(
+      path.join(__dirname, '..', 'skills', 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md'),
+      'utf8',
+    );
+    const script = step.slice(step.indexOf("let gateDecision = 'NOT_EVALUATED'")).split('\n```')[0];
+    for (const [freshness, failed, p0Coverage, expected] of [
+      ['fresh', 1, 100, 'CONCERNS'],
+      ['fresh', 1, 50, 'FAIL'],
+      ['stale', 1, 100, 'PASS'],
+      ['not_present', 0, 100, 'PASS'],
+    ]) {
+      const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, {
+        gateEligible: true,
+        allowGate: true,
+        collectionStatus: 'COLLECTED',
+        p0Coverage,
+        overallCoverage: 100,
+        effectiveP1Coverage: 100,
+        hasP1Requirements: false,
+        criticalGaps: p0Coverage === 100 ? 0 : 1,
+        syntheticOracle: false,
+        effectiveOracleConfidence: 'high',
+        liveOnlyCoveredRequirements: 0,
+        liveEvidence: { freshness, failed },
+      });
+      assert.equal(actual, expected);
+    }
+  });
+  check('frozen oracle priorities reject consistent report reprioritization', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file, 'utf8');
+    try {
+      for (const source of [
+        '### AC-1 (P0): Admin may export.\n',
+        '| ID | Requirement | Priority |\n| --- | --- | --- |\n| AC-1 | Admin may export. | P0 |\n',
+      ]) {
+        fs.writeFileSync(file, `# Epic 4: Export\n\n${source}`);
+        const result = run('source-priority-drift');
+        assert.equal(result.status, 3, result.stderr);
+        assert.match(result.payload.reason, /explicit source priority/);
+        assert.equal(fs.readFileSync(file, 'utf8'), `# Epic 4: Export\n\n${source}`);
+      }
+      fs.writeFileSync(file, original);
+      for (const mode of ['missing-oracle-ledger', 'oracle-ledger-drift', 'mutated-source']) {
+        const result = run(mode);
+        assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
+        fs.writeFileSync(file, original);
+      }
+    } finally {
+      fs.writeFileSync(file, original);
+    }
+  });
+  check('non-string artifact configuration preserves inputs and invokes no agent', () => {
+    const config = path.join(root, '_bmad', 'config.toml');
+    const original = fs.readFileSync(config, 'utf8');
+    const before = fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8');
+    try {
+      for (const value of ['42', 'true', '["artifacts"]', '""']) {
+        const text = `[modules.tea]\ntest_artifacts = ${value}\n`;
+        fs.writeFileSync(config, text);
+        const result = run('pass');
+        assert.equal(result.status, 2);
+        assert.match(result.payload.reason, /test_artifacts.*nonempty string/);
+        assert.equal(fs.readFileSync(config, 'utf8'), text);
+        assert.equal(fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8'), before);
+      }
+    } finally {
+      fs.writeFileSync(config, original);
+    }
   });
   check('no-gate removes the previous scope gate and omits its signal', () => {
     const result = run('pass', ['--no-gate']);
@@ -399,10 +479,56 @@ try {
         }
       }
       assert.equal(
-        validateTraceOutputs({ paths, target, collectionMode: 'contract_static', allowGate: true }).summary.gate_status,
+        validateTraceOutputs({
+          paths,
+          target,
+          collectionMode: 'contract_static',
+          allowGate: true,
+          oracleLedger: sourceOracleLedger(
+            fs.readFileSync(
+              path.join(
+                __dirname,
+                'fixtures',
+                'trace-eval',
+                id === '4' ? 'seeded' : 'clean',
+                'docs',
+                'epics',
+                id === '4' ? 'epic-4-tenant-data-export-and-erasure.md' : 'epic-5-api-token-lifecycle.md',
+              ),
+              'utf8',
+            ),
+            'captured source',
+          ),
+          requireOracleLedger: true,
+        }).summary.gate_status,
         expected,
       );
     }
+  });
+
+  check('repeated diagnostic after archive preserves all four actual measurements and byte pins', () => {
+    const directory = path.join(__dirname, 'results', 'live-eval-remediation', 'trace-codex-2026-10-09');
+    const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'after-attempt-2-manifest.json'), 'utf8'));
+    const archive = fs.readFileSync(path.join(directory, manifest.archive));
+    assert.equal(createHash('sha256').update(archive).digest('hex'), manifest.archiveSha256);
+    const capture = JSON.parse(gunzipSync(archive));
+    assert.equal(capture.sourceCommit, 'f4045e99d8440adfba3789db9a9b438727a5324f');
+    assert.equal(capture.files.length, manifest.files.length);
+    for (const [index, file] of capture.files.entries()) {
+      const bytes = Buffer.from(file.base64, 'base64');
+      assert.equal(file.path, manifest.files[index].path);
+      assert.equal(bytes.length, manifest.files[index].bytes);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.files[index].sha256);
+    }
+    const result = capture.files.find((file) => file.path === 'invocation/result.json');
+    const bytes = Buffer.from(result.base64, 'base64');
+    assert.deepEqual(bytes, fs.readFileSync(path.join(directory, 'after-attempt-2.json')));
+    const value = JSON.parse(bytes);
+    assert.equal(value.exitCode, 0);
+    assert.equal(value.repository.dirty, false);
+    assert.deepEqual(value.runners[0].repetitions, { expected: 4, completed: 4 });
+    assert.equal(value.runners[0].measurements.unstableCases, 0);
+    assert.equal(value.runners[0].measurements.fixtureMutations, 0);
   });
 
   check('agent-created output aliases are rejected before publication and failure-result writes', () => {

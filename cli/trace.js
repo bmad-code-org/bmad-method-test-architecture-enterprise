@@ -7,6 +7,7 @@ const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
 const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
 const {
+  sourceOracleLedger,
   COLLECTION_MODES,
   GATE_TYPES,
   resolveTraceTarget,
@@ -50,7 +51,10 @@ function execute(options, registerOutputGuard = () => {}) {
     throw new Error('--coverage-levels must list e2e, api, component, unit, or live.');
   const skillRoot = resolveWorkflowSkill({ projectRoot, skillName: 'bmad-testarch-trace', skillRoot: options.skillRoot });
   const resolvedConfig = resolveTeaConfig({ projectRoot, skillRoot, skillName: 'bmad-testarch-trace' });
-  const configuredRoot = resolvedConfig.configSnapshot.modules.tea.test_artifacts.replaceAll('{project-root}', projectRoot);
+  const rawArtifacts = resolvedConfig.configSnapshot.modules.tea.test_artifacts;
+  if (typeof rawArtifacts !== 'string' || !rawArtifacts.trim())
+    throw new Error('test_artifacts in the TEA config must be a nonempty string.');
+  const configuredRoot = rawArtifacts.replaceAll('{project-root}', projectRoot);
   const artifactRoot = projectPath(projectRoot, options.outputDir ?? configuredRoot, '--output-dir');
   const testDir = projectPath(projectRoot, options.testDir, '--test-dir');
   const sourceDir = projectPath(projectRoot, options.sourceDir, '--source-dir');
@@ -59,6 +63,8 @@ function execute(options, registerOutputGuard = () => {}) {
   if (!fs.statSync(sourceDir).isDirectory()) throw new Error('--source-dir must be a directory.');
   const targetFile = options.target ? readInput(projectRoot, options.target, '--target') : undefined;
   const target = resolveTraceTarget({ projectRoot, target: targetFile, targetId: options.targetId, gateType: options.gateType });
+  const targetText = targetFile ? fs.readFileSync(targetFile, 'utf8') : '';
+  const oracleLedger = sourceOracleLedger(targetText, targetFile ?? 'project');
   const liveResults = options.liveResults
     ? readInput(projectRoot, options.liveResults, '--live-results')
     : path.join(artifactRoot, 'live-verification-results.json');
@@ -113,6 +119,8 @@ function execute(options, registerOutputGuard = () => {}) {
         resolvedConfig,
         requestLines: [
           'Execute both trace phases, finishing Step 5. Use deterministic gate decisions.',
+          `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its identities and explicit priorities in Step 1 and the final matrix.`,
+          'Persist Step 1 oracleLedger in matrix YAML frontmatter as an array of {id, requirement, priority, source} records. Assign priorities only where the source leaves them unspecified.',
           `The only trace target for this run is ${target.document ? JSON.stringify(target.document) : `the project (${target.runScope})`}.`,
           `Resolved identity: ${JSON.stringify(target)}. Preserve it in every output.`,
           `Resolve {gate_type} to ${JSON.stringify(target.type)}, {run_scope} to ${JSON.stringify(target.runScope)}, and {run_key} to ${JSON.stringify(target.runKey)}.`,
@@ -133,7 +141,16 @@ function execute(options, registerOutputGuard = () => {}) {
       return { prompt, paths };
     },
     validate({ paths }) {
-      return validateTraceOutputs({ paths, target, collectionMode: options.collectionMode, allowGate });
+      if (targetFile && fs.readFileSync(targetFile, 'utf8') !== targetText)
+        throw new Error('Trace agent changed the target requirement document.');
+      return validateTraceOutputs({
+        paths,
+        target,
+        collectionMode: options.collectionMode,
+        allowGate,
+        oracleLedger,
+        requireOracleLedger: true,
+      });
     },
   });
   if (result.dryRun) return { exitCode: 0, prompt: result.context.prompt, evidence: result.runDir };

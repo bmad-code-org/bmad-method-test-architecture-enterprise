@@ -9,7 +9,10 @@ description: 'Run Trace from a terminal and retain the evidence behind its cover
 It publishes a traceability matrix, a coverage summary, and an eligible gate decision as JSON.
 Each attempt keeps its prompt, agent output, and generated files for inspection.
 Before publication, the command reconciles criterion priorities and coverage in matrix tables, detail sections, and the oracle ledger with the summary.
+It freezes the target document's explicit criterion identities and priorities before agent execution and compares the saved Step 1 ledger with that source.
+Inferred identities and priorities require a populated `oracleLedger` in progress frontmatter.
 It checks coverage arithmetic, threshold fields, and the decision's consistency with coverage and confidence.
+Fresh live verification failures cap an otherwise passing gate at CONCERNS.
 
 Install TEA with Node.js 22.20.0 or later, then install and authenticate the agent you select.
 The command uses the skill and knowledge base shipped in its package.

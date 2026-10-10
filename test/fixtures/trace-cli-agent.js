@@ -23,7 +23,7 @@ if (mode === 'retry' && attempt === 1) {
   process.exit(1);
 }
 if (mode === 'fail-agent') process.exit(1);
-const gateStatus = mode === 'gap' ? 'FAIL' : mode === 'concerns' ? 'CONCERNS' : 'PASS';
+const gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
 const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
 const inventory = { total: 1, covered: pct === 0 ? 0 : 1, pct };
 const snapshot = '2026-10-09T00:00:00.000Z';
@@ -77,6 +77,12 @@ if (mode === 'ignored-confidence') {
   summary.oracle.confidence = 'medium';
   summary.oracle.synthetic = true;
 }
+if (['fresh-failure', 'fresh-failure-concerns', 'stale-failure'].includes(mode)) summary.live_evidence = { requirements_live_only: 0, freshness: mode === 'stale-failure' ? 'stale' : 'fresh', failed: 1 };
+if (mode === 'fresh-invalid-count') summary.live_evidence = { requirements_live_only: 0, freshness: 'fresh', failed: -1 };
+if (mode === 'source-priority-drift') {
+  summary.coverage.priority_breakdown.P1 = summary.coverage.priority_breakdown.P0;
+  summary.coverage.priority_breakdown.P0 = { total: 0, covered: 0, pct: 100 };
+}
 if (mode === 'ignored-live-only') summary.live_evidence.requirements_live_only = 1;
 if (mode === 'missing-live-only') delete summary.live_evidence.requirements_live_only;
 if (mode === 'ignored-synthetic-basis') {
@@ -92,7 +98,7 @@ if (mode === 'automated-waiver') summary.gate_status = 'WAIVED';
 if (mode === 'missing-criteria') delete summary.gate_criteria;
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
-fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n### AC-1: Example (P0)\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`);
+fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: [{id: AC-1, requirement: Example, priority: P0, source: caller}]\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n### AC-1: Example (P0)\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`);
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
@@ -120,6 +126,10 @@ if (mode === 'late-artifact-pair') {
 if (mode === 'matrix-contradiction') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('FULL', 'NONE'));
 if (mode === 'matrix-missing-priority') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(' (P0)', ''));
 if (mode === 'matrix-duplicate') fs.appendFileSync(matrixPath, '\n### AC-1: Duplicate (P0)\n\n- **Coverage:** FULL\n');
+if (mode === 'source-priority-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replaceAll('P0', 'P1'));
+if (mode === 'missing-oracle-ledger') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/^oracleLedger:.*\n/m, ''));
+if (mode === 'oracle-ledger-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('priority: P0', 'priority: P1'));
+if (mode === 'mutated-source') fs.appendFileSync(identity.document, '\nChanged requirements.\n');
 if (mode.startsWith('attempt-')) {
   const old = mode === 'attempt-outside-link' ? `${process.cwd()}-old-matrix.md` : path.join(process.cwd(), 'old-matrix.md');
   fs.copyFileSync(matrixPath, old);

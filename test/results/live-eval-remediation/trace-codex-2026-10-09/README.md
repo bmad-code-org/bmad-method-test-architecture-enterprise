@@ -27,3 +27,12 @@ The seeded invocation exited 1 with FAIL, and the clean invocation exited 0 with
 ## First diagnostic after attempt
 
 `after-attempt-1.json` preserves the four-run after attempt at bcce79b6 unchanged. Every measured accuracy group passed at100%, with zero false positives, invented or duplicate criteria, incomplete runs, or source mutations. The seeded repetitions were stable and their arithmetic passed80/80 checks. The clean repetitions used six and fifteen valid evidence anchors, respectively. The harness includes citation counts in its stability signature, so the clean case was unstable and the aggregate exited1. The compressed archive pins all four staged workspaces, prompts, observations, streams, and invocation output. This attempt is retained as a measured failure. A followup makes assertion anchors explicit in the mapping instructions and repeats the evaluation with the same thresholds.
+
+## Second diagnostic after attempt
+
+`after-attempt-2.json` records four completed runs at f4045e99 with the same model, corpus, repetitions, scoring expectations, and thresholds.
+Every measured accuracy group passed at 100%; arithmetic passed 156/156 checks.
+Both cases were stable across their repetitions, with zero invented or duplicate criteria, clean false positives, incomplete runs, or fixture mutations.
+The archive retains all four staged workspaces, requests, observations, streams, and invocation output with per-file byte pins.
+This measurement preceded the later public-command source-ledger and fresh-live-failure validation repairs.
+It supplies diagnostic evidence for the mapping skill at its recorded source commit.

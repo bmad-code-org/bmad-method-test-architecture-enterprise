@@ -328,6 +328,11 @@ if (!gateEligible) {
   // A live result is a one-time observation of one commit with no artifact anyone can re-run, so a
   // requirement resting only on it is capped at CONCERNS. This overlay only ever lowers PASS or
   // annotates an existing CONCERNS; it can never lift a FAIL.
+  if (liveEvidence.freshness === 'fresh' && liveEvidence.failed > 0 && gateDecision === 'PASS') {
+    gateDecision = 'CONCERNS';
+    rationale = `${rationale} ${liveEvidence.failed} fresh live verification failure(s) require investigation.`;
+  }
+
   if (liveOnlyCoveredRequirements > 0 && ['PASS', 'CONCERNS'].includes(gateDecision)) {
     gateDecision = 'CONCERNS';
     // Appended rather than replaced so the coverage numbers that produced the base decision survive.

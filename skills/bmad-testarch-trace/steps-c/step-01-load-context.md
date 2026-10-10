@@ -82,7 +82,7 @@ Resolve the oracle in this order:
      - `P2`: secondary workflows and edge scenarios
      - `P3`: low-risk polish or optional flows
 
-Persist an oracle ledger in this step's progress output: one row per item with its stable ID, requirement text, priority, and source reference. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
+Persist `oracleLedger` in this step's progress YAML frontmatter as an array of `{id, requirement, priority, source}` records: one row per item with its stable ID, requirement text, priority, and source reference. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
 
 Record the resolved oracle metadata in step output/frontmatter using consistent keys:
 
