@@ -12,6 +12,9 @@ test/evaluations/**
 # reformatting them would fail the check they exist to be scored against.
 test/replay/ci/**
 
+# Live Trace baseline outputs preserve the captured bytes.
+test/replay/trace/seeded-codex-source-priority-drift/test-artifacts/**
+
 # Immutable Story 1.2 live outputs stay byte-identical to the runner artifacts.
 test/results/atdd-story-1.2/post-fix-*.json
 

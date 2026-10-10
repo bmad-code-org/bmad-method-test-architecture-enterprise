@@ -10,21 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `tea-test-design` accepts epic or system requirement documents, invokes the packaged skill with a selected headless agent, verifies fresh reports and a completed checkpoint, and publishes the plan. Each attempt retains its prompt, raw streams and vendor/model record; `--agent none` saves a prompt-only invocation.
+- `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
+
+### Changed
+
+- The eight Evaluate how-to guides now keep the agent-led path and reader decisions in view, with shorter troubleshooting passages and links to CLI details.
+- Each Evaluate how-to guide now opens with the action, the reader's decisions, and the result. The openings explain that the coding agent normally handles the detailed steps.
+- The MCP Evaluate guide now explains what the coding agent does, states the expected result upfront, and adds a checkpoint before scoring.
+  The architecture page links to `eval-quality` and identifies AgentEvals as an optional evaluator of agent tool calls.
+- The Evaluate tutorial now explains the usual coding-agent workflow before walking through its prepared example by hand.
+- Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
 
 ### Fixed
 
 - Test Design prefers normalized exact heading matches over substring matches when validating sections to select canonical headings over lookalike headings; evaluation artifact retention cleans incomplete attempt directories on failure.
 - Test Design accepts standalone `and` and `&` as equivalent section-heading connectors while still requiring populated content; retains the original rejected Codex report and a separate later-parser replay.
 - Test Design verifies populated mode-specific full-plan sections, score placement within the declared risk band, and a P0/P1/P2/P3 priority on every coverage row before publication.
-
 - Test Design clean-only evaluations retain null recall, coverage and priority rates when the selected corpus declares zero expectations. Result records verify explicit zero contribution metadata; lost observations and positive-expectation missing measurements still fail.
-
 - Test Design preserves canonical risk IDs, score-band ranges and test levels; recognizes exact empty-band absence markers and observed E2E qualifiers; accepts residual acceptance tables only when every referenced ID belongs to the scored register, preserves existing published reports on replacement failures, rejects input hardlink collisions, and cleans evaluation workspaces even when evidence retention fails. Priority guidance requires a source-backed recovery path before treating a workaround as business recovery.
 - Test design consolidates related failure mechanisms, uses stated existing controls as regression constraints, preserves canonical table headers, and explains priorities through documented consequences and workarounds. Its parser recognizes the observed `Description and source evidence` header, preserving supported risk descriptions in the evaluation projection. Headless workflow configuration selects the requested skill's customization namespace while preserving the existing test-review default.
-
-### Changed
-
-- Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
+- Trace keeps published reports after failed reruns, updates command JSON on publication errors, and rejects live evidence if Git HEAD changes.
+- Trace accepts compact priority-labeled matrix headings, honors explicit priorities in criterion text, rejects non-collected contract-static reports, and ignores malformed or duplicate live failures when counting fresh failures.
+- Trace merges matching criterion claims and skips unrelated source labels and matrix examples. Mapping cites final outcome assertions once, source references use numbered lines, and coverage totals are checked against mapped rows before the gate. The gate uses execution reports when available.
+- Trace evaluation removes incomplete attempt directories after capture errors and preserves staging errors during retries.
+- CI coverage validation follows executable nested `npm run` scripts, accepts dotted script names and output redirection, and excludes commands whose execution or failure can be hidden by shell control flow.
+- The test guide's Test Review command now runs only the Test Review CLI suite; `test:cli` still runs both Test Review and Trace CLI suites.
+- Trace preserves source priorities through mapping and coverage arithmetic. The CLI freezes source criteria before agent execution, validates the saved oracle ledger and live evidence, and checks outputs before publication. It rejects malformed artifacts and missing runtime evidence, confines reports to the current attempt, and restores prior reports after failed writes. Mapping records each accepted test declaration and its assertion anchors.
 
 ## [2.0.1] - 2026-10-10
 

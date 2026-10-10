@@ -10,6 +10,8 @@ ignores:
   # Live Evaluate working drafts are generated under this gitignored path.
   # The committed evaluation under test/evaluations/ remains linted.
   - test/eval-artifacts/**
+  # Live Trace output preserves the model's original report formatting.
+  - test/replay/trace/seeded-codex-source-priority-drift/test-artifacts/**
   - CODE_OF_CONDUCT.md
   # The BMAD runtime install directory: generated per project, never
   # committed. _bmad-output/ is a sibling, not a match of this pattern: it

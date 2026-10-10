@@ -15,6 +15,7 @@ oracleConfidence: ''
 oracleResolutionMode: ''
 oracleSources: []
 externalPointerStatus: ''
+oracleLedger: []
 ---
 
 # Traceability Matrix & Gate Decision - {TRACE_TARGET_LABEL}
