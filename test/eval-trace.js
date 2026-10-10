@@ -637,6 +637,15 @@ function parseArgs(argv) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
   if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
+  if (artifactsDir) {
+    let ancestor = artifactsDir;
+    while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+    const canonical = path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, artifactsDir));
+    const relative = path.relative(fs.realpathSync(PROJECT_ROOT), canonical);
+    if (relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)))
+      fatal(2, '--artifacts-dir must be outside the evaluation repository so retained attempts preserve the repository audit.');
+    artifactsDir = canonical;
+  }
   // Stability across one run is not a measurement. Say so rather than printing stable.
   if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);

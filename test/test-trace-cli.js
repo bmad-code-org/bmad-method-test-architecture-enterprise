@@ -149,6 +149,14 @@ try {
       'bad-collection',
       'automated-waiver',
       'missing-criteria',
+      'contradictory-percent',
+      'wrong-priority-total',
+      'wrong-priority-covered',
+      'wrong-verdict',
+      'wrong-threshold',
+      'ignored-confidence',
+      'ignored-live-only',
+      'missing-live-only',
     ]) {
       const result = run(mode);
       assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
@@ -184,6 +192,58 @@ try {
     ])
       assert.equal(run('pass', args).status, 2);
     assert.equal(fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8'), before);
+  });
+  check('absolute temporary-project inputs resolve through their canonical ancestors', () => {
+    const target = path.join(root, 'docs', 'epic-4-export.md');
+    const result = run('pass', ['--target', target]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.payload.run_key, 'epic-4');
+  });
+  check('artifact descendants and aliased inputs remain intact before agent execution', () => {
+    const beforeCalls = fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-external-'));
+    const artifactRoot = path.join(root, 'aliased-artifacts');
+    fs.mkdirSync(artifactRoot);
+    const externalSummary = path.join(outside, 'e2e-trace-summary-epic-4.json');
+    fs.writeFileSync(externalSummary, 'keep external evidence');
+    fs.symlinkSync(outside, path.join(artifactRoot, 'trace'), process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      const result = run('pass', ['--output-dir', 'aliased-artifacts']);
+      assert.equal(result.status, 2, result.stderr);
+      assert.equal(fs.readFileSync(externalSummary, 'utf8'), 'keep external evidence');
+      assert.equal(fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8'), beforeCalls);
+    } finally {
+      fs.rmSync(artifactRoot, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+    const directory = path.join(root, 'input-artifacts', 'trace');
+    fs.mkdirSync(directory, { recursive: true });
+    for (const [flag, file, contents] of [
+      ['--target', 'traceability-matrix-epic-4.md', '# Epic 4: Original requirements\n\nAC-1: Preserve this source.\n'],
+      ['--live-results', 'e2e-trace-summary-epic-4.json', '{"original":"live input"}'],
+      ['--waiver-register', 'gate-decision-epic-4.json', 'Original waiver input'],
+    ]) {
+      const relative = path.join('input-artifacts', 'trace', file);
+      fs.writeFileSync(path.join(root, relative), contents);
+      assert.equal(run('pass', ['--output-dir', 'input-artifacts', flag, relative]).status, 2);
+      assert.equal(fs.readFileSync(path.join(root, relative), 'utf8'), contents);
+      assert.equal(fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8'), beforeCalls);
+    }
+    const original = path.join(root, 'docs', 'epic-4-export.md');
+    const matrix = path.join(directory, 'traceability-matrix-epic-4.md');
+    fs.unlinkSync(matrix);
+    fs.linkSync(original, matrix);
+    const contents = fs.readFileSync(original, 'utf8');
+    assert.equal(run('pass', ['--output-dir', 'input-artifacts']).status, 2);
+    assert.equal(fs.readFileSync(original, 'utf8'), contents);
+  });
+  check('diagnostic retention rejects repository-owned paths before invoking a runner', () => {
+    const result = spawnSync(process.execPath, [path.join(__dirname, 'eval-trace.js'), '--validate-only', '--artifacts-dir', __dirname], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /outside the evaluation repository/);
   });
   check('result paths preserve inputs and trace artifacts, and create parent folders', () => {
     const target = path.join(root, 'docs', 'epic-4-export.md');

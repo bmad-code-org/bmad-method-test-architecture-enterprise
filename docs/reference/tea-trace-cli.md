@@ -8,6 +8,7 @@ description: 'Run Trace from a terminal and retain the evidence behind its cover
 `tea-trace` runs the [Trace skill](/docs/how-to/workflows/run-trace.md) against existing requirements and tests.
 It publishes a traceability matrix, a coverage summary, and an eligible gate decision as JSON.
 Each attempt keeps its prompt, agent output, and generated files for inspection.
+Before publication, the command checks coverage arithmetic, threshold fields, and the decision's consistency with coverage and confidence.
 
 Install TEA with Node.js 22.20.0 or later, then install and authenticate the agent you select.
 The command uses the skill and knowledge base shipped in its package.
@@ -24,6 +25,7 @@ npx tea-trace \
 
 Use `--project-root` when running from another directory.
 Relative inputs and output paths resolve inside that project.
+Artifact paths preserve declared inputs and reject links that resolve outside the project.
 The command preserves the source requirement priorities when mapping tests.
 Its coverage gate follows the skill's rules, including oracle confidence and recorded live evidence.
 Filed waivers are validated and reported separately from the computed decision.
@@ -97,4 +99,5 @@ A failed attempt keeps its evidence and publishes a failed command result.
 Other scopes keep their reports.
 
 The repository's diagnostic harness accepts `--artifacts-dir <path>` to retain staged projects, prompts, tagged observations, and output streams during before/after evaluations.
+Choose a directory outside the repository so retained observations preserve the evaluated Git state.
 This harness drives `tea-trace-runner`; public CLI integration checks exercise `tea-trace` itself.

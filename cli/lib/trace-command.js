@@ -102,7 +102,7 @@ function readJson(file) {
   return value;
 }
 
-/** Check the public artifact contract without recomputing the skill's verdict. */
+/** Check the public artifact contract and Step 5's deterministic gate invariants. */
 function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
   const matrix = fs.readFileSync(paths.matrix, 'utf8');
   const match = matrix.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
@@ -213,6 +213,31 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
       if (typeof criteria?.[field] !== 'string' || !/^\d+%$/.test(criteria[field])) throw new Error(`Trace gate has invalid ${field}.`);
     for (const field of ['p0_status', 'p1_status', 'overall_status'])
       if (!['MET', 'PARTIAL', 'NOT_MET'].includes(criteria?.[field])) throw new Error(`Trace gate has invalid ${field}.`);
+    // Step 5 defines these public gate fields. Validate their consistency with
+    // the inventory; criterion classification remains the skill's assessment.
+    const p0 = summary.coverage.priority_breakdown.P0.pct;
+    const p1 = summary.coverage.priority_breakdown.P1.pct;
+    const overall = summary.coverage.inventory.pct;
+    const expectedCriteria = {
+      p0_coverage_required: '100%',
+      p0_coverage_actual: `${p0}%`,
+      p0_status: p0 === 100 ? 'MET' : 'NOT_MET',
+      p1_coverage_target: '90%',
+      p1_coverage_minimum: '80%',
+      p1_coverage_actual: `${p1}%`,
+      p1_status: p1 >= 90 ? 'MET' : p1 >= 80 ? 'PARTIAL' : 'NOT_MET',
+      overall_coverage_minimum: '80%',
+      overall_coverage_actual: `${overall}%`,
+      overall_status: overall >= 80 ? 'MET' : 'NOT_MET',
+    };
+    for (const [field, expected] of Object.entries(expectedCriteria))
+      if (criteria[field] !== expected) throw new Error(`Trace gate ${field} contradicts the coverage inventory or Step 5 thresholds.`);
+    let expectedStatus = p0 < 100 || overall < 80 || p1 < 80 ? 'FAIL' : p1 < 90 ? 'CONCERNS' : 'PASS';
+    const liveOnly = summary.live_evidence.requirements_live_only;
+    if (!Number.isInteger(liveOnly) || liveOnly < 0) throw new Error('Trace summary has invalid live-only coverage metadata.');
+    if (expectedStatus === 'PASS' && ((summary.oracle.synthetic && summary.confidence !== 'high') || liveOnly > 0))
+      expectedStatus = 'CONCERNS';
+    if (summary.gate_status !== expectedStatus) throw new Error('Trace gate decision contradicts its coverage and confidence evidence.');
     gate = readJson(paths.gate);
     if (
       gate.schema_version !== '0.1.0' ||

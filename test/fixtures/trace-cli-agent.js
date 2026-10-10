@@ -24,8 +24,8 @@ if (mode === 'retry' && attempt === 1) {
 }
 if (mode === 'fail-agent') process.exit(1);
 const gateStatus = mode === 'gap' ? 'FAIL' : mode === 'concerns' ? 'CONCERNS' : 'PASS';
-const pct = mode === 'gap' ? 0 : 100;
-const inventory = { total: 1, covered: mode === 'gap' ? 0 : 1, pct };
+const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
+const inventory = { total: 1, covered: pct === 0 ? 0 : 1, pct };
 const snapshot = '2026-10-09T00:00:00.000Z';
 const eligible = allowGate && ['contract_static', 'runtime_manifest'].includes(collection);
 const summary = {
@@ -41,9 +41,16 @@ const summary = {
     by_level: Object.fromEntries(['e2e', 'api', 'component', 'unit', 'live', 'other'].map((level) => [level, { tests: level === 'api' ? 1 : 0, criteria_covered: level === 'api' && pct === 100 ? 1 : 0 }])),
   },
   tests: { files: 1, cases: 1, skipped_cases: 0, pending_cases: 0, fixme_cases: 0 },
-  risk_summary: { critical_open: pct === 0 ? 1 : 0, high_open: 0, medium_open: 0, low_open: 0 }, live_evidence: {},
+  risk_summary: { critical_open: pct === 0 ? 1 : 0, high_open: 0, medium_open: 0, low_open: 0 }, live_evidence: { requirements_live_only: 0 },
   blockers: [], recommendations: [], rejected_evidence: [], links: { trace_report_path: matrixPath },
 };
+if (mode === 'concerns') {
+  summary.confidence = 'medium';
+  summary.oracle.confidence = 'medium';
+  summary.oracle.synthetic = true;
+  summary.oracle.resolution_mode = 'synthetic_source';
+  summary.inventory_basis = 'synthetic_requirements';
+}
 if (eligible) {
   summary.gate_status = gateStatus;
   summary.gate_criteria = {
@@ -53,6 +60,25 @@ if (eligible) {
   };
 }
 if (mode === 'bad-arithmetic') summary.coverage.inventory = { ...inventory, pct: 37 };
+if (mode === 'contradictory-percent') {
+  summary.coverage.inventory = { total: 1, covered: 0, pct: 0 };
+  summary.coverage.priority_breakdown.P0 = { total: 1, covered: 0, pct: 0 };
+  summary.coverage.by_level.api.criteria_covered = 0;
+  summary.risk_summary.critical_open = 1;
+}
+if (mode === 'wrong-priority-total') summary.coverage.inventory = { total: 2, covered: 2, pct: 100 };
+if (mode === 'wrong-priority-covered') {
+  summary.coverage.inventory = { total: 2, covered: 2, pct: 100 };
+  summary.coverage.priority_breakdown.P0 = { total: 2, covered: 1, pct: 50 };
+}
+if (mode === 'wrong-threshold') summary.gate_criteria.p0_coverage_required = '0%';
+if (mode === 'ignored-confidence') {
+  summary.confidence = 'medium';
+  summary.oracle.confidence = 'medium';
+  summary.oracle.synthetic = true;
+}
+if (mode === 'ignored-live-only') summary.live_evidence.requirements_live_only = 1;
+if (mode === 'missing-live-only') delete summary.live_evidence.requirements_live_only;
 if (mode === 'wrong-target') summary.target.id = '99';
 if (mode === 'bad-confidence') summary.confidence = 'auto';
 if (mode === 'bad-collection') summary.collection_status = 'UNKNOWN';

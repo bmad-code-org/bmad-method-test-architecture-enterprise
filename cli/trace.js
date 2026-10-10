@@ -66,18 +66,23 @@ function execute(options) {
     ? readInput(projectRoot, options.waiverRegister, '--waiver-register')
     : path.join(artifactRoot, 'gate-waivers.md');
   const destinations = tracePaths(artifactRoot, target.runKey);
+  for (const [name, file] of Object.entries(destinations)) destinations[name] = projectPath(projectRoot, file, `trace ${name}`);
   const allowGate = options.gate && options.collectionMode !== 'inventory_only';
+  const identity = (file) => (fs.existsSync(file) ? fs.realpathSync(file) : path.resolve(file));
+  const aliases = (left, right) => {
+    if (identity(left) === identity(right)) return true;
+    if (!fs.existsSync(left) || !fs.existsSync(right)) return false;
+    const leftStat = fs.statSync(left);
+    const rightStat = fs.statSync(right);
+    return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+  };
+  const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
+  if (Object.values(destinations).some((output) => inputs.some((input) => aliases(output, input))))
+    throw new Error('Trace artifacts must use separate paths from the target, live results, and waiver register.');
   if (options.json) {
-    const protectedPaths = [targetFile, liveResults, waiverRegister, ...Object.values(destinations)].filter(Boolean);
-    const identity = (file) => (fs.existsSync(file) ? fs.realpathSync(file) : path.resolve(file));
-    const aliases = (file) => {
-      if (identity(file) === identity(options.json)) return true;
-      if (!fs.existsSync(file) || !fs.existsSync(options.json)) return false;
-      const inputStat = fs.statSync(file);
-      const resultStat = fs.statSync(options.json);
-      return inputStat.dev === resultStat.dev && inputStat.ino === resultStat.ino;
-    };
-    if (protectedPaths.some(aliases)) throw new Error('--json must use a separate path from inputs and trace artifacts.');
+    const protectedPaths = [...inputs, ...Object.values(destinations)];
+    if (protectedPaths.some((file) => aliases(file, options.json)))
+      throw new Error('--json must use a separate path from inputs and trace artifacts.');
     fs.mkdirSync(path.dirname(options.json), { recursive: true });
     if (fs.existsSync(options.json) && !fs.statSync(options.json).isFile()) throw new Error('--json must name a regular file.');
   }
