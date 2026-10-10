@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "type": "executed-generated-suite",
+  "generationWasInvoked": false,
+  "generatedAt": "2026-10-10T01:33:31.578Z",
+  "projectRoot": "/private/tmp/tea-automate-codex-after",
+  "mutation": {
+    "from": "const meetsMinimumSpend = cartTotal >= voucher.minimumSpend;",
+    "to": "const meetsMinimumSpend = cartTotal > voucher.minimumSpend;"
+  },
+  "protectedSourcePreserved": true,
+  "allFixedTestsPassed": true,
+  "mutationExecutionComplete": true,
+  "detectedRegression": true,
+  "detectingTitles": [
+    "[P0] 6.6-API-003 accepts a cart at the inclusive minimum spend",
+    "[P0] 6.6-API-006 calculates a fixed discount for an eligible cart"
+  ],
+  "runs": {
+    "fixed": {
+      "exitCode": 0,
+      "command": [
+        "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+        "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+        "test",
+        "--reporter=json"
+      ],
+      "environment": {
+        "PORT": "65185",
+        "VOUCHER_BASE_URL": "http://127.0.0.1:65185",
+        "CI": "1"
+      },
+      "errors": [],
+      "tests": [
+        {
+          "title": "[P0] 6.6-API-001 rejects an expired voucher one day after expiry",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P1] 6.6-API-002 accepts a percentage voucher on its exact expiry date",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-003 accepts a cart at the inclusive minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-004 rejects a cart one cent below the minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-005 calculates an uncapped percentage discount",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-006 calculates a fixed discount for an eligible cart",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-007 caps a percentage discount at maxDiscount",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        }
+      ],
+      "sourceBefore": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "45f9034d9624a2db2cd3dba4d495c48cec92cef973eb7984d01f608d4a88e63a",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      },
+      "sourceAfter": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "45f9034d9624a2db2cd3dba4d495c48cec92cef973eb7984d01f608d4a88e63a",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      }
+    },
+    "mutated": {
+      "exitCode": 1,
+      "command": [
+        "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+        "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+        "test",
+        "--reporter=json"
+      ],
+      "environment": {
+        "PORT": "65199",
+        "VOUCHER_BASE_URL": "http://127.0.0.1:65199",
+        "CI": "1"
+      },
+      "errors": [],
+      "tests": [
+        {
+          "title": "[P0] 6.6-API-001 rejects an expired voucher one day after expiry",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P1] 6.6-API-002 accepts a percentage voucher on its exact expiry date",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-003 accepts a cart at the inclusive minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "failed",
+              "errors": [
+                "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  71 |     expect(response.status()).toBe(200);\n  72 |     const body = (await response.json()) as RedemptionResponse;\n> 73 |     expect(body).toEqual({ accepted: true, discount: 5 });\n     |                  ^\n  74 |   });\n  75 |\n  76 |   test('[P0] 6.6-API-004 rejects a cart one cent below the minimum spend', async ({ request }) => {\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:73:18"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-004 rejects a cart one cent below the minimum spend",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-005 calculates an uncapped percentage discount",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-006 calculates a fixed discount for an eligible cart",
+          "project": "",
+          "attempts": [
+            {
+              "status": "failed",
+              "errors": [
+                "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  104 |     expect(response.status()).toBe(200);\n  105 |     const body = (await response.json()) as RedemptionResponse;\n> 106 |     expect(body).toEqual({ accepted: true, discount: 5 });\n      |                  ^\n  107 |   });\n  108 |\n  109 |   test('[P0] 6.6-API-007 caps a percentage discount at maxDiscount', async ({ request }) => {\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:106:18"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "[P0] 6.6-API-007 caps a percentage discount at maxDiscount",
+          "project": "",
+          "attempts": [
+            {
+              "status": "passed",
+              "errors": []
+            }
+          ]
+        }
+      ],
+      "sourceBefore": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "6dd089850a689119f36dd2f53d2a3149737b580e15e61c0b50bcdc921762cf99",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      },
+      "sourceAfter": {
+        "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+        "src/vouchers.js": "6dd089850a689119f36dd2f53d2a3149737b580e15e61c0b50bcdc921762cf99",
+        "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+        "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+      }
+    }
+  },
+  "pass": true
+}

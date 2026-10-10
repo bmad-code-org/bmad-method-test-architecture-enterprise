@@ -1,0 +1,32 @@
+
+Running 7 tests using 1 worker
+··F····
+
+  1) tests/api/voucher-redemption.spec.ts:38:7 › Voucher redemption API › [6.6-API-003] [P0] accepts a cart at the inclusive minimum spend 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "accepted": true,
+    -   "discount": 5,
+    +   "accepted": false,
+    +   "reason": "below-minimum-spend",
+      }
+
+      45 |
+      46 |     expect(response.status()).toBe(200);
+    > 47 |     expect(await response.json()).toEqual({
+         |                                   ^
+      48 |       accepted: true,
+      49 |       discount: 5,
+      50 |     });
+        at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-DXrh0u/mutated/tests/api/voucher-redemption.spec.ts:47:35
+
+    Error Context: test-results/api-voucher-redemption-Vou-cf602-the-inclusive-minimum-spend/error-context.md
+
+  1 failed
+    tests/api/voucher-redemption.spec.ts:38:7 › Voucher redemption API › [6.6-API-003] [P0] accepts a cart at the inclusive minimum spend 
+  6 passed (571ms)

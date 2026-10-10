@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-codex-generation",
+  "phase": "after",
+  "model": "gpt-5.6-sol",
+  "codexVersion": "0.162.0",
+  "projectRoot": "/private/tmp/tea-automate-codex-after",
+  "exitCode": 1,
+  "captureState": "preliminary-controller-before-independent-review-fixes",
+  "toolEventsSelection": "Exact response_item function_call/function_call_output JSONL lines; other session events omitted.",
+  "cliResult": {
+    "mode": "expand",
+    "operation": "create",
+    "executionStatus": "failed",
+    "summaryPath": "_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md",
+    "generatedFiles": [
+      "tests/api/voucher-redemption.spec.ts"
+    ],
+    "executionReports": [
+      "_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json"
+    ],
+    "counts": {
+      "initial": {
+        "executed": 7,
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0,
+        "intendedFailures": 0
+      },
+      "final": {
+        "executed": 7,
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0,
+        "intendedFailures": 0
+      }
+    },
+    "healingRoundsUsed": 0,
+    "remainingFailures": [
+      "Complete API coverage is blocked for the fixed discount cart-total cap: FLAT5 has amountOff 5 and minimumSpend 20, so every accepted cart exceeds the discount and requests below 20 are rejected before discount calculation."
+    ],
+    "evidenceDir": "/private/tmp/tea-automate-codex-after/_bmad-output/test-artifacts/automate-cli/83f3cc81-a434-4291-9a15-fc4c18341cc6/tea-automate-1lz0xe",
+    "agent": "codex"
+  },
+  "sourceHashes": {
+    "src/server.js": "e8f80ea988cfb5644c5040abf1107a720956392fa26d4546129cf3bdbd41583f",
+    "package.json": "0e8c9fcc1fc9fbc406f5e82cf3983c25dae23474eb9f66103b3c38660be56f77",
+    "playwright.config.ts": "7723884cb990f8bff6262d3e9c73290d2a579e07905cc0e63e81871eed0fea18"
+  },
+  "artifacts": {
+    "stdout.txt": "6915a766d86084ee145aad7b421f515663b3606294d13064e035defea6ae8f30",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "project.tar.gz": "6164a3f8ff0807e53f5bda472289c437cd5fb497ffed8ad52fa4de7b5cc8864c",
+    "tool-events.jsonl": "80b2997e051648b345b15205cf192179abd09d21a87e83673539cb42994863bb",
+    "generated/tests/api/voucher-redemption.spec.ts": "a8e0319fef5f85aba6367ae8d1bb415c74bf36cfceb9d2de8a75de67bd699052",
+    "cli-evidence/run.json": "b824e69a8a622f34ef5a68e1df2bbe1d4b77119875192f9d58492ebc95e69a73",
+    "cli-evidence/attempt-1/stdout.txt": "21082a6e1b6d9d835939647f920aeeeff071e318450171e0b6080a033b9d257d",
+    "cli-evidence/attempt-1/prompt.txt": "0eea21dc6f384315d9bcd30ba0101c5e521a7debd7f2038b9d88c777f1cded0b",
+    "cli-evidence/attempt-1/stderr.txt": "a276daa5e2f09f77ff532e2ead6e96e3108fc6abe40a3a1edac0466e5b32408b",
+    "cli-evidence/attempt-1/attempt.json": "14c24b994b127e9827500448a99fd5006cc3be839ee1660e52d6e41dba0dc4d9",
+    "cli-evidence/attempt-1/generation.json": "14ace7cc104e8fe473142275a6c33c2419b2d81cafdd165d73806dbbe50bbb32",
+    "independent-execution/score.json": "110cca62e96097a4cc3787c7bca9f5b0cb8020362b238f5f6bb2efea199b69ca",
+    "independent-execution/fixed-stderr.txt": "64843a5d51545ed85e2aca62c8cc323df5589b4ff3fedd6ec8c00fc9c2e41313",
+    "independent-execution/mutated-stderr.txt": "3ddf7c477c8a7b04e6e687dda7742984896b5d12716cbcf1ad0fd15741a894b9",
+    "independent-execution/fixed-playwright.json": "d7ab885eebbed736c131db6d1c01e4d8e9ff2118ccc6577d3ae29f39d4acdebc",
+    "independent-execution/mutated-playwright.json": "cf4f5f6068595c5d22dc7676b83f66d9da3db800f476d69963bd16630c1ed1f5",
+    "independent-execution/mutated-stdout.txt": "30a3722b3fa593d6dc6dfcfe66d3d79404ea87599bbfea82d10292366a3d80a0",
+    "independent-execution/fixed-stdout.txt": "1f9bd5194c70437d0c4a424c87265d6aeff4ede1fc5ae22154ec5643304837d7",
+    "workflow-artifacts/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md": "10442d4ab2df7ed0e4823be68937b8db158dc9de43cf3bc786f8bb2578cf9d9e",
+    "workflow-artifacts/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption/initial/results.json": "5251cadb72b6f8a11e8608d696bca3be298057761a8776c963a1db9f9a262879",
+    "scorer-development-attempt/fixed-stderr.txt": "0fbc7efc69d509b7af74833d04dce40c100054ef83209a49cdcdb1e4c2673529",
+    "scorer-development-attempt/fixed-playwright.json": "04e33329ca34fbf69ad2fe2dc6a4107a4bc12fc999a7569044a3b254e811dc09",
+    "scorer-development-attempt/mutated-playwright.json": "6b997dfe84f28d8dd2bd50a8c44acbed63dc5cf8f4cf4b2a14f6ce9218159de4",
+    "scorer-development-attempt/fixed-stdout.txt": "d9141bccc58312cf5303635649fc047b313f72f9f927a3018a99ddc1945cf8c4"
+  }
+}

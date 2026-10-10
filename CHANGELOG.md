@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tea-automate` CLI for the merged red/expand skill, with Create, Resume, Validate, Edit, default run-and-heal, JSON outcomes, and retained agent/runner evidence.
+- Real Codex generation captures and an independent fixed-versus-mutated voucher-suite scorer, complementing the deterministic AUTOMATE fixture evaluator.
+
+### Fixed
+
+- Codex command-execution runs can start loopback test services through the supported workspace network setting. Read-only and artifact-write capabilities retain their previous network policy; explicit network configuration keeps precedence.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.

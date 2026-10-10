@@ -1,0 +1,12 @@
+CLEAN
+
+Generated 8 P0 API tests through the real HTTP service. All 8 passed in 417 ms. Healing rounds used: 0.
+
+Manifest status is `failed` because the public catalog cannot exercise the fixed-discount floor at zero.
+
+- [Summary](/private/tmp/tea-automate-codex-final/_bmad-output/test-artifacts/automate/automation-summary-story-6-6-voucher-redemption.md)
+- [Generation manifest](/private/tmp/tea-automate-codex-final/_bmad-output/test-artifacts/automate-cli/86d3b1cf-fb6e-4cce-b6c5-9dfae117f694/tea-automate-pj1Fbp/attempt-1/generation.json)
+- [Generated API tests](/private/tmp/tea-automate-codex-final/tests/api/voucher-redemption.spec.ts)
+- [Runner evidence](/private/tmp/tea-automate-codex-final/_bmad-output/test-artifacts/automate/reports/story-6-6-voucher-redemption-initial.json)
+
+Production source and project configuration remained unchanged.

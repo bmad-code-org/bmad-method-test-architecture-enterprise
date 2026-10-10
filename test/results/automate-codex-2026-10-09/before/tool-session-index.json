@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "selection": "Exact tool call and tool output response_item lines from every Codex session with the recorded cwd; session metadata, reasoning, account IDs and other events omitted.",
+  "sessions": [
+    {
+      "file": "tool-session-01.jsonl",
+      "sourceSession": "rollout-2026-10-09T20-11-24-01a1235d-608b-7592-adc1-63f628908df0.jsonl",
+      "records": 116,
+      "sha256": "62014868305bc1689c063f373e2f2aaf4e8102f98332ae1d7142c7e67bacc3b4"
+    }
+  ]
+}

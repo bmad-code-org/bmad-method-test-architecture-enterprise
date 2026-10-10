@@ -1,0 +1,393 @@
+{
+  "config": {
+    "argv": [
+      "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+      "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/@playwright/test/cli.js",
+      "test",
+      "--reporter=json"
+    ],
+    "configFile": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/playwright.config.ts",
+    "rootDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 15000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "node src/server.js",
+      "url": "http://127.0.0.1:65199/health",
+      "env": {
+        "PORT": "65199"
+      },
+      "reuseExistingServer": false
+    }
+  },
+  "suites": [
+    {
+      "title": "api/voucher-redemption.spec.ts",
+      "file": "api/voucher-redemption.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Voucher redemption API",
+          "file": "api/voucher-redemption.spec.ts",
+          "line": 38,
+          "column": 6,
+          "specs": [
+            {
+              "title": "[P0] 6.6-API-001 rejects an expired voucher one day after expiry",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 22,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.054Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-d21e44c65fa3f8fc02ca",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 39,
+              "column": 7
+            },
+            {
+              "title": "[P1] 6.6-API-002 accepts a percentage voucher on its exact expiry date",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.092Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-93a36a17811ce1987b63",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 53,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-003 accepts a cart at the inclusive minimum spend",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 4,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:73:18",
+                        "location": {
+                          "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                          "column": 18,
+                          "line": 73
+                        },
+                        "snippet": "  71 |     expect(response.status()).toBe(200);\n  72 |     const body = (await response.json()) as RedemptionResponse;\n> 73 |     expect(body).toEqual({ accepted: true, discount: 5 });\n     |                  ^\n  74 |   });\n  75 |\n  76 |   test('[P0] 6.6-API-004 rejects a cart one cent below the minimum spend', async ({ request }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                            "column": 18,
+                            "line": 73
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  71 |     expect(response.status()).toBe(200);\n  72 |     const body = (await response.json()) as RedemptionResponse;\n> 73 |     expect(body).toEqual({ accepted: true, discount: 5 });\n     |                  ^\n  74 |   });\n  75 |\n  76 |   test('[P0] 6.6-API-004 rejects a cart one cent below the minimum spend', async ({ request }) => {\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:73:18"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.101Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/test-results/api-voucher-redemption-Vou-44fdf-the-inclusive-minimum-spend/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                        "column": 18,
+                        "line": 73
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-c1bd1ff9cc2c37c2733e",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 66,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-004 rejects a cart one cent below the minimum spend",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 21,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.289Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-1e5e734cbfbae75b74d7",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 76,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-005 calculates an uncapped percentage discount",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.325Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-294c741530725b77da64",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 86,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-006 calculates a fixed discount for an eligible cart",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 4,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:106:18",
+                        "location": {
+                          "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                          "column": 18,
+                          "line": 106
+                        },
+                        "snippet": "  104 |     expect(response.status()).toBe(200);\n  105 |     const body = (await response.json()) as RedemptionResponse;\n> 106 |     expect(body).toEqual({ accepted: true, discount: 5 });\n      |                  ^\n  107 |   });\n  108 |\n  109 |   test('[P0] 6.6-API-007 caps a percentage discount at maxDiscount', async ({ request }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                            "column": 18,
+                            "line": 106
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 2\u001b[39m\n\u001b[31m+ Received  + 2\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"accepted\": true,\u001b[39m\n\u001b[32m-   \"discount\": 5,\u001b[39m\n\u001b[31m+   \"accepted\": false,\u001b[39m\n\u001b[31m+   \"reason\": \"below-minimum-spend\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  104 |     expect(response.status()).toBe(200);\n  105 |     const body = (await response.json()) as RedemptionResponse;\n> 106 |     expect(body).toEqual({ accepted: true, discount: 5 });\n      |                  ^\n  107 |   });\n  108 |\n  109 |   test('[P0] 6.6-API-007 caps a percentage discount at maxDiscount', async ({ request }) => {\n    at /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts:106:18"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.334Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/test-results/api-voucher-redemption-Vou-b2c28-scount-for-an-eligible-cart/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-automate-generation-score-TAKLL6/mutated/tests/api/voucher-redemption.spec.ts",
+                        "column": 18,
+                        "line": 106
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-f82035bfc9ba4a96a0ac",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 96,
+              "column": 7
+            },
+            {
+              "title": "[P0] 6.6-API-007 caps a percentage discount at maxDiscount",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 15000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 22,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-10T01:33:31.518Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "7814dbef1881cbfaae53-79e31c0c9f119737fab4",
+              "file": "api/voucher-redemption.spec.ts",
+              "line": 109,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-10T01:33:30.755Z",
+    "duration": 810.789,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

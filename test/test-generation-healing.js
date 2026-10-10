@@ -557,7 +557,7 @@ function replayResumeAndSettings() {
       `${name} labels its seeded state separately from genuine legacy checkpoints`,
     );
     const config = parseToml(text('bmad-inputs/config.toml.raw')).modules.tea;
-    assert.deepEqual(config, capture.resolvedModuleConfig);
+    assert.deepEqual({ ...config }, capture.resolvedModuleConfig);
     for (const record of capture.files.filter((file) => file.archivePath.startsWith('watched-before/'))) {
       const afterPath = record.archivePath.replace('watched-before/', 'watched-after/');
       assert.equal(text(afterPath), text(record.archivePath), `${name}: owned test/source/config unchanged`);

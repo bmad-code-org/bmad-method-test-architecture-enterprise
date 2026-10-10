@@ -1,0 +1,33 @@
+{
+  "mode": "red",
+  "operation": "create",
+  "executionStatus": "verified red",
+  "summaryPath": "_bmad-output/test-artifacts/atdd/atdd-checklist-4-2-reserve-a-locker.md",
+  "generatedFiles": [
+    "tests/api/locker-reservations.spec.ts",
+    "tests/support/factories/reservation.ts"
+  ],
+  "executionReports": [
+    "_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9/attempt-1/red-report-initial.json"
+  ],
+  "counts": {
+    "initial": {
+      "executed": 5,
+      "passed": 0,
+      "failed": 5,
+      "skipped": 0,
+      "intendedFailures": 5
+    },
+    "final": {
+      "executed": 5,
+      "passed": 0,
+      "failed": 5,
+      "skipped": 0,
+      "intendedFailures": 5
+    }
+  },
+  "healingRoundsUsed": 0,
+  "remainingFailures": [],
+  "evidenceDir": "/private/tmp/tea-automate-codex-red/_bmad-output/test-artifacts/automate-cli/a7dea3b7-95b3-4506-9b9d-c7ef3e300446/tea-automate-stiIS9",
+  "agent": "codex"
+}
