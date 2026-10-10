@@ -199,6 +199,26 @@ function checkConditionalFallbackDoesNotCountAsCovered() {
   );
 }
 
+function checkNestedScriptNamesAndMaskedChains() {
+  const scripts = {
+    'test:root': 'npm run test:setup && npm run test:unit.js',
+    'test:setup': 'node test/setup.js',
+    'test:unit.js': 'node test/unit.js',
+  };
+  check(
+    JSON.stringify(chainedScripts({ scripts: { test: 'npm run test:unit.js && npm run lint:md' } })) === '["test:unit.js","lint:md"]',
+    'a dotted script name in the test chain was refused',
+  );
+  const covered = () => scriptsCoveredInCi(['test:root'], new Set(), [FULL_SHARD_RUN], scripts);
+  check(covered().has('test:unit.js'), 'a dotted nested script was missed');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js; echo done';
+  check(!covered().has('test:unit.js'), 'a later statement masked a skipped && command');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js\n echo done';
+  check(!covered().has('test:unit.js'), 'a later line masked a skipped && command');
+  scripts['test:root'] = 'npm run test:setup && npm run test:unit.js;';
+  check(covered().has('test:unit.js'), 'a trailing separator hid a command required for success');
+}
+
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {
   const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(['test:a']), []);
   check(
@@ -452,6 +472,7 @@ function main() {
   checkShardedChainCoversEveryChainedScript();
   checkShardedChainCoversNestedScripts();
   checkConditionalFallbackDoesNotCountAsCovered();
+  checkNestedScriptNamesAndMaskedChains();
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
   checkEveryBypassIsRefused();

@@ -131,6 +131,11 @@ try {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.payload.coverage.total, 1);
   });
+  check('matrix ignores example headings outside the oracle', () => {
+    const result = run('matrix-example-heading');
+    assert.equal(result.status, 0, result.payload.reason);
+    assert.equal(result.payload.coverage.total, 1);
+  });
   check('matrix accepts compact and trailing source priorities', () => {
     const file = path.join(root, 'docs', 'epic-4-export.md');
     const original = fs.readFileSync(file);

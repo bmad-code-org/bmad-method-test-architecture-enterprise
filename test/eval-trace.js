@@ -2393,12 +2393,12 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
   let attemptIndex = 1;
   let observation;
   let fault;
-  const retain = () => {
+  const retain = (source = workspace) => {
     if (!options.artifactsDir) return;
     fs.mkdirSync(options.artifactsDir, { recursive: true });
     const destination = fs.mkdtempSync(path.join(options.artifactsDir, `${agent}-${set.id}-run-${runIndex + 1}-attempt-${attemptIndex}-`));
     try {
-      fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
+      fs.cpSync(source.dir, path.join(destination, 'workspace'), { recursive: true });
       fs.writeFileSync(path.join(destination, 'prompt.txt'), buildPrompt(set), 'utf8');
       if (observation) {
         fs.writeFileSync(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8');
@@ -2415,8 +2415,13 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const portForAttempt = async (attempt) => {
       if (attempt > 1) {
-        retain();
-        fs.rmSync(workspace.dir, { recursive: true, force: true });
+        const previous = workspace;
+        workspace = undefined;
+        try {
+          retain(previous);
+        } finally {
+          fs.rmSync(previous.dir, { recursive: true, force: true });
+        }
         workspace = await stageWorkspace(set);
         attemptIndex = attempt;
         observation = undefined;
@@ -2536,10 +2541,12 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       artifactEvidence: [...artifactEvidence(paths.summary, summary.summary), ...artifactEvidence(paths.matrix, matrixArtifact.value)],
     };
   } finally {
-    try {
-      retain();
-    } finally {
-      fs.rmSync(workspace.dir, { recursive: true, force: true });
+    if (workspace) {
+      try {
+        retain();
+      } finally {
+        fs.rmSync(workspace.dir, { recursive: true, force: true });
+      }
     }
   }
 }

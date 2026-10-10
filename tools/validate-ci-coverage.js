@@ -113,7 +113,7 @@ function scriptsRunInCi() {
   for (const name of files) {
     if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
     const text = fs.readFileSync(path.join(WORKFLOW_ROOT, name), 'utf8');
-    for (const match of text.matchAll(/npm run ([\w:-]+)/g)) found.add(match[1]);
+    for (const match of text.matchAll(/npm run ([\w:.-]+)/g)) found.add(match[1]);
   }
   return found;
 }
@@ -272,16 +272,16 @@ function nestedNpmRuns(command) {
     let index = 0;
     while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
     const script =
-      words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:-]+$/.test(words[index + 2] ?? '') ? words[index + 2] : null;
+      words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:.-]+$/.test(words[index + 2] ?? '') ? words[index + 2] : null;
     chain.push({ script, separator });
     words = [];
   };
-  const finishChain = () => {
+  const finishChain = (maskedByLaterStatement = false) => {
     const hasFallback = chain.some((part) => part.separator === '||');
     let guaranteed = true;
     for (const part of chain) {
       if (guaranteed && part.script) found.push(part.script);
-      if (hasFallback && (part.separator === '&&' || part.separator === '||')) guaranteed = false;
+      if ((hasFallback || maskedByLaterStatement) && (part.separator === '&&' || part.separator === '||')) guaranteed = false;
     }
     chain = [];
   };
@@ -316,7 +316,7 @@ function nestedNpmRuns(command) {
     }
     if (char === '\n' || /[;()]/.test(char)) {
       finishCommand(char);
-      finishChain();
+      finishChain(command.slice(offset + 1).trim().length > 0);
       continue;
     }
     if (/\s/.test(char)) finishWord();

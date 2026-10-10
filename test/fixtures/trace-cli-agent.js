@@ -169,6 +169,7 @@ if (mode === 'late-artifact-pair') {
 if (mode === 'matrix-contradiction') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('FULL', 'NONE'));
 if (mode === 'matrix-missing-priority') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(' (P0)', ''));
 if (mode === 'matrix-duplicate') fs.appendFileSync(matrixPath, '\n### AC-1: Duplicate (P0)\n\n- **Coverage:** FULL\n');
+if (mode === 'matrix-example-heading') fs.appendFileSync(matrixPath, '\n### Example: AC-1: Admin may export. (P0)\n');
 if (mode === 'source-priority-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replaceAll('P0', 'P1'));
 if (mode === 'missing-oracle-ledger') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/^oracleLedger:.*\n/m, ''));
 if (mode === 'oracle-ledger-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('\"priority\":\"P0\"', '\"priority\":\"P1\"'));

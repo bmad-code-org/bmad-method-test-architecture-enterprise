@@ -271,6 +271,7 @@ function matrixInventory(matrix, reference) {
       const nextDepth = Number(token.tag.slice(1));
       if (nextDepth <= depth) current = null;
       const claim = /^\*{0,2}([A-Za-z0-9][A-Za-z0-9_.-]*)\*{0,2}(?:\s*\((P[0-3])\))?\s*:\s/.exec(heading);
+      if (claim && reference.size > 0 && !reference.has(claim[1]) && !ledgerPriorities.has(claim[1])) continue;
       const priority =
         claim?.[2] ??
         /\((P[0-3])\)\s*$/.exec(heading)?.[1] ??
