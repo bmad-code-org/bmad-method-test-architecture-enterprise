@@ -38,12 +38,20 @@ function withFixedHost(body) {
   const realpathSync = fs.realpathSync;
   const existsSync = fs.existsSync;
   const homedir = os.homedir;
+  const userInfo = os.userInfo;
   const stub = (candidate) => linked(String(candidate));
   stub.native = stub;
   fs.realpathSync = stub;
   fs.existsSync = (candidate) =>
     candidate === '/run/user' || candidate === '/fixture/home/.CFUserTextEncoding' ? true : existsSync(candidate);
   os.homedir = () => '/fixture/home';
+  os.userInfo = () => ({
+    username: 'runner',
+    uid: 501,
+    gid: 501,
+    shell: '/bin/bash',
+    homedir: '/fixture/home',
+  });
   // The evaluation layer names the user's private root, `/tmp/tea-evaluate-p<uid>` (Story 1.88), so the user is fixed too.
   const getuid = process.getuid;
   process.getuid = () => 501;
@@ -53,6 +61,7 @@ function withFixedHost(body) {
     fs.realpathSync = realpathSync;
     fs.existsSync = existsSync;
     os.homedir = homedir;
+    os.userInfo = userInfo;
     process.getuid = getuid;
   }
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Enforce Darwin evaluation file-read grants in the kernel so dropped audit diagnostics cannot expose ungranted host files.
+  Run Git confinement fixtures through the selected executable without its Xcode shim cache.
+  Preflight preserves observed denial paths and setup guidance when a blocked runner fails its verdict.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.
@@ -22,8 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CodeRabbit now reviews source generators and verification tests; deterministic CI checks cover generated artifacts and captured results.
 
 ### Fixed
-
-- Enforce Darwin evaluation file-read grants in the kernel so dropped audit diagnostics cannot expose ungranted host files; run Git confinement fixtures through the selected executable without its Xcode shim cache. Preflight preserves observed denial paths and setup guidance when the blocked runner fails its verdict.
 
 - Desktop documentation pages reserve enough space for the table of contents, keeping its links inside the viewport. Persistent documentation checks verify desktop and mobile layout, numbered step navigation, and rendered compatibility anchors.
 - Setup archives preserve each run's Create checkpoints and verify them before Resume restores saved positions. CI alias replay captures retain runner errors and termination signals for diagnosis.

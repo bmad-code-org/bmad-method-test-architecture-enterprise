@@ -668,7 +668,11 @@ A confined process:
 - writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends, and one private home directory for the trial, described below);
 - can neither read nor write anything under the evaluation folder: `contract.json`, `probes/`, `mutations/`, `corpus/`, `evaluator/`, `runs/` and the rest; Seatbelt answers `EPERM`, and Bubblewrap covers the folder with an empty read-only file system, so a read answers `ENOENT` and a write `EROFS`;
 - can neither read, write nor connect to a unix socket under the user's private root directory, apart from the call directories and the home it is handed (described below), beneath which every run's private parent holds the evaluation layer's private directories: the bridge's configuration, token file and socket, and the working directories of an evaluator and the judge (see [The bridge's admission token](/docs/explanation/why-evaluate-confines-the-target.md#the-bridges-admission-token)); Seatbelt answers `EPERM`, and Bubblewrap covers the directory with an empty read-only file system;
-- reads its workspace, private call directories, home, system runtime roots and declared `systemPaths`. On macOS, Seatbelt refuses file data outside these grants with `EPERM`, including a link inside the workspace that leads to an ungranted host file. The kernel enforces this even when its audit log drops a diagnostic. Linux continues to trace other host reads and judge them through the isolation manifest. The project's git directory is withheld except for its own worktree entry: Seatbelt answers `EPERM`, and Bubblewrap covers the git directory with an empty file system, the entry bound back in read-only.
+- reads its workspace, private call directories, home, system runtime roots and declared `systemPaths`.
+  On macOS, Seatbelt refuses file data outside these grants with `EPERM`, including a link inside the workspace that leads to an ungranted host file.
+  The kernel enforces this boundary even when its audit log drops a diagnostic record.
+  Linux continues to trace host reads and judge them through the isolation manifest.
+  The project's git directory is withheld except for its own worktree entry: Seatbelt answers `EPERM`, and Bubblewrap covers the git directory with an empty file system, the entry bound back in read-only.
   The target's git sees the evaluated commit's full history with the evaluation folder as an empty tree, and the project's git directory is withheld: the runtime builds a private repository for each worktree beside its checkout, outside what the target may write, with every commit, tree and blob your repository holds for the evaluated commit's history, every commit id as your repository has it, except the objects reachable only through the evaluation folder.
 
   A project cloned with a promisor remote (`--filter=blob:none`, `--filter=tree:0` and the like) runs confined: the private repository holds the objects your clone holds on disk, and no process of a confined run fetches from the remote.
@@ -707,7 +711,9 @@ A project in no git repository has no git directory to protect.
 
 Each trial also audits what its targets open, through the mechanism itself and for every process the target starts, whatever its language or environment: a shell script, a Python program, a native binary and a Node process started with an empty environment are seen alike.
 
-The audit records reported paths once, by their real path. On macOS these include denied read attempts; on Linux they include successful opens, directory listings and link reads outside what the trial was granted: its workspace, its temp and home directories, the Node installation the runtime runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like, and on macOS the zone data, logging filter and system interpreters' library directories under `/private/var/db/timezone`, `/Library/Preferences/Logging`, `/Library/Perl`, `/Library/Python` and `/Library/Ruby`) and the `systemPaths` of the target's registry entry.
+The audit records reported paths once, by their real path.
+On macOS these include denied read attempts.
+On Linux they include successful opens, directory listings and link reads outside what the trial was granted: its workspace, its temp and home directories, the Node installation the runtime runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like, and on macOS the zone data, logging filter and system interpreters' library directories under `/private/var/db/timezone`, `/Library/Preferences/Logging`, `/Library/Perl`, `/Library/Python` and `/Library/Ruby`) and the `systemPaths` of the target's registry entry.
 A link in the workspace that leads outside it reports the path it leads to, while a file under the operating system's own directories (`/usr`, `/etc`, `/lib` and their like, not `/proc`) is judged by the path the process asked for, so a system file the operating system links elsewhere (a stub resolver's `/etc/resolv.conf`) is not listed.
 A write the mechanism refuses is listed, and so is every access to the evaluation folder, the project's git directory (its worktree's own entry excepted) or your private root directory, refused or not, even under a declared system path.
 A read of a path that does not exist and a metadata probe (`stat`, `access`) are not listed.
@@ -716,7 +722,11 @@ The execution of a binary reads it, so an ungranted binary is listed like any un
 
 `run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`, and the summary line of `run` names every `lossy` trial.
 On macOS the kernel's report log can drop a report when sandbox reports reach it faster than it keeps them, from the trial or from anything else on the host, so a `lossy` trial's observed mounts may be missing a read; a trial is `lossy` when the log delivered fewer of the audit's canary reads than were sent, reported lost events, or was handed reports at that rate (`logOverloaded`).
-A macOS `complete` entry describes delivered canaries and measured traffic. A single denial diagnostic can still disappear; the kernel continues to refuse ungranted data. An empty observed list records that no diagnostic arrived. Every Linux trial is `complete`.
+A macOS `complete` entry describes delivered canaries and measured traffic.
+A single denial diagnostic can drop in transit.
+The kernel continues to refuse ungranted data regardless of dropped diagnostics.
+An empty observed list records that no diagnostic arrived.
+Every Linux trial is `complete`.
 A run whose observer fails exits 12 and leaves the trial with no record.
 
 The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
@@ -2096,7 +2106,10 @@ Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own
 
 ### Where the runner lives
 
-On macOS an undeclared runner outside the read grants cannot load its source. `preflight` names captured denials and the setup below even when its verdict fails. `run` can stop at its verdict before any trial is sealed; `score` then exits 64 because that incomplete run has no trials to score.
+On macOS an undeclared runner outside the read grants cannot load its source.
+`preflight` names captured denials and the setup below even when its verdict fails.
+`run` can stop at its verdict before any trial is sealed.
+`score` then exits 64 because that incomplete run has no trials to score.
 
 A confined trial reads its workspace, the system's own paths and the paths its registry entry lists in `systemPaths`.
 The runner is a program the trial starts, so the audit lists each of its files that lies outside those places.
