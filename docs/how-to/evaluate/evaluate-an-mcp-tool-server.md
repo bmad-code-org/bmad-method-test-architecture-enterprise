@@ -5,9 +5,16 @@ description: Evaluate a stdio MCP tool server through its tool calls, from the E
 
 # How to Evaluate an MCP Tool Server with TEA
 
-Use the Evaluate skill to prove that the tools of a stdio MCP server return what you require.
-Evaluate starts the server in a disposable copy of your project, calls its tools, plants known defects in the server's rules or configuration, and records whether the evaluation catches them.
+Start Evaluate in your coding agent and point it at a stdio MCP server.
+You confirm which tools it may call and what results count as correct.
+The skill builds the evaluation, runs the server in a disposable copy, and checks whether a planted defect changes its answers.
+The result shows what passed, which defect the evaluation caught, and where coverage is thin.
+The steps below let you inspect or repeat the run.
 A server reached over HTTP follows [How to Evaluate an HTTP API with TEA](/docs/how-to/evaluate/evaluate-an-http-api.md).
+
+The skill writes the probes and contract.
+`tea-evaluate` calls the MCP tools in a disposable project copy and records their results; `eval-quality` scores the evidence.
+[How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains these parts.
 
 ## When to Use This
 
@@ -126,6 +133,10 @@ tea-evaluate preflight: probes/P-002.probe.json: M-001: the baseline arm was den
 ```
 
 Add the tool name back to `tools` after you confirm that the evaluation may call it.
+
+`check` has validated the evaluation files.
+`preflight` has shown that the clean server passes and the seeded defect changes its answer.
+Next, run the trials and inspect the score.
 
 ### 5. Run and Score
 
