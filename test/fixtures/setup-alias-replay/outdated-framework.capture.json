@@ -32,7 +32,7 @@
     "skills/bmad-testarch-framework/resources/setup-phase-completion.md": "sha256:cb74ad87db8647f7c2079b9f38d7e7eeaf302ff82f3bd8fe1199339d43535a19",
     "skills/bmad-testarch-framework/resources/setup-routing.md": "sha256:ae4047d8d08dbb63a6e8ba1e6cfc23ecf10dead638e5f58b5ae1eebbda0976a1",
     "skills/bmad-testarch-framework/resources/setup-run-progress.example.md": "sha256:24ad255d70ec15c4194e8d7a9d2ec0c19283c2ecd4fc8cb9769f2b38161876f3",
-    "skills/bmad-testarch-framework/resources/setup-state.md": "sha256:b29a04e3cc41d05f843586100b9c61a6fad0e741c6e76008a85c14968f5ab4c3",
+    "skills/bmad-testarch-framework/resources/setup-state.md": "sha256:e6f231f381042a850984543e60882d86907f9424de24d3ee3157189019a0bc18",
     "test/fixtures/setup-alias-replay/outdated-framework/SKILL.md": "sha256:814197674fe6bba0abf81f45bcee702cb7444b2d80280cd9b9654c9b3727b19f",
     "test/lib/setup-alias-replay.js": "sha256:f99525279f0d8c0324535805758ffcdf015e8c4074b4db44bfc07eee45fd5191"
   },

@@ -5,7 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
 const { createHash } = require('node:crypto');
-const { stripVTControlCharacters } = require('node:util');
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /[\u001B\u009B][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+const stripVTControlCharacters = (str) => (typeof str === 'string' ? str.replaceAll(ANSI_REGEX, '') : str);
 const { spawnSync } = require('node:child_process');
 const { runAgent } = require('./run-agent');
 const { resolveTeaConfig } = require('./resolve-tea-config');

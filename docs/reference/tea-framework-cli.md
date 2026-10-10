@@ -47,6 +47,8 @@ When a CI-only request finds no framework, the skill records the unresolved setu
 Use `--scope both` to authorize both phases.
 
 Resume restores the saved scope and original Create, Edit, or Validate operation.
+It preserves the run identity, frozen contract, and completed hook instructions.
+An uncertain started hook requires explicit operator recovery in the journal before headless execution.
 Omit new input and instruction flags when resuming.
 Validate completes its report even when that report contains failing checks.
 Read the report's findings before using the validated artifacts.
@@ -80,9 +82,11 @@ Framework and CI customizations keep their existing scope and hook rules.
 | `--no-use-pactjs-utils`                      | Disable the optional Pact utilities                                             |
 
 Input and output paths stay inside the selected project, including through symlinks.
-Result publication checks protected inputs again after agent execution, including when a failed run writes its diagnostic result.
+Result publication protects configuration, input files, and generated setup outputs, including symlink and hard-link aliases.
+Failed runs check protected inputs again before writing diagnostic output.
 An explicit retry retains the previous attempt and requests Resume when a shared journal exists.
 The journal's hook ledger prevents repeating completed hooks.
+Automatic retries continue only newly recoverable progress from the current invocation.
 
 ## Results
 
@@ -94,7 +98,10 @@ Each live command creates a unique run directory containing:
 
 The skill keeps its shared journal at `{test_artifacts}/framework/setup-run-progress.md` and its existing per-phase progress files.
 Create completion requires a completed matching journal, completed requested phases, a finished hook ledger, and existing referenced artifacts.
-Create also requires nonempty test source and successful native execution of every frozen test command.
+Create also requires nonempty test source and positive native execution of every frozen test command.
+The controller recognizes Node test, unittest, pytest, Playwright, Vitest, Jest, Cypress, Go, Cargo, .NET, and PHPUnit summaries.
+Standard npm, pnpm, Yarn, and shell commands resolve to their declared runner.
+An unknown runner, an empty suite, or a skipped-only suite marks the run incomplete and retains logs.
 Each command inherits the caller's project environment, uses `--timeout-ms` as its wall-clock limit, and runs under the process-tree supervisor.
 `attempt-N/verification.json` and `verification-N.stdout.txt` / `verification-N.stderr.txt` retain its command, budget, status, and raw output.
 Validate findings remain in the skill outputs and captured agent transcript.
@@ -107,7 +114,3 @@ Validate findings remain in the skill outputs and captured agent transcript.
 | `3`  | Agent transport, timeout, or artifact parsing failure             |
 
 For the interactive workflow and its stack choices, see [framework and CI setup](../how-to/workflows/setup-test-framework.md).
-
-Create success also requires positive native test execution. The controller recognizes Node's test runner, unittest, pytest, Playwright, Vitest, Jest, Cypress, Go, Cargo, .NET and PHPUnit summaries. Ordinary npm, pnpm, Yarn and shell-script commands resolve to their declared runner. An unknown runner, an empty suite or a skipped-only suite produces an incomplete result with retained logs.
-
-Resume preserves the saved run identity, frozen contract and completed hook instructions. An uncertain started hook requires explicit operator recovery recorded in the journal before headless execution. Automatic retries continue only newly recoverable progress from the current invocation. Result publication protects configuration, input files and generated setup outputs, including symlink and hard-link aliases.
