@@ -1,6 +1,8 @@
 ---
 title: 'Learn Testing with TEA Academy'
 description: Walk through your first TEA Academy session, from invocation to session notes
+sidebar:
+  order: 1
 ---
 
 # Learn Testing with TEA Academy

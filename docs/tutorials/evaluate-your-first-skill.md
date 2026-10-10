@@ -1,6 +1,8 @@
 ---
 title: 'Evaluate Your First Skill'
 description: 'Score a small skill, accept a baseline, and run its pull request check using a local stub agent'
+sidebar:
+  order: 3
 ---
 
 **Evaluate** (`bmad-testarch-evaluate`) scores how an AI skill, agent or feature behaves against requirements you confirm.

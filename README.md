@@ -59,16 +59,16 @@ Each skill can run directly in a fresh session.
 
 | Skill                                                                                                                           | Command                      | Menu | Use it to                                            |
 | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---- | ---------------------------------------------------- |
-| [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)       | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                |
 | [Automate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)             | `/bmad-testarch-automate`    | TA   | Generate red acceptance scaffolds or expand coverage |
+| [Test Review](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/)       | `/bmad-testarch-test-review` | RV   | Audit test quality and score findings                |
 | [Test Design](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/)       | `/bmad-testarch-test-design` | TD   | Plan risks, coverage, and NFR evidence               |
 | [Framework](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/setup-test-framework/)    | `/bmad-testarch-framework`   | TF   | Set up a test framework, CI, or both                 |
 | [NFR](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-nfr-assess/)                | `/bmad-testarch-nfr`         | NR   | Audit implemented NFR evidence                       |
+| [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/)                   | `/bmad-testarch-trace`       | TR   | Map requirements to tests and decide a release gate  |
 | [Teach Me Testing](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/teach-me-testing/) | `/bmad-teach-me-testing`     | TMT  | Learn testing through seven sessions                 |
 
-Additional skills:
+Evaluate:
 
-- [Trace](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/): `/bmad-testarch-trace`, menu `TR`. Map requirements to tests and decide a release gate.
 - [Evaluate](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/evaluate-your-first-skill/): `/bmad-testarch-evaluate`, menu `EV`. Build and run a behavioral evaluation.
 
 Framework and CI setup share one skill, `bmad-testarch-framework`.
