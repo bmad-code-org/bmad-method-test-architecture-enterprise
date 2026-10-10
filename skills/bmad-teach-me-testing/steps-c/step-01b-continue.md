@@ -71,7 +71,7 @@ Read {progressFile} completely and extract:
 
 ### 2. Update Last Continued Timestamp
 
-Update {progressFile} frontmatter:
+Update the fields in {progressFile} and preserve one YAML document. Use the full-file progress schema; omit a trailing `---` document delimiter:
 
 - Set `lastContinued: {current_date}`
 - Keep all other fields unchanged

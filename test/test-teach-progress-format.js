@@ -11,6 +11,7 @@ const init = fs.readFileSync(path.join(skill, 'steps-c', 'step-01-init.md'), 'ut
 const blocks = [...init.matchAll(/```yaml\n([\s\S]*?)\n```/g)];
 const example = blocks.find((block) => block[1].includes('# TEA Academy Progress Tracking'))?.[1];
 assert.ok(example, 'initialization must supply its progress example');
+assert.ok(fs.readFileSync(path.join(skill, 'steps-c', 'step-01b-continue.md'), 'utf8').includes('preserve one YAML document'));
 const substituted = example.replaceAll('{ user_name }', 'test-learner').replaceAll('{ current_date }', '2026-10-09');
 const progress = yaml.load(substituted);
 assert.equal(progress.user, 'test-learner');
