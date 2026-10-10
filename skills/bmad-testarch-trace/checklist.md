@@ -277,8 +277,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 - [ ] Evidence freshness validated (warn if >7 days old, recommend re-running workflows)
 - [ ] Phase 1 coverage matrix available; missing supporting assessments recorded
-- [ ] Test results are complete (not partial or interrupted runs)
-- [ ] Test results match current codebase (not from outdated branch)
+- [ ] Available test execution reports are complete and match the current codebase
 
 ### Knowledge Base Loading
 
@@ -375,8 +374,8 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 **Evidence Summary Documented:**
 
-- [ ] Test results summary complete (total, passed, failed, pass rates)
-- [ ] Coverage summary complete (P0/P1 criteria, code coverage)
+- [ ] Available test execution results summarized; missing reports recorded
+- [ ] Coverage summary complete (P0/P1 criteria, code coverage when available)
 - [ ] NFR validation summary complete (security, performance, reliability, maintainability)
 - [ ] Flakiness summary complete (burn-in iterations, flaky test count)
 
@@ -452,7 +451,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 **Accuracy:**
 
 - [ ] Decision matches applied criteria rules
-- [ ] Test results match CI/CD pipeline output
+- [ ] Available test execution results match cited CI/CD pipeline output
 - [ ] Coverage percentages match reports
 - [ ] NFR status matches assessment document
 - [ ] No contradictions or inconsistencies
@@ -492,7 +491,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 ### Evidence-Based
 
-- [ ] Decision is based on actual test results (not guesses)
+- [ ] Decision follows the coverage matrix and available test execution results
 - [ ] All claims are supported by evidence
 - [ ] No assumptions without documentation
 - [ ] Evidence sources are cited (CI run IDs, report URLs)
@@ -576,7 +575,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 ### Conflicting Evidence
 
-- [ ] Conflicts between test results and assessments resolved
+- [ ] Conflicts between available test results and assessments resolved
 - [ ] Most recent/authoritative source identified
 - [ ] Conflict resolution documented in decision rationale
 - [ ] User consulted if conflict cannot be resolved

@@ -166,12 +166,14 @@ function checkShardedChainCoversEveryChainedScript() {
 
 function checkShardedChainCoversNestedScripts() {
   const scripts = {
-    'test:cli': 'npm run test:test-review-cli && node test/test-trace-cli.js',
+    'test:cli':
+      'echo "npm run test:orphan" && printf "before; npm run test:orphan" && npm run test:test-review-cli && node test/test-trace-cli.js',
     'test:test-review-cli': 'node test/test-test-review-cli.js',
+    'test:orphan': 'node test/test-orphan.js',
   };
   const covered = scriptsCoveredInCi(['test:cli'], new Set(), [FULL_SHARD_RUN], scripts);
   check(
-    covered.has('test:cli') && covered.has('test:test-review-cli'),
+    covered.has('test:cli') && covered.has('test:test-review-cli') && !covered.has('test:orphan'),
     `a sharded command did not count its nested npm script as run in CI: ${JSON.stringify([...covered])}`,
   );
 }

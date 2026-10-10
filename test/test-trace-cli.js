@@ -442,11 +442,38 @@ try {
   });
   check('late destination directories preserve current failure evidence without partial publication', () => {
     for (const file of Object.values(tracePaths(path.join(root, 'artifacts'), 'epic-4'))) if (fs.existsSync(file)) fs.unlinkSync(file);
-    const result = run('partial-publication');
+    const json = path.join(root, 'result.json');
+    fs.writeFileSync(json, '{"status":"completed","gate_status":"PASS"}');
+    const result = run('partial-publication', ['--json', 'result.json']);
     assert.equal(result.status, 2, result.stderr);
     assert.ok(result.payload.evidence);
+    assert.ok(!fs.existsSync(json));
     assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')));
     fs.rmdirSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json'));
+  });
+  check('publication failures replace the command JSON with the failed result', () => {
+    const json = path.join(root, 'result.json');
+    const directory = path.join(root, 'locked-artifacts', 'trace');
+    fs.mkdirSync(directory, { recursive: true });
+    fs.chmodSync(directory, 0o555);
+    try {
+      let writable = false;
+      try {
+        const probe = fs.mkdtempSync(path.join(directory, 'probe-'));
+        fs.rmdirSync(probe);
+        writable = true;
+      } catch {
+        writable = false;
+      }
+      if (writable) return;
+      fs.writeFileSync(json, '{"status":"completed","gate_status":"PASS"}');
+      const result = run('pass', ['--output-dir', 'locked-artifacts', '--json', 'result.json']);
+      assert.equal(result.status, 2, result.stderr);
+      assert.match(result.payload.reason, /Trace publication failed/);
+      assert.deepEqual(JSON.parse(fs.readFileSync(json, 'utf8')), result.payload);
+    } finally {
+      fs.chmodSync(directory, 0o755);
+    }
   });
   check('publication rolls back a failed second installation and retains recovery copies if rollback fails', () => {
     const directory = path.join(root, 'transaction');
@@ -799,6 +826,7 @@ try {
       for (const mode of ['late-json-success', 'late-json-failure', 'late-artifact-alias', 'late-artifact-escape', 'late-artifact-pair']) {
         const json = path.join(root, 'late-result.json');
         if (fs.existsSync(json)) fs.unlinkSync(json);
+        fs.writeFileSync(json, '{"status":"completed","gate_status":"PASS"}');
         const matrix = path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md');
         if (fs.existsSync(matrix)) fs.unlinkSync(matrix);
         if (mode === 'late-artifact-pair') {
@@ -808,6 +836,7 @@ try {
         const result = run(mode, ['--json', 'late-result.json']);
         assert.equal(result.status, 2, `${mode}: ${result.stderr}`);
         assert.equal(result.payload.status, 'failed');
+        if (!mode.startsWith('late-json-')) assert.ok(!fs.existsSync(json));
         assert.deepEqual(fs.readFileSync(target), before);
         assert.equal(fs.readFileSync(path.join(outside, 'sentinel.md'), 'utf8'), 'external sentinel');
         if (mode === 'late-artifact-pair') assert.equal(fs.readFileSync(matrix, 'utf8'), '# Agent-created matrix sentinel');

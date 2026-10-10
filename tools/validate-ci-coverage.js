@@ -254,20 +254,60 @@ function shardRunProblems(run) {
   return problems;
 }
 
-/**
- * Every script CI runs: each literal `npm run <script>` in a workflow, plus the
- * whole chain when some job runs tools/test-shards.js over a full shard matrix.
- */
+function nestedNpmRuns(command) {
+  const found = [];
+  let words = [];
+  let word = '';
+  let inWord = false;
+  let quote = '';
+  let escaped = false;
+  const finishWord = () => {
+    if (inWord) words.push(word);
+    word = '';
+    inWord = false;
+  };
+  const finishCommand = () => {
+    finishWord();
+    let index = 0;
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
+    if (words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:-]+$/.test(words[index + 2] ?? '')) found.push(words[index + 2]);
+    words = [];
+  };
+  for (const char of command) {
+    if (escaped) {
+      word += char;
+      inWord = true;
+      escaped = false;
+    } else if (quote) {
+      if (char === quote) quote = '';
+      else if (char === '\\' && quote === '"') escaped = true;
+      else word += char;
+    } else if (char === '\\') escaped = true;
+    else if (char === '"' || char === "'") {
+      quote = char;
+      inWord = true;
+    } else if (char === '\n' || /[;&|()]/.test(char)) finishCommand();
+    else if (/\s/.test(char)) finishWord();
+    else {
+      word += char;
+      inWord = true;
+    }
+  }
+  finishCommand();
+  return found;
+}
+
+/** Count literal script commands reached from CI scripts and complete shards. */
 function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns(), scripts = {}) {
   const covered = new Set(inCi);
   if (runs.some((run) => shardRunProblems(run).length === 0)) for (const script of chained) covered.add(script);
   const pending = [...covered];
   while (pending.length > 0) {
     const script = pending.pop();
-    for (const match of (scripts[script] ?? '').matchAll(/\bnpm run ([\w:-]+)/g)) {
-      if (covered.has(match[1])) continue;
-      covered.add(match[1]);
-      pending.push(match[1]);
+    for (const nested of nestedNpmRuns(scripts[script] ?? '')) {
+      if (covered.has(nested)) continue;
+      covered.add(nested);
+      pending.push(nested);
     }
   }
   return covered;

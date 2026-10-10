@@ -114,7 +114,10 @@ function execute(options, registerOutputGuard = () => {}) {
   };
   assertOutputPaths();
   registerOutputGuard(assertOutputPaths);
-  if (options.json) fs.mkdirSync(path.dirname(options.json), { recursive: true });
+  if (options.json) {
+    fs.mkdirSync(path.dirname(options.json), { recursive: true });
+    if (options.agent !== 'none' && fs.existsSync(options.json)) fs.unlinkSync(options.json);
+  }
   const result = runWithEvidence({
     name: NAME,
     projectRoot,
@@ -213,6 +216,7 @@ function main(argv = process.argv) {
   let options;
   let result;
   let outputGuard;
+  let outputGuardPassed = false;
   try {
     command.parse(argv);
     options = command.opts();
@@ -235,6 +239,7 @@ function main(argv = process.argv) {
   } else {
     try {
       outputGuard?.();
+      outputGuardPassed = Boolean(outputGuard);
     } catch (error) {
       result = {
         exitCode: 2,
@@ -243,7 +248,7 @@ function main(argv = process.argv) {
       process.stderr.write(`${NAME}: ${error.message}\n`);
     }
     const text = `${JSON.stringify(result.payload, null, 2)}\n`;
-    if (options?.json && result.exitCode !== 2) fs.writeFileSync(options.json, text, 'utf8');
+    if (options?.json && (result.exitCode !== 2 || outputGuardPassed)) fs.writeFileSync(options.json, text, 'utf8');
     process.stdout.write(text);
   }
   return result.exitCode;

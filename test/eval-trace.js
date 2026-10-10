@@ -2397,14 +2397,19 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     if (!options.artifactsDir) return;
     fs.mkdirSync(options.artifactsDir, { recursive: true });
     const destination = fs.mkdtempSync(path.join(options.artifactsDir, `${agent}-${set.id}-run-${runIndex + 1}-attempt-${attemptIndex}-`));
-    fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
-    fs.writeFileSync(path.join(destination, 'prompt.txt'), buildPrompt(set), 'utf8');
-    if (observation) {
-      fs.writeFileSync(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8');
-      fs.writeFileSync(path.join(destination, 'stdout.txt'), observedText(observation.stdout), 'utf8');
-      fs.writeFileSync(path.join(destination, 'stderr.txt'), observedText(observation.stderr), 'utf8');
+    try {
+      fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
+      fs.writeFileSync(path.join(destination, 'prompt.txt'), buildPrompt(set), 'utf8');
+      if (observation) {
+        fs.writeFileSync(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8');
+        fs.writeFileSync(path.join(destination, 'stdout.txt'), observedText(observation.stdout), 'utf8');
+        fs.writeFileSync(path.join(destination, 'stderr.txt'), observedText(observation.stderr), 'utf8');
+      }
+      if (fault) fs.writeFileSync(path.join(destination, 'fault.json'), `${JSON.stringify(fault, null, 2)}\n`, 'utf8');
+    } catch (error) {
+      fs.rmSync(destination, { recursive: true, force: true });
+      throw error;
     }
-    if (fault) fs.writeFileSync(path.join(destination, 'fault.json'), `${JSON.stringify(fault, null, 2)}\n`, 'utf8');
   };
   try {
     const treeBefore = workingTreeState(PROJECT_ROOT);
