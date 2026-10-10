@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Trace preserves each requirement's stated source priority through mapping and coverage arithmetic. Its checklist follows the coverage gate rules, reports waivers separately, and requires the slim gate JSON for eligible runs. The terminal command rejects contradictory coverage decisions and protects inputs from aliased output paths. Diagnostic Trace evaluations can retain staged projects and full observations outside the repository with `--artifacts-dir`.
+- Trace preserves each requirement's stated source priority through mapping and coverage arithmetic. Its checklist follows the coverage gate rules, reports waivers separately, and requires the slim gate JSON for eligible runs. The terminal command rejects contradictory coverage decisions and rechecks input aliases after agent execution. Mapping records each accepted test declaration and its observable assertion anchors. Diagnostic Trace evaluations can retain staged projects and full observations outside the repository with `--artifacts-dir`.
 
 ## [2.0.1] - 2026-10-10
 

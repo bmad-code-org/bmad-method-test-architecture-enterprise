@@ -193,6 +193,12 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
       throw new Error(`Trace summary has invalid risk_summary.${field}.`);
   if (!summary.live_evidence || typeof summary.live_evidence !== 'object' || Array.isArray(summary.live_evidence))
     throw new Error('Trace summary has no live_evidence metadata.');
+  // Step 4 counts every non-FULL P0 item as critical; P1-P3 gap buckets count NONE only.
+  for (const [index, field] of ['critical_open', 'high_open', 'medium_open', 'low_open'].entries()) {
+    const uncovered = priorities[index].total - priorities[index].covered;
+    if (index === 0 ? summary.risk_summary[field] !== uncovered : summary.risk_summary[field] > uncovered)
+      throw new Error(`Trace ${field} contradicts its uncovered priority inventory.`);
+  }
   if (summary.links?.trace_report_path !== paths.matrix) throw new Error('Trace summary links to a different matrix.');
 
   const eligible = allowGate && summary.collection_status === 'COLLECTED';
@@ -235,8 +241,8 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate }) {
     let expectedStatus = p0 < 100 || overall < 80 || p1 < 80 ? 'FAIL' : p1 < 90 ? 'CONCERNS' : 'PASS';
     const liveOnly = summary.live_evidence.requirements_live_only;
     if (!Number.isInteger(liveOnly) || liveOnly < 0) throw new Error('Trace summary has invalid live-only coverage metadata.');
-    if (expectedStatus === 'PASS' && ((summary.oracle.synthetic && summary.confidence !== 'high') || liveOnly > 0))
-      expectedStatus = 'CONCERNS';
+    const synthetic = summary.oracle.synthetic || ['synthetic_requirements', 'user_journeys'].includes(summary.inventory_basis);
+    if (expectedStatus === 'PASS' && ((synthetic && summary.confidence !== 'high') || liveOnly > 0)) expectedStatus = 'CONCERNS';
     if (summary.gate_status !== expectedStatus) throw new Error('Trace gate decision contradicts its coverage and confidence evidence.');
     gate = readJson(paths.gate);
     if (

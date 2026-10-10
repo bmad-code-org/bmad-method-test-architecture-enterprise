@@ -39,7 +39,7 @@ function parser() {
     .option('--json <path>', 'also save the command result JSON at this project-relative path');
 }
 
-function execute(options) {
+function execute(options, registerOutputGuard = () => {}) {
   const projectRoot = fs.realpathSync(path.resolve(options.projectRoot));
   if (!fs.statSync(projectRoot).isDirectory()) throw new Error('--project-root must be a directory.');
   if (!COLLECTION_MODES.includes(options.collectionMode))
@@ -77,15 +77,20 @@ function execute(options) {
     return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
   };
   const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
-  if (Object.values(destinations).some((output) => inputs.some((input) => aliases(output, input))))
-    throw new Error('Trace artifacts must use separate paths from the target, live results, and waiver register.');
-  if (options.json) {
+  const assertOutputPaths = () => {
+    for (const [name, file] of Object.entries(destinations)) projectPath(projectRoot, file, `trace ${name}`);
+    if (Object.values(destinations).some((output) => inputs.some((input) => aliases(output, input))))
+      throw new Error('Trace artifacts must use separate paths from the target, live results, and waiver register.');
+    if (!options.json) return;
+    projectPath(projectRoot, options.json, '--json');
     const protectedPaths = [...inputs, ...Object.values(destinations)];
     if (protectedPaths.some((file) => aliases(file, options.json)))
       throw new Error('--json must use a separate path from inputs and trace artifacts.');
-    fs.mkdirSync(path.dirname(options.json), { recursive: true });
     if (fs.existsSync(options.json) && !fs.statSync(options.json).isFile()) throw new Error('--json must name a regular file.');
-  }
+  };
+  assertOutputPaths();
+  registerOutputGuard(assertOutputPaths);
+  if (options.json) fs.mkdirSync(path.dirname(options.json), { recursive: true });
   const result = runWithEvidence({
     name: NAME,
     projectRoot,
@@ -126,6 +131,7 @@ function execute(options) {
     },
   });
   if (result.dryRun) return { exitCode: 0, prompt: result.context.prompt, evidence: result.runDir };
+  assertOutputPaths();
   const summary = publishTraceOutputs(result.value, destinations);
   const status = summary.gate_status ?? null;
   const exitCode = status === 'FAIL' || (status === 'CONCERNS' && options.failOn === 'concerns') ? 1 : 0;
@@ -150,11 +156,14 @@ function main(argv = process.argv) {
   command.exitOverride();
   let options;
   let result;
+  let outputGuard;
   try {
     command.parse(argv);
     options = command.opts();
     if (options.json) options.json = projectPath(path.resolve(options.projectRoot), options.json, '--json');
-    result = execute(options);
+    result = execute(options, (guard) => {
+      outputGuard = guard;
+    });
   } catch (error) {
     if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') return 0;
     const failedRun = ['environment-parser', 'environment-transport', 'environment-timeout'].includes(error.failureClass);
@@ -168,6 +177,12 @@ function main(argv = process.argv) {
     process.stdout.write(`${result.prompt}\n`);
     process.stderr.write(`${NAME}: prompt evidence: ${result.evidence}\n`);
   } else {
+    try {
+      outputGuard?.();
+    } catch (error) {
+      result = { exitCode: 2, payload: { schema_version: '0.1.0', status: 'failed', reason: error.message } };
+      process.stderr.write(`${NAME}: ${error.message}\n`);
+    }
     const text = `${JSON.stringify(result.payload, null, 2)}\n`;
     if (options?.json && result.exitCode !== 2) fs.writeFileSync(options.json, text, 'utf8');
     process.stdout.write(text);

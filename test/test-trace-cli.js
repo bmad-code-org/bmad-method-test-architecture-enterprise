@@ -160,6 +160,8 @@ try {
       'ignored-confidence',
       'ignored-live-only',
       'missing-live-only',
+      'ignored-synthetic-basis',
+      'contradictory-critical-gaps',
     ]) {
       const result = run(mode);
       assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
@@ -352,6 +354,31 @@ try {
         validateTraceOutputs({ paths, target, collectionMode: 'contract_static', allowGate: true }).summary.gate_status,
         expected,
       );
+    }
+  });
+
+  check('agent-created output aliases are rejected before publication and failure-result writes', () => {
+    const target = path.join(root, 'docs', 'epic-4-export.md');
+    const before = fs.readFileSync(target);
+    const outside = `${root}-outside`;
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'sentinel.md'), 'external sentinel');
+    try {
+      for (const mode of ['late-json-success', 'late-json-failure', 'late-artifact-alias', 'late-artifact-escape']) {
+        const json = path.join(root, 'late-result.json');
+        if (fs.existsSync(json)) fs.unlinkSync(json);
+        const matrix = path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md');
+        if (fs.existsSync(matrix)) fs.unlinkSync(matrix);
+        const result = run(mode, ['--json', 'late-result.json']);
+        assert.equal(result.status, 2, `${mode}: ${result.stderr}`);
+        assert.equal(result.payload.status, 'failed');
+        assert.deepEqual(fs.readFileSync(target), before);
+        assert.equal(fs.readFileSync(path.join(outside, 'sentinel.md'), 'utf8'), 'external sentinel');
+      }
+      for (const file of [path.join(root, 'late-result.json'), path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')])
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
     }
   });
 

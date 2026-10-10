@@ -79,6 +79,12 @@ if (mode === 'ignored-confidence') {
 }
 if (mode === 'ignored-live-only') summary.live_evidence.requirements_live_only = 1;
 if (mode === 'missing-live-only') delete summary.live_evidence.requirements_live_only;
+if (mode === 'ignored-synthetic-basis') {
+  summary.inventory_basis = 'synthetic_requirements';
+  summary.confidence = 'medium';
+  summary.oracle.confidence = 'medium';
+}
+if (mode === 'contradictory-critical-gaps') summary.risk_summary.critical_open = 1;
 if (mode === 'wrong-target') summary.target.id = '99';
 if (mode === 'bad-confidence') summary.confidence = 'auto';
 if (mode === 'bad-collection') summary.collection_status = 'UNKNOWN';
@@ -90,5 +96,19 @@ fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${ident
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
+}
+if (mode.startsWith('late-json-')) {
+  fs.linkSync(identity.document, path.join(process.cwd(), 'late-result.json'));
+  if (mode === 'late-json-failure') process.exit(1);
+}
+if (mode === 'late-artifact-alias') {
+  const published = path.join(process.cwd(), 'artifacts', 'trace', path.basename(matrixPath));
+  fs.mkdirSync(path.dirname(published), { recursive: true });
+  fs.linkSync(identity.document, published);
+}
+if (mode === 'late-artifact-escape') {
+  const published = path.join(process.cwd(), 'artifacts', 'trace', path.basename(matrixPath));
+  fs.mkdirSync(path.dirname(published), { recursive: true });
+  fs.symlinkSync(path.join(`${process.cwd()}-outside`, 'sentinel.md'), published);
 }
 process.stdout.write('trace fixture agent completed\n');
