@@ -36,6 +36,9 @@ if(mode !== 'incomplete-plan') plan += sections.filter(h => mode !== 'empty-exec
 if(mode === 'and-headings' || mode === 'empty-and-heading') plan = plan.replaceAll(' & ', ' and ');
 if(mode === 'empty-and-heading') plan = plan.replace(/(## Interworking and Regression\\n)[^]*?(?=\\n## |$)/, '$1\\n### Empty child\\n<!-- no content -->\\n');
 if(mode === 'empty-execution') plan += '\\n## Execution Strategy\\n\\n### Empty child\\n<!-- no content -->\\n';
+if(mode === 'shadow-appendix') plan = '## Appendix Notes\\n\\nPopulated lookalike.\\n\\n'+plan.replace(/(## Appendix\\n)[^]*?(?=\\n## |$)/, '$1\\n<!-- empty canonical -->\\n');
+if(mode === 'shadow-risk') { const original = plan.match(/## Risk Assessment\\n([^]*?)(?=\\n## |$)/)[1]; plan = '## Residual Risk Assessment Notes\\n'+original+'\\n'+plan.replace(/(## Risk Assessment\\n)[^]*?(?=\\n## |$)/,'$1\\n<!-- empty canonical -->\\n'); }
+if(mode === 'decorated-headings') plan = plan.replace(/^## (.+)$/gm, '## 🧪 2. $1').replace('Follow-on Workflows\\n','Follow-on Workflows (Manual)\\n');
 if(mode === 'misband') plan = plan.replace('| 1 | 2 | 2 |', '| 3 | 3 | 9 |');
 if(mode === 'no-priority') plan = plan.replace('### P1', '### Test Cases');
 if(mode === 'no-band') plan = plan.replace('Low Risks: Score 1 to 2', 'Low Risks');
@@ -292,6 +295,26 @@ test('eval artifact retention preserves exact bytes and identifies live observat
   assert.equal(provenance.mode, 'live');
   assert.equal(provenance.requestedModel, 'gpt-5.6-sol');
   assert.equal(provenance.originalWorkspace, workspace);
+});
+
+test('eval artifact retention cleans up incomplete destination when copy or write fails', async (t) => {
+  const root = project(t);
+  const { retainSkillArtifacts } = require('./lib/retain-skill-artifacts');
+  const retainedDir = path.join(root, 'retained');
+  await assert.rejects(
+    retainSkillArtifacts({
+      artifactsDir: retainedDir,
+      workspace: { dir: path.join(root, 'non-existent-workspace') },
+      caseId: 'failure-example',
+      agent: 'codex',
+      model: 'gpt-5.6-sol',
+      repetition: 1,
+      attempt: 1,
+      prompt: 'Execute',
+    }),
+  );
+  const entries = fs.readdirSync(retainedDir);
+  assert.equal(entries.length, 0, 'retained directory should have no leftover directories after failure');
 });
 
 test('publication refuses direct and symlink input collisions before invoking an agent', (t) => {
@@ -611,6 +634,24 @@ test('public CLI rejects an equivalent heading with empty content and preserves 
   assert.equal(rejected.status, 3, rejected.stderr);
   assert.match(rejected.stderr, /missing populated section: Interworking & Regression/);
   for (const [index, file] of files.entries()) assert.deepEqual(fs.readFileSync(file), before[index]);
+});
+
+test('public CLI prefers canonical section headings over populated lookalike headings', (t) => {
+  for (const [mode, expectedSection] of [
+    ['shadow-appendix', 'Appendix'],
+    ['shadow-risk', 'Risk Assessment'],
+  ]) {
+    const root = project(t);
+    const rejected = execute(root, ['--epic', '7'], mode);
+    assert.equal(rejected.status, 3, rejected.stderr);
+    assert.match(rejected.stderr, new RegExp(`missing populated section: ${expectedSection}`));
+  }
+});
+
+test('public CLI accepts decorated and numbered headings when content is populated', (t) => {
+  const root = project(t);
+  const result = execute(root, ['--epic', '7'], 'decorated-headings');
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('later parser replay preserves the final failed live capture and validates its actual populated plan', () => {

@@ -25,15 +25,20 @@ async function retainSkillArtifacts({ artifactsDir, workspace, caseId, agent, mo
   fs.mkdirSync(root, { recursive: true });
   const label = `${agent}-${caseId}-run-${repetition}-attempt-${attempt}`.replaceAll(/[^a-zA-Z0-9_-]/g, '_');
   const destination = fs.mkdtempSync(path.join(root, `${label}-`));
-  fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
-  await writeText(path.join(destination, 'prompt.txt'), prompt);
-  if (observation !== undefined) await writeText(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`);
-  await writeText(
-    path.join(destination, 'provenance.json'),
-    `${JSON.stringify({ mode: 'live', caseId, agent, requestedModel: model, repetition, attempt, capturedAt: new Date().toISOString(), originalWorkspace: workspace.dir }, null, 2)}\n`,
-  );
-  process.stderr.write(`retained skill artifacts: ${destination}\n`);
-  return destination;
+  try {
+    fs.cpSync(workspace.dir, path.join(destination, 'workspace'), { recursive: true });
+    await writeText(path.join(destination, 'prompt.txt'), prompt);
+    if (observation !== undefined) await writeText(path.join(destination, 'observation.json'), `${JSON.stringify(observation, null, 2)}\n`);
+    await writeText(
+      path.join(destination, 'provenance.json'),
+      `${JSON.stringify({ mode: 'live', caseId, agent, requestedModel: model, repetition, attempt, capturedAt: new Date().toISOString(), originalWorkspace: workspace.dir }, null, 2)}\n`,
+    );
+    process.stderr.write(`retained skill artifacts: ${destination}\n`);
+    return destination;
+  } catch (error) {
+    fs.rmSync(destination, { recursive: true, force: true });
+    throw error;
+  }
 }
 /** Always clean an attempt while preserving its original run failure. */
 async function finishSkillAttempt({ retain, workspace, runError, remove = fs.rmSync }) {

@@ -11,6 +11,7 @@ coverage/
 # Logs
 logs/
 *.log
+!test/results/**/*.log
 npm-debug.log*
 
 # Environment variables

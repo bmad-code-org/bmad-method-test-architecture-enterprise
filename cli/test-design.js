@@ -44,9 +44,18 @@ function checkPublication(destinations, inputs) {
 function validateSections(text, sections, label) {
   const headings = [...text.matchAll(/^(#{2,3})[ \t]+([^\n]+)\n/gm)];
   const equivalentHeading = (value) => value.replaceAll(/\band\b/gi, '&');
+  const normalizeHeading = (value) =>
+    equivalentHeading(value)
+      .replace(/^[\s\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Symbol}\d.)\-:]+/u, '')
+      .replaceAll(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
   for (const section of sections) {
+    const normalizedSection = normalizeHeading(section);
     const escaped = equivalentHeading(section).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-    const heading = headings.find((entry) => new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(equivalentHeading(entry[2])));
+    const heading =
+      headings.find((entry) => normalizeHeading(entry[2]) === normalizedSection) ??
+      headings.find((entry) => new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(equivalentHeading(entry[2])));
     const stop = heading && headings.find((entry) => entry.index > heading.index && entry[1].length <= heading[1].length);
     const body = heading && text.slice(heading.index + heading[0].length, stop?.index ?? text.length);
     const content = body

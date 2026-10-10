@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Test Design prefers normalized exact heading matches over substring matches when validating sections to select canonical headings over lookalike headings; evaluation artifact retention cleans incomplete attempt directories on failure.
 - Test Design accepts standalone `and` and `&` as equivalent section-heading connectors while still requiring populated content; retains the original rejected Codex report and a separate later-parser replay.
 - Test Design verifies populated mode-specific full-plan sections, score placement within the declared risk band, and a P0/P1/P2/P3 priority on every coverage row before publication.
 
