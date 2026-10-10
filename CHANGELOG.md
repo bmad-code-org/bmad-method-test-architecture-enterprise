@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt keeps its prompt and agent output until its artifacts pass validation.
+- `tea-trace` runs Trace from a terminal and writes scope-specific reports with CI exit codes. Each attempt retains its prompt, agent output, and generated files. Reports are published after validation.
 
 ### Changed
 

@@ -292,11 +292,7 @@ function nestedNpmRuns(command) {
   const finishChain = (maskedByLaterStatement = false) => {
     const hasFallback = chain.some((part) => part.separator === '||');
     const failureCanBeHidden = chain.some((part) => part.separator === '|' || part.separator === '&');
-    let guaranteed = true;
-    for (const part of chain) {
-      if (!failureCanBeHidden && guaranteed && part.script) found.push(part.script);
-      if ((hasFallback || maskedByLaterStatement) && (part.separator === '&&' || part.separator === '||')) guaranteed = false;
-    }
+    if (!maskedByLaterStatement && !hasFallback && !failureCanBeHidden) for (const part of chain) if (part.script) found.push(part.script);
     chain = [];
   };
   for (let offset = 0; offset < command.length; offset++) {
@@ -347,7 +343,7 @@ function nestedNpmRuns(command) {
   return found;
 }
 
-/** Count literal script commands reached from CI scripts and complete shards. */
+/** Follow nested scripts only when their failure reaches the calling CI path. */
 function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns(), scripts = {}) {
   const covered = new Set(inCi);
   if (runs.some((run) => shardRunProblems(run).length === 0)) for (const script of chained) covered.add(script);
