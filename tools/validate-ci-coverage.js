@@ -113,7 +113,7 @@ function scriptsRunInCi() {
   for (const name of files) {
     if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
     const text = fs.readFileSync(path.join(WORKFLOW_ROOT, name), 'utf8');
-    for (const match of text.matchAll(/npm run ([\w:-]+)/g)) found.add(match[1]);
+    for (const match of text.matchAll(/npm run ([\w:.-]+)/g)) found.add(match[1]);
   }
   return found;
 }
@@ -254,13 +254,113 @@ function shardRunProblems(run) {
   return problems;
 }
 
-/**
- * Every script CI runs: each literal `npm run <script>` in a workflow, plus the
- * whole chain when some job runs tools/test-shards.js over a full shard matrix.
- */
-function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns()) {
+function nestedNpmRuns(command) {
+  const found = [];
+  let chain = [];
+  let words = [];
+  let word = '';
+  let inWord = false;
+  let quote = '';
+  let escaped = false;
+  const controlStack = [];
+  let groupDepth = 0;
+  const finishWord = () => {
+    if (inWord) words.push(word);
+    word = '';
+    inWord = false;
+  };
+  const finishCommand = (separator) => {
+    finishWord();
+    let index = 0;
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
+    const head = words[index];
+    const opener = ['then', 'do'].includes(head) ? words[index + 1] : head;
+    const closer = { case: 'esac', if: 'fi', for: 'done', while: 'done', until: 'done', select: 'done' }[opener];
+    if (closer) controlStack.push(closer);
+    const script =
+      controlStack.length === 0 &&
+      groupDepth === 0 &&
+      head === 'npm' &&
+      words[index + 1] === 'run' &&
+      /^[\w:.-]+$/.test(words[index + 2] ?? '')
+        ? words[index + 2]
+        : null;
+    chain.push({ script, separator });
+    if (head === controlStack.at(-1)) controlStack.pop();
+    words = [];
+  };
+  const finishChain = (maskedByLaterStatement = false) => {
+    const hasFallback = chain.some((part) => part.separator === '||');
+    const failureCanBeHidden = chain.some((part) => part.separator === '|' || part.separator === '&');
+    if (!maskedByLaterStatement && !hasFallback && !failureCanBeHidden) for (const part of chain) if (part.script) found.push(part.script);
+    chain = [];
+  };
+  for (let offset = 0; offset < command.length; offset++) {
+    const char = command[offset];
+    if (escaped) {
+      word += char;
+      inWord = true;
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = '';
+      else if (char === '\\' && quote === '"') escaped = true;
+      else word += char;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      inWord = true;
+      continue;
+    }
+    if (char === '&' && (command[offset - 1] === '>' || command[offset - 1] === '<' || command[offset + 1] === '>')) {
+      word += char;
+      inWord = true;
+      continue;
+    }
+    if (char === '&' || char === '|') {
+      const separator = command[offset + 1] === char ? char + char : char;
+      finishCommand(separator);
+      if (separator.length === 2) offset++;
+      if (separator === '&') finishChain();
+      continue;
+    }
+    if (char === '\n' || /[;(){}]/.test(char)) {
+      finishCommand(char);
+      finishChain(command.slice(offset + 1).trim().length > 0);
+      if (char === '(' || char === '{') groupDepth++;
+      if (char === ')' || char === '}') groupDepth = Math.max(0, groupDepth - 1);
+      continue;
+    }
+    if (/\s/.test(char)) finishWord();
+    else {
+      word += char;
+      inWord = true;
+    }
+  }
+  finishCommand('end');
+  finishChain();
+  return found;
+}
+
+/** Follow nested scripts only when their failure reaches the calling CI path. */
+function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns(), scripts = {}) {
   const covered = new Set(inCi);
   if (runs.some((run) => shardRunProblems(run).length === 0)) for (const script of chained) covered.add(script);
+  const pending = [...covered];
+  while (pending.length > 0) {
+    const script = pending.pop();
+    for (const nested of nestedNpmRuns(scripts[script] ?? '')) {
+      if (covered.has(nested)) continue;
+      covered.add(nested);
+      pending.push(nested);
+    }
+  }
   return covered;
 }
 
@@ -500,7 +600,7 @@ function main() {
     return 1;
   }
 
-  const inCi = scriptsCoveredInCi(chained, scriptsRunInCi(), runs);
+  const inCi = scriptsCoveredInCi(chained, scriptsRunInCi(), runs, manifest.scripts);
   const missing = chained.filter((script) => !inCi.has(script));
 
   if (missing.length > 0) {

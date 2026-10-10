@@ -1,0 +1,89 @@
+{
+  "repository": {
+    "commit": "cbcf937135585c072846026ea7cacbcedf74182d",
+    "dirty": true
+  },
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "limitations": [
+    "The baseline harness did not retain prompts or agent streams. External file capture recovered final summary and matrix bytes. Their evidence digests match every completed repetition."
+  ],
+  "repetitions": [
+    {
+      "caseId": "seeded-tenant-data-export",
+      "repetition": 1,
+      "completionState": "completed",
+      "artifacts": [
+        {
+          "path": "before/seeded-tenant-data-export/run-1/summary.json",
+          "artifact": "tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+          "evidenceDigest": "sha256:a67b4d2e6116b08135575cd486209d574d8ca4b59d29301b7b7b9e6591d6b46a",
+          "bytesSha256": "f09b527abce777e2751149587c08d71c489ef411627c39636e1c2b03b17e648e"
+        },
+        {
+          "path": "before/seeded-tenant-data-export/run-1/matrix.txt",
+          "artifact": "tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md",
+          "evidenceDigest": "sha256:b52c7254ef513057fc93614ccb307f2217b79b2e2be0de22926a0cafb68cf64c",
+          "bytesSha256": "7325aafd0ae88cd636439110ff8602f8c9b150784037d0a5d3e6e8db3614831a"
+        }
+      ]
+    },
+    {
+      "caseId": "seeded-tenant-data-export",
+      "repetition": 2,
+      "completionState": "completed",
+      "artifacts": [
+        {
+          "path": "before/seeded-tenant-data-export/run-2/summary.json",
+          "artifact": "tenant-data-export/test-artifacts/trace/e2e-trace-summary-epic-4.json",
+          "evidenceDigest": "sha256:260c7add88973bdff708f7637c3150f4ad1084799f337c5cbb00c748a1117117",
+          "bytesSha256": "84028175cbb6077e60d351c3100849948242bb0c9a73e6e55e5d13a639df4631"
+        },
+        {
+          "path": "before/seeded-tenant-data-export/run-2/matrix.txt",
+          "artifact": "tenant-data-export/test-artifacts/trace/traceability-matrix-epic-4.md",
+          "evidenceDigest": "sha256:5147c9a99016492462d24f5df6926de7b1c27c2d99254941ae00fa63ea8b9861",
+          "bytesSha256": "cfe25f792996990cd789792784eccc8a2e6119b402aa5fdd42e0a1fc89793d99"
+        }
+      ]
+    },
+    {
+      "caseId": "clean-api-token-lifecycle",
+      "repetition": 1,
+      "completionState": "completed",
+      "artifacts": [
+        {
+          "path": "before/clean-api-token-lifecycle/run-1/summary.json",
+          "artifact": "api-token-lifecycle/test-artifacts/trace/e2e-trace-summary-epic-5.json",
+          "evidenceDigest": "sha256:a2958adba0c5145a0fc633e389a1398a8a5f3f26d8765b5a2ce5dc1aed962eda",
+          "bytesSha256": "3279dff8e8953afbf805faf38464bdf7acf800e34cff4ec6354be33eeb141b12"
+        },
+        {
+          "path": "before/clean-api-token-lifecycle/run-1/matrix.txt",
+          "artifact": "api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md",
+          "evidenceDigest": "sha256:48d3f02006e05e073db650f7e0855c7f41c6ec24cb5b131575d6881ed13169aa",
+          "bytesSha256": "85b52f07b6766b3767d355bc18918f0d83a6f6a391a5ef5bc910c16459c6fefe"
+        }
+      ]
+    },
+    {
+      "caseId": "clean-api-token-lifecycle",
+      "repetition": 2,
+      "completionState": "completed",
+      "artifacts": [
+        {
+          "path": "before/clean-api-token-lifecycle/run-2/summary.json",
+          "artifact": "api-token-lifecycle/test-artifacts/trace/e2e-trace-summary-epic-5.json",
+          "evidenceDigest": "sha256:9c86e176a640fd331ae8af718caaa501516c201599a0e9bd015125dc2dff9ec3",
+          "bytesSha256": "cc324a9445e54e4722d6206d2486f19874744a77fd259d30b52400ee89d3125c"
+        },
+        {
+          "path": "before/clean-api-token-lifecycle/run-2/matrix.txt",
+          "artifact": "api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md",
+          "evidenceDigest": "sha256:58f95904f24f9c344010eb6b132fc27f1a013ba6b5427300981b467ff8b9b213",
+          "bytesSha256": "ef9a1184692ab1203e5902838128fc5870baabfebde78ad6e91ed55ce11db39b"
+        }
+      ]
+    }
+  ]
+}

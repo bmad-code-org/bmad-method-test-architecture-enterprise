@@ -1345,6 +1345,7 @@ check('each new entry holds its sentence against the sources in the order its ca
     'replayAtddCapturedBytes',
     'replayTestReviewCapturedBytes',
     'replayCiCapturedBytes',
+    'replayTraceCapturedBytes',
   ]);
   assert.deepStrictEqual(find('test/test-eval-replay.js', 'the cases that carry captured bytes').counts, ['replayCapturedBytes']);
   assert.deepStrictEqual(find(epicsFile, 'the story count').counts, ['storyCount']);
