@@ -7,7 +7,7 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { publishArtifacts, protectSources } = require('../cli/lib/workflow-publication');
 const cli = path.join(__dirname, '..', 'cli', 'nfr.js');
-const { readNativeArchive, stageNativeCase, digest } = require('./lib/nfr-native-archive');
+const { readNativeArchive, stageNativeCase, sha256Hex } = require('./lib/nfr-native-archive');
 /** A consuming project supplies requirements, implementation and actual measured evidence. */
 function project(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-nfr-cli-'));
@@ -348,7 +348,7 @@ test('actual Codex public failures retain their original byte pins and exit code
 test('retained parser replay bytes distinguish original failures from controlled repair observations', () => {
   const directory = path.join(__dirname, 'results', 'codex-nfr', 'parser-replay');
   const manifestBytes = fs.readFileSync(path.join(directory, 'manifest.json'));
-  assert.equal(digest(manifestBytes), '8e15f65de609c3a2ed16a5a7467a0f386e5fc1efd85c77df293bb4d9fc65419b');
+  assert.equal(sha256Hex(manifestBytes), '8e15f65de609c3a2ed16a5a7467a0f386e5fc1efd85c77df293bb4d9fc65419b');
   const manifest = JSON.parse(manifestBytes);
   assert.equal(manifest.generatedByModel, false);
   assert.equal(manifest.sourceCommit, '1debdc1112ef51a7adf4ba7c956e3bfe0c3db9da');
@@ -360,7 +360,7 @@ test('retained parser replay bytes distinguish original failures from controlled
   for (const entry of manifest.files) {
     const bytes = fs.readFileSync(path.join(directory, entry.path));
     assert.equal(bytes.length, entry.bytes);
-    assert.equal(digest(bytes), entry.sha256);
+    assert.equal(sha256Hex(bytes), entry.sha256);
   }
   const { files } = readNativeArchive();
   for (const type of ['clean', 'gapped']) {
@@ -376,7 +376,7 @@ test('retained parser replay bytes distinguish original failures from controlled
       assert.equal(proof.exitCode, phase === 'original-parser' ? 3 : type === 'clean' ? 0 : 1);
       assert.deepEqual(proof.changedInputs, []);
       assert.deepEqual(proof.adaptedContextFields, ['requestId', 'supplied_project_root']);
-      assert.equal(digest(fs.readFileSync(path.join(root, 'nfr-assessment-system.md'))), digest(nativeReport));
+      assert.equal(sha256Hex(fs.readFileSync(path.join(root, 'nfr-assessment-system.md'))), sha256Hex(nativeReport));
     }
   }
 });
@@ -420,7 +420,7 @@ for (const [type, expectedExit, expectedStatus] of [
     assert.equal(run.status, expectedExit, run.stderr);
     const result = JSON.parse(run.stdout);
     assert.equal(result.status, expectedStatus);
-    assert.equal(digest(fs.readFileSync(result.report)), digest(originalReport));
+    assert.equal(sha256Hex(fs.readFileSync(result.report)), sha256Hex(originalReport));
     const originalContext = JSON.parse(fs.readFileSync(path.join(source, 'nfr-context-system.json')));
     const context = JSON.parse(fs.readFileSync(result.context));
     for (const field of ['requestId', 'supplied_project_root']) {

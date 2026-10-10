@@ -6,14 +6,14 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const root = path.join(__dirname, '..', 'results', 'codex-nfr', 'public-cli-original');
-const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const sha256Hex = (value) => crypto.createHash('sha256').update(value).digest('hex');
 /** Keep original failures immutable while exposing their exact source files to controlled replay. */
 function readNativeArchive() {
   const manifestBytes = fs.readFileSync(path.join(root, 'public-native.manifest.json'));
-  assert.equal(digest(manifestBytes), '46b3e73e2c32d7db91b55a5cb249a599e66acc98030cee282de1a3095eadb4d2');
+  assert.equal(sha256Hex(manifestBytes), '46b3e73e2c32d7db91b55a5cb249a599e66acc98030cee282de1a3095eadb4d2');
   const manifest = JSON.parse(manifestBytes);
   const archiveBytes = fs.readFileSync(path.join(root, manifest.archive));
-  assert.equal(digest(archiveBytes), manifest.archiveSha256);
+  assert.equal(sha256Hex(archiveBytes), manifest.archiveSha256);
   const archive = JSON.parse(zlib.gunzipSync(archiveBytes));
   assert.equal(archive.sourceCommit, 'a8225395571b026f194aefc696ca0a18922bf919');
   assert.equal(manifest.sourceCommit, archive.sourceCommit);
@@ -26,7 +26,7 @@ function readNativeArchive() {
   const files = new Map();
   for (const [index, file] of archive.files.entries()) {
     const bytes = Buffer.from(file.base64, 'base64');
-    assert.deepEqual(manifest.files[index], { path: file.path, bytes: bytes.length, sha256: digest(bytes) });
+    assert.deepEqual(manifest.files[index], { path: file.path, bytes: bytes.length, sha256: sha256Hex(bytes) });
     assert.equal(files.has(file.path), false);
     files.set(file.path, bytes);
   }
@@ -47,4 +47,4 @@ function stageNativeCase(root, type) {
     fs.writeFileSync(destination, bytes);
   }
 }
-module.exports = { readNativeArchive, stageNativeCase, digest };
+module.exports = { readNativeArchive, stageNativeCase, sha256Hex };

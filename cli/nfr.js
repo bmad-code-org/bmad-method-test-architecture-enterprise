@@ -190,8 +190,9 @@ function run(argv) {
   );
   const failed =
     options.failOn !== 'none' && (result.value.status === 'FAIL' || (options.failOn === 'concerns' && result.value.status === 'CONCERNS'));
+  const gatePassed = !failed;
   process.stdout.write(
-    `${JSON.stringify({ mode: 'live', runKey, status: result.value.status, gatePassed: !failed, evidence: result.runDir, report: published[0], context: published[1], gate: result.value.gate })}\n`,
+    `${JSON.stringify({ mode: 'live', runKey, status: result.value.status, gatePassed, evidence: result.runDir, report: published[0], context: published[1], gate: result.value.gate })}\n`,
   );
   return failed ? 1 : 0;
 }
