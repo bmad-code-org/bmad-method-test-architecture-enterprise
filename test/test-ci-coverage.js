@@ -219,6 +219,16 @@ function checkNestedScriptNamesAndMaskedChains() {
   check(covered().has('test:unit.js'), 'a trailing separator hid a command required for success');
   scripts['test:root'] = 'case x in y) npm run test:unit.js;; esac; npm run test:setup';
   check(!covered().has('test:unit.js') && covered().has('test:setup'), 'an unmatched case clause counted as CI execution');
+  scripts['test:root'] = 'if false; then\nnpm run test:unit.js\nfi\nnpm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'an unexecuted if branch counted as CI execution');
+  scripts['test:root'] = 'npm run test:unit.js & echo done; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a background command counted as CI execution');
+  scripts['test:root'] = 'npm run test:unit.js | cat; npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a pipeline command counted as CI execution');
+  scripts['test:root'] = '(npm run test:unit.js); npm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a subshell command counted as guaranteed CI execution');
+  scripts['test:root'] = 'helper() {\nnpm run test:unit.js\n}\nnpm run test:setup';
+  check(!covered().has('test:unit.js') && covered().has('test:setup'), 'a function body counted without its invocation');
 }
 
 function checkChainedScriptNeitherShardedNorNamedIsMissing() {

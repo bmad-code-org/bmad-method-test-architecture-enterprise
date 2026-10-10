@@ -262,7 +262,8 @@ function nestedNpmRuns(command) {
   let inWord = false;
   let quote = '';
   let escaped = false;
-  let caseDepth = 0;
+  const controlStack = [];
+  let groupDepth = 0;
   const finishWord = () => {
     if (inWord) words.push(word);
     word = '';
@@ -272,20 +273,28 @@ function nestedNpmRuns(command) {
     finishWord();
     let index = 0;
     while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? '')) index++;
-    if (words[index] === 'case' || (words[index] === 'then' && words[index + 1] === 'case')) caseDepth++;
+    const head = words[index];
+    const opener = ['then', 'do'].includes(head) ? words[index + 1] : head;
+    const closer = { case: 'esac', if: 'fi', for: 'done', while: 'done', until: 'done', select: 'done' }[opener];
+    if (closer) controlStack.push(closer);
     const script =
-      caseDepth === 0 && words[index] === 'npm' && words[index + 1] === 'run' && /^[\w:.-]+$/.test(words[index + 2] ?? '')
+      controlStack.length === 0 &&
+      groupDepth === 0 &&
+      head === 'npm' &&
+      words[index + 1] === 'run' &&
+      /^[\w:.-]+$/.test(words[index + 2] ?? '')
         ? words[index + 2]
         : null;
     chain.push({ script, separator });
-    if (words[index] === 'esac') caseDepth = Math.max(0, caseDepth - 1);
+    if (head === controlStack.at(-1)) controlStack.pop();
     words = [];
   };
   const finishChain = (maskedByLaterStatement = false) => {
     const hasFallback = chain.some((part) => part.separator === '||');
+    const failureCanBeHidden = chain.some((part) => part.separator === '|' || part.separator === '&');
     let guaranteed = true;
     for (const part of chain) {
-      if (guaranteed && part.script) found.push(part.script);
+      if (!failureCanBeHidden && guaranteed && part.script) found.push(part.script);
       if ((hasFallback || maskedByLaterStatement) && (part.separator === '&&' || part.separator === '||')) guaranteed = false;
     }
     chain = [];
@@ -317,11 +326,14 @@ function nestedNpmRuns(command) {
       const separator = command[offset + 1] === char ? char + char : char;
       finishCommand(separator);
       if (separator.length === 2) offset++;
+      if (separator === '&') finishChain();
       continue;
     }
-    if (char === '\n' || /[;()]/.test(char)) {
+    if (char === '\n' || /[;(){}]/.test(char)) {
       finishCommand(char);
       finishChain(command.slice(offset + 1).trim().length > 0);
+      if (char === '(' || char === '{') groupDepth++;
+      if (char === ')' || char === '}') groupDepth = Math.max(0, groupDepth - 1);
       continue;
     }
     if (/\s/.test(char)) finishWord();
