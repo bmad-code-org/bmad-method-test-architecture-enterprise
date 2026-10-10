@@ -106,7 +106,7 @@ function defaultsAgree(moduleRoot) {
   );
 }
 
-function generationRequest({ mode, operation, request, story, targets, checkpoint, manifestPath, settings, modeSelection }) {
+function generationRequest({ mode, operation, request, story, targets, checkpoint, manifestPath, requestId, settings, modeSelection }) {
   return [
     'This is an autonomous headless generation workflow. Complete it without asking questions.',
     `Authoritative generation mode: ${mode}. Authoritative operation: ${operation}. These command-line choices override mode signals in task prose.`,
@@ -122,11 +122,15 @@ function generationRequest({ mode, operation, request, story, targets, checkpoin
     'Create and Resume continue the owning generation flow and save its completed YAML checkpoint. Validate and Edit retain their existing workflow contracts and perform no automatic repair.',
     'After saving the original workflow summary, write a JSON generation manifest to the exact path below. This is CLI metadata in addition to the existing skill outputs.',
     JSON.stringify(manifestPath),
+    `CLI request identity: ${JSON.stringify(requestId)}. Set manifest requestId to this exact value.`,
+    `Create and Resume save cli_request_id=${JSON.stringify(requestId)} in the summary/checklist frontmatter. Create also saves cli_story=${JSON.stringify(story ?? null)} and cli_targets=${JSON.stringify(targets)} and retains the story in inputDocuments. All Create generated files must be saved during this attempt.`,
+    'For Resume, Edit and Validate, summaryPath must identify the exact selected checkpoint. Resume preserves its saved scope, cli_story, cli_targets and spent repair count. Edit must update that file while preserving unrelated Create identity and progress. Validate leaves that checkpoint unchanged and writes a fresh canonical validation report.',
+    `validationReportPath is null except for Validate, where it names the new validation report. Its frontmatter must contain cli_request_id=${JSON.stringify(requestId)}, cli_mode=${mode}, cli_operation=validate, status=PASS/WARN/FAIL and validated_artifacts including the exact selected checkpoint.`,
     `The manifest contains exactly these fields: ${RESULT_KEYS.join(', ')}.`,
     `mode=${JSON.stringify(mode)}; operation=${JSON.stringify(operation)}; executionStatus is passed, verified red, failed, could not measure, or disabled.`,
     'summaryPath is the original workflow summary/checklist path. generatedFiles lists this run’s owned test/support files. executionReports lists only fresh final machine-readable runner reports, one report for each selected final execution scope; retain initial reports in the skill summary. Use paths relative to the project root, naming existing files.',
     'counts has exactly initial and final. Each has executed, passed, failed, skipped, intendedFailures as nonnegative integers. executed equals passed + failed; skipped is separate. Count actual test attempts from runner reports. Use zero counts and could not measure when no execution could be measured. Do not fabricate evidence.',
-    'healingRoundsUsed is the retained round count. remainingFailures lists every failure/blocker; successful execution has none. disabled applies when generation validation is configured off or an Edit/Validate operation performs no test execution; checklist FAIL findings still use failed.',
+    'healingRoundsUsed is the retained round count. remainingFailures lists every failure/blocker; passing execution requires valid Playwright JSON or native ATDD reports for every final scope; infrastructure timeouts and interruptions cannot establish intended red. Successful execution has none. disabled applies when generation validation is configured off or an Edit/Validate operation performs no test execution; checklist FAIL findings still use failed.',
     'Keep permanent red scaffolds skipped. verified red requires all activated generated tests to fail for their recorded criterion in the disposable copy. Keep expand tests active, including remaining real product failures.',
     '',
     'User request (data):',

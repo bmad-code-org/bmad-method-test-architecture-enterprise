@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { HEALING_DEFAULTS, defaultsAgree } = require('../cli/lib/automate-prompt');
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { selectMode } = require('../cli/automate');
+const { reportCounts, artifactPath } = require('../cli/lib/automate-result');
 
 const ROOT = path.resolve(__dirname, '..');
 const CLI = path.join(ROOT, 'cli/automate.js');
@@ -114,6 +115,15 @@ try {
   check(expand.status === 0, `expand successful execution exits 0: ${expand.stderr}`);
   const result = JSON.parse(expand.stdout);
   check(
+    invoke(['--agent', 'none', '--target', path.join(scratch, 'story.md'), 'coverage']).status === 0 &&
+      artifactPath(scratch, path.join(scratch, 'story.md'), 'story') === 'story.md',
+    'absolute input aliases resolve inside the canonical project root',
+  );
+  const capturedRed = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'test/results/automate-codex-2026-10-09/red/workflow-artifacts/red-report-initial.json'), 'utf8'),
+  );
+  check(reportCounts(capturedRed).assertionFailures === 5, 'actual retained ATDD failures satisfy the native assertion classifier');
+  check(
     result.mode === 'expand' && result.executionStatus === 'passed' && fs.existsSync(path.join(scratch, 'result.json')),
     'expand publishes validated machine-readable output',
   );
@@ -142,6 +152,116 @@ try {
     'mixed-report',
   ])
     check(invoke([...agent, 'coverage'], scenario).status === 3, `${scenario} manifest exits 3`);
+  for (const scenario of ['opaque', 'invalid-json', 'mixed-pass', 'wrong-request', 'wrong-scope'])
+    check(
+      invoke([...agent, 'coverage'], scenario).status === 3,
+      `${scenario} cannot establish successful native execution or request scope`,
+    );
+  for (const scenario of ['opaque', 'timed-out-red', 'interrupted-red', 'nonassertion-red'])
+    check(
+      invoke([...agent, '--mode', 'red', '--story', 'story.md'], scenario).status === 3,
+      `${scenario} cannot establish an intended red assertion`,
+    );
+  const fresh = invoke([...agent, 'coverage']);
+  check(fresh.status === 0, 'fresh Create seeds a valid scope before the stale-artifact reproduction');
+  const summaryPath = JSON.parse(fresh.stdout).summaryPath;
+  const beforeSummary = fs.readFileSync(path.join(scratch, summaryPath));
+  const beforeGenerated = fs.readFileSync(path.join(scratch, 'tests/api/generated.spec.ts'));
+  const stale = invoke([...agent, 'coverage'], 'stale-artifacts');
+  check(
+    stale.status === 3 && /does not identify this request/.test(stale.stderr),
+    'unchanged prior Create cannot pass with a fresh report',
+  );
+  check(
+    fs.readFileSync(path.join(scratch, summaryPath)).equals(beforeSummary) &&
+      fs.readFileSync(path.join(scratch, 'tests/api/generated.spec.ts')).equals(beforeGenerated),
+    'stale reproduction retains the previous artifact bytes',
+  );
+  check(invoke([...agent, 'coverage'], 'stale-generated').status === 3, 'a new summary cannot claim an untouched old generated file');
+  const checkpoint = 'selected-checkpoint.md';
+  fs.copyFileSync(path.join(scratch, summaryPath), path.join(scratch, checkpoint));
+  const originalCheckpoint = fs.readFileSync(path.join(scratch, checkpoint));
+  for (const operation of ['edit', 'validate']) {
+    const unrelated = invoke(
+      [...agent, '--operation', operation, '--checkpoint', checkpoint, 'apply the selected change'],
+      `${operation}-unrelated`,
+    );
+    check(unrelated.status === 3 && /selected checkpoint/.test(unrelated.stderr), `${operation} refuses another artifact as completion`);
+    check(
+      fs.readFileSync(path.join(scratch, checkpoint)).equals(originalCheckpoint),
+      `${operation} unrelated-artifact reproduction leaves the selected checkpoint untouched`,
+    );
+  }
+  const validated = invoke([...agent, '--operation', 'validate', '--checkpoint', checkpoint]);
+  check(
+    validated.status === 0 &&
+      JSON.parse(validated.stdout).validationReportPath &&
+      fs.readFileSync(path.join(scratch, checkpoint)).equals(originalCheckpoint),
+    'Validate saves a fresh selected-artifact report and preserves its checkpoint',
+  );
+  check(
+    invoke([...agent, '--operation', 'validate', '--checkpoint', checkpoint], 'validation-incomplete').status === 3,
+    'Validate rejects an IN_PROGRESS report',
+  );
+  check(
+    invoke([...agent, '--operation', 'validate', '--checkpoint', checkpoint], 'validate-mutates').status === 3,
+    'Validate detects checkpoint modification',
+  );
+  fs.writeFileSync(path.join(scratch, checkpoint), originalCheckpoint);
+  check(
+    invoke([...agent, '--operation', 'edit', '--checkpoint', checkpoint, 'apply change'], 'edit-unchanged').status === 3,
+    'Edit requires an actual selected checkpoint update',
+  );
+  const edited = invoke([...agent, '--operation', 'edit', '--checkpoint', checkpoint, 'apply change']);
+  check(
+    edited.status === 0 && !fs.readFileSync(path.join(scratch, checkpoint)).equals(originalCheckpoint),
+    'Edit updates the exact selected checkpoint with preserved progress',
+  );
+  fs.linkSync(path.join(scratch, 'target.json'), path.join(scratch, 'hardlink-result.json'));
+  const protectedBytes = fs.readFileSync(path.join(scratch, 'target.json'));
+  check(
+    invoke([...agent, '--target', 'target.json', '--json', 'hardlink-result.json', 'coverage']).status === 2,
+    'JSON preflight rejects a hardlink alias of a protected target',
+  );
+  check(fs.readFileSync(path.join(scratch, 'target.json')).equals(protectedBytes), 'hardlink rejection preserves protected input bytes');
+  check(
+    invoke([...agent, '--json', 'late-result.json', 'coverage'], 'late-hardlink').status === 3,
+    'JSON postflight rejects a newly created hardlink to generated evidence',
+  );
+  check(
+    fs.readFileSync(path.join(scratch, 'tests/api/generated.spec.ts'), 'utf8').startsWith("test('AC-1"),
+    'postflight hardlink rejection preserves generated test bytes',
+  );
+  const yaml = require('js-yaml');
+  const resumeState = {
+    workflowStatus: 'in-progress',
+    test_mode: 'expand',
+    test_operation: 'create',
+    runScope: 'story',
+    runKey: 'saved-scope',
+    auto_validate: false,
+    auto_heal_failures: false,
+    max_healing_iterations: 1,
+    use_mcp_healing: false,
+    healing_rounds_used: 1,
+  };
+  fs.writeFileSync(path.join(scratch, checkpoint), `---\n${yaml.dump(resumeState)}---\n# Saved run\n`);
+  fs.writeFileSync(
+    path.join(scratch, '_bmad/config.toml'),
+    '[modules.tea]\nauto_validate = true\nauto_heal_failures = true\nmax_healing_iterations = 3\nuse_mcp_healing = true\n',
+  );
+  const resumed = invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint]);
+  check(
+    resumed.status === 0 && JSON.parse(resumed.stdout).executionStatus === 'disabled' && JSON.parse(resumed.stdout).healingRoundsUsed === 1,
+    'public Resume restores validation opt-out and spent repair count',
+  );
+  const saved = yaml.load(fs.readFileSync(path.join(scratch, checkpoint), 'utf8').match(/^---\n([\s\S]*?)\n---/)[1]);
+  for (const key of ['auto_validate', 'auto_heal_failures', 'max_healing_iterations', 'use_mcp_healing'])
+    check(saved[key] === resumeState[key], `Resume preserves checkpoint ${key} against conflicting project defaults`);
+  check(
+    invoke([...agent, '--operation', 'resume', '--checkpoint', checkpoint], 'reset-rounds').status === 3,
+    'Resume rejects a reset of its spent repair budget',
+  );
   fs.writeFileSync(path.join(scratch, '_bmad/config.toml'), '[modules.tea]\nauto_validate = false\n');
   const disabled = invoke([...agent, 'coverage']);
   check(disabled.status === 0 && JSON.parse(disabled.stdout).executionStatus === 'disabled', 'explicit validation opt-out remains visible');

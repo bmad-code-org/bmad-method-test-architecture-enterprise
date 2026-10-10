@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bind Automate CLI results to the current request and selected checkpoint, reject stale generated artifacts and opaque success evidence, distinguish red assertions from execution failures, and protect input and evidence files from JSON hardlink collisions.
 - Retained generation artifacts use compact paths so Windows checkouts can clone the repository.
 - Native generated-suite replay retains raw timeout and signal evidence before reporting execution blockers.
 - Codex command-execution runs can start loopback test services through the supported workspace network setting. Read-only and artifact-write capabilities retain their previous network policy; explicit network configuration keeps precedence.

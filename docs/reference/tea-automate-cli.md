@@ -43,7 +43,7 @@ tea-automate --agent codex --operation edit \
 
 Generation operations require zero transport retries. Resume the retained checkpoint explicitly after an interrupted run so its saved scope and repair budget remain authoritative.
 
-Validate records findings. Edit checks the requested changes. Both preserve the skill's operation boundaries and perform no automatic repair.
+Validate leaves the selected checkpoint unchanged and records a fresh PASS, WARN, or FAIL report identifying that checkpoint. Edit updates the selected checkpoint while preserving its identity, progress, and repair settings. Both preserve the skill's operation boundaries and perform no automatic repair.
 
 ## Inputs and configuration
 
@@ -75,7 +75,9 @@ The CLI uses the [TEA configuration layers](./configuration.md) and module defau
 
 Live commands create a unique directory under `_bmad-output/test-artifacts/automate-cli/`. Each attempt keeps its prompt, agent stdout and stderr, timing, and generation manifest. `run.json` records the selected adapter, model, timeout, capability, and attempt outcomes. The workflow's original summary/checklist path stays intact.
 
-JSON output includes the selected mode and operation, execution status, generated files, final execution reports, initial/final counts, repair rounds, and remaining failures. The CLI checks summary frontmatter, configured repair limits, referenced files, and result consistency. For Playwright JSON and the ATDD verifier, it also compares reported counts with actual recorded attempt statuses. Other runner formats retain their original evidence and agent-reported counts. Red assertion provenance and other framework semantics remain the skill's responsibility.
+JSON output includes the request identity, selected mode and operation, execution status, generated files, final execution reports, initial/final counts, repair rounds, remaining failures, and the Validate report path when applicable. Each Create summary identifies the current request, story, and targets; its summary and generated files must be saved during that attempt. Resume updates the exact selected checkpoint and retains its saved scope and spent repair budget.
+
+Passing expand and verified red outcomes require supported native Playwright JSON or ATDD verifier reports for every final scope. Counts must match recorded attempts. Verified red requires an assertion failure for every executed test; timeouts, interruptions, runner errors, and source changes reject success. Unsupported report formats retain their evidence and require a failed or unmeasured outcome. JSON result destinations are checked before and after generation against input and artifact paths, including hardlink aliases.
 
 | Exit | Meaning                                                                                                                 |
 | ---- | ----------------------------------------------------------------------------------------------------------------------- |

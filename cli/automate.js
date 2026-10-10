@@ -5,9 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { Command } = require('commander');
-const yaml = require('js-yaml');
 const { addAgentOptions, agentOptions, projectPath, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
-const { artifactPath, parseResult } = require('./lib/automate-result');
+const { artifactPath, parseResult, frontmatter } = require('./lib/automate-result');
 const { resolveGenerationConfig, generationRequest } = require('./lib/automate-prompt');
 
 const NAME = 'tea-automate';
@@ -25,6 +24,22 @@ function safeTarget(root, value) {
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
     throw new Error(`target is outside the project: ${value}`);
   return relative.split(path.sep).join('/') || '.';
+}
+
+function resultDestination(root, value, protectedFiles) {
+  const output = projectPath(root, value, '--json');
+  if (path.extname(output) !== '.json') throw new Error('--json must name a .json result separate from inputs');
+  const existing = fs.existsSync(output) ? fs.statSync(output, { bigint: true }) : null;
+  if (existing && !existing.isFile()) throw new Error('--json must name a regular file');
+  const canonical = existing ? fs.realpathSync(output) : output;
+  for (const file of protectedFiles.filter(Boolean)) {
+    const input = path.resolve(root, file);
+    if (!fs.existsSync(input)) continue;
+    const stat = fs.statSync(input, { bigint: true });
+    if (canonical === fs.realpathSync(input) || (existing && existing.dev === stat.dev && existing.ino === stat.ino))
+      throw new Error('--json collides with a protected input or artifact');
+  }
+  return output;
 }
 
 function selectMode(explicit, request, savedMode) {
@@ -80,6 +95,8 @@ async function main(argv) {
   let targets;
   let resolvedConfig;
   let modeSelection;
+  let checkpointBefore;
+  let protectedFiles;
   try {
     if (options.mode !== undefined && !MODES.includes(options.mode)) throw new Error(`--mode must be ${MODES.join(' or ')}`);
     if (!OPERATIONS.includes(options.operation)) throw new Error(`--operation must be ${OPERATIONS.join(', ')}`);
@@ -104,24 +121,20 @@ async function main(argv) {
     if (options.story) story = artifactPath(root, options.story, '--story');
     if (options.checkpoint) checkpoint = artifactPath(root, options.checkpoint, '--checkpoint');
     targets = options.target.map((target) => safeTarget(root, target));
-    if (options.json) {
-      const output = projectPath(root, options.json, '--json');
-      const canonical = fs.existsSync(output) ? fs.realpathSync(output) : output;
-      if (
-        path.extname(output) !== '.json' ||
-        [story, checkpoint, 'package.json', ...targets.filter((target) => fs.statSync(path.join(root, target)).isFile())]
-          .filter(Boolean)
-          .some((file) => path.join(root, file) === canonical)
-      )
-        throw new Error('--json must name a .json result separate from inputs and package.json');
-    }
+    protectedFiles = [story, checkpoint, 'package.json', ...targets.filter((target) => fs.statSync(path.join(root, target)).isFile())];
+    if (options.json) resultDestination(root, options.json, protectedFiles);
     if (options.operation !== 'create' && !checkpoint) throw new Error(`--checkpoint is required for ${options.operation}`);
     if (options.operation === 'create' && checkpoint) throw new Error('--checkpoint requires Resume, Validate or Edit');
     let savedMode;
     if (checkpoint) {
-      const content = fs.readFileSync(path.join(root, checkpoint), 'utf8');
-      const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-      const saved = frontmatter ? yaml.load(frontmatter[1]) : {};
+      checkpointBefore = frontmatter(path.join(root, checkpoint));
+      const saved = checkpointBefore.state;
+      if (options.operation === 'resume') {
+        if (story && (saved.cli_story === undefined ? !(saved.inputDocuments ?? []).includes(story) : saved.cli_story !== story))
+          throw new Error('Resume story differs from its saved scope');
+        if (targets.length > 0 && JSON.stringify(saved.cli_targets) !== JSON.stringify(targets))
+          throw new Error('Resume targets differ from its saved scope');
+      }
       savedMode = saved?.testMode ?? saved?.test_mode;
       if (savedMode && !MODES.includes(savedMode)) throw new Error('checkpoint has an invalid generation mode');
       if (!savedMode) savedMode = /(?:^|\/)atdd(?:\/|$)|(?:^|\/)atdd-checklist-/.test(checkpoint) ? 'red' : 'expand';
@@ -149,6 +162,7 @@ async function main(argv) {
   const evidenceRoot = path.resolve(root, options.evidenceDir ?? path.join('_bmad-output', 'test-artifacts', 'automate-cli', randomUUID()));
   const prepare = ({ attemptDir }) => {
     const manifestPath = path.join(attemptDir, 'generation.json');
+    const requestId = randomUUID();
     const prompt = headlessPrompt({
       skillRoot,
       projectRoot: root,
@@ -162,11 +176,12 @@ async function main(argv) {
         targets,
         checkpoint,
         manifestPath,
+        requestId,
         settings: resolvedConfig.settings,
         modeSelection,
       }),
     });
-    return { prompt, manifestPath, startedAtMs: Date.now() };
+    return { prompt, manifestPath, requestId, startedAtMs: Date.now() };
   };
   if (options.agent === 'none') {
     process.stdout.write(`${prepare({ attemptDir: path.join(evidenceRoot, 'attempt-1') }).prompt}\n`);
@@ -180,7 +195,7 @@ async function main(argv) {
       options,
       prepare,
       capabilities: ['command-execution'],
-      validate: ({ manifestPath, startedAtMs }) =>
+      validate: ({ manifestPath, startedAtMs, requestId }) =>
         parseResult({
           manifestPath,
           projectRoot: root,
@@ -188,15 +203,23 @@ async function main(argv) {
           operation: options.operation,
           settings: resolvedConfig.settings,
           startedAtMs,
+          requestId,
+          story,
+          targets,
+          selectedCheckpoint: checkpoint,
+          checkpointBefore,
         }),
     });
     const payload = { ...result.value, modeSelection, evidenceDir: result.runDir, agent: options.agent };
     const text = `${JSON.stringify(payload, null, 2)}\n`;
     if (options.json) {
-      const output = projectPath(root, options.json, '--json');
-      const canonical = fs.existsSync(output) ? fs.realpathSync(output) : output;
-      if ([payload.summaryPath, ...payload.generatedFiles, ...payload.executionReports].some((file) => path.join(root, file) === canonical))
-        throw new Error('--json collides with generated artifacts or execution evidence');
+      const output = resultDestination(root, options.json, [
+        ...protectedFiles,
+        payload.summaryPath,
+        ...payload.generatedFiles,
+        ...payload.executionReports,
+        payload.validationReportPath,
+      ]);
       fs.mkdirSync(path.dirname(output), { recursive: true });
       fs.writeFileSync(output, text);
     }
