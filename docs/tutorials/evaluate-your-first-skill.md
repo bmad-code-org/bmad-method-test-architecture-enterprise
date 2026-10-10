@@ -6,7 +6,10 @@ sidebar:
 ---
 
 **Evaluate** (`bmad-testarch-evaluate`) scores how an AI skill, agent or feature behaves against requirements you confirm.
-This tutorial evaluates one small skill, `refund-check`, from its confirmed requirements to a scored run, an accepted baseline and a passing pull request check.
+In normal use, you [start Evaluate in your coding agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md).
+It inspects your target, asks you to confirm the requirements, and writes the evaluation files.
+This tutorial uses a prepared `refund-check` example and has you run each command yourself so you can see the files and results.
+A stub agent stands in for the model, so you need no coding agent, model or API key.
 
 ## What You'll Build
 
@@ -30,8 +33,7 @@ npm ci
 
 - macOS, or Linux with `bubblewrap` and `strace` installed, since Evaluate confines every target it runs (see [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement))
 
-This tutorial needs no coding agent, no API key, no network access and no model.
-A small stub agent stands in for the model that would normally follow the skill.
+The evaluation itself needs no network access.
 
 Run every command of this tutorial from the root of the checkout, in one terminal session.
 
