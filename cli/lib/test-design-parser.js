@@ -270,6 +270,7 @@ function readRisks(tables) {
   // one had the second half vanish with nothing reported. They are counted so the
   // caller can fail on them.
   const unscored = [];
+  const residualReferences = new Map();
   for (const table of tables) {
     if (table.reference) continue;
     const idColumn = columnIndex(table.header, ['Risk ID', 'RiskID', 'ID']);
@@ -279,7 +280,31 @@ function readRisks(tables) {
       scoreColumn === -1 &&
       table.rows.some((row) => RISK_ID_PATTERN.test(String(row[idColumn] ?? '').toUpperCase()))
     ) {
-      unscored.push({ headings: table.headings, rows: table.rows.length });
+      const entry = { headings: table.headings, rows: table.rows.length };
+      unscored.push(entry);
+      const normalized = table.header.map((header) =>
+        String(header)
+          .toLowerCase()
+          .replaceAll(/[^a-z]/g, ''),
+      );
+      if (
+        String(table.headings.at(-1) ?? '')
+          .toLowerCase()
+          .replaceAll(/[^a-z]/g, '')
+          .startsWith('residualrisk') &&
+        normalized.some((header) => header.startsWith('residualrisk')) &&
+        normalized.includes('acceptancecondition') &&
+        !normalized.some((header) => ['category', 'riskcategory', 'probability', 'impact'].includes(header))
+      ) {
+        residualReferences.set(
+          entry,
+          table.rows.map((row) =>
+            String(row[idColumn] ?? '')
+              .trim()
+              .toUpperCase(),
+          ),
+        );
+      }
     }
     if (idColumn === -1 || scoreColumn === -1) continue;
     const categoryColumn = columnIndex(table.header, ['Category', 'Risk Category']);
@@ -304,7 +329,14 @@ function readRisks(tables) {
       });
     }
   }
-  risks.unscoredTables = unscored;
+  const knownIds = new Set(risks.map((risk) => risk.id));
+  // A residual acceptance table may only reference IDs in the scored register.
+  // Its exact heading and columns distinguish it from an additional register;
+  // an unknown ID still reports an unscored table to every caller.
+  risks.unscoredTables = unscored.filter((entry) => {
+    const references = residualReferences.get(entry);
+    return !references || references.length === 0 || references.some((id) => !knownIds.has(id));
+  });
   return risks;
 }
 

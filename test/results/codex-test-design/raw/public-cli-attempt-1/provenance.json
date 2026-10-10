@@ -1,0 +1,10 @@
+{
+  "mode": "live",
+  "sourceCommit": "455c0255adf14999fbf7fc0c21d4b9353d222a27",
+  "sourceDirty": false,
+  "command": "node cli/test-design.js --project-root /tmp/remaining-skills-evidence/test-design-cli-after/field-order-capture --input docs/epic-7.md --epic 7 --agent codex --output-dir test-artifacts --evidence-dir .tea-runs --retries 0",
+  "agentExitCode": 0,
+  "cliExitCode": 3,
+  "failure": "Unscored risk table false positive on canonical residual-risk reference rows",
+  "requestedModel": "gpt-5.6-sol"
+}

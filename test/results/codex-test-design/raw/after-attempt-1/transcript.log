@@ -1,0 +1,33 @@
+[33mnote[0m: --runs 1 cannot measure stability; use --runs 2 or more.
+[36m========================================
+tea test-design eval harness
+========================================[0m
+
+[32m✓[0m 2 fixture set(s), 5 material risk(s), 8 ruled out, 9 ordering constraint(s); every quote resolves and no matcher overlaps
+[2m1 run(s) per fixture set per agent[0m
+
+[36mcodex[0m
+retained skill artifacts: /tmp/remaining-skills-evidence/test-design-after/raw/codex-seeded-offline-order-capture-run-1-attempt-1-xncdXd
+  [32m✓[0m seeded-offline-order-capture: 7 risk(s), 5/5 grounded, 0 ungrounded, [33munrepeated[0m
+        [31mout of order:[0m tech-uncapped-retry-loop at P1 below ops-no-release-kill-switch at P0
+retained skill artifacts: /tmp/remaining-skills-evidence/test-design-after/raw/codex-clean-last-sync-indicator-run-1-attempt-1-wJsaoM
+  [32m✓[0m clean-last-sync-indicator: 3 risk(s), 0/0 grounded, 0 ungrounded, [33munrepeated[0m
+  [2m────────[0m
+  grounded recall     100%   (threshold  80%)
+  risk precision      100%   (threshold  80%)
+  scale compliance    100%   (threshold 100%)
+  score arithmetic    100%   (threshold 100%)
+  category validity   100%   (threshold 100%)
+  band placement      100%   (threshold 100%)
+  risk id well formed 100%   (threshold 100%)
+  risk link resolves  100%   (threshold 100%)
+  priority ordering    89%   (threshold 100%)
+  coverage mapping    100%   (threshold  80%)
+  ungrounded risks       0   (max 0)
+  unscored registers     0   (max 0)
+  top-severity missed    0   (max 0)
+  over the ceiling       0   (max 0)
+  fixture mutations      0   (max 0)
+  [31mbelow threshold: priorityOrderingAccuracy[0m
+
+[2mresult written to /tmp/remaining-skills-evidence/test-design-after/result.json[0m

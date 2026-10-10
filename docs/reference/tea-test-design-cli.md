@@ -54,7 +54,7 @@ System scope produces architecture, QA and handoff documents. Epic scope produce
 | `--agent-arg <arg>`    | Append a vendor argument. Repeat for several arguments.                                                                       |
 | `--env-pass <NAME>`    | Pass an additional environment name to the vendor. Repeat as needed.                                                          |
 
-Each attempt has its own fresh artifact directory. The CLI retains the exact prompt, raw stdout, raw stderr, attempt timing, prompt digest and vendor/model record under the evidence directory. An incomplete or malformed report fails before publication. Existing reports cannot satisfy the new attempt's checks. The JSON line on stdout identifies the published artifacts and retained evidence.
+Each attempt has its own fresh artifact directory. The CLI retains the exact prompt, raw stdout, raw stderr, attempt timing, prompt digest and vendor/model record under the evidence directory. An incomplete or malformed report fails before publication. Existing reports cannot satisfy the new attempt's checks. The JSON line on stdout identifies the published artifacts and retained evidence. Publication stages every validated file before replacement. If replacement fails, the CLI restores previous reports and prints the retained evidence path. If filesystem errors prevent restoration, its diagnostic identifies recovery backups and affected files.
 
 The check verifies report structure and internal consistency. Review the plan's risk judgments and scope against your requirements before using it as a release policy.
 

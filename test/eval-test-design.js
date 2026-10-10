@@ -160,7 +160,7 @@ const {
   targetProblems,
 } = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
-const { retainSkillArtifacts, captureProbe } = require('./lib/retain-skill-artifacts');
+const { retainSkillArtifacts, captureProbe, finishSkillAttempt } = require('./lib/retain-skill-artifacts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
@@ -1381,10 +1381,12 @@ async function corpusMutations(workspace) {
   return changed + added.length;
 }
 
+/** Run one isolated live attempt and preserve its evidence before cleanup. */
 async function runCase(set, options, agent, runIndex, categories) {
   let workspace = await stageWorkspace(set);
   let lastAttempt = 1;
   let rawObservation;
+  let runError;
   const retain = () =>
     retainSkillArtifacts({
       artifactsDir: options.artifactsDir,
@@ -1466,9 +1468,11 @@ async function runCase(set, options, agent, runIndex, categories) {
     }
 
     return await interpretObservation(set, observation, workspace, categories);
+  } catch (error) {
+    runError = error;
+    throw error;
   } finally {
-    await retain();
-    fs.rmSync(workspace.dir, { recursive: true, force: true });
+    await finishSkillAttempt({ retain, workspace, runError });
   }
 }
 

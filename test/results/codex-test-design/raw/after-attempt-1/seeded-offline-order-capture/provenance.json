@@ -1,0 +1,10 @@
+{
+  "mode": "live",
+  "caseId": "seeded-offline-order-capture",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "repetition": 1,
+  "attempt": 1,
+  "capturedAt": "2026-10-10T01:45:19.682Z",
+  "originalWorkspace": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-test-design-eval-HYGwNW"
+}

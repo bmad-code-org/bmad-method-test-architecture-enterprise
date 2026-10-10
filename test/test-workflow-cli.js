@@ -9,6 +9,7 @@ const { runWithEvidence, WorkflowError, integer, projectPath, readInput } = requ
 const { resolveTeaConfig } = require('../cli/lib/resolve-tea-config');
 const cli = path.join(__dirname, '..', 'cli', 'test-design.js');
 const skillRoot = path.join(__dirname, '..', 'skills', 'bmad-testarch-test-design');
+/** Create a disposable consuming project with two concrete input documents. */
 function project(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-workflow-cli-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -16,6 +17,7 @@ function project(t) {
   fs.writeFileSync(path.join(dir, 'architecture.md'), '# Architecture\n\nOne local queue, one API endpoint.\n');
   return dir;
 }
+/** Exercise the public executable through a controlled custom agent process. */
 function execute(root, args = [], stubMode) {
   const stub = path.join(root, 'agent.cjs');
   fs.writeFileSync(
@@ -173,7 +175,7 @@ test('missing output, incomplete checkpoint and wrong arithmetic fail without pu
 test('the observed evidence header preserves baseline risk meaning without changing scoring rules', () => {
   const { readDesign } = require('../cli/lib/test-design-parser');
   const { scoreRun } = require('./eval-test-design');
-  const groundTruth = require('./fixtures/test-design-eval/ground-truth.json');
+  const groundTruth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'test-design-eval', 'ground-truth.json'), 'utf8'));
   const generated = fs.readFileSync(
     path.join(__dirname, 'results', 'codex-test-design', 'raw', 'before', 'seeded-offline-order-capture', 'test-design-epic-7.md'),
     'utf8',
@@ -309,4 +311,108 @@ test('each probe attempt records its own raw observation or fault before retry',
   assert.equal(await success.probe({}, new AbortController().signal), raw);
   assert.equal(recorded[0].fault.detail, 'raw transport detail');
   assert.equal(recorded[1], raw);
+});
+
+test('the observed residual-risk reference table preserves the canonical scored register', () => {
+  const { readDesign } = require('../cli/lib/test-design-parser');
+  const generated = fs.readFileSync(
+    path.join(
+      __dirname,
+      'results',
+      'codex-test-design',
+      'raw',
+      'public-cli-attempt-1',
+      'evidence',
+      'attempt-1',
+      'artifacts',
+      'test-design',
+      'test-design-epic-7.md',
+    ),
+    'utf8',
+  );
+  const parsed = readDesign({ kind: 'text', value: generated });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.design.risks.length, 6);
+  assert.equal(parsed.design.unscoredTables.length, 0);
+  const index = generated.indexOf('### Residual Risk');
+  assert.ok(index > 0);
+  const unknown = generated.slice(0, index) + generated.slice(index).replace('R-006', 'R-999');
+  assert.equal(readDesign({ kind: 'text', value: unknown }).design.unscoredTables.length, 1);
+});
+
+test('publication refuses a hardlink onto an input before invoking the agent', (t) => {
+  const root = project(t);
+  const destination = path.join(root, 'published', 'test-design', 'test-design-epic-7.md');
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.linkSync(path.join(root, 'epic.md'), destination);
+  const result = execute(root, ['--epic', '7'], 'success');
+  assert.equal(result.status, 2, result.stderr);
+  assert.equal(fs.existsSync(path.join(root, 'captured-prompt.txt')), false);
+  assert.equal(fs.readFileSync(destination, 'utf8'), '# Epic 7\n\nA sync job runs once per request.\n');
+});
+
+test('a replacement failure restores old reports and removes newly published files', (t) => {
+  const { publishDesign } = require('../cli/test-design');
+  for (const preexisting of [true, false]) {
+    const root = project(t);
+    const outputDir = path.join(root, 'published');
+    const destinations = ['one.md', 'two.md'].map((name) => path.join(outputDir, 'test-design', name));
+    fs.mkdirSync(path.dirname(destinations[0]), { recursive: true });
+    if (preexisting) for (const destination of destinations) fs.writeFileSync(destination, `old ${path.basename(destination)}`);
+    const artifacts = destinations.map((destination) => {
+      const source = path.join(root, path.basename(destination));
+      fs.writeFileSync(source, `new ${path.basename(destination)}`);
+      return { path: source };
+    });
+    const io = Object.create(fs);
+    let replacements = 0;
+    io.renameSync = (source, target) => {
+      if (path.basename(source) === 'next' && ++replacements === 2) throw new Error('simulated second replacement failure');
+      fs.renameSync(source, target);
+    };
+    assert.throws(
+      () => publishDesign(artifacts, { projectRoot: root, outputDir, runDir: '/retained/evidence' }, io),
+      (error) => error.runDir === '/retained/evidence' && /previous reports restored/.test(error.message),
+    );
+    for (const destination of destinations) {
+      if (preexisting) assert.equal(fs.readFileSync(destination, 'utf8'), `old ${path.basename(destination)}`);
+      else assert.equal(fs.existsSync(destination), false);
+    }
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(destinations[0])).filter((name) => name.startsWith('.tea-publish-')),
+      [],
+    );
+  }
+});
+
+test('retention failure always cleans the workspace and preserves a preceding run exception', async (t) => {
+  const { finishSkillAttempt } = require('./lib/retain-skill-artifacts');
+  const original = new Error('original runner failure');
+  const retention = new Error('retention disk failure');
+  for (const runError of [original, undefined]) {
+    const root = project(t);
+    const workspace = { dir: path.join(root, 'attempt') };
+    fs.mkdirSync(workspace.dir);
+    const finish = () =>
+      finishSkillAttempt({
+        workspace,
+        runError,
+        retain: async () => {
+          throw retention;
+        },
+      });
+    if (runError) {
+      await assert.rejects(
+        async () => {
+          try {
+            throw original;
+          } finally {
+            await finish();
+          }
+        },
+        (error) => error === original,
+      );
+    } else await assert.rejects(finish, (error) => error === retention);
+    assert.equal(fs.existsSync(workspace.dir), false);
+  }
 });

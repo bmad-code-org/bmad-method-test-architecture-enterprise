@@ -18,6 +18,7 @@ function captureProbe(port, record) {
     },
   };
 }
+/** Retain exact workspace bytes, prompt, raw observation and live provenance. */
 async function retainSkillArtifacts({ artifactsDir, workspace, caseId, agent, model, repetition, attempt, prompt, observation }) {
   if (!artifactsDir) return null;
   const root = path.resolve(artifactsDir);
@@ -34,4 +35,22 @@ async function retainSkillArtifacts({ artifactsDir, workspace, caseId, agent, mo
   process.stderr.write(`retained skill artifacts: ${destination}\n`);
   return destination;
 }
-module.exports = { retainSkillArtifacts, captureProbe };
+/** Always clean an attempt while preserving its original run failure. */
+async function finishSkillAttempt({ retain, workspace, runError, remove = fs.rmSync }) {
+  let failure = runError;
+  try {
+    await retain();
+  } catch (error) {
+    if (failure) process.stderr.write(`artifact retention failed: ${error.message}\n`);
+    else failure = error;
+  } finally {
+    try {
+      remove(workspace.dir, { recursive: true, force: true });
+    } catch (error) {
+      if (failure) process.stderr.write(`attempt cleanup failed: ${error.message}\n`);
+      else failure = error;
+    }
+  }
+  if (failure && failure !== runError) throw failure;
+}
+module.exports = { retainSkillArtifacts, captureProbe, finishSkillAttempt };

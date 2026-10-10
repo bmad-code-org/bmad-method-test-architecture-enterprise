@@ -1,0 +1,23 @@
+{
+  "name": "tea-test-design",
+  "startedAt": "2026-10-10T01:37:42.348Z",
+  "completedAt": "2026-10-10T01:47:47.952Z",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 605603,
+      "status": "failed",
+      "failureClass": "environment-parser",
+      "message": "the report contains unscored risk tables",
+      "promptSha256": "4dbaf9640fec3d3e6fb7753a0af8290a18d8b14f752a309f0d55b4637b0e241e"
+    }
+  ],
+  "failureClass": "environment-parser"
+}
