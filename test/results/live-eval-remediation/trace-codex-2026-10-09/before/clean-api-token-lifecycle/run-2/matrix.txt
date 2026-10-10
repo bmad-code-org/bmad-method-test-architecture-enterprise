@@ -1,0 +1,268 @@
+---
+runScope: 'epic'
+runKey: 'epic-5'
+targetType: 'epic'
+targetId: '5'
+targetLabel: 'Epic 5: API Token Lifecycle'
+workflowStatus: 'completed'
+stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision']
+lastStep: 'step-05-gate-decision'
+lastSaved: '2026-10-10T01:37:54Z'
+workflowType: 'testarch-trace'
+inputDocuments: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md']
+coverageBasis: 'acceptance_criteria'
+oracleConfidence: 'high'
+oracleResolutionMode: 'formal_requirements'
+oracleSources: ['api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md']
+externalPointerStatus: 'not_used'
+collectionStatus: 'COLLECTED'
+sourceSha: ''
+tempCoverageMatrixPath: '/tmp/tea-trace-coverage-matrix-epic-5-2026-10-10T01-36-39Z.json'
+---
+
+# Traceability Matrix & Gate Decision: Epic 5: API Token Lifecycle
+
+**Target:** Epic 5: API Token Lifecycle  
+**Date:** 2026-10-09  
+**Evaluator:** tea-eval-harness  
+**Coverage Oracle:** acceptance criteria  
+**Oracle Confidence:** high  
+**Oracle Sources:** `api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md`
+
+---
+
+This workflow traces existing evidence. It does not generate tests.
+
+## PHASE 1: REQUIREMENTS TRACEABILITY
+
+### Coverage Summary
+
+| Priority | Total Criteria | FULL Coverage | Coverage % | Status |
+| --- | ---: | ---: | ---: | --- |
+| P0 | 2 | 2 | 100% | ✅ PASS |
+| P1 | 2 | 2 | 100% | ✅ PASS |
+| P2 | 1 | 1 | 100% | ✅ PASS |
+| P3 | 0 | 0 | 100% | ✅ PASS |
+| **Total** | **5** | **5** | **100%** | **✅ PASS** |
+
+Coverage status follows the workflow definition: FULL means the evidence establishes every scenario stated by the criterion.
+
+### Detailed Mapping
+
+#### AC-1: A revoked token stops working immediately (P0)
+
+- **Coverage:** FULL ✅
+- **Tests:**
+  - `5-API-003`, API, active: `api-token-lifecycle/tests/api/token-revocation.api.spec.ts:14`
+    - **Given:** A valid tenant token authenticates successfully before revocation.
+    - **When:** The administrator revokes the token and the integrator sends the next request with it.
+    - **Then:** The next request is rejected with `401`.
+- **Classification basis:** The API test establishes every behavior stated by the criterion.
+
+#### AC-2: A token secret is returned once and never again (P0)
+
+- **Coverage:** FULL ✅
+- **Tests:**
+  - `5-API-004`, API, active: `api-token-lifecycle/tests/api/token-revocation.api.spec.ts:32`
+    - **Given:** An administrator creates a tenant token.
+    - **When:** The creation response, later single-token read, and later token list are inspected.
+    - **Then:** Creation returns a formatted secret. Neither later read returns a `secret` property.
+- **Classification basis:** The test establishes the one-time disclosure rule across every read path named by the criterion.
+
+#### AC-3: An admin creates a token with a name and an expiry (P1)
+
+- **Coverage:** FULL ✅
+- **Tests:**
+  - `5-E2E-001`, E2E, active: `api-token-lifecycle/tests/e2e/token-management.spec.ts:10`
+    - **Given:** The administrator is on the tenant token console.
+    - **When:** The administrator enters the name `billing-sync`, enters the expiry `2027-01-01`, and creates the token.
+    - **Then:** A row for the named token appears with a masked prefix and the supplied expiry.
+- **Classification basis:** The E2E test establishes every input and visible result stated by the criterion.
+
+#### AC-4: A token past its expiry stops working and is marked expired (P1)
+
+- **Coverage:** FULL ✅
+- **Tests:**
+  - `5-API-001`, API, active: `api-token-lifecycle/tests/api/credential-lifetime.api.spec.ts:15`
+    - **Given:** A token is created with an expiry in the past.
+    - **When:** An API request presents that token.
+    - **Then:** The request is rejected with `401`.
+  - `5-API-002`, API, active: `api-token-lifecycle/tests/api/credential-lifetime.api.spec.ts:29`
+    - **Given:** A token is created with an expiry in the past.
+    - **When:** The administrator lists the tenant's tokens.
+    - **Then:** The token has state `expired` and retains the lapsed expiry timestamp.
+- **Classification basis:** Together, the two API tests establish both scenarios stated by the criterion.
+
+#### AC-5: The token list shows when each token was last used (P2)
+
+- **Coverage:** FULL ✅
+- **Tests:**
+  - `5-COMP-001`, Component, active: `api-token-lifecycle/tests/component/token-list.spec.tsx:10`
+    - **Given:** The list receives one used token with a timestamp and one unused token with a null last-use value.
+    - **When:** The token list renders.
+    - **Then:** The used token shows its ISO last-use time and the unused token shows `Never used`.
+- **Classification basis:** The component test establishes both rendered states stated by the criterion.
+
+### Gap Analysis
+
+#### Critical Gaps (BLOCKER) ❌
+
+0 gaps found.
+
+#### High Priority Gaps (PR BLOCKER) ⚠️
+
+0 gaps found.
+
+#### Medium Priority Gaps (Nightly) ⚠️
+
+0 gaps found.
+
+#### Low Priority Gaps (Optional) ℹ️
+
+0 gaps found.
+
+No criterion has `PARTIAL`, `NONE`, `UNIT-ONLY`, or `INTEGRATION-ONLY` coverage. Rejected evidence is empty.
+
+### Coverage Heuristics Findings
+
+- Endpoints without direct API tests: 0
+- Auth or authorization criteria missing negative paths: 0
+- Happy-path-only criteria that require an error or alternate path: 0
+- UI journey status: `not_applicable`
+- UI state status: `not_applicable`
+
+The formal requirements oracle names the behaviors to trace. Synthetic UI journey and UI state heuristics do not apply to this run.
+
+### Quality Assessment
+
+- Mapped test files: 4
+- Mapped test cases: 6
+- Skipped cases: 0
+- Fixme cases: 0
+- Pending cases: 0
+- Counted live cases: 0
+- Static inspection found no committed focus, hard waits, conditional assertion skips, unreachable assertions, or tautological assertions.
+- Runtime duration, pass results, flakiness, and code coverage: `unknown`
+
+### Coverage by Test Level
+
+| Test Level | Tests | Criteria Covered | Criterion Coverage |
+| --- | ---: | ---: | ---: |
+| E2E | 1 | 1 | 20% |
+| API | 4 | 3 | 60% |
+| Component | 1 | 1 | 20% |
+| Unit | 0 | 0 | 0% |
+| Live | 0 | 0 | 0% |
+| Other | 0 | 0 | 0% |
+| **Total unique** | **6** | **5** | **100%** |
+
+### Duplicate Coverage Analysis
+
+- AC-4 uses two API cases for distinct required outcomes: authentication rejection and expired listing state.
+- No redundant cross-level coverage was found.
+
+### Traceability Recommendations
+
+Coverage remediation is unnecessary. A separate `/bmad-testarch-test-review` run can assess broader test-quality concerns.
+
+## PHASE 2: QUALITY GATE DECISION
+
+**Gate Type:** epic  
+**Decision Mode:** deterministic
+
+### Evidence Summary
+
+#### Test Inventory and Execution
+
+- Total mapped tests: 6
+- Passed: `unknown`
+- Failed: `unknown`
+- Skipped: 0
+- Fixme: 0
+- Pending: 0
+- Duration: `unknown`
+- Results source: static repository evidence
+
+The `contract_static` collection mode supports a coverage gate from test assertions. Runtime execution values remain `unknown` because no execution report was supplied.
+
+#### Requirements Coverage
+
+- P0 acceptance criteria: 2/2 covered, 100%
+- P1 acceptance criteria: 2/2 covered, 100%
+- P2 acceptance criteria: 1/1 covered, 100%
+- Overall coverage: 5/5, 100%
+- Line coverage: `unknown`
+- Branch coverage: `unknown`
+- Function coverage: `unknown`
+
+#### Non-Functional Requirements
+
+- Security: NOT_ASSESSED
+- Performance: NOT_ASSESSED
+- Reliability: NOT_ASSESSED
+- Maintainability: NOT_ASSESSED
+- NFR source: unavailable
+
+#### Flakiness Validation
+
+- Burn-in iterations: `unknown`
+- Flaky tests detected: `unknown`
+- Stability score: `unknown`
+
+### Decision Criteria Evaluation
+
+| Criterion | Threshold | Actual | Status |
+| --- | ---: | ---: | --- |
+| P0 coverage | 100% | 100% | MET |
+| P1 coverage target | 90% | 100% | MET |
+| P1 coverage minimum | 80% | 100% | MET |
+| Overall coverage minimum | 80% | 100% | MET |
+
+### GATE DECISION: PASS ✅
+
+### Rationale
+
+P0 coverage is 100%, P1 coverage is 100% against a 90% target, and overall coverage is 100% against an 80% minimum. The collection status is `COLLECTED`, gate evaluation is enabled, the oracle confidence is high, and no criterion depends on live-only evidence.
+
+### Gate Recommendations
+
+1. Proceed under the normal release process.
+2. Keep the six mapped cases in the required regression selection for Epic 5.
+3. Record runtime results separately when pass rate, duration, or flakiness evidence is required.
+
+## Related Artifacts
+
+- **Epic:** `api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md`
+- **Trace summary:** `api-token-lifecycle/test-artifacts/trace/e2e-trace-summary-epic-5.json`
+- **Test directory:** `api-token-lifecycle/tests`
+- **Test design:** unavailable
+- **NFR evidence audit:** unavailable
+- **Live verification:** absent
+
+## Sign-Off
+
+- Overall coverage: 100% ✅
+- P0 coverage: 100% ✅
+- P1 coverage: 100% ✅
+- Critical gaps: 0
+- High-priority gaps: 0
+- Decision: PASS ✅
+- P0 evaluation: all coverage criteria met
+- P1 evaluation: all coverage criteria met
+
+**Generated:** 2026-10-10T01:37:54Z  
+**Workflow:** bmad-testarch-trace 5.0
+
+---
+
+<!-- Powered by BMAD-CORE™ -->
+
+## Gate Decision Summary
+
+- Gate decision: PASS
+- P0 coverage: 100%, required 100%, MET
+- P1 coverage: 100%, target 90%, minimum 80%, MET
+- Overall coverage: 100%, minimum 80%, MET
+- Critical gaps: 0
+- Waivers filed: 0
+- Rationale: P0 coverage is 100%, P1 coverage is 100%, and overall coverage is 100%. All deterministic coverage thresholds are met.

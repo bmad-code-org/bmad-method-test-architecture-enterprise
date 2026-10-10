@@ -39,6 +39,7 @@ Create the traceability matrix linking the resolved oracle items to tests.
 
 For each resolved oracle item (formal requirement, endpoint/spec item, or synthetic journey):
 
+- Copy its ID, requirement text, and priority from Step 1's persisted oracle ledger. Preserve explicit source priorities through every matrix heading and statistics bucket. Keep each mapped test's priority in the test record as a separate field.
 - Map to matching tests
 - Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY. `checklist.md`'s "Coverage Classification" section is the definition; **read it before classifying anything**, and apply the rule it turns on:
   - Classification is decided by what the evidence **establishes** about the criterion. The number of levels the evidence spans does not set the status.
@@ -46,6 +47,10 @@ For each resolved oracle item (formal requirement, endpoint/spec item, or synthe
   - **UNIT-ONLY** and **INTEGRATION-ONLY** are for the case where a _missing_ level is what leaves the criterion unestablished: unit tests only, against a criterion stating an HTTP status or a rendered state; or API/component tests only, against a criterion stating branch-level logic that needs unit proof. "The only evidence is API-level" is not by itself INTEGRATION-ONLY.
 - Cite every mapped test as a backticked `` `path:line` `` pair, the form `trace-template.md` and `resources/traceability-matrix.example.md` both use. The backticks are the delimiter, so a path holding a space survives whole. An undelimited pair written into prose has no boundary but the file extension, and a path with a space in it is then read only from its last space-free segment onward.
 - Record test level and priority
+- For every accepted static test, cite its declaration once and each assertion that establishes a fact named by the criterion once within that criterion's evidence block. Cite both an asserted state and an asserted property that ties it to the stated condition, such as `expired` state and the token's expiry timestamp.
+- A status assertion on a prerequisite request is setup evidence. A 200 response before revocation does not establish that a later request is rejected. Cite a response status when the criterion requires it or the status itself establishes the outcome, such as 403 for denied access. When a later state or value assertion proves the outcome, omit an earlier 2xx response assertion on the action that produced it.
+- For a criterion that asks for a ready job and a signed link, cite the ready-state and signed-link assertions. An earlier 202 response only shows that creation was accepted. Apply the same rule to other intermediate 2xx responses.
+- Use the exact assertion line; for a multiline assertion, use its opening line. Use one project-relative path spelling throughout, including rejected evidence. Strip the project root directory from paths inside that project. Do not cite setup or action lines as separate anchors. Explain their role beside the assertion anchors. Before Step 4, remove duplicate `path:line` pairs from each criterion block, including pairs repeated in prose.
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:
   - Endpoint coverage present/missing (for API-impacting items)
@@ -63,6 +68,8 @@ A test earns its place in a criterion's `tests` array by establishing part of wh
 That is the rule for this workflow, and it fixes what every count derived from `tests` means: `tests.cases`, `coverage.by_level.*.tests`, and Step 4's live-only derivation all count test cases this trace accepted as evidence. The other answer, admitting the test and leaving the criterion at NONE, would have made the same numbers mean "test cases considered", so a suite full of mistitled tests would report level counts a reader could not use to judge where coverage actually sits.
 
 Record every such test in `rejectedEvidence` against the criterion it claims, with the reason its assertions fall short. Carry the list forward for Step 4 and persist it into the progress document so a resumed Step 4 can read it. A reader needs to see that the test was read and turned down: a test that claims a criterion and then vanishes from the report is indistinguishable from a test nobody found.
+
+Use the test's explicit ID when its source declares one. Otherwise set `test_id` to its project-relative `file:line` declaration anchor. Do not assign a new sequence number to a rejected test.
 
 ```javascript
 // One entry per test whose name claims a criterion its assertions do not establish.

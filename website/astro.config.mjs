@@ -203,6 +203,7 @@ export default defineConfig({
             { label: 'Live Verification Results', slug: 'reference/live-verification-results' },
             { label: 'tea-evaluate CLI', slug: 'reference/tea-evaluate-cli' },
             { label: 'tea-test-review CLI', slug: 'reference/tea-test-review-cli' },
+            { label: 'tea-trace CLI', slug: 'reference/tea-trace-cli' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
           ],
         },
