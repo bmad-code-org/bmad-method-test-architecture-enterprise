@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
+const { captureLiveResults } = require('./lib/trace-live');
 const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
 const {
   sourceOracleLedger,
@@ -83,6 +84,17 @@ function execute(options, registerOutputGuard = () => {}) {
     return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
   };
   const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
+  const heldInputs = inputs.map((file) => {
+    if (!fs.existsSync(file)) return { file, missing: true };
+    const stat = fs.statSync(file);
+    if (!stat.isFile()) throw new Error(`Trace input must be a regular file: ${file}`);
+    return { file, real: fs.realpathSync(file), mode: stat.mode, dev: stat.dev, ino: stat.ino, bytes: fs.readFileSync(file) };
+  });
+  const liveCapture = captureLiveResults(
+    liveResults,
+    projectRoot,
+    levels.includes('live') || options.collectionMode === 'runtime_manifest',
+  );
   const assertOutputPaths = () => {
     for (const [name, file] of Object.entries(destinations)) {
       projectPath(projectRoot, file, `trace ${name}`);
@@ -119,7 +131,7 @@ function execute(options, registerOutputGuard = () => {}) {
         resolvedConfig,
         requestLines: [
           'Execute both trace phases, finishing Step 5. Use deterministic gate decisions.',
-          `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its identities and explicit priorities in Step 1 and the final matrix.`,
+          `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
           'Persist Step 1 oracleLedger in matrix YAML frontmatter as an array of {id, requirement, priority, source} records. Assign priorities only where the source leaves them unspecified.',
           `The only trace target for this run is ${target.document ? JSON.stringify(target.document) : `the project (${target.runScope})`}.`,
           `Resolved identity: ${JSON.stringify(target)}. Preserve it in every output.`,
@@ -141,8 +153,22 @@ function execute(options, registerOutputGuard = () => {}) {
       return { prompt, paths };
     },
     validate({ paths }) {
-      if (targetFile && fs.readFileSync(targetFile, 'utf8') !== targetText)
-        throw new Error('Trace agent changed the target requirement document.');
+      for (const input of heldInputs) {
+        const changed = input.missing
+          ? fs.existsSync(input.file)
+          : !fs.existsSync(input.file) ||
+            (() => {
+              const stat = fs.statSync(input.file);
+              return (
+                fs.realpathSync(input.file) !== input.real ||
+                stat.mode !== input.mode ||
+                stat.dev !== input.dev ||
+                stat.ino !== input.ino ||
+                !fs.readFileSync(input.file).equals(input.bytes)
+              );
+            })();
+        if (changed) throw new Error(`Trace agent changed a supplied input: ${input.file}`);
+      }
       return validateTraceOutputs({
         paths,
         target,
@@ -150,6 +176,8 @@ function execute(options, registerOutputGuard = () => {}) {
         allowGate,
         oracleLedger,
         requireOracleLedger: true,
+        liveCapture,
+        requireLiveManifest: true,
       });
     },
   });

@@ -10,7 +10,7 @@ It publishes a traceability matrix, a coverage summary, and an eligible gate dec
 Each attempt keeps its prompt, agent output, and generated files for inspection.
 Before publication, the command reconciles criterion priorities and coverage in matrix tables, detail sections, and the oracle ledger with the summary.
 It freezes the target document's explicit criterion identities and priorities before agent execution and compares the saved Step 1 ledger with that source.
-Inferred identities and priorities require a populated `oracleLedger` in progress frontmatter.
+Every new run requires a populated `oracleLedger` in progress frontmatter. The CLI binds its requirement text, source reference, identity, and explicit priority to the frozen source. Consecutive colon criteria and wrapped titles remain separate source records; Markdown decoration and line wrapping preserve the same text. Historical captures without a ledger retain their original identity and priority checks during offline replay.
 It checks coverage arithmetic, threshold fields, and the decision's consistency with coverage and confidence.
 Fresh live verification failures cap an otherwise passing gate at CONCERNS.
 
@@ -50,7 +50,7 @@ Filed waivers are validated and reported separately from the computed decision.
 | `--no-gate`                | Collect coverage and omit gate signals. `inventory_only` also disables the gate.                                                             |
 | `--fail-on <status>`       | Default `fail`. Use `concerns` to fail CI on CONCERNS too.                                                                                   |
 
-`runtime_manifest` supports projects without a static test directory.
+`runtime_manifest` supports projects without a static test directory. Missing or unreadable live evidence produces `INACCESSIBLE` collection with no gate. The CLI rejects a report that claims collected coverage from that absent input.
 It reads the [live verification contract](/docs/reference/live-verification-results.md).
 Missing or unreadable runtime evidence leaves the collection inaccessible and the gate unevaluated.
 Existing test-design and NFR documents are read from the project's original artifact root.
@@ -98,6 +98,8 @@ The JSON result prints artifact and evidence paths to standard output.
 | `1`  | Computed FAIL, or CONCERNS with `--fail-on concerns`.                             |
 | `2`  | Invalid configuration, input, or unavailable agent.                               |
 | `3`  | Agent execution failed or current artifacts failed validation.                    |
+
+Supplied target, live-result, and waiver files retain their bytes, file identity, permissions, and resolved paths through validation. The CLI freezes the supplied live manifest and consuming Git revision before invoking the agent. It checks reported freshness and failure counts against that input. A failure at the current revision caps a passing gate at `CONCERNS`, including a manifest that also contains stale results.
 
 Before an agent starts, a fresh run clears the previous published files for its own scope.
 A failed attempt keeps its evidence and publishes a failed command result.

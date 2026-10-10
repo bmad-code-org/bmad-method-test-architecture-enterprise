@@ -14,6 +14,11 @@ const matrixPath = capture(`Resolve \\{outputFile\\} and \\{default_output_file\
 const summaryPath = capture(`\\{e2e_trace_summary_output\\} to (${quoted})`);
 const gatePath = capture(`\\{gate_decision_output\\} to (${quoted})`);
 const identity = JSON.parse(prompt.match(/Resolved identity: (\{.*\})\. Preserve/)[1]);
+const sourceLedger = JSON.parse(prompt.match(/Frozen source oracle ledger: (\[.*\])\. Preserve/)[1]);
+let ledger = (sourceLedger.length ? sourceLedger : [{id: 'AC-1', requirement: 'Example', priority: 'P0', source: 'caller'}]).map(row => ({...row, priority: row.priority ?? 'P0'}));
+if (mode === 'missing-source-criterion') ledger = ledger.slice(0, 1);
+if (mode === 'source-text-drift') ledger[0].requirement = 'Example';
+if (mode === 'source-binding-drift') ledger[0].source = 'caller';
 const collection = capture(`Resolve \\{collection_mode\\} to (${quoted})`);
 const allowGate = prompt.match(/\{allow_gate\} to (true|false)/)[1] === 'true';
 if (mode === 'retry' && attempt === 1) {
@@ -23,11 +28,11 @@ if (mode === 'retry' && attempt === 1) {
   process.exit(1);
 }
 if (mode === 'fail-agent') process.exit(1);
-const gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
+const gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns', 'manifest-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
 const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
-const inventory = { total: 1, covered: pct === 0 ? 0 : 1, pct };
+const inventory = { total: ledger.length, covered: pct === 0 ? 0 : ledger.length, pct };
 const snapshot = '2026-10-09T00:00:00.000Z';
-const eligible = allowGate && ['contract_static', 'runtime_manifest'].includes(collection);
+const eligible = allowGate && ['contract_static', 'runtime_manifest'].includes(collection) && mode !== 'runtime-inaccessible';
 const summary = {
   schema_version: '0.3.0', snapshot_at: snapshot, collection_mode: collection,
   collection_status: ({ waived: 'WAIVED', restricted: 'RESTRICTED', inaccessible: 'INACCESSIBLE', deferred_shared: 'DEFERRED_SHARED' })[collection] ?? 'COLLECTED',
@@ -37,13 +42,21 @@ const summary = {
   gate_basis: eligible ? 'priority_thresholds' : 'none',
   coverage: {
     inventory,
-    priority_breakdown: { P0: inventory, P1: { total: 0, covered: 0, pct: 100 }, P2: { total: 0, covered: 0, pct: 100 }, P3: { total: 0, covered: 0, pct: 100 } },
+    priority_breakdown: Object.fromEntries(['P0', 'P1', 'P2', 'P3'].map(priority => { const total = ledger.filter(row => row.priority === priority).length; return [priority, {total, covered: pct ? total : 0, pct: total ? pct : 100}]; })),
     by_level: Object.fromEntries(['e2e', 'api', 'component', 'unit', 'live', 'other'].map((level) => [level, { tests: level === 'api' ? 1 : 0, criteria_covered: level === 'api' && pct === 100 ? 1 : 0 }])),
   },
   tests: { files: 1, cases: 1, skipped_cases: 0, pending_cases: 0, fixme_cases: 0 },
   risk_summary: { critical_open: pct === 0 ? 1 : 0, high_open: 0, medium_open: 0, low_open: 0 }, live_evidence: { requirements_live_only: 0 },
   blockers: [], recommendations: [], rejected_evidence: [], links: { trace_report_path: matrixPath },
 };
+if (mode === 'runtime-inaccessible') {
+  summary.collection_status = 'INACCESSIBLE';
+  const livePath = capture(`Resolve \\{live_results_input\\} to (${quoted})`);
+  if (fs.existsSync(livePath)) {
+    const sha = require('node:child_process').spawnSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).stdout.trim();
+    summary.live_evidence = {requirements_live_only: 0, present: true, freshness: 'unreadable', current_source_sha: sha, failed: 0};
+  }
+}
 if (mode === 'concerns') {
   summary.confidence = 'medium';
   summary.oracle.confidence = 'medium';
@@ -78,6 +91,20 @@ if (mode === 'ignored-confidence') {
   summary.oracle.synthetic = true;
 }
 if (['fresh-failure', 'fresh-failure-concerns', 'stale-failure'].includes(mode)) summary.live_evidence = { requirements_live_only: 0, freshness: mode === 'stale-failure' ? 'stale' : 'fresh', failed: 1 };
+if (mode.startsWith('manifest-') && mode !== 'manifest-omitted') {
+  const livePath = capture(`Resolve \\{live_results_input\\} to (${quoted})`);
+  const manifest = JSON.parse(fs.readFileSync(livePath, 'utf8'));
+  const sha = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
+  const matches = row => {const recorded = row.source_sha ?? manifest.source_sha; return recorded.startsWith(sha) || sha.startsWith(recorded);};
+  const stale = manifest.results.filter(row => row.status === 'pass' && !matches(row)).length;
+  const counted = manifest.results.filter(row => row.status === 'pass' && matches(row)).length;
+  summary.live_evidence = {requirements_live_only: 0, present: true, current_source_sha: sha,
+    freshness: stale ? counted ? 'mixed' : 'stale' : 'fresh',
+    failed: manifest.results.filter(row => row.status === 'fail').length,
+    fresh_failed: manifest.results.filter(row => row.status === 'fail' && matches(row)).length};
+  if (mode === 'manifest-stale-cap') summary.live_evidence.freshness = 'stale';
+  if (mode === 'manifest-input-mutation') fs.writeFileSync(livePath, '{}');
+}
 if (mode === 'fresh-invalid-count') summary.live_evidence = { requirements_live_only: 0, freshness: 'fresh', failed: -1 };
 if (mode === 'source-priority-drift') {
   summary.coverage.priority_breakdown.P1 = summary.coverage.priority_breakdown.P0;
@@ -98,7 +125,7 @@ if (mode === 'automated-waiver') summary.gate_status = 'WAIVED';
 if (mode === 'missing-criteria') delete summary.gate_criteria;
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
-fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: [{id: AC-1, requirement: Example, priority: P0, source: caller}]\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n### AC-1: Example (P0)\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`);
+fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`).join('\n')}`);
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
@@ -128,7 +155,7 @@ if (mode === 'matrix-missing-priority') fs.writeFileSync(matrixPath, fs.readFile
 if (mode === 'matrix-duplicate') fs.appendFileSync(matrixPath, '\n### AC-1: Duplicate (P0)\n\n- **Coverage:** FULL\n');
 if (mode === 'source-priority-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replaceAll('P0', 'P1'));
 if (mode === 'missing-oracle-ledger') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/^oracleLedger:.*\n/m, ''));
-if (mode === 'oracle-ledger-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('priority: P0', 'priority: P1'));
+if (mode === 'oracle-ledger-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('\"priority\":\"P0\"', '\"priority\":\"P1\"'));
 if (mode === 'mutated-source') fs.appendFileSync(identity.document, '\nChanged requirements.\n');
 if (mode.startsWith('attempt-')) {
   const old = mode === 'attempt-outside-link' ? `${process.cwd()}-old-matrix.md` : path.join(process.cwd(), 'old-matrix.md');
@@ -140,3 +167,5 @@ if (mode.startsWith('attempt-')) {
 }
 if (mode === 'partial-publication') fs.mkdirSync(path.join(process.cwd(), 'artifacts', 'trace', path.basename(summaryPath)), { recursive: true });
 process.stdout.write('trace fixture agent completed\n');
+
+if (mode === 'matrix-text-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/(### AC-1:) [^\n]+/, '$1 Example (P0)'));

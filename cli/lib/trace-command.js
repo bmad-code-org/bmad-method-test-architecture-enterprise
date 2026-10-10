@@ -5,6 +5,7 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 const MarkdownIt = require('markdown-it');
 const { readInput } = require('./workflow-cli');
+const { liveReference } = require('./trace-live');
 
 const GATE_TYPES = ['story', 'epic', 'release', 'hotfix'];
 const COLLECTION_MODES = [
@@ -18,6 +19,18 @@ const COLLECTION_MODES = [
 ];
 const GATE_STATUSES = new Set(['PASS', 'CONCERNS', 'FAIL']);
 const LEVELS = ['e2e', 'api', 'component', 'unit', 'live', 'other'];
+
+function criterionText(value) {
+  const content = value.replace(/\s*\(P[0-3]\)\s*$/, '');
+  const children = new MarkdownIt().parseInline(content, {})[0]?.children ?? [];
+  return children
+    .map((token) =>
+      ['softbreak', 'hardbreak'].includes(token.type) ? ' ' : ['text', 'code_inline'].includes(token.type) ? token.content : '',
+    )
+    .join('')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
 
 function slug(value) {
   return String(value)
@@ -116,35 +129,57 @@ function sourceOracleLedger(text, source) {
     if (token.type === 'table_open') {
       const rows = [];
       let row;
+      let line;
       while (++index < tokens.length && tokens[index].type !== 'table_close') {
-        if (tokens[index].type === 'tr_open') row = [];
-        else if (tokens[index].type === 'inline' && row) row.push(tokens[index].content.replaceAll(/[*`]/g, '').trim());
-        else if (tokens[index].type === 'tr_close') rows.push(row);
+        if (tokens[index].type === 'tr_open') {
+          row = [];
+          line = (tokens[index].map?.[0] ?? token.map?.[0] ?? 0) + 1;
+        } else if (tokens[index].type === 'inline' && row) row.push(tokens[index].content.replaceAll(/[*`]/g, '').trim());
+        else if (tokens[index].type === 'tr_close') rows.push({ cells: row, line });
       }
-      const header = rows.shift() ?? [];
+      const header = rows.shift()?.cells ?? [];
       const idIndex = header.findIndex((cell) => /^(?:id|criterion|criterion id|requirement id)$/i.test(cell));
       const requirementIndex = header.findIndex((cell) => /^(?:requirement|criterion text|description)$/i.test(cell));
       const priorityIndex = header.findIndex((cell) => /^priority$/i.test(cell));
       if (idIndex === -1 || requirementIndex === -1) continue;
-      for (const cells of rows) {
+      for (const { cells, line } of rows) {
         const priority = priorityIndex === -1 ? '' : cells[priorityIndex];
         if (priority && !/^P[0-3]$/.test(priority)) throw inputError('Source oracle has invalid priority.');
         if (!cells[idIndex] || !cells[requirementIndex]) throw inputError('Source oracle has an incomplete criterion row.');
-        add(cells[idIndex], priority, cells[requirementIndex], (token.map?.[0] ?? 0) + 1);
+        add(cells[idIndex], priority, cells[requirementIndex], line);
       }
     } else if (token.type === 'inline') {
-      const claim = /^([A-Z][A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*)(?:\s*\((P[0-3])\))?\s*:\s*(.+)/.exec(token.content.replaceAll(/[*`]/g, ''));
-      if (claim) add(claim[1], claim[2] ?? /\b(P[0-3])\b/.exec(claim[3])?.[1], claim[3], (token.map?.[0] ?? 0) + 1);
+      let pending;
+      const flush = () => {
+        if (pending) add(pending.id, pending.priority, pending.requirement, pending.line);
+      };
+      for (const [offset, line] of token.content.split('\n').entries()) {
+        const claim = /^([A-Z][A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*)(?:\s*\((P[0-3])\))?\s*:\s*(.+)/.exec(line.replaceAll(/[*`]/g, ''));
+        if (claim) {
+          flush();
+          pending = {
+            id: claim[1],
+            priority: claim[2] ?? /\b(P[0-3])\b/.exec(claim[3])?.[1],
+            requirement: claim[3],
+            line: (token.map?.[0] ?? 0) + offset + 1,
+          };
+        } else if (pending) pending.requirement += `\n${line}`;
+      }
+      flush();
     }
   }
   return [...ledger.values()];
 }
 
-/** Reconcile the saved Step 1 ledger with the caller's frozen source identities and priorities. */
-function oracleReference(progress, sourceLedger, required) {
+/** Reconcile the saved Step 1 ledger with the caller's frozen source claims. */
+function oracleReference(progress, sourceLedger, required, allowLegacyExplicitOracle) {
   const recorded = progress.oracleLedger;
-  if (recorded === undefined && required && (sourceLedger.length === 0 || sourceLedger.some((row) => !row.priority)))
-    throw new Error('Trace progress must preserve the Step 1 oracleLedger for inferred criteria or priorities.');
+  if (
+    recorded === undefined &&
+    required &&
+    (!allowLegacyExplicitOracle || sourceLedger.length === 0 || sourceLedger.some((row) => !row.priority))
+  )
+    throw new Error('Trace progress must preserve the Step 1 oracleLedger.');
   const reference = new Map();
   if (recorded !== undefined) {
     if (!Array.isArray(recorded) || recorded.length === 0) throw new Error('Trace Step 1 oracleLedger must be a nonempty array.');
@@ -161,16 +196,19 @@ function oracleReference(progress, sourceLedger, required) {
         reference.has(row.id)
       )
         throw new Error('Trace Step 1 oracleLedger has an invalid or duplicate criterion.');
-      reference.set(row.id, row.priority);
+      reference.set(row.id, row);
     }
   }
   if (sourceLedger.length > 0) {
     if (recorded !== undefined && (reference.size !== sourceLedger.length || sourceLedger.some((row) => !reference.has(row.id))))
       throw new Error('Trace Step 1 oracleLedger differs from the frozen source criterion identities.');
     for (const row of sourceLedger) {
-      if (row.priority && reference.has(row.id) && reference.get(row.id) !== row.priority)
+      const saved = reference.get(row.id);
+      if (row.priority && saved && saved.priority !== row.priority)
         throw new Error(`Trace Step 1 criterion ${row.id} changed its explicit source priority.`);
-      if (row.priority) reference.set(row.id, row.priority);
+      if (saved && (criterionText(saved.requirement) !== criterionText(row.requirement) || saved.source !== row.source))
+        throw new Error(`Trace Step 1 criterion ${row.id} changed its frozen requirement text or source binding.`);
+      reference.set(row.id, { ...row, priority: row.priority ?? saved?.priority, compareText: Boolean(saved) });
     }
   }
   return reference;
@@ -199,6 +237,7 @@ function matrixInventory(matrix, reference) {
     }
     const header = rows.shift() ?? [];
     const idIndex = header.findIndex((cell) => /^(?:id|criterion|criterion id)$/i.test(cell));
+    const requirementIndex = header.findIndex((cell) => /^requirement$/i.test(cell));
     const priorityIndex = header.findIndex((cell) => /^priority$/i.test(cell));
     const coverageIndex = header.findIndex((cell) => /^coverage$/i.test(cell));
     if (idIndex === -1 || priorityIndex === -1) continue;
@@ -214,7 +253,7 @@ function matrixInventory(matrix, reference) {
       if (tableClaims.has(id)) throw new Error(`Trace criterion ${id} is duplicated in the matrix table.`);
       const status = /^(FULL|PARTIAL|NONE|UNIT-ONLY|INTEGRATION-ONLY)\b/.exec(cells[coverageIndex])?.[1];
       if (!status) throw new Error(`Trace criterion ${id} has invalid table coverage.`);
-      tableClaims.set(id, { priority, status });
+      tableClaims.set(id, { priority, status, requirement: requirementIndex === -1 ? undefined : cells[requirementIndex] });
     }
   }
   for (let index = 0; index < tokens.length; index++) {
@@ -230,7 +269,7 @@ function matrixInventory(matrix, reference) {
       if (ledgerPriorities.has(claim[1]) && ledgerPriorities.get(claim[1]) !== priority)
         throw new Error(`Trace criterion ${claim[1]} detail contradicts its oracle priority.`);
       if (criteria.has(claim[1])) throw new Error(`Trace criterion ${claim[1]} is duplicated.`);
-      current = { priority, status: null };
+      current = { priority, status: null, requirement: heading.slice(claim[0].length) };
       depth = nextDepth;
       criteria.set(claim[1], current);
     } else if (current && token.type === 'inline') {
@@ -245,14 +284,22 @@ function matrixInventory(matrix, reference) {
       const detail = criteria.get(id);
       if (detail.priority !== criterion.priority || detail.status !== criterion.status)
         throw new Error(`Trace criterion ${id} table and detail disagree.`);
+      if (criterion.requirement !== undefined && criterionText(detail.requirement) !== criterionText(criterion.requirement))
+        throw new Error(`Trace criterion ${id} table and detail requirement text disagree.`);
     } else criteria.set(id, criterion);
   }
   for (const id of ledgerPriorities.keys()) {
     if (!criteria.has(id)) throw new Error(`Trace oracle criterion ${id} is missing from the matrix.`);
   }
-  for (const [id, priority] of reference) {
-    if (!criteria.has(id) || criteria.get(id).priority !== priority)
+  for (const [id, expected] of reference) {
+    if (!criteria.has(id) || criteria.get(id).priority !== expected.priority)
       throw new Error(`Trace criterion ${id} differs from its frozen oracle priority or is missing.`);
+    if (
+      expected.compareText !== false &&
+      (typeof criteria.get(id).requirement !== 'string' ||
+        criterionText(criteria.get(id).requirement) !== criterionText(expected.requirement))
+    )
+      throw new Error(`Trace criterion ${id} changed its frozen requirement text in the matrix.`);
   }
   if (reference.size > 0 && [...criteria.keys()].some((id) => !reference.has(id)))
     throw new Error('Trace matrix has criteria absent from the Step 1 oracle ledger.');
@@ -267,7 +314,17 @@ function matrixInventory(matrix, reference) {
 }
 
 /** Check the public artifact contract and Step 5's deterministic gate invariants. */
-function validateTraceOutputs({ paths, target, collectionMode, allowGate, oracleLedger = [], requireOracleLedger = false }) {
+function validateTraceOutputs({
+  paths,
+  target,
+  collectionMode,
+  allowGate,
+  oracleLedger = [],
+  requireOracleLedger = false,
+  allowLegacyExplicitOracle = false,
+  liveCapture,
+  requireLiveManifest = false,
+}) {
   const attemptRoot = path.dirname(path.dirname(paths.matrix));
   for (const [name, file] of Object.entries(paths)) {
     if (name === 'gate' && !fs.existsSync(file)) continue;
@@ -306,6 +363,11 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate, oracle
     collectionMode
   ];
   if (fixedStatus && summary.collection_status !== fixedStatus) throw new Error('Trace summary collection status contradicts its mode.');
+  if (requireLiveManifest && collectionMode === 'runtime_manifest') {
+    const expectedStatus = liveCapture?.manifest ? 'COLLECTED' : 'INACCESSIBLE';
+    if (summary.collection_status !== expectedStatus)
+      throw new Error('Trace runtime-manifest collection status contradicts the frozen supplied evidence.');
+  }
   if (summary.target?.type !== target.type || String(summary.target?.id ?? '') !== target.id)
     throw new Error('Trace summary has a different target.');
   if (!Number.isFinite(Date.parse(summary.snapshot_at))) throw new Error('Trace summary has no valid snapshot_at timestamp.');
@@ -339,7 +401,8 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate, oracle
     if (bucket.pct !== expected) throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
   }
   const priorities = ['P0', 'P1', 'P2', 'P3'].map((key) => summary.coverage.priority_breakdown[key]);
-  const declared = matrixInventory(matrix, oracleReference(progress, oracleLedger, requireOracleLedger));
+  const reference = oracleReference(progress, oracleLedger, requireOracleLedger, allowLegacyExplicitOracle);
+  const declared = matrixInventory(matrix, reference);
   for (const [priority, counts] of Object.entries(declared)) {
     const reported = summary.coverage.priority_breakdown[priority];
     if (reported.total !== counts.total || reported.covered !== counts.covered)
@@ -373,6 +436,17 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate, oracle
       throw new Error(`Trace summary has invalid risk_summary.${field}.`);
   if (!summary.live_evidence || typeof summary.live_evidence !== 'object' || Array.isArray(summary.live_evidence))
     throw new Error('Trace summary has no live_evidence metadata.');
+  const frozenLive = liveReference(liveCapture, new Set(reference.keys()));
+  if (frozenLive) {
+    for (const field of ['present', 'freshness', 'failed'])
+      if (summary.live_evidence[field] !== frozenLive[field])
+        throw new Error(`Trace live evidence ${field} differs from the frozen supplied manifest.`);
+    const reportedSha = summary.live_evidence.current_source_sha;
+    if (reportedSha !== frozenLive.current_source_sha && !(frozenLive.current_source_sha === '' && reportedSha === 'unknown'))
+      throw new Error('Trace live evidence current_source_sha differs from the frozen consuming revision.');
+    if ('fresh_failed' in summary.live_evidence && summary.live_evidence.fresh_failed !== frozenLive.freshFailed)
+      throw new Error('Trace live evidence fresh_failed differs from the frozen supplied manifest.');
+  }
   // Step 4 counts every non-FULL P0 item as critical; P1-P3 gap buckets count NONE only.
   for (const [index, field] of ['critical_open', 'high_open', 'medium_open', 'low_open'].entries()) {
     const uncovered = priorities[index].total - priorities[index].covered;
@@ -425,7 +499,11 @@ function validateTraceOutputs({ paths, target, collectionMode, allowGate, oracle
     const liveFailed = summary.live_evidence.failed;
     if (summary.live_evidence.freshness === 'fresh' && (!Number.isInteger(liveFailed) || liveFailed < 0))
       throw new Error('Trace fresh live evidence has invalid failed count.');
-    const freshFailure = summary.live_evidence.freshness === 'fresh' && liveFailed > 0;
+    const freshFailed =
+      frozenLive?.freshFailed ?? summary.live_evidence.fresh_failed ?? (summary.live_evidence.freshness === 'fresh' ? liveFailed : 0);
+    if (freshFailed !== undefined && (!Number.isInteger(freshFailed) || freshFailed < 0))
+      throw new Error('Trace live evidence has invalid fresh_failed count.');
+    const freshFailure = freshFailed > 0;
     if (expectedStatus === 'PASS' && ((synthetic && summary.confidence !== 'high') || liveOnly > 0 || freshFailure))
       expectedStatus = 'CONCERNS';
     if (summary.gate_status !== expectedStatus) throw new Error('Trace gate decision contradicts its coverage and confidence evidence.');

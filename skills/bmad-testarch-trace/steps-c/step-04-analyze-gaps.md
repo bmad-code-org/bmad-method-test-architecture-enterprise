@@ -286,6 +286,20 @@ const liveEvidence = {
   stale: staleCount,
   unverifiable: unverifiableCount,
   failed: countDisposition('fail'),
+  fresh_failed: liveRecordsForRollup.filter((record) => {
+    if (record.disposition !== 'fail') return false;
+    const recorded = String(record.recorded_source_sha || '')
+      .trim()
+      .toLowerCase();
+    const current = String(currentSourceSha || '')
+      .trim()
+      .toLowerCase();
+    return (
+      /^[0-9a-f]{7,64}$/.test(recorded) &&
+      /^[0-9a-f]{7,64}$/.test(current) &&
+      (recorded.startsWith(current) || current.startsWith(recorded))
+    );
+  }).length,
   contradicted: countDisposition('contradicted'),
   blocked: countDisposition('blocked'),
   skipped: countDisposition('skipped'),

@@ -106,11 +106,14 @@ try {
       'utf8',
     );
     const script = step.slice(step.indexOf("let gateDecision = 'NOT_EVALUATED'")).split('\n```')[0];
-    for (const [freshness, failed, p0Coverage, expected] of [
+    for (const [freshness, failed, p0Coverage, expected, freshFailed] of [
       ['fresh', 1, 100, 'CONCERNS'],
       ['fresh', 1, 50, 'FAIL'],
       ['stale', 1, 100, 'PASS'],
       ['not_present', 0, 100, 'PASS'],
+      ['mixed', 1, 100, 'CONCERNS', 1],
+      ['stale', 1, 100, 'CONCERNS', 1],
+      ['fresh', 1, 100, 'PASS', 0],
     ]) {
       const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, {
         gateEligible: true,
@@ -124,7 +127,7 @@ try {
         syntheticOracle: false,
         effectiveOracleConfidence: 'high',
         liveOnlyCoveredRequirements: 0,
-        liveEvidence: { freshness, failed },
+        liveEvidence: { freshness, failed, fresh_failed: freshFailed },
       });
       assert.equal(actual, expected);
     }
@@ -171,6 +174,85 @@ try {
       fs.writeFileSync(config, original);
     }
   });
+  check('frozen requirement text and source bindings survive ledger and matrix publication', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file, 'utf8');
+    try {
+      fs.writeFileSync(file, '# Epic 4: Export\n\n### AC-1 (P0): **Admin may export.**\n');
+      assert.equal(run('pass').status, 0);
+      for (const mode of ['source-text-drift', 'source-binding-drift', 'matrix-text-drift', 'missing-oracle-ledger']) {
+        const result = run(mode);
+        assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
+        assert.match(result.payload.reason, /frozen requirement|source binding|oracleLedger/);
+        assert.equal(fs.readFileSync(file, 'utf8'), '# Epic 4: Export\n\n### AC-1 (P0): **Admin may export.**\n');
+        assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'gate-decision-epic-4.json')));
+      }
+    } finally {
+      fs.writeFileSync(file, original);
+    }
+  });
+  check('consecutive colon criteria and wrapped titles preserve every source row', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file, 'utf8');
+    try {
+      const text = '# Epic 4: Export\n\nAC-1 (P0): Admin may\nexport.\nAC-2 (P0): Deny member export.\n';
+      fs.writeFileSync(file, text);
+      const accepted = run('pass');
+      assert.equal(accepted.status, 0, accepted.stderr);
+      assert.equal(accepted.payload.coverage.total, 2);
+      const ledger = sourceOracleLedger(text, file);
+      assert.deepEqual(
+        ledger.map((row) => [row.id, row.source]),
+        [
+          ['AC-1', `${file}:3`],
+          ['AC-2', `${file}:5`],
+        ],
+      );
+      const dropped = run('missing-source-criterion');
+      assert.equal(dropped.status, 3, dropped.stderr);
+      assert.match(dropped.payload.reason, /frozen source criterion identities/);
+    } finally {
+      fs.writeFileSync(file, original);
+    }
+  });
+  check('supplied native live failures remain authoritative with missing, stale, or mixed summary metadata', () => {
+    for (const args of [
+      ['init', '-q'],
+      ['add', 'docs', '_bmad/config.toml'],
+      ['-c', 'user.name=Trace fixture', '-c', 'user.email=trace@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture'],
+    ]) {
+      const git = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+      assert.equal(git.status, 0, git.stderr);
+    }
+    const current = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const stale = current[0] === 'a' ? 'b'.repeat(40) : 'a'.repeat(40);
+    const live = path.join(root, 'live.json');
+    const write = (results) => fs.writeFileSync(live, JSON.stringify({ schema_version: '0.1.0', source_sha: current, results }));
+    const failure = { id: '1.1-LIVE-001', requirement_id: 'AC-1', status: 'fail' };
+    try {
+      write([failure]);
+      for (const mode of ['manifest-omitted', 'manifest-stale-cap', 'manifest-ignored-cap']) {
+        const result = run(mode, ['--live-results', 'live.json']);
+        assert.equal(result.status, 3, `${mode}: ${result.stderr}`);
+        assert.match(result.payload.reason, /frozen supplied manifest|gate decision/);
+      }
+      assert.equal(run('manifest-concerns', ['--live-results', 'live.json']).payload.gate_status, 'CONCERNS');
+      write([failure, { id: '1.1-LIVE-002', requirement_id: 'AC-1', status: 'pass', source_sha: stale }]);
+      const mixed = run('manifest-concerns', ['--live-results', 'live.json']);
+      assert.equal(mixed.status, 0, mixed.stderr);
+      assert.equal(mixed.payload.gate_status, 'CONCERNS');
+      write([{ ...failure, source_sha: stale }]);
+      const old = run('manifest-pass', ['--live-results', 'live.json']);
+      assert.equal(old.status, 0, old.stderr);
+      assert.equal(old.payload.gate_status, 'PASS');
+      write([failure]);
+      const mutation = run('manifest-input-mutation', ['--live-results', 'live.json']);
+      assert.equal(mutation.status, 3, mutation.stderr);
+      assert.match(mutation.payload.reason, /changed a supplied input/);
+    } finally {
+      fs.unlinkSync(live);
+    }
+  });
   check('no-gate removes the previous scope gate and omits its signal', () => {
     const result = run('pass', ['--no-gate']);
     assert.equal(result.status, 0, result.stderr);
@@ -184,9 +266,27 @@ try {
     assert.equal(result.payload.collection_status, 'COLLECTED');
     assert.equal(result.payload.gate_status, null);
   });
-  check('runtime-manifest accepts a project with no static tests', () => {
-    const result = run('pass', ['--test-dir', 'missing-tests', '--collection-mode', 'runtime_manifest']);
+  check('runtime-manifest with missing evidence reports inaccessible and publishes no gate', () => {
+    const args = ['--test-dir', 'missing-tests', '--collection-mode', 'runtime_manifest'];
+    const falseSuccess = run('pass', args);
+    assert.equal(falseSuccess.status, 3, falseSuccess.stderr);
+    assert.match(falseSuccess.payload.reason, /runtime-manifest collection status/);
+    const result = run('runtime-inaccessible', args);
     assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.payload.collection_status, 'INACCESSIBLE');
+    assert.equal(result.payload.gate_status, null);
+    const file = path.join(root, 'unreadable-live.json');
+    fs.writeFileSync(file, '{malformed');
+    try {
+      const invalid = run('pass', [...args, '--live-results', 'unreadable-live.json']);
+      assert.equal(invalid.status, 3, invalid.stderr);
+      const inaccessible = run('runtime-inaccessible', [...args, '--live-results', 'unreadable-live.json']);
+      assert.equal(inaccessible.status, 0, inaccessible.stderr);
+      assert.equal(inaccessible.payload.gate_status, null);
+      assert.equal(fs.readFileSync(file, 'utf8'), '{malformed');
+    } finally {
+      fs.unlinkSync(file);
+    }
   });
   check('story, release, hotfix, and system identities match the skill contract', () => {
     const documents = [
@@ -500,6 +600,9 @@ try {
             'captured source',
           ),
           requireOracleLedger: true,
+          // Original captures predate the typed Step 1 ledger. This offline replay
+          // checks their frozen identity/priority contract; the public CLI requires it.
+          allowLegacyExplicitOracle: true,
         }).summary.gate_status,
         expected,
       );
@@ -529,6 +632,71 @@ try {
     assert.deepEqual(value.runners[0].repetitions, { expected: 4, completed: 4 });
     assert.equal(value.runners[0].measurements.unstableCases, 0);
     assert.equal(value.runners[0].measurements.fixtureMutations, 0);
+  });
+  check('later actual public Codex captures preserve original exits and frozen source ledgers', () => {
+    const directory = path.join(__dirname, 'results', 'live-eval-remediation', 'trace-codex-2026-10-09');
+    for (const [capture, commit, legacy] of [
+      ['public-before-cr', '8ee3aa5cd8af16dbabe4b8a8d0df09c931b68cc4', true],
+      ['public-after-cr', '7eabcf927a1400b5599c6027da71efdf2aa64dea', false],
+    ]) {
+      const manifest = JSON.parse(fs.readFileSync(path.join(directory, capture, 'public-native.manifest.json')));
+      const compressed = fs.readFileSync(path.join(directory, capture, manifest.archive));
+      assert.equal(createHash('sha256').update(compressed).digest('hex'), manifest.archiveSha256);
+      assert.equal(manifest.sourceCommit, commit);
+      assert.deepEqual(manifest.nativeExits, [1, 0]);
+      const archived = JSON.parse(gunzipSync(compressed));
+      const files = new Map(archived.files.map((file) => [file.path, Buffer.from(file.base64, 'base64')]));
+      assert.equal(files.size, manifest.files.length);
+      for (const pin of manifest.files) {
+        assert.equal(files.get(pin.path).length, pin.bytes);
+        assert.equal(createHash('sha256').update(files.get(pin.path)).digest('hex'), pin.sha256);
+      }
+      for (const [name, id, expected] of [
+        ['seeded', '4', 'FAIL'],
+        ['clean', '5', 'PASS'],
+      ]) {
+        const invocation = JSON.parse(files.get(`${name}-invocation.json`));
+        assert.match(invocation.sourceCommit, /^[0-9a-f]{7,40}$/);
+        assert.ok(commit.startsWith(invocation.sourceCommit));
+        assert.deepEqual(JSON.parse(files.get(`${name}-result.json`)).changedInputs, []);
+        const prompt = [...files.entries()]
+          .find(([file]) => file.startsWith(`${name}/.tea-runs/`) && file.endsWith('/prompt.txt'))[1]
+          .toString();
+        const frozen = prompt.match(/Frozen source oracle ledger: (\[.*\])\. Preserve/);
+        const targetDocument = invocation.args[invocation.args.indexOf('--target') + 1];
+        const ledger = frozen
+          ? JSON.parse(frozen[1])
+          : sourceOracleLedger(files.get(`${name}/${targetDocument}`).toString(), 'captured source');
+        const target = { type: 'epic', id, runKey: `epic-${id}`, runScope: 'epic' };
+        const paths = tracePaths(path.join(root, 'later-capture-validation', capture, name), target.runKey);
+        fs.mkdirSync(path.dirname(paths.matrix), { recursive: true });
+        for (const [kind, destination] of Object.entries(paths)) {
+          const original = [...files.entries()].find(
+            ([file]) => file.startsWith(`${name}/.tea-runs/`) && file.endsWith(path.basename(destination)),
+          )[1];
+          if (kind === 'matrix') fs.writeFileSync(destination, original);
+          else {
+            const value = JSON.parse(original);
+            value.links.trace_report_path = paths.matrix;
+            fs.writeFileSync(destination, JSON.stringify(value));
+          }
+        }
+        const liveFile = files.get(`${name}/test-artifacts/live-verification-results.json`);
+        assert.equal(
+          validateTraceOutputs({
+            paths,
+            target,
+            collectionMode: 'contract_static',
+            allowGate: true,
+            oracleLedger: ledger,
+            requireOracleLedger: true,
+            allowLegacyExplicitOracle: legacy,
+            liveCapture: liveFile ? { manifest: JSON.parse(liveFile), currentSha: '' } : undefined,
+          }).summary.gate_status,
+          expected,
+        );
+      }
+    }
   });
 
   check('agent-created output aliases are rejected before publication and failure-result writes', () => {
