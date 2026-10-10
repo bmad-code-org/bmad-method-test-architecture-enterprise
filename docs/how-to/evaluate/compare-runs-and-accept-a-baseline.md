@@ -37,29 +37,15 @@ Add `--run <invocationId>` to compare an older run.
 
 ### 2. Read the Outcome
 
-#### `first-run`
+`compare` prints one of three outcomes:
 
-The folder holds no `baseline/`:
+| Outcome     | What to do next                                                                      |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `first-run` | Review the scored run before accepting the first baseline.                           |
+| `compared`  | Read the relation for each probe and investigate any regression.                     |
+| `refused`   | Review what changed in the evaluation, then decide whether to accept a new baseline. |
 
-```text
-tea-evaluate compare: comparing run 20261007T091652474Z-2e1d4685
-tea-evaluate compare: first-run: baseline/ holds no baseline to compare run 20261007T091652474Z-2e1d4685 with; accept it with tea-evaluate compare --accept (exit 0, /work/app/evals/grader-tool-server/runs/20261007T091652474Z-2e1d4685)
-```
-
-Review the run, then accept it in step 3.
-
-#### `compared`
-
-The baseline and the run measure the same thing, and `compare` prints one line per probe:
-
-```text
-tea-evaluate compare: comparing run 20261007T091703186Z-e2a944af
-P-001: incomparable (a is the baseline, b is run 20261007T091703186Z-e2a944af)
-P-002: equivalent (a is the baseline, b is run 20261007T091703186Z-e2a944af)
-tea-evaluate compare: compared: 2 probe(s) of run 20261007T091703186Z-e2a944af with the baseline of run 20261007T091652474Z-2e1d4685 (exit 0, /work/app/evals/grader-tool-server/runs/20261007T091703186Z-e2a944af)
-```
-
-The relation comes from eval-quality, with the baseline as `a` and the run as `b`:
+For a `compared` result, eval-quality uses `a` for the baseline and `b` for the new run:
 
 | Relation        | Meaning                                                                      |
 | --------------- | ---------------------------------------------------------------------------- |
@@ -69,29 +55,16 @@ The relation comes from eval-quality, with the baseline as `a` and the run as `b
 | `incomparable`  | Neither side dominates the other, or the evidence cannot decide between them |
 
 A clean control carries no strength vector, so it compares `incomparable` with itself.
-That is the expected line for `P-001`.
 Read an `a-dominates-b` line as a regression and find what changed before you accept anything.
 
-#### `refused`
-
-The two sides do not measure the same thing, so no relation between them would mean anything.
-Changing `catchThreshold` in `policy/scoring-policy.json` and running again produces:
-
-```text
-tea-evaluate compare: comparing run 20261007T091707337Z-7cb6ab11
-tea-evaluate compare: refused: probe P-001: comparabilityKey differs (sha256:72e6deef...f2c2 vs sha256:a4ce6908...c4f6): the two results do not measure the same scoring policy and probe set, so no relation between them is meaningful; probe P-002: comparabilityKey differs (sha256:c43ee147...7b2f vs sha256:31979267...6edf): the two results do not measure the same scoring policy and probe set, so no relation between them is meaningful (exit 0, /work/app/evals/grader-tool-server/runs/20261007T091707337Z-7cb6ab11)
-```
-
-The reason names the cause.
-A run is refused when:
+For a `refused` result, the message names the change that prevents comparison, such as:
 
 - the partitions differ, such as a held-out run against a baseline accepted from a full run
 - the probe sets differ
 - a probe's `comparabilityKey` differs, because the scoring policy, the probe set or the corpus changed
 - `evalQualityVersion` differs, because a different eval-quality release scored the baseline
 
-For each cause the answer is the same.
-Decide that the new setup is the intended one, then accept the new run as the baseline in step 3.
+Confirm that the new setup is intended before accepting its run as the baseline.
 
 ### 3. Accept a Baseline
 
@@ -103,27 +76,8 @@ npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-ser
 npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --accept
 ```
 
-```text
-tea-evaluate compare: accepting run 20261007T091652474Z-2e1d4685
-tea-evaluate compare: accepted: run 20261007T091652474Z-2e1d4685 (score invocation 20261007T091655530Z-5568ed59) is the baseline, 45 file(s) under baseline/ (exit 0, /work/app/evals/grader-tool-server/runs/20261007T091652474Z-2e1d4685)
-```
-
 `--accept` replaces `baseline/` with a byte-identical snapshot of the run.
-It is the only command that writes there.
-`baseline/baseline.json` is the manifest.
-It names the accepted run, its score invocation, the partition, the eval-quality version and the digests of the corpus, the contract and the policy.
-
-The new folder is untracked:
-
-```bash
-git status --short
-```
-
-```text
-?? evals/grader-tool-server/baseline/
-```
-
-Commit it before anything else.
+Review and commit the new `baseline/` folder with the change it measures.
 Another `run` over an uncommitted `baseline/` records `"dirty": true` in its `run.json`, and the accept refuses a dirty run.
 
 Open a pull request that carries `baseline/` together with the change that moved the target, the corpus, the contract, the policy or the engine.
@@ -132,25 +86,11 @@ The reviewer reads the baseline diff next to the cause of every difference.
 ### 4. Know When an Accept Is Refused
 
 `--accept` refuses a run measured over uncommitted work.
-After `run --from-working-tree` over a local edit, the accept exits 10 and writes nothing:
-
-```text
-tea-evaluate compare: accepting run 20261007T091711743Z-75ac0996
-run.json: [dirty] records dirty true; a run measured over uncommitted work is never accepted as a baseline
-tea-evaluate compare: run 20261007T091711743Z-75ac0996 is dirty; nothing was written under baseline/ (exit 10, /work/app/evals/grader-tool-server/runs/20261007T091711743Z-75ac0996)
-```
-
-No flag overrides this.
-Commit the change and run again.
+Commit the change, rerun and score it, then accept that run.
 
 A baseline edited by hand fails too.
-After appending one space to `baseline/run.json`, `check` and `compare` both exit 10 before they read any evidence:
-
-```text
-baseline/run.json: [baseline-digest] digests to sha256:5e65d382ea9e19f8a807716882636abfd75ca06648195a37c9800cd2f9fc2492; baseline.json records sha256:c2476f76d454061cb24fcc707837b3b90b75eaf6f725ae0665bd53dc63755b74, so the file is not the one that was accepted
-```
-
 Restore the file from git, or accept a new run.
+[The `compare` reference](/docs/reference/tea-evaluate-cli.md#compare) has the exact refusal messages and acceptance rules.
 
 ## How You Know It Worked
 
