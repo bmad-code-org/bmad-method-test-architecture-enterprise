@@ -1,0 +1,1 @@
+tea-nfr: security-authentication report fields contradict its canonical criterion; evidence: /private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-eAoqnN/.tea-runs/tea-nfr-HXHicQ

@@ -2,6 +2,7 @@
 # https://github.com/DavidAnson/markdownlint-cli2
 
 ignores:
+  - "test/results/codex-nfr/parser-replay/**"
   - "test/results/codex-nfr/public-cli-original/**"
   - "test/results/codex-nfr/raw/**"
   - node_modules/**

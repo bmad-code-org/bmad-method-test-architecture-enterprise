@@ -51,3 +51,4 @@ _bmad-output/implementation-artifacts/evaluate/story-1.54.md
 # Immutable live NFR observations.
 test/results/codex-nfr/raw/
 test/results/codex-nfr/public-cli-original/
+test/results/codex-nfr/parser-replay/

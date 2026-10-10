@@ -345,6 +345,41 @@ test('actual Codex public failures retain their original byte pins and exit code
     assert.match(files.get(type + '-stderr.txt').toString(), /tea-nfr:/);
   }
 });
+test('retained parser replay bytes distinguish original failures from controlled repair observations', () => {
+  const directory = path.join(__dirname, 'results', 'codex-nfr', 'parser-replay');
+  const manifestBytes = fs.readFileSync(path.join(directory, 'manifest.json'));
+  assert.equal(digest(manifestBytes), '8e15f65de609c3a2ed16a5a7467a0f386e5fc1efd85c77df293bb4d9fc65419b');
+  const manifest = JSON.parse(manifestBytes);
+  assert.equal(manifest.generatedByModel, false);
+  assert.equal(manifest.sourceCommit, '1debdc1112ef51a7adf4ba7c956e3bfe0c3db9da');
+  assert.deepEqual(manifest.originalNativeExits, [3, 3]);
+  assert.deepEqual(manifest.originalParserReplayExits, [3, 3]);
+  assert.deepEqual(manifest.repairedParserReplayExits, [0, 1]);
+  assert.equal(manifest.stability, 'unmeasured');
+  assert.equal(manifest.files.length, 40);
+  for (const entry of manifest.files) {
+    const bytes = fs.readFileSync(path.join(directory, entry.path));
+    assert.equal(bytes.length, entry.bytes);
+    assert.equal(digest(bytes), entry.sha256);
+  }
+  const { files } = readNativeArchive();
+  for (const type of ['clean', 'gapped']) {
+    const nativeReport = [...files.entries()].find(
+      ([name]) => name.startsWith(type + '/') && name.endsWith('/nfr-assessment-system.md'),
+    )[1];
+    for (const phase of ['original-parser', 'repaired-parser']) {
+      const root = path.join(directory, `${phase}-${type}`);
+      const proof = JSON.parse(fs.readFileSync(path.join(root, 'provenance.json')));
+      assert.equal(proof.kind, 'controlled-parser-replay');
+      assert.equal(proof.generatedByModel, false);
+      assert.equal(proof.originalNativeExit, 3);
+      assert.equal(proof.exitCode, phase === 'original-parser' ? 3 : type === 'clean' ? 0 : 1);
+      assert.deepEqual(proof.changedInputs, []);
+      assert.deepEqual(proof.adaptedContextFields, ['requestId', 'supplied_project_root']);
+      assert.equal(digest(fs.readFileSync(path.join(root, 'nfr-assessment-system.md'))), digest(nativeReport));
+    }
+  }
+});
 for (const [type, expectedExit, expectedStatus] of [
   ['clean', 0, 'PASS'],
   ['gapped', 1, 'FAIL'],

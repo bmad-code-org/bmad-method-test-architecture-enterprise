@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "controlled-parser-replay",
+  "generatedByModel": false,
+  "sourceCommit": "1debdc1112ef51a7adf4ba7c956e3bfe0c3db9da",
+  "originalNativeSourceCommit": "a8225395571b026f194aefc696ca0a18922bf919",
+  "originalNativeExit": 3,
+  "case": "clean",
+  "phase": "repaired-parser",
+  "exitCode": 0,
+  "status": "PASS",
+  "command": [
+    "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+    "/Users/murat/opensource/_wt/nfr-codex-evaluation/cli/nfr.js",
+    "--project-root",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-0L1At7",
+    "--input",
+    "docs/tech-spec.md",
+    "--implementation",
+    "config/logging.json",
+    "--evidence",
+    "evidence",
+    "--evidence",
+    "config/logging.json",
+    "--output-dir",
+    "published",
+    "--agent",
+    "custom",
+    "--agent-cmd",
+    "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+    "--agent-arg",
+    "/Users/murat/opensource/_wt/nfr-codex-evaluation/test/lib/nfr-native-replay-agent.js",
+    "--agent-arg",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-0L1At7/original-native"
+  ],
+  "adaptedContextFields": [
+    "requestId",
+    "supplied_project_root"
+  ],
+  "reportSha256": "5356e68ed8aa0ee0dedfab8f5674928a95da7e4244a728f1a5b2a7d438dd430f",
+  "changedInputs": [],
+  "suppliedInputs": [
+    {
+      "path": "docs/tech-spec.md",
+      "sha256": "0ec4be1fa312d588f9530365eb39a28f534ab1004b7d1b304e81df33ec5dc810"
+    },
+    {
+      "path": "config/logging.json",
+      "sha256": "50664edaec4679b9bb4fa4994a1eac215dba61a2cd8c89dfcc2e25ebb08408db"
+    },
+    {
+      "path": "evidence/coverage-summary-2026-09-01.json",
+      "sha256": "3494a162418b4140977899e426fbdec6c6cee880fd35eade9c953e64cbb72a23"
+    },
+    {
+      "path": "evidence/dependency-scan-2026-09-01.json",
+      "sha256": "e91ac6795540aefe33502ab65aa2d451892f4e3d0faa78f8e28366e0a0089cf9"
+    },
+    {
+      "path": "evidence/duplication-report-2026-09-01.json",
+      "sha256": "907b01b7642083dc1c99f0540ac60ed1a1b9316f341559bcd98a4c16a54b389a"
+    },
+    {
+      "path": "evidence/load-test-2026-09-02.json",
+      "sha256": "f8d2530317b45f14d8f9db87c49302f55497f038d59c8913973cd68e7891412b"
+    },
+    {
+      "path": "evidence/reliability-2026-09.json",
+      "sha256": "4057fff548d6db6d7d07503edacccfde32beee7ae4916c368b89b963941b39bb"
+    },
+    {
+      "path": "evidence/security-review-2026-09-01.md",
+      "sha256": "4c6e0370d3e0ab7adbba461ef00f680e6e9cf361d5a3d8d388f8e1470db9ce8c"
+    }
+  ],
+  "retainedWorkspace": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-0L1At7",
+  "stability": "unmeasured"
+}

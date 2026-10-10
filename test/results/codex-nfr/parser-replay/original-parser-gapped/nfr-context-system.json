@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "requestId": "a51ff5df-621d-44f7-a9e7-3498fa2e6eb7",
+  "runScope": "system",
+  "runKey": "system",
+  "supplied_project_root": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/nfr-parser-proof-u3H2NI",
+  "declared_nfr_criteria": {
+    "security": [
+      {
+        "id": "security-authentication",
+        "order": 1,
+        "label": "Authentication",
+        "threshold": "Every ledger API call presents an OAuth 2.1 access token whose lifetime is 15 minutes or less. Refresh tokens rotate on use.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "security-authorization",
+        "order": 2,
+        "label": "Authorization",
+        "threshold": "Tenant-scoped RBAC is enforced on every statement endpoint. A token issued for one tenant must never read another tenant's statements.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "security-data-protection",
+        "order": 3,
+        "label": "Data protection",
+        "threshold": "Statements are encrypted at rest with AES-256 and in transit with TLS 1.3.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "security-vulnerability-management",
+        "order": 4,
+        "label": "Vulnerability management",
+        "threshold": "A release ships with 0 critical and 0 high severity dependency findings. Moderate and low findings are tracked but do not block.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "security-compliance",
+        "order": 5,
+        "label": "Compliance",
+        "threshold": "The ledger processes no cardholder data and no personal health data, so PCI-DSS and HIPAA are out of scope for this service. No external compliance regime applies to it.",
+        "threshold_source": "docs/tech-spec.md"
+      }
+    ],
+    "performance": [
+      {
+        "id": "performance-response-time",
+        "order": 6,
+        "label": "Response time",
+        "threshold": "UNKNOWN",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "performance-throughput",
+        "order": 7,
+        "label": "Throughput",
+        "threshold": "UNKNOWN",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "performance-resource-usage",
+        "order": 8,
+        "label": "Resource usage",
+        "threshold": "UNKNOWN",
+        "threshold_source": "docs/tech-spec.md"
+      }
+    ],
+    "reliability": [
+      {
+        "id": "reliability-availability",
+        "order": 9,
+        "label": "Availability",
+        "threshold": "Monthly uptime at or above 99.5%.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "reliability-error-rate",
+        "order": 10,
+        "label": "Error rate",
+        "threshold": "The monthly 5xx rate stays below 0.5% of ledger API requests.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "reliability-mttr",
+        "order": 11,
+        "label": "MTTR",
+        "threshold": "A ledger incident is restored within 15 minutes.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "reliability-fault-tolerance",
+        "order": 12,
+        "label": "Fault tolerance",
+        "threshold": "The statement worker retries a failed ledger write three times with exponential backoff, and the region failover drill runs once a quarter.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "reliability-ci-burn-in",
+        "order": 13,
+        "label": "CI burn-in",
+        "threshold": "100 consecutive green runs of the ledger suite precede a release.",
+        "threshold_source": "docs/tech-spec.md"
+      }
+    ],
+    "maintainability": [
+      {
+        "id": "maintainability-test-coverage",
+        "order": 15,
+        "label": "Test coverage",
+        "threshold": "Statement coverage of the ledger service stays at or above 80%.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "maintainability-structured-logging",
+        "order": 16,
+        "label": "Structured logging",
+        "threshold": "Every ledger log line is JSON and carries `tenant_id`, `trace_id`, and `event_type`.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "maintainability-error-tracking",
+        "order": 17,
+        "label": "Error tracking",
+        "threshold": "Unhandled rejections and 5xx responses reach the error tracker.",
+        "threshold_source": "docs/tech-spec.md"
+      },
+      {
+        "id": "maintainability-code-duplication",
+        "order": 18,
+        "label": "Code duplication",
+        "threshold": "UNKNOWN",
+        "threshold_source": "docs/tech-spec.md"
+      }
+    ]
+  },
+  "recorded_only_nfr_criteria": [
+    {
+      "id": "disaster-recovery-disaster-recovery",
+      "order": 14,
+      "label": "Disaster recovery",
+      "threshold": "RTO 4 hours, RPO 15 minutes.",
+      "threshold_source": "docs/tech-spec.md",
+      "domain": "disaster-recovery",
+      "assessment_mode": "recorded-only"
+    }
+  ],
+  "supplied_evidence_ledger": [
+    {
+      "path": "config/logging.json",
+      "source": "supplied",
+      "source_type": "implementation-evidence",
+      "domains": [
+        "maintainability"
+      ],
+      "observations": [
+        {
+          "criterion_id": "maintainability-error-tracking",
+          "supports": "\"captures\": [\"unhandled_rejection\", \"uncaught_exception\", \"http_5xx\"],"
+        },
+        {
+          "criterion_id": "maintainability-error-tracking",
+          "supports": "\"enabled\": true,"
+        },
+        {
+          "criterion_id": "maintainability-structured-logging",
+          "supports": "\"assertion\": \"ledger/test/observability/log-format.spec.ts asserts every required field on a sampled line\","
+        },
+        {
+          "criterion_id": "maintainability-structured-logging",
+          "supports": "\"format\": \"json\","
+        },
+        {
+          "criterion_id": "maintainability-structured-logging",
+          "supports": "\"required_fields\": [\"timestamp\", \"level\", \"message\", \"tenant_id\", \"trace_id\", \"event_type\"],"
+        },
+        {
+          "criterion_id": "maintainability-structured-logging",
+          "supports": "\"schema\": \"config/logging.json is the schema of record; every ledger log line is validated against it in the logging middleware test\","
+        }
+      ]
+    },
+    {
+      "path": "evidence/dependency-scan-2026-08-30.json",
+      "source": "supplied",
+      "source_type": "implementation-evidence",
+      "domains": [
+        "security"
+      ],
+      "observations": [
+        {
+          "criterion_id": "security-vulnerability-management",
+          "supports": "\"note\": \"Moderate and low findings are tracked in the dependency backlog and do not block a release under the tech spec.\""
+        },
+        {
+          "criterion_id": "security-vulnerability-management",
+          "supports": "\"summary\": { \"critical\": 0, \"high\": 0, \"moderate\": 3, \"low\": 7, \"info\": 0, \"total\": 10 },"
+        }
+      ]
+    },
+    {
+      "path": "evidence/load-test-2026-08-28.json",
+      "source": "supplied",
+      "source_type": "implementation-evidence",
+      "domains": [
+        "performance"
+      ],
+      "observations": [
+        {
+          "criterion_id": "performance-resource-usage",
+          "supports": "\"resource_usage\": { \"peak_cpu_pct\": 58, \"peak_heap_pct\": 61, \"db_connection_pool_peak\": 34, \"db_connection_pool_size\": 60 }"
+        },
+        {
+          "criterion_id": "performance-response-time",
+          "supports": "\"response_time_ms\": { \"p50\": 96, \"p95\": 214, \"p99\": 388 },"
+        },
+        {
+          "criterion_id": "performance-throughput",
+          "supports": "\"throughput_rps\": 344,"
+        }
+      ]
+    },
+    {
+      "path": "evidence/reliability-2026-08.json",
+      "source": "supplied",
+      "source_type": "implementation-evidence",
+      "domains": [
+        "reliability"
+      ],
+      "observations": [
+        {
+          "criterion_id": "reliability-availability",
+          "supports": "\"availability\": { \"uptime_pct\": 99.71, \"downtime_minutes\": 128 },"
+        },
+        {
+          "criterion_id": "reliability-ci-burn-in",
+          "supports": "\"ci_burn_in\": { \"suite\": \"ledger\", \"consecutive_green_runs\": 214, \"last_failure\": \"2026-06-30\" },"
+        },
+        {
+          "criterion_id": "reliability-error-rate",
+          "supports": "\"error_rate_pct\": 1.94,"
+        },
+        {
+          "criterion_id": "reliability-fault-tolerance",
+          "supports": "\"failover_drill\": { \"date\": \"2026-08-12\", \"result\": \"passed\", \"observed_failover_seconds\": 38, \"data_loss\": \"none\" },"
+        },
+        {
+          "criterion_id": "reliability-mttr",
+          "supports": "\"mttr_minutes\": 11,"
+        }
+      ]
+    },
+    {
+      "path": "evidence/security-review-2026-08-29.md",
+      "source": "supplied",
+      "source_type": "implementation-evidence",
+      "domains": [
+        "security"
+      ],
+      "observations": [
+        {
+          "criterion_id": "security-authentication",
+          "supports": "OAuth 2.1 authorization-code flow with PKCE. Access tokens are signed ES256 and issued with a\n900-second (15-minute) lifetime; refresh tokens rotate on every use and the previous token is\nrevoked. Verified by `ledger/test/auth/token-lifetime.spec.ts`, which asserts the issued `exp`\nclaim, and by a manual replay of an expired token against every statement route."
+        },
+        {
+          "criterion_id": "security-authorization",
+          "supports": "Tenant-scoped RBAC is enforced in `ledger/src/http/tenant-guard.ts`, which runs ahead of every\nroute in the statements router. The authorization suite exercises all five statement routes with a\ntoken issued for a different tenant; each returns 403 and writes an audit record. Cross-tenant read\nattempts: 5 of 5 refused."
+        },
+        {
+          "criterion_id": "security-compliance",
+          "supports": "Confirmed with the compliance team on 2026-08-26: the ledger stores no cardholder data and no\npersonal health data, so PCI-DSS and HIPAA do not apply to this service. No other external regime\ncovers it. This section exists so a reader does not have to infer the scope from silence."
+        },
+        {
+          "criterion_id": "security-data-protection",
+          "supports": "At rest: the statements table and its backups use AES-256 volume encryption; keys rotate every 90\n  days through the platform key service."
+        },
+        {
+          "criterion_id": "security-data-protection",
+          "supports": "In transit: the ledger's ingress terminates TLS 1.3 only. TLS 1.2 and below were disabled on\n  2026-06-14 and the scan below confirms no downgrade path."
+        }
+      ]
+    }
+  ],
+  "domain_assessments": {
+    "security": {
+      "status": "PASS",
+      "findings": [
+        {
+          "criterion_id": "security-authentication",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/security-review-2026-08-29.md",
+              "supports": "OAuth 2.1 authorization-code flow with PKCE. Access tokens are signed ES256 and issued with a\n900-second (15-minute) lifetime; refresh tokens rotate on every use and the previous token is\nrevoked. Verified by `ledger/test/auth/token-lifetime.spec.ts`, which asserts the issued `exp`\nclaim, and by a manual replay of an expired token against every statement route."
+            }
+          ]
+        },
+        {
+          "criterion_id": "security-authorization",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/security-review-2026-08-29.md",
+              "supports": "Tenant-scoped RBAC is enforced in `ledger/src/http/tenant-guard.ts`, which runs ahead of every\nroute in the statements router. The authorization suite exercises all five statement routes with a\ntoken issued for a different tenant; each returns 403 and writes an audit record. Cross-tenant read\nattempts: 5 of 5 refused."
+            }
+          ]
+        },
+        {
+          "criterion_id": "security-data-protection",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/security-review-2026-08-29.md",
+              "supports": "At rest: the statements table and its backups use AES-256 volume encryption; keys rotate every 90\n  days through the platform key service."
+            },
+            {
+              "path": "evidence/security-review-2026-08-29.md",
+              "supports": "In transit: the ledger's ingress terminates TLS 1.3 only. TLS 1.2 and below were disabled on\n  2026-06-14 and the scan below confirms no downgrade path."
+            }
+          ]
+        },
+        {
+          "criterion_id": "security-vulnerability-management",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/dependency-scan-2026-08-30.json",
+              "supports": "\"note\": \"Moderate and low findings are tracked in the dependency backlog and do not block a release under the tech spec.\""
+            },
+            {
+              "path": "evidence/dependency-scan-2026-08-30.json",
+              "supports": "\"summary\": { \"critical\": 0, \"high\": 0, \"moderate\": 3, \"low\": 7, \"info\": 0, \"total\": 10 },"
+            }
+          ]
+        },
+        {
+          "criterion_id": "security-compliance",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/security-review-2026-08-29.md",
+              "supports": "Confirmed with the compliance team on 2026-08-26: the ledger stores no cardholder data and no\npersonal health data, so PCI-DSS and HIPAA do not apply to this service. No other external regime\ncovers it. This section exists so a reader does not have to infer the scope from silence."
+            }
+          ]
+        }
+      ],
+      "evidence_gaps": []
+    },
+    "performance": {
+      "status": "CONCERNS",
+      "findings": [
+        {
+          "criterion_id": "performance-response-time",
+          "status": "CONCERNS",
+          "evidence": [
+            {
+              "path": "evidence/load-test-2026-08-28.json",
+              "supports": "\"response_time_ms\": { \"p50\": 96, \"p95\": 214, \"p99\": 388 },"
+            }
+          ]
+        },
+        {
+          "criterion_id": "performance-throughput",
+          "status": "CONCERNS",
+          "evidence": [
+            {
+              "path": "evidence/load-test-2026-08-28.json",
+              "supports": "\"throughput_rps\": 344,"
+            }
+          ]
+        },
+        {
+          "criterion_id": "performance-resource-usage",
+          "status": "CONCERNS",
+          "evidence": [
+            {
+              "path": "evidence/load-test-2026-08-28.json",
+              "supports": "\"resource_usage\": { \"peak_cpu_pct\": 58, \"peak_heap_pct\": 61, \"db_connection_pool_peak\": 34, \"db_connection_pool_size\": 60 }"
+            }
+          ]
+        }
+      ],
+      "evidence_gaps": [
+        {
+          "criterion_id": "performance-response-time",
+          "message": "Response time: UNKNOWN threshold gap"
+        },
+        {
+          "criterion_id": "performance-throughput",
+          "message": "Throughput: UNKNOWN threshold gap"
+        },
+        {
+          "criterion_id": "performance-resource-usage",
+          "message": "Resource usage: UNKNOWN threshold gap"
+        }
+      ]
+    },
+    "reliability": {
+      "status": "FAIL",
+      "findings": [
+        {
+          "criterion_id": "reliability-availability",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/reliability-2026-08.json",
+              "supports": "\"availability\": { \"uptime_pct\": 99.71, \"downtime_minutes\": 128 },"
+            }
+          ]
+        },
+        {
+          "criterion_id": "reliability-error-rate",
+          "status": "FAIL",
+          "evidence": [
+            {
+              "path": "evidence/reliability-2026-08.json",
+              "supports": "\"error_rate_pct\": 1.94,"
+            }
+          ]
+        },
+        {
+          "criterion_id": "reliability-mttr",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/reliability-2026-08.json",
+              "supports": "\"mttr_minutes\": 11,"
+            }
+          ]
+        },
+        {
+          "criterion_id": "reliability-fault-tolerance",
+          "status": "CONCERNS",
+          "evidence": [
+            {
+              "path": "evidence/reliability-2026-08.json",
+              "supports": "\"failover_drill\": { \"date\": \"2026-08-12\", \"result\": \"passed\", \"observed_failover_seconds\": 38, \"data_loss\": \"none\" },"
+            }
+          ]
+        },
+        {
+          "criterion_id": "reliability-ci-burn-in",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "evidence/reliability-2026-08.json",
+              "supports": "\"ci_burn_in\": { \"suite\": \"ledger\", \"consecutive_green_runs\": 214, \"last_failure\": \"2026-06-30\" },"
+            }
+          ]
+        }
+      ],
+      "evidence_gaps": []
+    },
+    "maintainability": {
+      "status": "CONCERNS",
+      "findings": [
+        {
+          "criterion_id": "maintainability-test-coverage",
+          "status": "CONCERNS",
+          "evidence": []
+        },
+        {
+          "criterion_id": "maintainability-structured-logging",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "config/logging.json",
+              "supports": "\"assertion\": \"ledger/test/observability/log-format.spec.ts asserts every required field on a sampled line\","
+            },
+            {
+              "path": "config/logging.json",
+              "supports": "\"format\": \"json\","
+            },
+            {
+              "path": "config/logging.json",
+              "supports": "\"required_fields\": [\"timestamp\", \"level\", \"message\", \"tenant_id\", \"trace_id\", \"event_type\"],"
+            },
+            {
+              "path": "config/logging.json",
+              "supports": "\"schema\": \"config/logging.json is the schema of record; every ledger log line is validated against it in the logging middleware test\","
+            }
+          ]
+        },
+        {
+          "criterion_id": "maintainability-error-tracking",
+          "status": "PASS",
+          "evidence": [
+            {
+              "path": "config/logging.json",
+              "supports": "\"captures\": [\"unhandled_rejection\", \"uncaught_exception\", \"http_5xx\"],"
+            },
+            {
+              "path": "config/logging.json",
+              "supports": "\"enabled\": true,"
+            }
+          ]
+        },
+        {
+          "criterion_id": "maintainability-code-duplication",
+          "status": "CONCERNS",
+          "evidence": []
+        }
+      ],
+      "evidence_gaps": [
+        {
+          "criterion_id": "maintainability-test-coverage",
+          "message": "Test coverage: no supplied implementation evidence"
+        },
+        {
+          "criterion_id": "maintainability-code-duplication",
+          "message": "Code duplication: no supplied implementation evidence"
+        }
+      ]
+    }
+  }
+}
