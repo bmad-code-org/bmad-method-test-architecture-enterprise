@@ -57,9 +57,12 @@ The contract declares the free-text fields volatile, each finding's `title` incl
 
 ## Seeded defects and refusals
 
-Both mutations sit in `cli/lib/diff-evidence.js`, the single source of line provenance, and both surface on the `adds-defects` step as an `Approve` recommendation: the introduced hard waits no longer gate.
+Both mutations sit in `cli/lib/diff-evidence.js`, the single source of line provenance.
+Each makes the `adds-defects` review approve introduced hard waits.
 Each mutated arm repeats every step of the plan with a live review, so the corpus seeds B-002 alone, the gate itself, and refuses a seed for the other behaviors to keep a run within the confirmed time budget.
-The CLI removes pre-existing findings from a PR verdict. The manifestation witnesses check the published approval and reviewed file; each defect signature checks the H1 finding and provenance separately.
+The CLI removes pre-existing findings from a PR verdict.
+Each mutation witness checks the published approval, reviewed file, and H1 finding with the expected line and provenance.
+The defect signatures make the same H1 check on the mutated arm's observed result.
 
 - **B-001, B-003, B-004, B-005, B-006, B-007, B-009, B-010, B-011, B-012: refused.** Each would need its own mutated arm, three more live trials of all eight steps. The clean controls still measure each behavior on every trial.
 - **B-008: partly refused.** The verdict JSON carries findings but no criteria table, so an inapplicable criterion rendered as a pass and a duration marked PASS from a static read are visible only in the Markdown report, a written file. O-008 reads what stdout carries: no finding under a Playwright-utils or Pact row. The table half becomes observable once the verdict carries criterion statuses.
