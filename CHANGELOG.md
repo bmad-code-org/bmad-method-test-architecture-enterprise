@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Automate reconciles native Playwright evidence across nested configs, RegExp selectors, CommonJS and ESM source locations, namespace registrations, and merged fixture aliases. Real native full and filtered runs verify complete generated scope for each supported form.
 - Reconcile Automate generated test leaves, files, configured projects, and repetitions with native execution identities; require complete mode progress, preserve disabled healing counters, and protect existing directory inputs and aliases from result publication.
 - Bind Automate CLI results to the current request and selected checkpoint, reject stale generated artifacts and opaque or repeated success evidence, distinguish red assertions from execution failures, and protect input and evidence files from JSON hardlink collisions.
 - Retained generation artifacts use compact paths so Windows checkouts can clone the repository.

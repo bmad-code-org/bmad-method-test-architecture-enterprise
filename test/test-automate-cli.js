@@ -368,6 +368,7 @@ try {
   check(disabled.status === 0 && JSON.parse(disabled.stdout).executionStatus === 'disabled', 'explicit validation opt-out remains visible');
   fs.writeFileSync(path.join(scratch, '_bmad/config.toml'), '[modules.tea]\nmax_healing_iterations = "99"\n');
   check(invoke(['--agent', 'none', 'coverage']).status === 2, 'invalid repair budget fails before agent execution');
+  checks += require('./automate-native-checks').runNativeChecks();
   console.log(`\n${checks} AUTOMATE CLI checks passed.`);
 } finally {
   fs.rmSync(scratch, { recursive: true, force: true });

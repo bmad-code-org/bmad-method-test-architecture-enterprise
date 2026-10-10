@@ -71,7 +71,8 @@ async function main() {
     const reviewedInventory = generatedInventory(project, manifest.generatedFiles);
     const reviewedReports = manifest.executionReports.map((file) => JSON.parse(fs.readFileSync(path.join(project, file), 'utf8')));
     assert.equal(
-      reconcileInventory(reviewedInventory, reviewedReports).executionScopes.length,
+      reconcileInventory(reviewedInventory, reviewedReports, { reportProjectRoot: path.dirname(reviewedReports[0].config.configFile) })
+        .executionScopes.length,
       9,
       'unchanged real Playwright evidence identifies every generated leaf and project under the later parser',
     );
