@@ -90,3 +90,42 @@ assert.deepEqual(after.runners[0].measurements, {
   maxUnearnedMastery: 0,
 });
 console.log('After Codex diagnostic bytes, comparable criteria and honest source provenance verified.');
+const publicEvidence = path.join(evidence, 'public-cli');
+const publicManifest = JSON.parse(fs.readFileSync(path.join(publicEvidence, 'public-native.manifest.json'), 'utf8'));
+const publicArchive = fs.readFileSync(path.join(publicEvidence, publicManifest.archive));
+assert.equal(createHash('sha256').update(publicArchive).digest('hex'), publicManifest.archiveSha256);
+const native = JSON.parse(gunzipSync(publicArchive));
+assert.equal(native.sourceCommit, '73e92b1810fb1ba82a8b9724b8f8becf55da2c94');
+assert.equal(publicManifest.sourceCommit, native.sourceCommit);
+assert.equal(native.files.length, 24);
+assert.equal(native.files.length, publicManifest.files.length);
+const publicFiles = new Map();
+for (const [index, file] of native.files.entries()) {
+  const bytes = Buffer.from(file.base64, 'base64'),
+    pin = publicManifest.files[index];
+  assert.equal(file.path, pin.path);
+  assert.equal(bytes.length, pin.bytes);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), pin.sha256);
+  publicFiles.set(file.path, bytes);
+}
+for (const number of [1, 2]) {
+  const invocation = JSON.parse(publicFiles.get(`turn-${number}-invocation.json`));
+  assert.equal(invocation.sourceCommit, native.sourceCommit);
+  assert.equal(invocation.agent, 'codex');
+  assert.equal(invocation.requestedModel, 'gpt-5.6-sol');
+  assert.equal(JSON.parse(publicFiles.get(`turn-${number}-result.json`)).status, 0);
+}
+assert.deepEqual(publicManifest.nativeExits, [0, 0]);
+assert.equal(publicManifest.completedTurns, 2);
+assert.equal(publicManifest.stability, 'unmeasured');
+const publicConversation = JSON.parse(publicFiles.get('learner-project/learner/conversation.json'));
+assert.deepEqual(
+  publicConversation.turns.map((turn) => turn.learnerMessage),
+  ['I want to learn testing', 'QA'],
+);
+assert.deepEqual(publicConversation.turns.at(-1).waiting, { kind: 'assessment', field: 'experience_level' });
+assert.deepEqual(publicConversation.quiz, {});
+const publicProgress = yaml.load(publicFiles.get('learner-project/learner/CLI evaluation learner-tea-progress.yaml').toString());
+assert.equal(publicProgress.role, 'QA');
+assert.equal(publicProgress.sessions_completed, 0);
+console.log('Two-turn native public CLI capture retains exact bytes, source identity and limited assessment outcome.');

@@ -5,8 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const yaml = require('js-yaml');
+const { globSync } = require('glob');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
+const { protectSources } = require('./lib/workflow-publication');
 const {
   addAgentOptions,
   agentOptions,
@@ -25,6 +27,8 @@ const {
   sameSnapshot,
   publishState,
   checkConversation,
+  checkHistory,
+  trustedSessionFingerprint,
   validateTurn,
 } = require('./lib/teach-turn');
 const NAME = 'tea-teach';
@@ -102,9 +106,20 @@ function run(argv = process.argv) {
   const message = inputFile ? new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(inputFile)) : options.message;
   if (!message.trim()) throw new WorkflowError('usage', 'learner message must be nonempty');
   const skillRoot = resolveWorkflowSkill({ projectRoot: root, skillName: 'bmad-teach-me-testing', skillRoot: options.skillRoot });
-  const config = resolveTeaConfig({ projectRoot: root, skillRoot, skillName: 'bmad-teach-me-testing' });
+  const consumedInputs = new Set();
+  const inputPatterns = new Map();
+  const config = resolveTeaConfig({
+    projectRoot: root,
+    skillRoot,
+    skillName: 'bmad-teach-me-testing',
+    inputPaths: consumedInputs,
+    inputPatterns,
+  });
   config.configSnapshot.core.user_name = options.learner;
-  const artifactRoot = config.configSnapshot.modules.tea.test_artifacts.replaceAll('{project-root}', root);
+  const configuredArtifacts = config.configSnapshot.modules.tea.test_artifacts;
+  if (typeof configuredArtifacts !== 'string' || !configuredArtifacts.trim())
+    throw new WorkflowError('environment-configuration', 'modules.tea.test_artifacts must be a nonempty path string');
+  const artifactRoot = configuredArtifacts.replaceAll('{project-root}', root);
   const slug =
     options.learner
       .toLowerCase()
@@ -125,6 +140,7 @@ function run(argv = process.argv) {
     inputFile,
     imported,
     config.configPath,
+    ...consumedInputs,
     ...[
       '_bmad/config.toml',
       '_bmad/config.user.toml',
@@ -139,6 +155,8 @@ function run(argv = process.argv) {
   const guard = () => {
     if (projectPath(root, stateDir, '--state-dir') !== stateDir || projectPath(root, evidenceDir, '--evidence-dir') !== evidenceDir)
       throw new WorkflowError('usage', 'state or evidence path changed through an alias');
+    if (inputs.some((file) => within(stateDir, file) || within(evidenceDir, file)))
+      throw new WorkflowError('usage', 'state and evidence must be separate from configuration and supplied inputs');
     if (!jsonPath) return;
     if (
       projectPath(root, jsonPath, '--json') !== jsonPath ||
@@ -169,6 +187,8 @@ function run(argv = process.argv) {
     originalExisted = fs.existsSync(stateDir);
     original = snapshot(stateDir);
     if (imported && original.size > 0) throw new WorkflowError('usage', '--progress import requires an empty CLI learner state');
+    if (original.has('conversation.json') && !original.has(progressName))
+      throw new WorkflowError('usage', 'saved conversation requires its paired learner progress');
     let before = null,
       legacyNormalized = false;
     if (original.has(progressName) || imported) {
@@ -188,17 +208,30 @@ function run(argv = process.argv) {
       learner: options.learner,
       turns: [],
       quiz: {},
-      importedProgress: imported ? { path: imported, legacyNormalized, trustedPriorCompletions: before.sessions_completed } : null,
+      importedProgress: imported
+        ? {
+            path: imported,
+            sha256: hash(fs.readFileSync(imported)),
+            legacyNormalized,
+            trustedPriorCompletions: before.sessions_completed,
+            completedSessions: Object.fromEntries(
+              before.sessions
+                .filter((session) => session.status === 'completed')
+                .map((session) => [session.id, trustedSessionFingerprint(session)]),
+            ),
+          }
+        : null,
     };
     const bank = yaml.load(fs.readFileSync(path.join(skillRoot, 'data/quiz-questions.yaml'), 'utf8'), { schema: yaml.JSON_SCHEMA });
     try {
       if (original.has('conversation.json')) conversation = JSON.parse(original.get('conversation.json'));
       else if (before && !imported) throw new Error('existing progress requires its saved conversation or explicit --progress import');
       checkConversation(conversation, options.learner, bank);
+      if (before) checkHistory(before, conversation, bank);
     } catch (error) {
       throw new WorkflowError('usage', `invalid saved conversation: ${error.message}`);
     }
-    const heldInputs = [...new Set([inputFile, imported].filter(Boolean))];
+    const heldInputs = [...new Set(inputs)];
     const importedArtifacts = new Map();
     if (imported)
       for (const file of [
@@ -209,7 +242,32 @@ function run(argv = process.argv) {
         heldInputs.push(source);
         importedArtifacts.set(source, fs.readFileSync(source));
       }
-    const inputDigests = heldInputs.map((file) => [file, hash(fs.readFileSync(file))]);
+    inputs.push(...heldInputs);
+    guard();
+    // Skill defaults may live outside the consuming project. Freeze them under their own root.
+    const projectInputs = heldInputs.filter((file) => within(root, file));
+    const absentInputs = heldInputs.filter((file) => !fs.existsSync(file));
+    const protections = [
+      protectSources(
+        root,
+        projectInputs.filter((file) => fs.existsSync(file)),
+      ),
+      protectSources(
+        skillRoot,
+        [...consumedInputs].filter((file) => within(skillRoot, file) && fs.existsSync(file)),
+      ),
+    ];
+    const assertInputsUnchanged = () => {
+      for (const protection of protections) protection.assertUnchanged();
+      if (absentInputs.some((file) => fs.existsSync(file)))
+        throw new WorkflowError('environment-parser', 'the agent created a previously absent configuration input');
+      for (const [pattern, matches] of inputPatterns) {
+        const current = globSync(pattern, { cwd: root, dot: true, nodir: true, follow: false }).sort();
+        if (JSON.stringify(current) !== JSON.stringify(matches))
+          throw new WorkflowError('environment-parser', 'the agent changed customization policy membership');
+      }
+    };
+    assertInputsUnchanged();
     const requestId = crypto.randomUUID();
     execution = runWithEvidence({
       name: NAME,
@@ -217,6 +275,7 @@ function run(argv = process.argv) {
       evidenceRoot: evidenceDir,
       options,
       prepare({ attemptDir }) {
+        assertInputsUnchanged();
         const stagedRoot = path.join(attemptDir, 'artifacts');
         fs.mkdirSync(stagedRoot);
         for (const [file, bytes] of original)
@@ -278,17 +337,19 @@ function run(argv = process.argv) {
           stagedRoot,
           progressFile,
           responseFile,
+          assertInputsUnchanged,
           inputDigests: [
-            ...inputDigests,
             ...(stagedBefore?.sessions
               .filter((session) => session.status === 'completed')
               .map((session) => [session.notes_artifact, hash(fs.readFileSync(session.notes_artifact))]) ?? []),
+            ...(stagedBefore?.summary_generated ? [[stagedBefore.summary_path, hash(fs.readFileSync(stagedBefore.summary_path))]] : []),
           ],
         };
       },
       validate: validateTurn,
     });
     guard();
+    assertInputsUnchanged();
     if (!sameSnapshot(original, snapshot(stateDir)))
       throw new WorkflowError('environment-parser', 'the agent changed published learner state');
     if (execution.dryRun) {
@@ -311,6 +372,8 @@ function run(argv = process.argv) {
       );
     next.set(progressName, Buffer.from(yaml.dump(value.progress)));
     next.set('conversation.json', serialize(value.conversation));
+    checkHistory(value.progress, value.conversation, bank);
+    assertInputsUnchanged();
     publishState(stateDir, next);
     const payload = {
       schema_version: '0.1.0',

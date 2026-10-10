@@ -39,6 +39,10 @@ Quiz questions use the selected skill's canonical question bank. Answer the curr
 
 Generated artifacts must be separate regular files inside the current attempt. New learner facts must cite caller messages. Completed sessions and their notes remain intact. Conversation, progress and notes publish as one directory replacement with rollback. Failed or invalid turns preserve previous state and leave an existing `--json` result unchanged. Concurrent invocations for one learner state fail while its lock is held; a diagnostic names a stale lock for manual recovery after confirming its invocation has ended.
 
+Saved conversation and progress form a pair. Missing paired progress or a completed local session without its caller-owned quiz ledger fails before the vendor runs. Explicit imported completions carry provenance for each specific session. Established completion summaries retain their flag, path, completion date and content across import and continuation.
+
+The controller freezes consumed configuration layers, workflow customization, resolved policy files and supplied message/import files. It detects changes to bytes, permissions, inode identity, symlink topology, optional configuration presence and matching policy membership before accepting or publishing a turn. A custom agent can still modify files in its consuming project; detection fails the turn and preserves published learner state. Review retained evidence and repair changed project inputs before retrying.
+
 An explicit `--progress` import preserves existing skill facts and completions as trusted prior history. Its conversation records that provenance. A legacy file with one populated YAML document followed by one empty document is normalized during import; new generated progress always requires one document. Imported progress must belong to the exact learner and retain the seven canonical sessions.
 
 | Exit | Meaning                                                                    |

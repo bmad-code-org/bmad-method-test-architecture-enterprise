@@ -71,3 +71,32 @@ if (mode === 'advanced' || mode === 'advanced-invent') {
   }
   fs.writeFileSync(request.artifacts.progress,yaml.dump(progress));fs.writeFileSync(responseFile,JSON.stringify(response));
 }
+if(mode.startsWith('input:')) {
+ const [_,operation,relative]=mode.split(':');const file=path.join(process.cwd(),relative);
+ if(operation==='bytes')fs.appendFileSync(file,'\n# changed\n');
+ if(operation==='mode')fs.chmodSync(file,0o600);
+ if(operation==='replace'){const b=fs.readFileSync(file);fs.renameSync(file,file+'.old');fs.writeFileSync(file,b);}
+ if(operation==='link'){fs.renameSync(file,file+'.old');fs.symlinkSync(file+'.old',file);}
+ if(operation==='delete')fs.unlinkSync(file);
+ if(operation==='create')fs.writeFileSync(file,'[core]\nuser_name="Changed"\n');
+ if(operation==='member')fs.writeFileSync(path.join(path.dirname(file),'new.md'),'New policy');
+}
+if(mode.startsWith('summary:')) {
+ const operation=mode.split(':')[1];
+ if(operation==='erase'){progress.summary_generated=false;progress.summary_path=null;progress.completion_date=null;}
+ if(operation==='flag')progress.summary_generated=false;
+ if(operation==='path'){const previous=progress.summary_path;progress.summary_path=path.join(request.artifacts.root,'replacement-summary.md');fs.copyFileSync(previous,progress.summary_path);}
+ if(operation==='date')progress.completion_date='2099-01-01';
+ if(operation==='content')fs.appendFileSync(progress.summary_path,'Altered summary');
+ fs.writeFileSync(request.artifacts.progress,yaml.dump(progress));
+}
+if(mode.startsWith('native:')) {
+ const {gunzipSync}=require('node:zlib');const archive=JSON.parse(gunzipSync(fs.readFileSync(path.resolve(__dirname,'../../results/teach-codex-2026-10-09/public-cli/public-native.json.gz'))));
+ const files=new Map(archive.files.map(file=>[file.path,Buffer.from(file.base64,'base64')]));const turn=mode.split(':')[1];
+ const captured=JSON.parse(files.get(`turn-${turn}-stdout.json`));const run=path.basename(captured.evidence);
+ const prefix=`learner-project/.tea-runs/${run}/attempt-1/`;
+ const response=JSON.parse(files.get(prefix+'response.json'));response.requestId=request.requestId;
+ for(const field of Object.keys(response.factEvidence))response.factEvidence[field]=request.requestId;
+ const saved=[...files].find(([file])=>file.startsWith(prefix+'artifacts/teaching-progress/')&&file.endsWith('-tea-progress.yaml'));
+ fs.writeFileSync(request.artifacts.progress,saved[1]);fs.writeFileSync(responseFile,JSON.stringify(response));
+}

@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "73e92b1810fb1ba82a8b9724b8f8becf55da2c94",
+  "agent": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "archive": "public-native.json.gz",
+  "archiveSha256": "e204013f744c87a71b0b1d5042b550e1351d4f84515532f0bcaa2967fb3104ce",
+  "expectedTurns": 2,
+  "completedTurns": 2,
+  "nativeExits": [
+    0,
+    0
+  ],
+  "stability": "unmeasured",
+  "files": [
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/artifacts/teaching-progress/CLI evaluation learner-tea-progress.yaml",
+      "bytes": 1947,
+      "sha256": "18b1c43421bd942eea821cb163d5db3c77067ebc5ef5ba7cd6b1a41c7dec4003"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/attempt.json",
+      "bytes": 152,
+      "sha256": "e027f4e55b0f1ed4e97a61e28ba6d32fcf84a8d7f0da7856f6e622d38e60df7c"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/prompt.txt",
+      "bytes": 12404,
+      "sha256": "15d4018c7da9eda5fe9ce729a253c316daecb794cc0c71f581d8a679037ddf21"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/response.json",
+      "bytes": 1388,
+      "sha256": "8d5147ed9b7d809974552e3bb04a3063e95724e97111d11f561d2d46cced0da8"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/stderr.txt",
+      "bytes": 64415,
+      "sha256": "99295a318dda1a29a9fb2bb91117371f6adc49ebbdafd88a3b394929a20985f5"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/attempt-1/stdout.txt",
+      "bytes": 207,
+      "sha256": "1e16612c21a0ce053665deab410960b2ab64ffb2eeee220b4dc82a57bdef55f1"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ECEq8y/run.json",
+      "bytes": 453,
+      "sha256": "b9f48d5fad966d8a4446337fd4b50b59692591a361fde2ee3b08d1f752f84ff2"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/artifacts/teaching-progress/CLI evaluation learner-tea-progress.yaml",
+      "bytes": 1760,
+      "sha256": "14f1b1077ad75d15b57e34976348fbe3e3ec97542760c7e50ef34488ef44c987"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/attempt.json",
+      "bytes": 152,
+      "sha256": "a0ae4530a96282a149724e77db0487b715e48a4805689efed67cc5b6e39074a8"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/prompt.txt",
+      "bytes": 13700,
+      "sha256": "89186b0edba42077e207c64a38a55c3bfbc9c3791a749314b9fbee3f0fe7741d"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/response.json",
+      "bytes": 633,
+      "sha256": "6c2a59a03847756422786e66f8139ce33baa910b8e53fc8e005110cc1a7d353f"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/stderr.txt",
+      "bytes": 53438,
+      "sha256": "9c23e0281aba8bc825a80d21e15e3a9bba0579353f94aacd72ce8decc5c9f0fb"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/attempt-1/stdout.txt",
+      "bytes": 369,
+      "sha256": "76809b3e5c1330d8183e6c1afaab72f2981c446f59e1c04fc994e4dc1b35e88e"
+    },
+    {
+      "path": "learner-project/.tea-runs/tea-teach-ldAybJ/run.json",
+      "bytes": 453,
+      "sha256": "bf467fd13e3622a551ce42abbf6a14d44b107f2dbd337a5e610a5f39665337e0"
+    },
+    {
+      "path": "learner-project/learner/CLI evaluation learner-tea-progress.yaml",
+      "bytes": 1760,
+      "sha256": "14f1b1077ad75d15b57e34976348fbe3e3ec97542760c7e50ef34488ef44c987"
+    },
+    {
+      "path": "learner-project/learner/conversation.json",
+      "bytes": 2118,
+      "sha256": "3a7daa0208a561b268f30d1fcdaaa6b450583a09477d382fbd2b607d6ec57c20"
+    },
+    {
+      "path": "turn-1-invocation.json",
+      "bytes": 499,
+      "sha256": "6435d2c9c149147c1961feb3e733d91f72a9b3cd9ce8d6bf78bc74ea5d335bde"
+    },
+    {
+      "path": "turn-1-result.json",
+      "bytes": 79,
+      "sha256": "7c9097cbc437e0a8161696b7527d02794e138355bca76b6787b752a8c9133dbd"
+    },
+    {
+      "path": "turn-1-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "turn-1-stdout.json",
+      "bytes": 1707,
+      "sha256": "5ecb33b5814cd2d8590a12d473f3b4cddb71dc36beee0ea95b1a1bdbbafed09b"
+    },
+    {
+      "path": "turn-2-invocation.json",
+      "bytes": 457,
+      "sha256": "2c94bacc062124c70d86082e38ffe014501e4516adbf0febd0947b43436ab1d1"
+    },
+    {
+      "path": "turn-2-result.json",
+      "bytes": 79,
+      "sha256": "5c963e307c3a35fdfbffdee71ba436db32f41bbf5ac6bf74b9c3f7fc37642d14"
+    },
+    {
+      "path": "turn-2-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "turn-2-stdout.json",
+      "bytes": 898,
+      "sha256": "3ceb16c97888aa38819d50bc476e504fec4a9974fd615786bb27abed655185f3"
+    }
+  ]
+}

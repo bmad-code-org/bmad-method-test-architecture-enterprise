@@ -87,6 +87,16 @@ function checkProgress(progress, learner) {
     typeof progress.lastStep !== 'string'
   )
     fail('progress has invalid continuation tracking');
+  if (typeof progress.summary_generated !== 'boolean') fail('progress has an invalid summary flag');
+  if (
+    progress.summary_generated &&
+    (completed !== 7 ||
+      typeof progress.summary_path !== 'string' ||
+      !progress.summary_path.trim() ||
+      typeof progress.completion_date !== 'string' ||
+      !progress.completion_date.trim())
+  )
+    fail('completed summary lacks its path, completion date or all seven sessions');
 }
 /** Every read is a fresh, singly linked regular file inside the attempt. */
 function regularArtifact(root, value) {
@@ -236,8 +246,76 @@ function scoredRound(round, questions) {
   const correct = round.answers.filter((answer) => answer.correct).length;
   return { score: Math.round((correct / questions.length) * 10_000) / 100, passed: (correct / questions.length) * 100 >= 70 };
 }
+/** Bind trusted imported completions to specific session facts; publication relocates notes. */
+function trustedSessionFingerprint(session) {
+  const facts = { ...session };
+  delete facts.notes_artifact;
+  return hash(JSON.stringify(Object.fromEntries(Object.entries(facts).sort(([left], [right]) => left.localeCompare(right)))));
+}
+/** Cross-check saved progress against caller-owned history before invoking a tutor or publishing. */
+function checkHistory(progress, conversation, bank) {
+  for (const session of progress.sessions) {
+    if (session.status !== 'completed') continue;
+    const imported = conversation.importedProgress;
+    if (
+      imported?.completedSessions?.[session.id] === trustedSessionFingerprint(session) &&
+      typeof imported.path === 'string' &&
+      typeof imported.sha256 === 'string' &&
+      /^[a-f0-9]{64}$/.test(imported.sha256)
+    )
+      continue;
+    const questions = bank[session.id]?.questions;
+    if (!Array.isArray(questions)) fail('completed session has no canonical quiz bank');
+    let result;
+    if (questions.length === 0) {
+      const completed = conversation.turns.some((turn, index) => {
+        const pending = conversation.turns[index - 1]?.waiting;
+        return (
+          pending?.kind === 'completion' && pending.sessionId === session.id && /^(?:c|complete|done)$/i.test(turn.learnerMessage.trim())
+        );
+      });
+      if (!completed) fail('saved exploratory completion lacks its caller choice');
+      result = { score: 100, passed: null };
+    } else {
+      result = scoredRound(conversation.quiz[session.id], questions);
+      if (!result) fail(`saved completion lacks caller quiz evidence: ${session.id}`);
+      if (!result.passed) {
+        const lastAnswer = conversation.quiz[session.id].answers.at(-1).messageId;
+        const answerIndex = conversation.turns.findIndex((turn) => turn.id === lastAnswer);
+        if (
+          !conversation.turns.some(
+            (turn, index) =>
+              index > answerIndex &&
+              conversation.turns[index - 1]?.waiting.kind === 'review' &&
+              conversation.turns[index - 1].waiting.sessionId === session.id &&
+              /^\[?c\]?$/i.test(turn.learnerMessage.trim()),
+          )
+        )
+          fail('saved below-pass completion lacks its caller Continue choice');
+      }
+    }
+    if (
+      Math.abs(session.score - result.score) > 0.011 ||
+      session.quiz_passed !== result.passed ||
+      ['passed', 'mastered'].some((field) => session[field] !== undefined && session[field] !== result.passed)
+    )
+      fail('saved completion contradicts its caller quiz grade');
+  }
+}
 /** Verify the tutor output against host-owned incoming messages and quiz results. */
-function validateTurn({ request, conversation, before, bank, attemptDir, stagedRoot, progressFile, responseFile, inputDigests }) {
+function validateTurn({
+  request,
+  conversation,
+  before,
+  bank,
+  attemptDir,
+  stagedRoot,
+  progressFile,
+  responseFile,
+  inputDigests,
+  assertInputsUnchanged,
+}) {
+  assertInputsUnchanged();
   for (const [file, digest] of inputDigests) if (hash(fs.readFileSync(file)) !== digest) fail('the agent changed a supplied input');
   const progressArtifact = regularArtifact(attemptDir, progressFile);
   const progress = parseProgress(progressArtifact.bytes.toString('utf8')).progress;
@@ -364,9 +442,16 @@ function validateTurn({ request, conversation, before, bank, attemptDir, stagedR
       fail('completion summary lacks all seven completed sessions');
     collect(progress.summary_path);
   }
+  if (before?.summary_generated && (!progress.summary_generated || progress.summary_path !== before.summary_path))
+    fail('the tutor changed the established completion summary');
+  if (before?.completion_date != null && progress.completion_date !== before.completion_date)
+    fail('the tutor changed the established completion date');
   if (before && before.stepsCompleted.some((step) => !progress.stepsCompleted.includes(step)))
     fail('the tutor discarded saved workflow steps');
-  return { progress, conversation: { ...conversation, turns: messages, quiz }, artifacts };
+  const nextConversation = { ...conversation, turns: messages, quiz };
+  checkConversation(nextConversation, request.learner, bank);
+  checkHistory(progress, nextConversation, bank);
+  return { progress, conversation: nextConversation, artifacts };
 }
 module.exports = {
   SESSION_IDS,
@@ -379,6 +464,8 @@ module.exports = {
   sameSnapshot,
   publishState,
   checkConversation,
+  trustedSessionFingerprint,
+  checkHistory,
   quizForTurn,
   scoredRound,
   validateTurn,
