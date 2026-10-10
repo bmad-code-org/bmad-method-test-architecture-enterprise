@@ -231,6 +231,27 @@ test('later publication failure restores both previous files', (t) => {
   );
   for (const artifact of artifacts) assert.match(fs.readFileSync(artifact.destination, 'utf8'), /^old /);
 });
+test('publication writes validated text and does not re-read modified attempt file', (t) => {
+  const root = project(t),
+    protection = protectSources(root, ['requirements.md']);
+  const file = path.join(root, 'report.new'),
+    destination = path.join(root, 'report.md');
+  fs.writeFileSync(file, 'tampered on disk');
+  publishArtifacts([{ path: file, destination, text: 'validated content' }], { projectRoot: root, runDir: 'run', protection });
+  assert.equal(fs.readFileSync(destination, 'utf8'), 'validated content');
+});
+test('publication failure preserves WorkflowError failureClass on source mutation', (t) => {
+  const root = project(t),
+    protection = protectSources(root, ['requirements.md']);
+  fs.writeFileSync(path.join(root, 'requirements.md'), 'mutated requirements');
+  const file = path.join(root, 'report.new'),
+    destination = path.join(root, 'report.md');
+  fs.writeFileSync(file, 'content');
+  assert.throws(
+    () => publishArtifacts([{ path: file, destination, text: 'content' }], { projectRoot: root, runDir: 'run', protection }),
+    (error) => error.failureClass === 'environment-parser' && /could not publish artifacts/.test(error.message),
+  );
+});
 test('single live harness repetition remains unrepeated and retains exact observations', (t) => {
   const root = project(t),
     agent = path.join(root, 'replay-agent.cjs'),

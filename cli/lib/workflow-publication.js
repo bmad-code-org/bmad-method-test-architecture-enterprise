@@ -125,7 +125,8 @@ function publishArtifacts(artifacts, { projectRoot, runDir, protection }, io = f
         if (!io.statSync(target).isFile()) throw new Error(`publication destination is not a regular file: ${target}`);
         io.copyFileSync(target, item.previous);
       }
-      io.copyFileSync(artifact.path, item.next);
+      if (typeof artifact.text === 'string') io.writeFileSync(item.next, artifact.text, { flag: 'wx' });
+      else io.copyFileSync(artifact.path, item.next);
       if (item.existed) io.chmodSync(item.next, io.statSync(target).mode);
     }
     protection.assertUnchanged();
@@ -149,7 +150,8 @@ function publishArtifacts(artifacts, { projectRoot, runDir, protection }, io = f
     const status = keepBackups
       ? `recovery backups: ${staged.map((item) => item.directory).join(', ')}; rollback errors: ${rollbackErrors.join('; ')}`
       : 'previous artifacts restored';
-    const error = new WorkflowError('environment-configuration', `could not publish artifacts: ${error_.message}; ${status}`, {
+    const failureClass = error_ instanceof WorkflowError ? error_.failureClass : 'environment-configuration';
+    const error = new WorkflowError(failureClass, `could not publish artifacts: ${error_.message}; ${status}`, {
       cause: error_,
     });
     error.runDir = runDir;

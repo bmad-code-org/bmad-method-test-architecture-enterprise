@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrected the clean NFR evaluation fixture's outbound transport evidence to TLS 1.3, matching its existing requirement. Preserved the original conflicting baseline as historical evidence. NFR evaluator single runs now report unrepeated, with stability unmeasured, and `--artifacts-dir` retains every attempt before retry or cleanup.
 - NFR CLI rejects an invalid configured artifact root with a clear configuration error before invoking an agent.
 - Synchronize test chain count and isolate boundary helper naming in NFR test tooling.
+- Publish validated artifact text directly and preserve workflow error failure classes during publication rollback.
 
 ### Changed
 
