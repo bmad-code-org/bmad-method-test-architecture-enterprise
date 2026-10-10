@@ -5,9 +5,11 @@ description: Let Evaluate write the CI plan, run its pull request tier, read the
 
 # How to Put an Evaluation in CI with TEA
 
-Use the CI plan to run an evaluation on every pull request, every merge, on a schedule and at release, each at the tier that fits its cost.
-The `pr` tier replays your accepted baseline with no model call and no secret.
-The live tiers run the real target when a pipeline can afford it.
+After you accept a baseline, ask Evaluate to plan which checks run on pull requests, merges, a schedule, and releases.
+Review the placements; your coding agent tests the pull request tier and uses the Framework skill to put the plan into your pipeline.
+Pull requests replay the accepted baseline, and live tiers run the real target at the times the plan assigns.
+You get a CI result with each check's outcome and evidence saved for review.
+The commands below show what your agent normally runs and let you repeat it.
 
 ## When to Use This
 
