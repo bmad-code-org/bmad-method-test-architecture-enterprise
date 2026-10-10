@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tea-test-design` accepts epic or system requirement documents, invokes the packaged skill with a selected headless agent, verifies fresh reports and a completed checkpoint, and publishes the plan. Each attempt retains its prompt, raw streams and vendor/model record; `--agent none` saves a prompt-only invocation.
+
+### Fixed
+
+- Test design consolidates related failure mechanisms, uses stated existing controls as regression constraints, preserves canonical table headers, and explains priorities through documented consequences and workarounds. Its parser recognizes the observed `Description and source evidence` header, preserving supported risk descriptions in the evaluation projection. Headless workflow configuration selects the requested skill's customization namespace while preserving the existing test-review default.
+
 ### Changed
 
 - Reordered the public Skills menu with Automate first and Test Review second, placed Trace alongside the other skills, and moved the Evaluate tutorial to third. The skill catalogs and command reference now use the same order and names; ATDD and CI compatibility entries remain under Automate and Framework.

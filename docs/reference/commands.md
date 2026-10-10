@@ -200,6 +200,8 @@ Risk-based test planning with coverage strategy and NFR planning
 
 Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview.md) and [Run Test Design](/docs/how-to/workflows/run-test-design.md).
 
+**CLI:** [`tea-test-design`](/docs/reference/tea-test-design-cli.md) accepts project inputs and publishes a verified epic or system plan.
+
 **Browser Automation (CLI/MCP):** Exploratory mode (live browser UI discovery)
 
 **How-To Guide:** [Run Test Design](/docs/how-to/workflows/run-test-design.md)

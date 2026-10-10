@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-10T01:24:52.740Z",
+  "mode": "live",
+  "repository": {
+    "commit": "cbcf937135585c072846026ea7cacbcedf74182d",
+    "dirty": false
+  },
+  "suite": {
+    "id": "test-design",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-test-design"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/test-design.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+    "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
+    "caseIds": [
+      "seeded-offline-order-capture",
+      "clean-last-sync-indicator"
+    ],
+    "cases": [
+      {
+        "id": "seeded-offline-order-capture",
+        "promptDigest": "sha256:5053f310f168e5f075c0a454b4859f282c64a452a3c87cf042b2388fd7004f7c"
+      },
+      {
+        "id": "clean-last-sync-indicator",
+        "promptDigest": "sha256:2d7c2c69e46bfd1b138b7f50c3c6b5216e5832604bcc09cd661f7046d2019b0c"
+      }
+    ],
+    "thresholds": {
+      "groundedRiskRecall": 0.8,
+      "riskPrecision": 0.8,
+      "scaleComplianceAccuracy": 1,
+      "scoreArithmeticAccuracy": 1,
+      "categoryValidityAccuracy": 1,
+      "bandPlacementAccuracy": 1,
+      "riskIdWellFormedAccuracy": 1,
+      "riskLinkResolutionAccuracy": 1,
+      "priorityOrderingAccuracy": 1,
+      "coverageMappingAccuracy": 0.8,
+      "maxUnscoredRiskTables": 0,
+      "maxUngroundedRisks": 0,
+      "maxTopSeverityMissed": 0,
+      "maxRiskCeilingExcess": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 2,
+        "completed": 2
+      },
+      "measurements": {
+        "groundedRiskRecall": 0,
+        "riskPrecision": 1,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": null,
+        "coverageMappingAccuracy": null,
+        "ungroundedRisks": 0,
+        "unscoredRiskTables": 0,
+        "topSeverityMissed": 1,
+        "riskCeilingExcess": 5,
+        "unstableCases": null,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 735655,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "groundedRiskRecall",
+        "priorityOrderingAccuracy (unmeasurable)",
+        "coverageMappingAccuracy (unmeasurable)",
+        "1 of the most severe risk(s) went unreported",
+        "5 risk(s) over the declared ceiling"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "seeded-offline-order-capture",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":20,\"resolved\":20,\"dangling\":[]},{\"declared\":5,\"matched\":0,\"matches\":[],\"missed\":[\"sec-unencrypted-offline-queue\",\"data-sync-conflict-overwrite\",\"tech-uncapped-retry-loop\",\"perf-backlog-sync-budget\",\"ops-no-release-kill-switch\"],\"topSeverityMissed\":1},[],{\"maxRisks\":8,\"excess\":0},[],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null}],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 5,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 8,
+            "riskPrecision.denominator": 8,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 8,
+            "scaleComplianceAccuracy.denominator": 8,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 8,
+            "scoreArithmeticAccuracy.denominator": 8,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 8,
+            "categoryValidityAccuracy.denominator": 8,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 8,
+            "bandPlacementAccuracy.denominator": 8,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 8,
+            "riskIdWellFormedAccuracy.denominator": 8,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 20,
+            "riskLinkResolutionAccuracy.denominator": 20,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 1,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "groundedRiskRecall; priorityOrderingAccuracy; coverageMappingAccuracy; topSeverityMissed",
+          "triage": [
+            {
+              "reason": "groundedRiskRecall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "priorityOrderingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "coverageMappingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "topSeverityMissed",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "groundedRiskRecall",
+            "priorityOrderingAccuracy (unmeasurable)",
+            "coverageMappingAccuracy (unmeasurable)",
+            "1 of the most severe risk(s) went unreported"
+          ],
+          "mappedMeasurements": [
+            "priorityOrderingAccuracy",
+            "coverageMappingAccuracy"
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":20,\"resolved\":20,\"dangling\":[]},{\"declared\":5,\"matched\":0,\"matches\":[],\"missed\":[\"sec-unencrypted-offline-queue\",\"data-sync-conflict-overwrite\",\"tech-uncapped-retry-loop\",\"perf-backlog-sync-budget\",\"ops-no-release-kill-switch\"],\"topSeverityMissed\":1},[],{\"maxRisks\":8,\"excess\":0},[],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":false,\"ok\":null},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":false,\"ok\":null}],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-order-capture/test-artifacts/test-design/test-design-epic-7.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:5b185061ae7781466c592e39ef1e6e08a6c9e012ff2522c83c01516f4908d679 --- workflowStatus: 'completed' totalSteps: 5 stepsCompleted: - 'step-01-detect-mode' - 'step-02-load-context' - 'step-03-risk-and-testability' - 'step-04-coverage-plan' - 'step-05-generate-output' lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-09' inputDocuments: - 'field-order-capture/_bmad/config.toml' - 'field-order-capture/docs/epics/epic-7-offline-order-capture.md' - 'bmod-tea/knowledge/risk-governance.md' - 'bmod-tea/knowledge/probability-impact.md' - 'bmod-tea/knowledge/test-le"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":12,\"resolved\":12,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":5},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 8,
+            "riskPrecision.denominator": 8,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 8,
+            "scaleComplianceAccuracy.denominator": 8,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 8,
+            "scoreArithmeticAccuracy.denominator": 8,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 8,
+            "categoryValidityAccuracy.denominator": 8,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 8,
+            "bandPlacementAccuracy.denominator": 8,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 8,
+            "riskIdWellFormedAccuracy.denominator": 8,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 12,
+            "riskLinkResolutionAccuracy.denominator": 12,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 5,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "priorityOrderingAccuracy; coverageMappingAccuracy; riskCeilingExcess",
+          "triage": [
+            {
+              "reason": "priorityOrderingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "coverageMappingAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "riskCeilingExcess",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "mappedFailures": [
+            "priorityOrderingAccuracy (unmeasurable)",
+            "coverageMappingAccuracy (unmeasurable)",
+            "5 risk(s) over the declared ceiling"
+          ],
+          "mappedMeasurements": [
+            "priorityOrderingAccuracy",
+            "coverageMappingAccuracy"
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":12,\"resolved\":12,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":5},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:0c152459c6c1dd2785d5d51b28d4adaa0b16f03c28150b64beee94ee95417014 --- workflowStatus: 'completed' totalSteps: 5 stepsCompleted: - 'step-01-detect-mode' - 'step-02-load-context' - 'step-03-risk-and-testability' - 'step-04-coverage-plan' - 'step-05-generate-output' lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-09' inputDocuments: - 'field-sync-indicator/_bmad/config.toml' - 'field-sync-indicator/docs/epics/epic-9-last-sync-indicator.md' - 'bmod-tea/knowledge/risk-governance.md' - 'bmod-tea/knowledge/probability-impact.md' - 'bmod-tea/knowledge/test-le"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 735746,
+  "failureClass": "quality",
+  "exitCode": 1
+}

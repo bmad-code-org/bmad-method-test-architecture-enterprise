@@ -1,0 +1,192 @@
+{
+  "set": "seeded-offline-order-capture",
+  "mentions": {
+    "sec-unencrypted-offline-queue": true,
+    "data-sync-conflict-overwrite": true,
+    "tech-uncapped-retry-loop": true,
+    "perf-backlog-sync-budget": true,
+    "ops-no-release-kill-switch": true,
+    "payment-gateway-failure": false,
+    "cross-tenant-data-leak": false,
+    "browser-and-accessibility-regression": false,
+    "data-residency-compliance": false
+  },
+  "shape": {
+    "rows": 8,
+    "wellFormedIds": 8,
+    "validCategories": 8,
+    "inScale": 8,
+    "arithmeticOk": 8,
+    "banded": 8,
+    "bandOk": 8,
+    "arithmeticTotal": 8
+  },
+  "shapeFailures": [],
+  "links": {
+    "total": 20,
+    "resolved": 20,
+    "dangling": []
+  },
+  "grounding": {
+    "declared": 5,
+    "matched": 5,
+    "matches": [
+      {
+        "riskId": "sec-unencrypted-offline-queue",
+        "rowId": "R-001"
+      },
+      {
+        "riskId": "data-sync-conflict-overwrite",
+        "rowId": "R-002"
+      },
+      {
+        "riskId": "tech-uncapped-retry-loop",
+        "rowId": "R-003"
+      },
+      {
+        "riskId": "perf-backlog-sync-budget",
+        "rowId": "R-004"
+      },
+      {
+        "riskId": "ops-no-release-kill-switch",
+        "rowId": "R-005"
+      }
+    ],
+    "missed": [],
+    "topSeverityMissed": 0
+  },
+  "ungrounded": [],
+  "ceiling": {
+    "maxRisks": 8,
+    "excess": 0
+  },
+  "coverageChecks": [
+    {
+      "riskId": "sec-unencrypted-offline-queue",
+      "rowId": "R-001",
+      "ok": true,
+      "levels": [
+        "E2E"
+      ],
+      "reason": null
+    },
+    {
+      "riskId": "data-sync-conflict-overwrite",
+      "rowId": "R-002",
+      "ok": true,
+      "levels": [
+        "API",
+        "E2E"
+      ],
+      "reason": null
+    },
+    {
+      "riskId": "tech-uncapped-retry-loop",
+      "rowId": "R-003",
+      "ok": true,
+      "levels": [
+        "API",
+        "Unit",
+        "API"
+      ],
+      "reason": null
+    },
+    {
+      "riskId": "perf-backlog-sync-budget",
+      "rowId": "R-004",
+      "ok": true,
+      "levels": [
+        "E2E",
+        "API"
+      ],
+      "reason": null
+    },
+    {
+      "riskId": "ops-no-release-kill-switch",
+      "rowId": "R-005",
+      "ok": true,
+      "levels": [
+        "E2E",
+        "E2E",
+        "Component"
+      ],
+      "reason": null
+    }
+  ],
+  "orderingChecks": [
+    {
+      "higher": "sec-unencrypted-offline-queue",
+      "lower": "data-sync-conflict-overwrite",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "sec-unencrypted-offline-queue",
+      "lower": "tech-uncapped-retry-loop",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "sec-unencrypted-offline-queue",
+      "lower": "perf-backlog-sync-budget",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "sec-unencrypted-offline-queue",
+      "lower": "ops-no-release-kill-switch",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "data-sync-conflict-overwrite",
+      "lower": "tech-uncapped-retry-loop",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "data-sync-conflict-overwrite",
+      "lower": "perf-backlog-sync-budget",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "data-sync-conflict-overwrite",
+      "lower": "ops-no-release-kill-switch",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "tech-uncapped-retry-loop",
+      "lower": "perf-backlog-sync-budget",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    },
+    {
+      "higher": "tech-uncapped-retry-loop",
+      "lower": "ops-no-release-kill-switch",
+      "resolvable": true,
+      "ok": true,
+      "higherPriority": "P0",
+      "lowerPriority": "P0"
+    }
+  ],
+  "flattenedPriorities": true,
+  "unscoredRiskTables": []
+}

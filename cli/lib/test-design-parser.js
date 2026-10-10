@@ -283,7 +283,7 @@ function readRisks(tables) {
     }
     if (idColumn === -1 || scoreColumn === -1) continue;
     const categoryColumn = columnIndex(table.header, ['Category', 'Risk Category']);
-    const descriptionColumn = columnIndex(table.header, ['Description', 'Risk', 'Summary']);
+    const descriptionColumn = columnIndex(table.header, ['Description', 'Description and source evidence', 'Risk', 'Summary']);
     const probabilityColumn = columnIndex(table.header, ['Probability']);
     const impactColumn = columnIndex(table.header, ['Impact']);
     for (const row of table.rows) {

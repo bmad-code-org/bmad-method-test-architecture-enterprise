@@ -62,6 +62,9 @@ Using `risk-governance.md` and `probability-impact.md` (if loaded):
 - Identify real risks (not just features)
 - Ground every risk in an explicit statement from the supplied epic or a named artifact loaded for this run. Record the supporting statement in the risk description or mitigation notes so another reader can trace the row.
 - Keep the register bounded by the scope supported by the supplied epic or a named artifact loaded for this run. Do not add plausible risks merely because they are common in other systems. If a concern has no supporting statement, record it as an assumption or clarification outside the risk register.
+- Treat controls explicitly described as already satisfied as scope constraints. Verify them with regression assertions in the coverage plan. A hypothetical implementation violating a stated read-only, local-only, privacy, or rollout constraint needs evidence of a new exposure before it becomes a scored risk.
+- Consolidate conditions that share a failure mechanism, consequence, and mitigation into one risk. Keep individual trigger and boundary cases in the coverage plan. For example, a stale cached timestamp and a missed refresh event can be one display-freshness risk; absent-value and disabled-flag rendering can share one conditional-visibility risk when the same visibility guard controls both.
+- Preserve the risk table columns `Risk ID`, `Category`, `Description`, `Probability`, `Impact`, and `Score`. Add a separate source-evidence column when useful. State the failure consequence in `Description` and cite the supporting input.
 - Classify by category: TECH / SEC / PERF / DATA / BUS / OPS
 - Score Probability (1–3) and Impact (1–3)
 - Calculate Risk Score (P × I)

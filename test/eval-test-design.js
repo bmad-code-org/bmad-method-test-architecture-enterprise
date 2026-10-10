@@ -160,6 +160,7 @@ const {
   targetProblems,
 } = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
+const { retainSkillArtifacts } = require('./lib/retain-skill-artifacts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
@@ -306,6 +307,7 @@ function parseArgs(argv) {
   let agentCmd;
   let model;
   let jsonPath;
+  let artifactsDir;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -361,6 +363,13 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--artifacts-dir': {
+        artifactsDir = argv[index + 1];
+        if (!artifactsDir || artifactsDir.startsWith('--')) fatal(2, '--artifacts-dir requires a directory');
+        artifactsDir = path.resolve(artifactsDir);
+        index += 1;
+        break;
+      }
       case '--json': {
         jsonPath = argv[index + 1];
         if (!jsonPath) fatal(2, '--json requires a file path');
@@ -393,7 +402,7 @@ function parseArgs(argv) {
   if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);
   }
-  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath, artifactsDir };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1374,13 +1383,29 @@ async function corpusMutations(workspace) {
 
 async function runCase(set, options, agent, runIndex, categories) {
   let workspace = await stageWorkspace(set);
+  let lastAttempt = 1;
+  let rawObservation;
+  const retain = () =>
+    retainSkillArtifacts({
+      artifactsDir: options.artifactsDir,
+      workspace,
+      caseId: set.id,
+      agent,
+      model: resolveModel(agent, options.model, options.agentArgs),
+      repetition: runIndex + 1,
+      attempt: lastAttempt,
+      prompt: buildPrompt(set),
+      observation: rawObservation,
+    });
   try {
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const portForAttempt = async (attempt) => {
       if (attempt > 1) {
+        await retain();
         fs.rmSync(workspace.dir, { recursive: true, force: true });
         workspace = await stageWorkspace(set);
       }
+      lastAttempt = attempt;
       const leaked = await assertGroundTruthAbsent(workspace.dir);
       if (leaked.length > 0) {
         return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
@@ -1408,6 +1433,7 @@ async function runCase(set, options, agent, runIndex, categories) {
       }),
       new AbortController().signal,
     );
+    rawObservation = result.ok ? result.observation : { fault: result };
     // The declared scope is the workspace. A run that reached the repository
     // instead is outside it, and its document is not read. Checked before the
     // result is, because a killed run may have written before it was killed.
@@ -1438,6 +1464,7 @@ async function runCase(set, options, agent, runIndex, categories) {
 
     return await interpretObservation(set, observation, workspace, categories);
   } finally {
+    await retain();
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
 }

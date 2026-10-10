@@ -57,6 +57,8 @@ Walk the Priority Decision Tree in `test-priorities-matrix.md` for each scenario
 - P2: Secondary behavior with narrower user reach and an acceptable workaround
 - P3: Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround
 
+Record the failure consequence and the source-supported workaround in the primary coverage row's notes. Preserve these four priority criteria in the published plan. Evaluate a performance budget or an operational control through its documented business consequence before assigning its test priority. An empty priority band is valid; explain why the planned scenarios belong to the assigned bands. When every primary risk has the same priority, justify how each consequence meets that criterion.
+
 ---
 
 ## 2. NFR Coverage and Evidence Plan
