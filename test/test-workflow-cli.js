@@ -33,10 +33,13 @@ const runKey = prompt.match(/run_key=([^;\\n]+)/)[1];
 let plan = '# Test Design\\n\\n## Risk Assessment\\n\\n### Low Risks: Score 1 to 2\\n\\n| Risk ID | Category | Description | Probability | Impact | Score |\\n| --- | --- | --- | --- | --- | --- |\\n| R-001 | DATA | Request handling loses queued input | 1 | 2 | '+(mode === 'bad-score' ? '9' : '2')+' |\\n\\n## Test Coverage Plan\\n\\n### P1\\n\\n| Test ID | Scenario | Test Level | Risk Link |\\n| --- | --- | --- | --- |\\n| T-001 | Keep queued input when sync fails | API | R-001 |\\n';
 const sections = ['Executive Summary','Not in Scope','NFR Planning','Entry Criteria','Exit Criteria','Execution Strategy','Resource Estimates','Quality Gate Criteria','Mitigation Plans','Assumptions and Dependencies','Follow-on Workflows','Approval','Interworking & Regression','Appendix','Dependencies & Test Blockers','NFR Test Coverage Plan','QA Effort Estimate','Appendix A: Code Examples & Tagging','Appendix B: Knowledge Base References'];
 if(mode !== 'incomplete-plan') plan += sections.filter(h => mode !== 'empty-execution' || h !== 'Execution Strategy').map(h => '\\n## '+h+'\\n\\nExplicit scope, owner, condition and supporting evidence.\\n').join('');
+if(mode === 'and-headings' || mode === 'empty-and-heading') plan = plan.replaceAll(' & ', ' and ');
+if(mode === 'empty-and-heading') plan = plan.replace(/(## Interworking and Regression\\n)[^]*?(?=\\n## |$)/, '$1\\n### Empty child\\n<!-- no content -->\\n');
 if(mode === 'empty-execution') plan += '\\n## Execution Strategy\\n\\n### Empty child\\n<!-- no content -->\\n';
 if(mode === 'misband') plan = plan.replace('| 1 | 2 | 2 |', '| 3 | 3 | 9 |');
 if(mode === 'no-priority') plan = plan.replace('### P1', '### Test Cases');
 if(mode === 'no-band') plan = plan.replace('Low Risks: Score 1 to 2', 'Low Risks');
+if(mode === 'captured-final-plan') plan = fs.readFileSync(${JSON.stringify(path.join(__dirname, 'results/codex-test-design/raw/public-cli-attempt-4/evidence/attempt-1/artifacts/test-design/test-design-epic-7.md'))},'utf8');
 const architecture = '# Architecture\\n\\n'+['Executive Summary','Risk Assessment','NFR Testability Requirements','Testability Concerns and Architectural Gaps','Risk Mitigation Plans','Assumptions and Dependencies'].map(h => '## '+h+'\\n\\nExplicit design decision.\\n').join('\\n');
 const handoff = '# Handoff\\n\\n'+['Purpose','TEA Artifacts Inventory','Epic-Level Integration Guidance','Story-Level Integration Guidance','Risk-to-Story Mapping','Recommended BMAD → TEA Workflow Sequence','Phase Transition Quality Gates'].map(h => '## '+h+'\\n\\nActionable integration guidance.\\n').join('\\n');
 for (const file of files) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, /(?:epic-|qa\\.md$)/.test(file) ? plan : (mode === 'malformed-system' ? '# Incomplete\\n' : file.endsWith('architecture.md') ? architecture : handoff)); }
@@ -44,6 +47,7 @@ if (mode !== 'no-checkpoint') {
  const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);
  fs.writeFileSync(checkpoint, '---\\nrunScope: '+(runKey === 'system' ? 'system' : 'epic')+'\\nrunKey: '+runKey+'\\nworkflowStatus: completed\\ntotalSteps: 5\\nstepsCompleted: [step-01-detect-mode, step-02-load-context, step-03-risk-and-testability, step-04-coverage-plan, step-05-generate-output]\\nlastStep: step-05-generate-output\\nnextStep: ""\\n---\\n# Finished\\n');
 }
+if(mode === 'captured-final-plan') {const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);fs.copyFileSync(${JSON.stringify(path.join(__dirname, 'results/codex-test-design/raw/public-cli-attempt-4/evidence/attempt-1/artifacts/test-design/test-design-progress-epic-7.md'))},checkpoint);}
 if(mode === 'wrong-key' || mode === 'wrong-scope') {
  const checkpoint = JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);
  let text = fs.readFileSync(checkpoint,'utf8');
@@ -583,3 +587,70 @@ for (const mode of ['wrong-key', 'wrong-scope', 'input-mutation']) {
     assert.match(result.stderr, mode === 'input-mutation' ? /changed an input/ : /does not confirm completion/);
   });
 }
+
+test('public CLI accepts populated and/ampersand section aliases in epic and system plans', (t) => {
+  for (const scope of ['epic', 'system']) {
+    const root = project(t);
+    const args = scope === 'system' ? ['--scope', 'system', '--input', 'architecture.md'] : ['--epic', '7'];
+    const result = execute(root, args, 'and-headings');
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout).artifacts.find((file) =>
+      file.endsWith(scope === 'system' ? 'test-design-qa.md' : 'test-design-epic-7.md'),
+    );
+    assert.match(fs.readFileSync(report, 'utf8'), /## Interworking and Regression/);
+  }
+});
+
+test('public CLI rejects an equivalent heading with empty content and preserves prior publication', (t) => {
+  const root = project(t);
+  const previous = execute(root, ['--epic', '7'], 'and-headings');
+  assert.equal(previous.status, 0, previous.stderr);
+  const files = JSON.parse(previous.stdout).artifacts;
+  const before = files.map((file) => fs.readFileSync(file));
+  const rejected = execute(root, ['--epic', '7'], 'empty-and-heading');
+  assert.equal(rejected.status, 3, rejected.stderr);
+  assert.match(rejected.stderr, /missing populated section: Interworking & Regression/);
+  for (const [index, file] of files.entries()) assert.deepEqual(fs.readFileSync(file), before[index]);
+});
+
+test('later parser replay preserves the final failed live capture and validates its actual populated plan', () => {
+  const { createHash } = require('node:crypto');
+  const { validateDesign } = require('../cli/test-design');
+  const capture = path.join(__dirname, 'results/codex-test-design/raw/public-cli-attempt-4');
+  const provenance = JSON.parse(fs.readFileSync(path.join(capture, 'provenance.json'), 'utf8'));
+  assert.equal(provenance.cliExitCode, 3);
+  assert.equal(provenance.sourceCommit, 'e8c7551bfaaa939a9df16f5f98a215af98cd851c');
+  for (const [file, expected] of Object.entries(provenance.rawArtifactSha256))
+    assert.equal(
+      createHash('sha256')
+        .update(fs.readFileSync(path.join(capture, file)))
+        .digest('hex'),
+      expected,
+      file,
+    );
+  const run = JSON.parse(fs.readFileSync(path.join(capture, 'evidence/run.json'), 'utf8'));
+  assert.equal(run.attempts[0].status, 'failed');
+  assert.match(run.attempts[0].message, /Interworking & Regression/);
+  const result = validateDesign({
+    attemptDir: path.join(capture, 'evidence/attempt-1'),
+    artifactFiles: ['artifacts/test-design/test-design-epic-7.md'],
+    planFile: 'artifacts/test-design/test-design-epic-7.md',
+    checkpointFile: 'artifacts/test-design/test-design-progress-epic-7.md',
+    runKey: 'epic-7',
+    runScope: 'epic',
+    inputDigests: [],
+  });
+  assert.ok(result.riskCount > 0);
+  assert.ok(result.coverageCount > 0);
+});
+
+test('public custom-agent replay publishes the unchanged actual final plan without a model invocation', (t) => {
+  const root = project(t);
+  const replay = execute(root, ['--epic', '7'], 'captured-final-plan');
+  assert.equal(replay.status, 0, replay.stderr);
+  const payload = JSON.parse(replay.stdout);
+  assert.equal(payload.riskCount, 5);
+  assert.equal(payload.coverageCount, 23);
+  const native = path.join(__dirname, 'results/codex-test-design/raw/public-cli-attempt-4/evidence/attempt-1/artifacts/test-design');
+  for (const file of payload.artifacts) assert.deepEqual(fs.readFileSync(file), fs.readFileSync(path.join(native, path.basename(file))));
+});

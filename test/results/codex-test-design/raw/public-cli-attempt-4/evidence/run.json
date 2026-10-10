@@ -1,0 +1,23 @@
+{
+  "name": "tea-test-design",
+  "startedAt": "2026-10-10T02:52:55.802Z",
+  "completedAt": "2026-10-10T02:59:45.269Z",
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "timeoutMs": 1200000,
+  "capabilities": [
+    "scoped-artifact-writes"
+  ],
+  "mode": "live",
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsedMs": 409466,
+      "status": "failed",
+      "failureClass": "environment-parser",
+      "message": "epic plan is missing populated section: Interworking & Regression",
+      "promptSha256": "6a865b8d395d28671d934dcef0cfc83a33471620a59feb9473e85bfbc79bb89d"
+    }
+  ],
+  "failureClass": "environment-parser"
+}

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Test Design accepts standalone `and` and `&` as equivalent section-heading connectors while still requiring populated content; retains the original rejected Codex report and a separate later-parser replay.
 - Test Design verifies populated mode-specific full-plan sections, score placement within the declared risk band, and a P0/P1/P2/P3 priority on every coverage row before publication.
 
 - Test Design clean-only evaluations retain null recall, coverage and priority rates when the selected corpus declares zero expectations. Result records verify explicit zero contribution metadata; lost observations and positive-expectation missing measurements still fail.

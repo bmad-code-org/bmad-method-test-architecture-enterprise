@@ -1,0 +1,23 @@
+{
+  "mode": "live",
+  "sourceCommit": "e8c7551bfaaa939a9df16f5f98a215af98cd851c",
+  "requestedModel": "gpt-5.6-sol",
+  "defaultAdapter": true,
+  "cliExitCode": 3,
+  "agentCompleted": true,
+  "originalCaptureRoot": "/private/tmp/remaining-skills-evidence/test-design-cli-final",
+  "rawArtifactSha256": {
+    "stderr.log": "f368b9bd5585b1004a193d3f0bc9fcf1669b1261a755f9bda4abbea25909025e",
+    "result.json": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-provenance.json": "16b68c5fe3ff0f2411d43ce4570b5c61a59e58f854d7ad3e5ac4e767fbe565b4",
+    "epic-7.md": "15f8163c43f69d5b7d2c27a5e1c3cfe579047383ae926f83ec18b6c4e239abe2",
+    "evidence/run.json": "f6467aa23ef972716cc868c5495caa2dad262f1ae63336003b21685370226a14",
+    "evidence/attempt-1/stdout.txt": "27fc17c23e783a8f1d5a4d682eeb7b0cb999ec589eafdaa00a93de3bc8dd0d12",
+    "evidence/attempt-1/prompt.txt": "6a865b8d395d28671d934dcef0cfc83a33471620a59feb9473e85bfbc79bb89d",
+    "evidence/attempt-1/stderr.txt": "9cf576053033363fe24a82c2bff3c0614785c3ae039dc3f624f43f005e64d1d4",
+    "evidence/attempt-1/attempt.json": "0b280f98d97f7f6def3ace35a50ae52857a8bac0ba02557c9513b12eb67104f2",
+    "evidence/attempt-1/artifacts/test-design/test-design-progress-epic-7.md": "9a8c91cfa2a9f65099f0bbe640027169377f992f031f7fb6e0d5890f2b33be10",
+    "evidence/attempt-1/artifacts/test-design/test-design-epic-7.md": "b11083ae60e7d01a78cc8b475a56a8821f83630ffadae9b35b4d73da34c7a7c4"
+  },
+  "note": "Original streams, input, reports, checkpoint, failed run records and source provenance copied byte-for-byte. Later-parser replay is separate from this model invocation."
+}

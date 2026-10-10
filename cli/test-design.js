@@ -43,9 +43,10 @@ function checkPublication(destinations, inputs) {
 /** Require populated workflow sections and reject unresolved template scaffolding. */
 function validateSections(text, sections, label) {
   const headings = [...text.matchAll(/^(#{2,3})[ \t]+([^\n]+)\n/gm)];
+  const equivalentHeading = (value) => value.replaceAll(/\band\b/gi, '&');
   for (const section of sections) {
-    const escaped = section.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-    const heading = headings.find((entry) => new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(entry[2]));
+    const escaped = equivalentHeading(section).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    const heading = headings.find((entry) => new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(equivalentHeading(entry[2])));
     const stop = heading && headings.find((entry) => entry.index > heading.index && entry[1].length <= heading[1].length);
     const body = heading && text.slice(heading.index + heading[0].length, stop?.index ?? text.length);
     const content = body

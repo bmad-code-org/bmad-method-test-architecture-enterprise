@@ -1,0 +1,9 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawnSync}=require('node:child_process');
+const repo='/Users/murat/opensource/_wt/remaining-skills-codex-evaluation';
+const capture=path.join(repo,'test/results/codex-test-design/raw/public-cli-attempt-4');
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'tea-design-heading-replay-'));
+fs.copyFileSync(path.join(capture,'epic-7.md'),path.join(root,'epic.md'));
+const agent=path.join(root,'replay-agent.cjs');
+fs.writeFileSync(agent,`const fs=require('fs'),path=require('path');const prompt=fs.readFileSync(0,'utf8');const files=JSON.parse(prompt.match(/Produce these deliverables: (.*)/)[1]);const checkpoint=JSON.parse(prompt.match(/Save a completed progress checkpoint at (.*)\\./)[1]);for(const file of [...files,checkpoint]){fs.mkdirSync(path.dirname(file),{recursive:true});fs.copyFileSync(path.join(${JSON.stringify(capture)},'evidence/attempt-1/artifacts/test-design',path.basename(file)),file);}process.stdout.write('Deterministic replay of preserved Codex artifacts; no model invocation.');`);
+const result=spawnSync(process.execPath,[path.join(repo,'cli/test-design.js'),'--project-root',root,'--input','epic.md','--epic','7','--agent','custom','--agent-cmd',process.execPath,'--agent-arg',agent,'--retries','0','--output-dir','published'],{encoding:'utf8'});
+const out={generationWasInvoked:false,projectRoot:root,exitCode:result.status,stdout:result.stdout,stderr:result.stderr};fs.writeFileSync(process.argv[2],JSON.stringify(out,null,2)+'\n');console.log(out);
