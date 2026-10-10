@@ -9,12 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tea-teach` runs one learner message through the packaged teaching skill, retains conversation and progress, and verifies caller-owned quiz evidence before publishing completion. Prompt-only previews, explicit progress imports, fresh attempt evidence and atomic state replacement support durable learning from the terminal.
+- `tea-teach` runs one learner message through the packaged teaching skill, retains conversation and progress, and verifies caller-owned quiz evidence before publishing completion.
+  Prompt-only previews, explicit progress imports, fresh attempt evidence and atomic state replacement support durable learning from the terminal.
 
 ### Fixed
 
-- `tea-teach` rejects unpaired saved state and completed sessions whose caller quiz evidence is missing. Configuration and customization inputs are checked for byte, permission, inode and topology changes before publication; completed summaries keep their flags, path, date and exact content. Invalid artifact configuration receives a clear path-type error. The native two-turn CLI assessment capture remains archived with its original source and byte hashes.
-- Teach Me Testing writes its saved progress as one YAML document. Its first two quizzes correctly state that three of three answers are needed to reach the 70 percent passing score. The original Codex baseline and unreadable saved progress remain retained.
+- `tea-teach` rejects unpaired saved state and completed sessions whose caller quiz evidence is missing.
+  Configuration and customization inputs are checked for byte, permission, inode and topology changes before publication; completed summaries keep their flags, path, date and exact content.
+  Invalid artifact configuration receives a clear path-type error.
+  The native two-turn CLI assessment capture remains archived with its original source and byte hashes.
+- Teach Me Testing writes its saved progress as one YAML document.
+  Its first two quizzes correctly state that three of three answers are needed to reach the 70 percent passing score.
+  The original Codex baseline and unreadable saved progress remain retained.
 
 ### Changed
 
