@@ -600,6 +600,7 @@ function skillRunnerViolations(node, value, report) {
   }
 }
 
+/** A specifier with its separators spelled `/`. */
 function normalizedSpecifier(value) {
   return value.replaceAll('\\', '/');
 }

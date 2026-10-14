@@ -52,6 +52,7 @@ const failures = [];
 let checks = 0;
 const scratch = scratchDirectories('tea-evaluate-discovery');
 
+/** Counts one assertion and records its message when `condition` is false. */
 function check(condition, message) {
   checks += 1;
   if (!condition) failures.push(message);
@@ -79,6 +80,7 @@ function problemsOf(record) {
   }
 }
 
+/** Asserts the reader refuses `record` with a problem matching `expected`. */
 function refuses(label, record, expected) {
   const problems = problemsOf(record);
   check(problems.length > 0, `${label}: the reader accepted it`);
@@ -88,11 +90,13 @@ function refuses(label, record, expected) {
   );
 }
 
+/** Asserts the reader accepts `record`. */
 function accepts(label, record) {
   const problems = problemsOf(record);
   check(problems.length === 0, `${label}: the reader refused it: ${JSON.stringify(problems)}`);
 }
 
+/** Asserts the reader refuses the JSON `text` with a problem matching `expected`. */
 function refusesText(label, text, expected) {
   let problems = [];
   try {
@@ -129,6 +133,7 @@ function idPatterns(schema, found = new Set()) {
   return found;
 }
 
+/** The fixture parses and serializes to its own bytes, at every key depth, with the identifiers and digests native artifacts use. */
 async function checkRoundTrip() {
   const record = discovery.readCandidate(FIXTURE_FOLDER, FIXTURE_PATH);
   check(record.schemaVersion === discovery.CANDIDATE_SCHEMA_VERSION, 'the fixture carries the current schemaVersion');
@@ -166,6 +171,7 @@ async function checkRoundTrip() {
   );
 }
 
+/** Every state and disposition has a valid record, and the dispositions that stop a candidate sit at the states that can stop it. */
 function checkEveryStateAndDispositionRepresentable() {
   const stop = (state, disposition) => {
     const record = fixture();
@@ -212,6 +218,7 @@ function checkEveryStateAndDispositionRepresentable() {
   );
 }
 
+/** Each way a record can be unversioned, unknown, held-out, unevidenced, stale, forged or native-shaped is refused with the problem that names it. */
 function checkRefusals() {
   refuses('unknown schemaVersion', { ...fixture(), schemaVersion: 2 }, /\/schemaVersion must be equal to constant/);
   const unversioned = fixture();
@@ -471,12 +478,14 @@ function checkRefusals() {
   refusesText('JSON null', 'null', /\(root\) must be object/);
 }
 
+/** A scratch copy of the fixture folder. */
 function folderCopy(label) {
   const folder = path.join(scratch.make(label), 'folder');
   fs.cpSync(FIXTURE_FOLDER, folder, { recursive: true });
   return folder;
 }
 
+/** Asserts `readCandidate` refuses `relative` in `folder` with a problem matching `expected`. */
 function refusesFile(label, folder, relative, expected) {
   let problems = [];
   try {
@@ -492,6 +501,7 @@ function refusesFile(label, folder, relative, expected) {
   );
 }
 
+/** A candidate is read only from its own path, through no link, against the requirements file and receipt it names. */
 function checkFileReading() {
   const file = (folder) => path.join(folder, ...FIXTURE_PATH.split('/'));
   refusesFile(
@@ -533,6 +543,30 @@ function checkFileReading() {
   fs.rmSync(file(directory));
   fs.mkdirSync(file(directory));
   refusesFile('a directory where the file belongs', directory, FIXTURE_PATH, /is not a regular file/);
+  if (process.platform !== 'win32') {
+    for (const [label, relative] of [
+      ['a candidate file', FIXTURE_PATH],
+      ['the requirements file', 'requirements.md'],
+      ['a qualification receipt', 'baseline/qualification/P-003.mutated-fail.json'],
+    ]) {
+      const fifo = folderCopy('fifo');
+      fs.rmSync(path.join(fifo, ...relative.split('/')));
+      const made = spawnSync('mkfifo', [path.join(fifo, ...relative.split('/'))]);
+      check(made.status === 0, `mkfifo made the pipe for ${label}`);
+      const reader = spawnSync(
+        process.execPath,
+        [
+          '-e',
+          `try { require(${JSON.stringify(path.join(DISCOVERY_ROOT, 'candidate.js'))}).readCandidate(${JSON.stringify(fifo)}, ${JSON.stringify(FIXTURE_PATH)}); } catch (error) { console.log(error.problems.join('; ')); }`,
+        ],
+        { encoding: 'utf8', timeout: 20_000 },
+      );
+      check(
+        reader.error === undefined && /is not a regular file/.test(reader.stdout),
+        `reading with a named pipe as ${label} did not refuse it: ${reader.error?.message ?? reader.stdout}`,
+      );
+    }
+  }
   const binary = folderCopy('binary');
   fs.writeFileSync(file(binary), Buffer.from([0x7b, 0xff, 0xfe, 0x7d]));
   refusesFile('bytes that are not UTF-8', binary, FIXTURE_PATH, /is not UTF-8 text/);
@@ -578,18 +612,21 @@ function checkFileReading() {
   );
 }
 
+/** A scratch copy of the valid evaluation fixture. */
 function evaluationCopy(label) {
   const folder = path.join(scratch.make(label), 'valid');
   fs.cpSync(VALID, folder, { recursive: true });
   return folder;
 }
 
+/** Writes `text` (the fixture candidate by default) at `relative` under `folder`. */
 function plant(folder, relative, text = fixtureText) {
   const file = path.join(folder, ...relative.split('/'));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 }
 
+/** Applies `edit` to the JSON file at `relative` under `folder` and writes it back. */
 function rewriteJson(folder, relative, edit) {
   const file = path.join(folder, ...relative.split('/'));
   const value = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -597,12 +634,14 @@ function rewriteJson(folder, relative, edit) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** Runs `tea-evaluate` with `args` and returns its exit status and output. */
 function runCli(args) {
   const result = spawnSync(process.execPath, [CLI, ...args], { cwd: PROJECT_ROOT, encoding: 'utf8' });
   if (result.error) throw result.error;
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
+/** The fixture's own bytes planted where a scored artifact reads are refused by the real loader and binary; under `discovery/` they change nothing. */
 async function checkBoundaryThroughTheRealLoader() {
   const clean = evaluationCopy('clean');
   const cleanFindings = await checkEvaluation(clean);
@@ -785,6 +824,7 @@ async function checkBoundaryThroughTheRealLoader() {
   );
 }
 
+/** The draft of a promoted candidate is a native mutation that `check` accepts, and only a promoted candidate has one. */
 async function checkPromotionYieldsAnOrdinaryMutation() {
   const record = discovery.readCandidate(FIXTURE_FOLDER, FIXTURE_PATH);
   const draft = discovery.draftMutation(record);
@@ -819,6 +859,7 @@ async function checkPromotionYieldsAnOrdinaryMutation() {
   check(refused, 'a candidate that is not promoted has no draft');
 }
 
+/** Every eval-quality schema refuses a candidate, and no disposition or state is an engine outcome, verdict or qualification failure. */
 async function checkEngineSchemasRefuseTheCandidate() {
   const engine = await loadEngine();
   const root = path.dirname(require.resolve('eval-quality/package.json'));
@@ -900,6 +941,7 @@ const SHARED_WITH_NATIVE = new Set([
   'version',
 ]);
 
+/** No native schema or fixture carries a candidate-only property, and the native schemas stay closed. */
 async function checkNativeArtifactsAreUnchanged() {
   const candidateSchema = JSON.parse(fs.readFileSync(path.join(DISCOVERY_ROOT, 'candidate.schema.json'), 'utf8'));
   const names = [...propertyNames(candidateSchema)];
@@ -941,6 +983,7 @@ async function checkNativeArtifactsAreUnchanged() {
   }
 }
 
+/** The decision record exists with its sections and names the rules this change adds. */
 function checkDecisionRecord() {
   const text = fs.existsSync(ADR) ? fs.readFileSync(ADR, 'utf8') : '';
   check(text.length > 0, 'the candidate contract decision record exists beside the other Evaluate planning artifacts');
@@ -958,6 +1001,7 @@ function checkDecisionRecord() {
   for (const word of claimed) check(text.includes(`\`${word}\``), `the decision record names ${word}`);
 }
 
+/** Runs every check and reports the failures. */
 async function main() {
   try {
     await checkRoundTrip();

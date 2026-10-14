@@ -266,6 +266,7 @@ function semanticProblems(record) {
   return problems;
 }
 
+/** The Ajv errors of a failed schema validation, each as a path and a message. */
 function schemaProblems(errors) {
   return errors.map(
     (error) =>
@@ -340,10 +341,11 @@ function readHeldFile(folder, relative, label) {
     if (stats.isSymbolicLink()) throw new CandidateError([`${label} ${relative} is reached through a link`]);
     if (index < segments.length - 1 && !stats.isDirectory())
       throw new CandidateError([`${label} ${relative} is under something that is not a directory`]);
+    if (index === segments.length - 1 && !stats.isFile()) throw new CandidateError([`${label} ${relative} is not a regular file`]);
   }
   let descriptor;
   try {
-    descriptor = fs.openSync(at, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    descriptor = fs.openSync(at, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
   } catch (error) {
     throw new CandidateError([`${label} ${relative} cannot be opened: ${error.code ?? error.message}`]);
   }
