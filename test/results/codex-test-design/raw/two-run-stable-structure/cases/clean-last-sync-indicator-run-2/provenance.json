@@ -1,0 +1,10 @@
+{
+  "mode": "live",
+  "caseId": "clean-last-sync-indicator",
+  "agent": "codex",
+  "requestedModel": "gpt-6.1-sol",
+  "repetition": 2,
+  "attempt": 1,
+  "capturedAt": "2026-10-14T16:52:47.705Z",
+  "originalWorkspace": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-test-design-eval-DbAAeB"
+}

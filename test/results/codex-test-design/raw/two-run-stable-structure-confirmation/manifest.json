@@ -1,0 +1,109 @@
+{
+  "files": [
+    {
+      "path": "result-seeded-offline-order-capture.json",
+      "sha256": "b217ff85fc7680b69af9110a6b298a8044b476a24172be5750fa9c273edc6088",
+      "bytes": 20584
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/observation.json",
+      "sha256": "842ebb956c7a00ff69a886d37f91fb282c1c5d53fa43783227678ef5fc9da2ea",
+      "bytes": 84318
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/prompt.txt",
+      "sha256": "061e5e8b14f12f40d899291fa53d920632230302bbb14e4ebc6dd9c4f79b9302",
+      "bytes": 1808
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/provenance.json",
+      "sha256": "39ef0b7436f24df82418ca7c2d1cd9cd2b5fbeb16e7fd4ecb086b6d0787d08e2",
+      "bytes": 302
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/test-design-epic-7.md",
+      "sha256": "58fc490f0cdb58b35ea48ff766c9c099c3395025d2c6b8129a23752fdabe806c",
+      "bytes": 40693
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/test-design-progress-epic-7.md",
+      "sha256": "3dc959d7099724b6e8a2512d9ebde5e0237a3ce5565526ec7ea52902127faec2",
+      "bytes": 16372
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/observation.json",
+      "sha256": "97b0afd0d1e4b98e0e0c18cc7205c179a70bad2bfa047f3cfdd365b9c4af5c3c",
+      "bytes": 80576
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/prompt.txt",
+      "sha256": "061e5e8b14f12f40d899291fa53d920632230302bbb14e4ebc6dd9c4f79b9302",
+      "bytes": 1808
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/provenance.json",
+      "sha256": "d783137bd2ee696a506c89aee0fb1ef77c26dee29e16e7d735097f1dfdff7916",
+      "bytes": 302
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/test-design-epic-7.md",
+      "sha256": "009f0970d7816b924ca84238b4897fc1bc865b5cf2410b42b5856070e76a8891",
+      "bytes": 38844
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/test-design-progress-epic-7.md",
+      "sha256": "94db4e918baf9c3f7c6b5fc00ce88c80a53e9842d73cb55a60856e99f7ab3f14",
+      "bytes": 16508
+    },
+    {
+      "path": "result-clean-last-sync-indicator.json",
+      "sha256": "38e51a8ada73304c739972ff8671109f24787f094637cd7937adada91f908a8a",
+      "bytes": 11755
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/observation.json",
+      "sha256": "00486128bccb0ef4b852138e2de40adf2bd1ab38ba501df3dd40b91865c8ba21",
+      "bytes": 57873
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/prompt.txt",
+      "sha256": "9759aec559a76a17b56e0719ddc86feb167fe41bc18a2f10f109664cbee870ca",
+      "bytes": 1815
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/provenance.json",
+      "sha256": "6bd7401ded93494c63e476dd0a0dd0fe09d17d69676f35cb6d325af438b1f44e",
+      "bytes": 299
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/test-design-epic-9.md",
+      "sha256": "e76301445d2f4f6ca5bd481671e5b5dc13960eea2a2fedd28a48e2b7712264da",
+      "bytes": 28330
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/observation.json",
+      "sha256": "bc37113877b0d6bfdce49ec1661c3162a999ee40e356e5706963e8cd8b36640a",
+      "bytes": 59037
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/prompt.txt",
+      "sha256": "9759aec559a76a17b56e0719ddc86feb167fe41bc18a2f10f109664cbee870ca",
+      "bytes": 1815
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/provenance.json",
+      "sha256": "bb83cedd1d0243cb185b4a00c8431ef7e7a7833be0f8d5bf15976c30f9ae7694",
+      "bytes": 299
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/test-design-epic-9.md",
+      "sha256": "ca1945233c58d5a643cd9c80a77a5a433b250a77701cf776094285db85fb5a5a",
+      "bytes": 28890
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/test-design-progress-epic-9.md",
+      "sha256": "eaef73832e79d6afe8f96dd7872a730f71502cc87e1df3b2067bb8b0f4f05345",
+      "bytes": 14538
+    }
+  ]
+}

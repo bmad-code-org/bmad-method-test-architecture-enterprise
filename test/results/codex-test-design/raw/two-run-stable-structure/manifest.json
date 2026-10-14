@@ -1,0 +1,109 @@
+{
+  "files": [
+    {
+      "path": "result-seeded-offline-order-capture.json",
+      "sha256": "d04fc3c67cbaa63a57e2e1eaf9c73b6d26d02c008c8f4c19ba7db29d5a4bf8cd",
+      "bytes": 20584
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/observation.json",
+      "sha256": "c770c3d3763991a54259944700a9e770667cd3ab1bf3bb586d1253abdb7ac3d5",
+      "bytes": 77530
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/prompt.txt",
+      "sha256": "061e5e8b14f12f40d899291fa53d920632230302bbb14e4ebc6dd9c4f79b9302",
+      "bytes": 1808
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/provenance.json",
+      "sha256": "e29f097d3d19283dad3e865c1bc912d232510df06fd7ac402cc0723d6d11befe",
+      "bytes": 302
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/test-design-epic-7.md",
+      "sha256": "f6ec2624c0a7de8307ccc5ce132d671d7194cb78cd095d30cb0a1b22c424c7f0",
+      "bytes": 37405
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/observation.json",
+      "sha256": "6fa19fa430f88dc3883b1f571a724cc884ea1dce5e823391269b58b9d9657d86",
+      "bytes": 82665
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/prompt.txt",
+      "sha256": "061e5e8b14f12f40d899291fa53d920632230302bbb14e4ebc6dd9c4f79b9302",
+      "bytes": 1808
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/provenance.json",
+      "sha256": "1a02bbf1dd76d37a5d0142b2f4f8c7e4fe738585aa4f5c27152772c73700aff4",
+      "bytes": 302
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/test-design-epic-7.md",
+      "sha256": "5abcb427c0a15d493dc01c98667cb39b88c0762af8ce2e261cc1fe8a8bc8e580",
+      "bytes": 40080
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/test-design-progress-epic-7.md",
+      "sha256": "b963403e7cf97ce3a607526f43ce54a983f928e1d83664d77da485d13a04aaf2",
+      "bytes": 14068
+    },
+    {
+      "path": "result-clean-last-sync-indicator.json",
+      "sha256": "90cd4218d8e91d6c1d4b5a9c3ab50c46d9f68067e656a7777d17072183b98755",
+      "bytes": 11757
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/observation.json",
+      "sha256": "d7ca03920febed91b375af774dd870d75e057508cb1065ca6629f1b64ef97b85",
+      "bytes": 60287
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/prompt.txt",
+      "sha256": "9759aec559a76a17b56e0719ddc86feb167fe41bc18a2f10f109664cbee870ca",
+      "bytes": 1815
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/provenance.json",
+      "sha256": "aabc3250649116ffda8bc0bd80ca613d04423bbbdbed7e57ee466e9f1970958a",
+      "bytes": 299
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/test-design-epic-9.md",
+      "sha256": "20a9cbad40a615fa9ea869e542359a5bdf03228174b451391514ce5c09d9f69d",
+      "bytes": 29518
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/test-design-progress-epic-9.md",
+      "sha256": "9f9994e98d6ab13c7f0608a2b98d3902f7e4cf11e2789b2efa39d5af9df87cb9",
+      "bytes": 15468
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/observation.json",
+      "sha256": "bf952118f7446f3cd115cf5485f7d9818e7ea43cea61a54bcdabd8bca36125de",
+      "bytes": 61205
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/prompt.txt",
+      "sha256": "9759aec559a76a17b56e0719ddc86feb167fe41bc18a2f10f109664cbee870ca",
+      "bytes": 1815
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/provenance.json",
+      "sha256": "e6f463ca1e956f7e2007b4767a2a0aada0c4b431236ea906e049a5958ad67136",
+      "bytes": 299
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/test-design-epic-9.md",
+      "sha256": "969ef8c3aa66bb31a64b0858a0398aa257a2e1fefcfa5bfbda3136b5e36f42b0",
+      "bytes": 29981
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/test-design-progress-epic-9.md",
+      "sha256": "cf99a2bfea97afd8d39e5c9b6e89663b92741455bc331165b9a2a85a325f4396",
+      "bytes": 14083
+    }
+  ]
+}

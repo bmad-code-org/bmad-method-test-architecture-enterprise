@@ -1,0 +1,248 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-14T17:09:34.796Z",
+  "mode": "live",
+  "repository": {
+    "commit": "2988454553a2f2a3d9373cd4975d0d1072860a65",
+    "dirty": false
+  },
+  "suite": {
+    "id": "test-design",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-tea-test-design"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/test-design.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+    "promptDigest": "sha256:5b69a2794b5416e10d80162aebff8cbb6c9e3207a47ac5e0cbac8152b5bbd9be",
+    "caseIds": [
+      "clean-last-sync-indicator"
+    ],
+    "cases": [
+      {
+        "id": "clean-last-sync-indicator",
+        "promptDigest": "sha256:9c12212a4b27063b70405d59e43b94460b7c485d0aa5e18c12c049baf422cc11"
+      }
+    ],
+    "thresholds": {
+      "groundedRiskRecall": 0.8,
+      "riskPrecision": 0.8,
+      "scaleComplianceAccuracy": 1,
+      "scoreArithmeticAccuracy": 1,
+      "categoryValidityAccuracy": 1,
+      "bandPlacementAccuracy": 1,
+      "riskIdWellFormedAccuracy": 1,
+      "riskLinkResolutionAccuracy": 1,
+      "priorityOrderingAccuracy": 1,
+      "coverageMappingAccuracy": 0.8,
+      "maxUnscoredRiskTables": 0,
+      "maxUngroundedRisks": 0,
+      "maxTopSeverityMissed": 0,
+      "maxRiskCeilingExcess": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "/opt/homebrew/bin/codex",
+      "version": "codex-cli 0.162.1",
+      "model": "gpt-6.1-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 2,
+        "completed": 2
+      },
+      "measurements": {
+        "groundedRiskRecall": null,
+        "riskPrecision": 1,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": null,
+        "coverageMappingAccuracy": null,
+        "ungroundedRisks": 0,
+        "unscoredRiskTables": 0,
+        "topSeverityMissed": 0,
+        "riskCeilingExcess": 0,
+        "unstableCases": 0,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 972139,
+      "usage": null,
+      "failureClass": "none",
+      "failures": [],
+      "diagnostics": [
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":2,\"resolved\":2,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 0,
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 2,
+            "riskPrecision.denominator": 2,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 2,
+            "scaleComplianceAccuracy.denominator": 2,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 2,
+            "scoreArithmeticAccuracy.denominator": 2,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 2,
+            "categoryValidityAccuracy.denominator": 2,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 2,
+            "bandPlacementAccuracy.denominator": 2,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 2,
+            "riskIdWellFormedAccuracy.denominator": 2,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 2,
+            "riskLinkResolutionAccuracy.denominator": 2,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 0,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 0,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":2,\"resolved\":2,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:80a0e4ce317d22cc3568010511e337d72762c912a482a72c2f572431656928c1 --- workflowStatus: 'completed' totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-14' runScope: 'epic' runKey: 'epic-9' epic_num: 9 mode: 'epic-level' design_level: 'full' tea_execution_mode: 'sequential' tea_capability_probe: false inputDocuments: - 'field-sync-indicator/_bmad/config.toml' - 'field-sync-indicator/docs/epics/epic"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":2,\"resolved\":2,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 0,
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 2,
+            "riskPrecision.denominator": 2,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 2,
+            "scaleComplianceAccuracy.denominator": 2,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 2,
+            "scoreArithmeticAccuracy.denominator": 2,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 2,
+            "categoryValidityAccuracy.denominator": 2,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 2,
+            "bandPlacementAccuracy.denominator": 2,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 2,
+            "riskIdWellFormedAccuracy.denominator": 2,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 2,
+            "riskLinkResolutionAccuracy.denominator": 2,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 0,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 0,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":2,\"resolved\":2,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:f584ffb896d96e256b2fc82ffa2320c63d07754fc2b8ef144a8447195a349b6e --- runScope: 'epic' runKey: 'epic-9' mode: 'epic-level' designLevel: 'full' executionMode: 'sequential' capabilityProbe: false workflowStatus: 'completed' totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-14' inputDocuments: - field-sync-indicator/_bmad/config.toml - field-sync-indicator/docs/epics/epic-9-last-sync-indicator.md "
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 972218,
+  "failureClass": "none",
+  "exitCode": 0
+}
