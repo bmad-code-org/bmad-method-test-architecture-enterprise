@@ -41,6 +41,7 @@ const CLI = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const VALID = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'valid');
 const FIXTURE_FOLDER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-discovery');
 const FIXTURE_PATH = discovery.candidatePath('red-phase-pilot', 'C-001');
+const PLANNED = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'partition-plan', 'evals', 'verdict');
 const NATIVE_SCHEMAS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas');
 const DISCOVERY_ROOT = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'discovery');
 const ADR = path.join(PROJECT_ROOT, '_bmad-output', 'planning-artifacts', 'evaluate', 'adr-exploratory-candidate-contract.md');
@@ -297,6 +298,17 @@ function checkRefusals() {
     /\/disposition/,
   );
 
+  const uncited = fixture();
+  uncited.review.scope.observations = uncited.review.scope.observations.filter((reviewed) => reviewed.observationId === 'OBS-001');
+  refuses(
+    'a confirmed review that cites no candidate-arm observation',
+    uncited,
+    /review\.scope\.observations cites no candidate observation with a completed trial/,
+  );
+  const ownDigest = fixture();
+  ownDigest.independentEvidence[0].digest = ownDigest.target.artifactDigest;
+  refuses('evidence that is the edited file itself', rebound(ownDigest), /independentEvidence\[0\]\.digest is the target's own digest/);
+
   const tampered = fixture();
   tampered.edit.replace = 'test.only(';
   refuses('an edit changed without its identity', tampered, /identity is sha256:[0-9a-f]+; the candidate's fields digest to/);
@@ -428,6 +440,19 @@ function checkRefusals() {
   repeated.observations[1].observationId = 'OBS-001';
   refuses('a repeated observation ID', rebound(repeated), /observationId OBS-001 repeats/);
 
+  for (const [label, act] of [
+    ['serializing', (record) => discovery.serializeCandidate(record)],
+    ['rendering the draft of', (record) => discovery.draftMutation(record)],
+  ]) {
+    let refused = false;
+    try {
+      act(flipped);
+    } catch (error) {
+      refused = error instanceof discovery.CandidateError;
+    }
+    check(refused, `${label} a record with a stale review is refused`);
+  }
+
   refusesText(
     'a repeated top-level key',
     fixtureText.replace('  "state": "promoted",', '  "state": "generated",\n  "state": "promoted",'),
@@ -524,14 +549,32 @@ function checkFileReading() {
   fs.rmSync(path.join(noRequirements, 'requirements.md'));
   refusesFile('a folder with no requirements file', noRequirements, FIXTURE_PATH, /requirement requirements\.md does not exist/);
   const receipt = folderCopy('receipt');
-  fs.appendFileSync(path.join(receipt, 'baseline', 'qualification', 'P-001.baseline-pass.json'), ' ');
-  refusesFile('a qualification receipt edited after promotion', receipt, FIXTURE_PATH, /P-001\.baseline-pass\.json digests to/);
-  fs.rmSync(path.join(receipt, 'baseline', 'qualification', 'P-001.baseline-pass.json'));
+  fs.appendFileSync(path.join(receipt, 'baseline', 'qualification', 'P-003.mutated-fail.json'), ' ');
+  refusesFile('a qualification receipt edited after promotion', receipt, FIXTURE_PATH, /P-003\.mutated-fail\.json digests to/);
+  const crossed = folderCopy('crossed');
+  fs.writeFileSync(
+    path.join(crossed, 'probes', 'P-003.probe.json'),
+    '{"probeId":"P-003","qualification":{"route":"controlled-mutation","mutation":"M-001"}}\n',
+  );
+  refusesFile(
+    'a receipt of a probe that qualifies another mutation',
+    crossed,
+    FIXTURE_PATH,
+    /qualifies P-003, whose mutation is M-001; the draft is M-002/,
+  );
+  fs.rmSync(path.join(crossed, 'probes', 'P-003.probe.json'));
+  refusesFile(
+    'a receipt of a probe the folder does not hold',
+    crossed,
+    FIXTURE_PATH,
+    /qualified probe probes\/P-003\.probe\.json does not exist/,
+  );
+  fs.rmSync(path.join(receipt, 'baseline', 'qualification', 'P-003.mutated-fail.json'));
   refusesFile(
     'a qualification receipt that is gone',
     receipt,
     FIXTURE_PATH,
-    /qualification receipt baseline\/qualification\/P-001\.baseline-pass\.json does not exist/,
+    /qualification receipt baseline\/qualification\/P-003\.mutated-fail\.json does not exist/,
   );
 }
 
@@ -611,24 +654,74 @@ async function checkBoundaryThroughTheRealLoader() {
     );
   }
 
-  const sealed = evaluationCopy('sealed');
-  plant(sealed, 'corpus/held-out/C-001.candidate.json');
-  const heldOut = path.join(sealed, 'corpus', 'held-out');
-  fs.chmodSync(heldOut, 0);
-  try {
-    const developmentFindings = await checkEvaluation(sealed, { partition: 'development' });
+  for (const skipped of ['runs/C-001.candidate.json', 'node_modules/C-001.candidate.json']) {
+    const folder = evaluationCopy('skipped');
+    plant(folder, skipped);
+    const findings = await checkEvaluation(folder);
     check(
-      developmentFindings.every((finding) => finding.rule !== 'candidate-placement'),
-      `a development check opened or flagged the sealed held-out folder: ${JSON.stringify(developmentFindings.map(({ file, rule }) => `${file}:${rule}`))}`,
+      findings.every((finding) => finding.rule !== 'candidate-placement'),
+      `a candidate at ${skipped}, which the scan leaves out, drew a finding`,
     );
-  } finally {
-    fs.chmodSync(heldOut, 0o755);
   }
-  const bothFindings = await checkEvaluation(sealed, { partition: 'both' });
+  for (const nested of [
+    'corpus/runs/C-001.candidate.json',
+    'policy/node_modules/C-001.candidate.json',
+    'policy/discovery/C-001.candidate.json',
+  ]) {
+    const folder = evaluationCopy('nested');
+    plant(folder, nested);
+    const findings = await checkEvaluation(folder);
+    check(
+      findings.some((finding) => finding.file === nested && finding.rule === 'candidate-placement'),
+      `a candidate at ${nested}: the top-level skips apply at depth, so it drew no finding`,
+    );
+  }
+
+  const unplanned = evaluationCopy('unplanned');
+  plant(unplanned, 'corpus/held-out/C-001.candidate.json');
+  const unplannedFindings = await checkEvaluation(unplanned, { partition: 'development' });
   check(
-    bothFindings.some((finding) => finding.file === 'corpus/held-out/C-001.candidate.json' && finding.rule === 'candidate-placement'),
-    'a check that opens the held-out partition refuses a candidate planted there',
+    unplannedFindings.some((finding) => finding.file === 'corpus/held-out/C-001.candidate.json' && finding.rule === 'candidate-placement'),
+    'an evaluation with no held-out plan has no sealed folder, and the corpus index digests this one, so a development check refuses the candidate',
   );
+
+  const planned = path.join(scratch.make('planned'), 'verdict');
+  fs.cpSync(PLANNED, planned, { recursive: true });
+  for (const spelling of ['held-out', 'Held-Out']) {
+    if (spelling !== 'held-out') fs.renameSync(path.join(planned, 'corpus', 'held-out'), path.join(planned, 'corpus', spelling));
+    plant(planned, `corpus/${spelling}/C-001.candidate.json`);
+    const listed = [];
+    const original = fs.readdirSync;
+    fs.readdirSync = function readdirSpy(target, ...rest) {
+      listed.push(String(target));
+      return original.call(this, target, ...rest);
+    };
+    let development;
+    let both;
+    try {
+      development = await checkEvaluation(planned, { partition: 'development' });
+      const developmentListed = listed.splice(0);
+      check(
+        developmentListed.every((target) => !target.toLowerCase().includes('held-out')),
+        `a development check listed a sealed ${spelling} folder: ${developmentListed.filter((target) => target.toLowerCase().includes('held-out'))}`,
+      );
+      both = await checkEvaluation(planned, { partition: 'both' });
+      check(
+        listed.some((target) => target.toLowerCase().includes('held-out')),
+        `a check that opens the held-out partition never listed ${spelling}, so the spy proves nothing`,
+      );
+    } finally {
+      fs.readdirSync = original;
+    }
+    check(
+      development.every((finding) => finding.rule !== 'candidate-placement'),
+      `a development check flagged a candidate in the sealed ${spelling} folder`,
+    );
+    check(
+      both.some((finding) => finding.file === `corpus/${spelling}/C-001.candidate.json` && finding.rule === 'candidate-placement'),
+      `a check that opens the held-out partition refuses a candidate planted in ${spelling}`,
+    );
+  }
 
   const smuggles = [
     {

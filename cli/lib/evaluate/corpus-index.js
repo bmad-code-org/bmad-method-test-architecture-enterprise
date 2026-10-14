@@ -221,4 +221,13 @@ async function corpusIndexProblem(folder, { unread = [] } = {}) {
   );
 }
 
-module.exports = { CorpusIndexError, INDEXED_ROOTS, INDEX_NAME, buildCorpusIndex, corpusDigestOf, corpusIndexProblem, writeCorpusIndex };
+module.exports = {
+  CorpusIndexError,
+  INDEXED_ROOTS,
+  INDEX_NAME,
+  buildCorpusIndex,
+  corpusDigestOf,
+  corpusIndexProblem,
+  unreadPaths,
+  writeCorpusIndex,
+};

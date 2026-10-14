@@ -358,9 +358,9 @@
                   "required": ["path", "digest"],
                   "properties": {
                     "path": {
-                      "description": "A committed qualification receipt of the evaluation folder.",
+                      "description": "A committed qualification receipt of the evaluation folder, named for the probe it qualifies: baseline/qualification/<probeId>.<kind>.json.",
                       "type": "string",
-                      "pattern": "^baseline/qualification/(?!(?:.*/)?\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
+                      "pattern": "^baseline/qualification/P-[0-9]{3,}\\.[a-z0-9-]+\\.json$"
                     },
                     "digest": {
                       "description": "eval-quality's digestBytes over the receipt file.",

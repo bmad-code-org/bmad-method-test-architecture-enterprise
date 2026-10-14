@@ -51,8 +51,8 @@
   "promotion": {
     "draftMutationId": "M-002",
     "qualificationReceipt": {
-      "digest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
-      "path": "baseline/qualification/P-001.baseline-pass.json"
+      "digest": "sha256:781449732f17792e3c207db382785b55594477bf81dbb5133e4e592234907d0a",
+      "path": "baseline/qualification/P-003.mutated-fail.json"
     }
   },
   "recordKind": "exploratory-candidate",

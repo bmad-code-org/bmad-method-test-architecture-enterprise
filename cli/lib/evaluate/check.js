@@ -199,7 +199,7 @@ const {
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
-const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
+const { CorpusIndexError, INDEX_NAME, corpusIndexProblem, unreadPaths } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -525,10 +525,10 @@ function optionSetsByOperation(contract) {
 
 /**
  * `candidate-placement`: a candidate file anywhere a scored artifact could read it. Links are not followed, so the scan stays
- * inside the folder the way `listDirectory` does. `unread` lists directories (each ending in `/`) the scan leaves unopened: a
- * development check never opens the held-out folder.
+ * inside the folder the way `listDirectory` does. `unread` is the `unreadPaths` of the directories the scan leaves unopened, the
+ * same set the corpus index leaves unread, so a development check never opens a sealed held-out folder in any spelling.
  */
-function checkCandidatePlacement(report, folder, { unread = [] } = {}, relativeDirectory = '') {
+function checkCandidatePlacement(report, folder, unread, relativeDirectory = '') {
   let entries;
   try {
     entries = listDirectory(folder, relativeDirectory);
@@ -541,8 +541,8 @@ function checkCandidatePlacement(report, folder, { unread = [] } = {}, relativeD
   for (const entry of entries ?? []) {
     const relative = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
     if (relativeDirectory === '' && PLACEMENT_SKIPPED.has(entry.name)) continue;
-    if (entry.isDirectory && unread.includes(`${relative}/`)) continue;
-    if (entry.isDirectory) checkCandidatePlacement(report, folder, { unread }, relative);
+    if (entry.isDirectory && unread.has(relative)) continue;
+    if (entry.isDirectory) checkCandidatePlacement(report, folder, unread, relative);
     else if (entry.name.endsWith(CANDIDATE_SUFFIX)) {
       report.add(
         relative,
@@ -2521,7 +2521,9 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
-  checkCandidatePlacement(report, folder, { unread: openPlan ? [] : [HELD_OUT_DIRECTORY] });
+  const planFile = evaluation.partitionPlan?.heldOutPlan;
+  const heldOutUnread = openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY];
+  checkCandidatePlacement(report, folder, unreadPaths(heldOutUnread));
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
   // The answers a gameability probe gives the held-out plan's steps sit beside the plan, so a check that opens a sound plan reads them
   // and a development check never does (Story 1.109).
@@ -2560,10 +2562,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   });
 
   try {
-    const planFile = evaluation.partitionPlan?.heldOutPlan;
-    const stale = await corpusIndexProblem(folder, {
-      unread: openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY],
-    });
+    const stale = await corpusIndexProblem(folder, { unread: heldOutUnread });
     if (stale !== null) report.add(INDEX_NAME, 'stale-index', stale);
   } catch (error) {
     if (!(error instanceof CorpusIndexError)) throw error;

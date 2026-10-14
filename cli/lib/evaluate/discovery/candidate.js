@@ -226,7 +226,22 @@ function semanticProblems(record) {
       }
     }
   };
-  if (record.review !== null) staleScope('review', record.review.scope);
+  if (record.review !== null) {
+    staleScope('review', record.review.scope);
+    if (String(record.disposition).startsWith('confirmed-undesirable')) {
+      const cited = new Set(record.review.scope.observations.map((reviewed) => reviewed.observationId));
+      for (const arm of ['baseline', 'candidate']) {
+        const rests = record.observations.some(
+          (observation) => observation.arm === arm && observation.trials.completed >= 1 && cited.has(observation.observationId),
+        );
+        if (!rests) {
+          problems.push(
+            `review.scope.observations cites no ${arm} observation with a completed trial, which disposition ${record.disposition} rests on`,
+          );
+        }
+      }
+    }
+  }
   if (record.acceptedRisk !== null) staleScope('acceptedRisk', record.acceptedRisk.scope);
 
   if (String(record.disposition).startsWith('confirmed-undesirable')) {
@@ -240,6 +255,9 @@ function semanticProblems(record) {
   for (const [index, evidence] of record.independentEvidence.entries()) {
     if (evidence.digest === record.requirement.digest) {
       problems.push(`independentEvidence[${index}].digest is the requirement's digest, which the candidate is judged against`);
+    }
+    if (evidence.digest === record.target.artifactDigest) {
+      problems.push(`independentEvidence[${index}].digest is the target's own digest, which the edit changes`);
     }
     if (observed.has(evidence.digest))
       problems.push(`independentEvidence[${index}].digest is an observation's evidence, which the evaluated system produced`);
@@ -340,7 +358,8 @@ function readHeldFile(folder, relative, label) {
 /**
  * Reads the candidate an evaluation folder holds at `relative`, which must be `discovery/<campaignId>/C-NNN.candidate.json`,
  * and holds it to the folder: the record names that campaign and that candidate, the requirements file digests to the
- * record's `requirement.digest`, and a linked qualification receipt is a file of the folder with the recorded digest.
+ * record's `requirement.digest`, and a linked qualification receipt is a file of the folder with the recorded digest, named for a
+ * probe of the folder whose qualification is the draft mutation.
  *
  * @param {string} folder the evaluation folder
  * @param {string} relative
@@ -371,7 +390,20 @@ function readCandidate(folder, relative) {
   };
   held('requirement', record.requirement.path, record.requirement.digest);
   const receipt = record.promotion?.qualificationReceipt;
-  if (receipt) held('qualification receipt', receipt.path, receipt.digest);
+  if (receipt) {
+    held('qualification receipt', receipt.path, receipt.digest);
+    const probeId = /^baseline\/qualification\/(P-[0-9]{3,})\./.exec(receipt.path)[1];
+    try {
+      const probe = JSON.parse(readHeldFile(folder, `probes/${probeId}.probe.json`, 'qualified probe').toString('utf8'));
+      if (probe?.qualification?.mutation !== record.promotion.draftMutationId) {
+        problems.push(
+          `${receipt.path} qualifies ${probeId}, whose mutation is ${probe?.qualification?.mutation}; the draft is ${record.promotion.draftMutationId}`,
+        );
+      }
+    } catch (error) {
+      problems.push(...(error.problems ?? [`probes/${probeId}.probe.json is not JSON`]));
+    }
+  }
   if (problems.length > 0) throw new CandidateError(problems);
   return record;
 }
