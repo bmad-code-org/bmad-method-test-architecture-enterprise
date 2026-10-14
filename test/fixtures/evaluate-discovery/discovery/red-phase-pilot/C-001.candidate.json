@@ -1,0 +1,88 @@
+{
+  "acceptedRisk": null,
+  "campaignId": "red-phase-pilot",
+  "candidateId": "C-001",
+  "disposition": "confirmed-undesirable-missed",
+  "edit": {
+    "find": "test.skip(",
+    "occurrences": 1,
+    "replace": "test.fixme("
+  },
+  "generator": {
+    "name": "marker",
+    "seed": "20261014",
+    "version": "1.0.0"
+  },
+  "hypothesis": "Marking the generated tests fixme instead of skip leaves the scaffold failing for the wrong reason, which the red-phase gate must still report.",
+  "identity": "sha256:2bcf4c7dc9957732f23ebead8c09a2088db9291c3365dbec2f94fbaa22ca8a96",
+  "independentEvidence": [
+    {
+      "digest": "sha256:c79bd3fb088d6c08a779fcbc1c5fa7c8be40e35daeb2de7e044d4fd7410a5936",
+      "kind": "separate-specification",
+      "reference": "the Playwright test annotations reference: test.fixme marks a test as failing and to be fixed, test.skip marks it as not to run"
+    }
+  ],
+  "intent": "regression",
+  "observations": [
+    {
+      "arm": "baseline",
+      "evidence": "sha256:5fe2b9ea1d9a7b97926805729035d9077d3749017eda2c81c5074b5244b50651",
+      "observationId": "OBS-001",
+      "trials": {
+        "completed": 3,
+        "errors": 0,
+        "missing": 0,
+        "planned": 3
+      }
+    },
+    {
+      "arm": "candidate",
+      "evidence": "sha256:8e48802c47f7cd9be71a54e98ae4480c89f51207f2417cda751e6f1d895afe8e",
+      "observationId": "OBS-002",
+      "trials": {
+        "completed": 3,
+        "errors": 0,
+        "missing": 0,
+        "planned": 3
+      }
+    }
+  ],
+  "partition": "development",
+  "promotion": {
+    "draftMutationId": "M-002",
+    "qualificationReceipt": {
+      "digest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
+      "path": "baseline/qualification/P-001.baseline-pass.json"
+    }
+  },
+  "recordKind": "exploratory-candidate",
+  "requirement": {
+    "digest": "sha256:00915b7cd0d39a70760c657b7a23422da750a4a6bc0902ad32d08b16892572b6",
+    "path": "requirements.md"
+  },
+  "review": {
+    "decidedAt": "2026-10-14T09:00:00Z",
+    "rationale": "The edit changes how the scaffold is annotated, the annotations reference says the two markers differ, and the evaluated suite stayed green.",
+    "reviewer": "maintainer",
+    "scope": {
+      "determination": "sha256:377c99c662e285d95d6619ecf4162263679a2dfeae729932485588a730049ba3",
+      "identity": "sha256:2bcf4c7dc9957732f23ebead8c09a2088db9291c3365dbec2f94fbaa22ca8a96",
+      "observations": [
+        {
+          "evidence": "sha256:5fe2b9ea1d9a7b97926805729035d9077d3749017eda2c81c5074b5244b50651",
+          "observationId": "OBS-001"
+        },
+        {
+          "evidence": "sha256:8e48802c47f7cd9be71a54e98ae4480c89f51207f2417cda751e6f1d895afe8e",
+          "observationId": "OBS-002"
+        }
+      ]
+    }
+  },
+  "schemaVersion": 1,
+  "state": "promoted",
+  "target": {
+    "artifact": "skill/steps-c/step-04-generate-tests.md",
+    "artifactDigest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2"
+  }
+}

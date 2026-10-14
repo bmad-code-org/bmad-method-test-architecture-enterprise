@@ -15,6 +15,9 @@
  *   regular file held by the evaluation folder, its committed bytes disagree with the recorded digest, or
  *   they digest to something other than the contract's `sourceSpecDigest` (contract-source freshness, Story
  *   2.2: a requirements change the contract has not absorbed blocks the pull request).
+ * - `candidate-placement`: a `*.candidate.json` file sits anywhere in the folder outside its top-level `discovery/` directory
+ *   (the lane exploratory candidates live in, which no scored artifact reads), so a candidate cannot be digested into the corpus,
+ *   the evaluator layer, the policy or the baseline.
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
@@ -221,6 +224,11 @@ const QUALIFICATION_PREFIX = 'baseline/qualification/';
 const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
 const MUTATION_FILE = /^(.+)\.mutation\.json$/;
+/** The one directory of an evaluation folder that holds exploratory candidates, and the suffix of their files. */
+const CANDIDATE_LANE = 'discovery';
+const CANDIDATE_SUFFIX = '.candidate.json';
+/** Top-level entries a placement scan leaves out: the lane itself, runtime output and installed packages. */
+const PLACEMENT_SKIPPED = new Set([CANDIDATE_LANE, 'runs', 'node_modules']);
 const WRITTEN_FILE_POINTER = /^\/interactions\/[^/]+\/artifact(?:\/|$)/;
 const INTERACTION_POINTER = /^\/interactions\/([^/]+)(?:\/|$)/;
 /** The step budget a signature's regular-expression operators get while `check` resolves them. */
@@ -512,6 +520,25 @@ function optionSetsByOperation(contract) {
     }
   }
   return sets;
+}
+
+/**
+ * `candidate-placement`: a candidate file anywhere a scored artifact could read it. Links are not followed, so the scan stays
+ * inside the folder the way `listDirectory` does.
+ */
+function checkCandidatePlacement(report, folder, relativeDirectory = '') {
+  for (const entry of listDirectory(folder, relativeDirectory) ?? []) {
+    const relative = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
+    if (relativeDirectory === '' && PLACEMENT_SKIPPED.has(entry.name)) continue;
+    if (entry.isDirectory) checkCandidatePlacement(report, folder, relative);
+    else if (entry.name.endsWith(CANDIDATE_SUFFIX)) {
+      report.add(
+        relative,
+        'candidate-placement',
+        `a candidate file belongs under ${CANDIDATE_LANE}/<campaignId>/, which no scored artifact reads; here it would be digested into the evaluation`,
+      );
+    }
+  }
 }
 
 /**
@@ -2477,6 +2504,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkRegistryKinds(report, evaluation, registry, context.contract);
   checkPrincipalMappings(report, evaluation, registry, context.contract);
   checkHttpPort(report, folder, registry);
+  checkCandidatePlacement(report, folder);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
   const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
