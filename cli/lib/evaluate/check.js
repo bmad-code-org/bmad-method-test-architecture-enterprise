@@ -17,7 +17,8 @@
  *   2.2: a requirements change the contract has not absorbed blocks the pull request).
  * - `candidate-placement`: a `*.candidate.json` file sits anywhere in the folder outside its top-level `discovery/` directory
  *   (the lane exploratory candidates live in, which no scored artifact reads), so a candidate cannot be digested into the corpus,
- *   the evaluator layer, the policy or the baseline.
+ *   the evaluator layer, the policy or the baseline. A development check leaves `corpus/held-out/` unopened, as it does for the
+ *   corpus index.
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
@@ -524,13 +525,24 @@ function optionSetsByOperation(contract) {
 
 /**
  * `candidate-placement`: a candidate file anywhere a scored artifact could read it. Links are not followed, so the scan stays
- * inside the folder the way `listDirectory` does.
+ * inside the folder the way `listDirectory` does. `unread` lists directories (each ending in `/`) the scan leaves unopened: a
+ * development check never opens the held-out folder.
  */
-function checkCandidatePlacement(report, folder, relativeDirectory = '') {
-  for (const entry of listDirectory(folder, relativeDirectory) ?? []) {
+function checkCandidatePlacement(report, folder, { unread = [] } = {}, relativeDirectory = '') {
+  let entries;
+  try {
+    entries = listDirectory(folder, relativeDirectory);
+  } catch (error) {
+    // A directory this process cannot read is reported by the rule that owns it (the corpus index for corpus/), and a
+    // candidate cannot be read from it either.
+    if (error.code === 'EACCES' || error.code === 'EPERM') return;
+    throw error;
+  }
+  for (const entry of entries ?? []) {
     const relative = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
     if (relativeDirectory === '' && PLACEMENT_SKIPPED.has(entry.name)) continue;
-    if (entry.isDirectory) checkCandidatePlacement(report, folder, relative);
+    if (entry.isDirectory && unread.includes(`${relative}/`)) continue;
+    if (entry.isDirectory) checkCandidatePlacement(report, folder, { unread }, relative);
     else if (entry.name.endsWith(CANDIDATE_SUFFIX)) {
       report.add(
         relative,
@@ -2504,12 +2516,12 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkRegistryKinds(report, evaluation, registry, context.contract);
   checkPrincipalMappings(report, evaluation, registry, context.contract);
   checkHttpPort(report, folder, registry);
-  checkCandidatePlacement(report, folder);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
   const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
+  checkCandidatePlacement(report, folder, { unread: openPlan ? [] : [HELD_OUT_DIRECTORY] });
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
   // The answers a gameability probe gives the held-out plan's steps sit beside the plan, so a check that opens a sound plan reads them
   // and a development check never does (Story 1.109).

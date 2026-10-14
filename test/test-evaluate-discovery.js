@@ -611,6 +611,25 @@ async function checkBoundaryThroughTheRealLoader() {
     );
   }
 
+  const sealed = evaluationCopy('sealed');
+  plant(sealed, 'corpus/held-out/C-001.candidate.json');
+  const heldOut = path.join(sealed, 'corpus', 'held-out');
+  fs.chmodSync(heldOut, 0);
+  try {
+    const developmentFindings = await checkEvaluation(sealed, { partition: 'development' });
+    check(
+      developmentFindings.every((finding) => finding.rule !== 'candidate-placement'),
+      `a development check opened or flagged the sealed held-out folder: ${JSON.stringify(developmentFindings.map(({ file, rule }) => `${file}:${rule}`))}`,
+    );
+  } finally {
+    fs.chmodSync(heldOut, 0o755);
+  }
+  const bothFindings = await checkEvaluation(sealed, { partition: 'both' });
+  check(
+    bothFindings.some((finding) => finding.file === 'corpus/held-out/C-001.candidate.json' && finding.rule === 'candidate-placement'),
+    'a check that opens the held-out partition refuses a candidate planted there',
+  );
+
   const smuggles = [
     {
       label: 'a candidate named as a mutation',
