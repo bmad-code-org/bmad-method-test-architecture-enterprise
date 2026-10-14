@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0.0",
+  "experimentId": "test-design-baseline-repeatability",
+  "stage": "baseline",
+  "scope": {
+    "workflow": "bmad-tea-test-design",
+    "owner": "TEA maintainers",
+    "claim": "fixed-suite",
+    "judge": "none",
+    "objective": "repeatability",
+    "baseline": {
+      "id": "incumbent",
+      "description": "The Test Design workflow as installed, unchanged."
+    },
+    "candidate": null,
+    "changedFactor": null,
+    "memberships": {
+      "development": [
+        "seeded-offline-order-capture",
+        "clean-last-sync-indicator"
+      ],
+      "validation": [],
+      "confirmation": []
+    },
+    "clusters": [
+      {
+        "caseId": "seeded-offline-order-capture",
+        "clusterId": "seeded-offline-order-capture",
+        "weight": 0.5
+      },
+      {
+        "caseId": "clean-last-sync-indicator",
+        "clusterId": "clean-last-sync-indicator",
+        "weight": 0.5
+      }
+    ]
+  },
+  "identity": {
+    "fixed": {
+      "suiteDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+      "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
+      "groundTruthDigest": "record the digest of test/fixtures/test-design-eval/ground-truth.json",
+      "scorerDigest": "record the digest of test/eval-test-design.js",
+      "thresholdsDigest": "record the digest of the suite thresholds",
+      "rubricDigest": "not-applicable"
+    }
+  },
+  "design": {
+    "repeats": 2,
+    "order": "interleaved",
+    "isolation": "fresh staged workspace per attempt",
+    "maxAttempts": 1,
+    "stoppingRule": "fixed repeat schedule"
+  },
+  "gates": {
+    "success": {
+      "metrics": {
+        "groundedRiskRecall": 0.8,
+        "riskPrecision": 0.8,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": 1,
+        "coverageMappingAccuracy": 0.8
+      }
+    },
+    "critical": {
+      "tolerance": 0,
+      "rules": [
+        {
+          "id": "top-severity-risk-missed",
+          "count": "topSeverityMissed"
+        },
+        {
+          "id": "ungrounded-risk-reported",
+          "count": "ungroundedRisks"
+        }
+      ]
+    }
+  },
+  "resources": {
+    "authorization": null
+  }
+}

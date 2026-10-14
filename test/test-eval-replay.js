@@ -177,6 +177,7 @@
 
 'use strict';
 
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -187,6 +188,7 @@ const { readSummary, readMatrix, scoreRun, signatureOf, traceOutputsOf } = requi
 const { parseRouting } = require('../cli/lib/parse-routing');
 const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require('./eval-bmad-tea-routing');
 const { readDesign: readTestDesign, scoreRun: scoreTestDesignRun, signatureOf: testDesignSignatureOf } = require('./eval-test-design');
+const { replayFixedOutput, testDesignReplay } = require('./lib/configuration-experiment');
 const {
   readReport: readNfrReport,
   scoreRun: scoreNfrRun,
@@ -1299,7 +1301,7 @@ function checkNfrCitationCanonicalization() {
  *
  * @param {Array<{id: string, scored: object}>} replayed
  */
-function checkTestDesignSignatures(replayed) {
+function checkTestDesignSignatures(replayed, groundTruth) {
   if (replayed.length === 0) return;
   const mutationBlind = replayed
     .filter((item) => testDesignSignatureOf(item.scored, 0) === testDesignSignatureOf(item.scored, 1))
@@ -1326,6 +1328,30 @@ function checkTestDesignSignatures(replayed) {
     disagreements.length === 0,
     'two stored test designs sign identically exactly when their scored results agree',
     disagreements.join('; '),
+  );
+
+  // The offline experiment reader replays saved bytes through this same scorer. A stored document replayed twice from
+  // identical hashed bytes has to sign exactly as the harness signs it, or a replay control would measure the reader.
+  const replayScorer = testDesignReplay({ groundTruth });
+  const replayDisagreements = [];
+  for (const item of replayed) {
+    const hash = `sha256:${createHash('sha256').update(item.text).digest('hex')}`;
+    const copies = [1, 2].map((index) => ({
+      attemptId: `${item.id}-${index}`,
+      caseId: item.setId,
+      outputSha256: hash,
+      outputText: item.text,
+    }));
+    const fixed = replayFixedOutput(copies, replayScorer);
+    const signature = replayScorer(item.text, copies[0]).signature;
+    if (!fixed.ok || !fixed.identical) replayDisagreements.push(`${item.id} does not replay identically from identical bytes`);
+    if (signature !== testDesignSignatureOf(item.scored, 0))
+      replayDisagreements.push(`${item.id} replays to a signature the harness does not sign`);
+  }
+  assert(
+    replayDisagreements.length === 0,
+    'the experiment reader replays every stored test design to the harness signature, identically from identical bytes',
+    replayDisagreements.join('; '),
   );
 }
 
@@ -1699,12 +1725,12 @@ async function replayCase(item, expected, context) {
       }
       const observed = replayTestDesignCase(item, expected, set, context.testDesignCategories);
       if (!observed.unmeasurable) {
-        const read = readTestDesign({
-          kind: 'text',
-          value: fs.readFileSync(path.join(item.directory, expected.storedOutput?.design ?? 'design.md'), 'utf8'),
-        });
+        const text = fs.readFileSync(path.join(item.directory, expected.storedOutput?.design ?? 'design.md'), 'utf8');
+        const read = readTestDesign({ kind: 'text', value: text });
         context.testDesignReplayed.push({
           id: item.id,
+          setId,
+          text,
           result: observed,
           scored: scoreTestDesignRun(set, read.design, context.testDesignCategories),
         });
@@ -1847,7 +1873,7 @@ async function main(argv) {
     assert(false, item.id, detail);
   }
 
-  checkTestDesignSignatures(testDesignReplayed);
+  checkTestDesignSignatures(testDesignReplayed, testDesignGroundTruth);
   checkTraceSignatures(traceReplayed);
   checkRoutingSignatures(routingReplayed);
   checkNfrSignatures(nfrReplayed);

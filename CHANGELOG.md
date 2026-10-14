@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An offline experiment reader for repeatability and one-factor configuration comparisons. It reads a frozen `experiment.json` declaration and saved evidence, reports per-case success fractions, metric spread, native stability signatures and a deterministic-scorer replay, and judges one cheaper configuration against the incumbent with an equal-weight paired case-cluster percentile bootstrap. Missing identity, receipts, pairs or cost yield an explicit blocked or descriptive-only result. A verified candidate critical miss always rejects, equality at a gate boundary never passes, and unknown usage stays unknown. The output is an advisory report, an evidence index and a Markdown rendering; it accepts no baseline and applies no patch. See [How to Measure Repeatability and Compare One Configuration](docs/how-to/evaluate/measure-repeatability-and-compare-a-configuration.md).
+
 ## [3.0.2] - 2026-10-14
 
 ### Changed

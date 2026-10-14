@@ -327,7 +327,70 @@ function harnessProjectionFixtures() {
   ];
 }
 
+/**
+ * The offline experiment reader (`test/lib/configuration-experiment.js`) reads two Test Design diagnostic surfaces by name: the
+ * signature it splits into components, and the numerator and denominator contributions it divides into per-metric values and its
+ * critical counts. Holding them here means a harness change that renames or reorders either one fails this suite before it can
+ * leave the reader describing the wrong thing.
+ */
+function checkExperimentReaderSurfaces() {
+  const experiment = require('./lib/configuration-experiment');
+  const baseline = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'fixtures', 'configuration-experiment', 'example-baseline-experiment.json'), 'utf8'),
+  );
+  const scored = {
+    set: 'set',
+    mentions: {},
+    shape: {},
+    shapeFailures: [],
+    links: {},
+    grounding: {},
+    ungrounded: [],
+    ceiling: {},
+    coverageChecks: [],
+    orderingChecks: [],
+    flattenedPriorities: false,
+    unscoredRiskTables: [],
+  };
+  const signature = JSON.parse(design.signatureOf(scored, 0));
+  check(
+    signature.length === experiment.SIGNATURE_COMPONENTS.length,
+    `the test-design signature has ${signature.length} components, the experiment reader names ${experiment.SIGNATURE_COMPONENTS.length}`,
+  );
+  check(
+    signature[0] === 'set' && signature.at(-1) === 0,
+    'the test-design signature opens with the set and closes with the fixture mutation count',
+  );
+
+  const contributions = numericContributions(
+    design.testDesignDiagnosticProjection(
+      {
+        grounding: { matched: 1, declared: 1, topSeverityMissed: 0 },
+        shape: { rows: 1, inScale: 1, arithmeticOk: 1, arithmeticTotal: 1, validCategories: 1, bandOk: 1, banded: 1, wellFormedIds: 1 },
+        ungrounded: [],
+        links: { resolved: 1, total: 1 },
+        orderingChecks: [{ resolvable: true, ok: true }],
+        flattenedPriorities: false,
+        coverageChecks: [{ ok: true }],
+        unscoredRiskTables: [],
+        ceiling: { excess: 0 },
+      },
+      0,
+    ),
+  );
+  for (const metric of Object.keys(baseline.gates.success.metrics)) {
+    check(
+      `${metric}.numerator` in contributions && `${metric}.denominator` in contributions,
+      `the diagnostic contributions carry ${metric} as a numerator and a denominator, which the experiment reader divides`,
+    );
+  }
+  for (const rule of baseline.gates.critical.rules) {
+    check(rule.count in contributions, `the diagnostic contributions carry the ${rule.count} count that the example critical rule reads`);
+  }
+}
+
 async function main() {
+  checkExperimentReaderSurfaces();
   const first = diagnosticRecord({
     caseId: 'case-a',
     repetition: 1,
