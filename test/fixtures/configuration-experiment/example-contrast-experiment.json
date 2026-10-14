@@ -142,18 +142,17 @@
       }
     },
     "quality": {
-      "groundedRiskRecall": {
-        "maxLoss": 0.05
-      },
       "riskPrecision": {
         "maxLoss": 0.05
       },
-      "coverageMappingAccuracy": {
+      "scaleComplianceAccuracy": {
+        "maxLoss": 0.05
+      },
+      "riskLinkResolutionAccuracy": {
         "maxLoss": 0.05
       }
     },
     "floors": {
-      "groundedRiskRecall": 0.8,
       "riskPrecision": 0.8
     },
     "saving": {
@@ -178,6 +177,6 @@
     "overhead": []
   },
   "frozen": {
-    "digest": "sha256:b8629293f318900920c82fefde2215e664770fdd4ba4f09c4fbbc0ab3176417e"
+    "digest": "sha256:f3cf2e5f5692ad7fc93ff500d890ccaede793c9bdefd5570e0479281eb699082"
   }
 }

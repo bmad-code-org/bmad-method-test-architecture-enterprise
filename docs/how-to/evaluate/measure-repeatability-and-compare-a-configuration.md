@@ -18,7 +18,7 @@ The reader is `test/lib/configuration-experiment.js` in a TEA repository checkou
 | The saved documents                              | A replay of the deterministic scorer, kept apart from the native run |
 | A second arm and a declared changed factor       | A paired contrast with explicit gates and a decision                 |
 
-It writes three files: `experiment-report.json`, `experiment-report.md` and `evidence-index.json`. The index has one row per attempt. Failed, canceled, invalid and retried attempts stay in it. Every aggregate in the report lists the attempts it came from.
+It writes three files: `experiment-report.json`, `experiment-report.md` and `evidence-index.json`. The index has one row per attempt. Failed, canceled, invalid and retried attempts stay in it. Every aggregate in the report lists the attempts it came from, and the index holds each of them.
 
 ## 1. Read What You Already Have
 
@@ -119,7 +119,7 @@ Freeze it by recording the digest of its bytes:
 node test/lib/configuration-experiment.js freeze experiment.json
 ```
 
-Add the printed value as `"frozen": { "digest": "sha256:…" }`. Any later edit changes the digest, and the reader reports the mismatch instead of reading on. A declaration without a candidate gives the repeatability reading alone, so freezing is optional there. A paired contrast needs it.
+Add the printed value as `"frozen": { "digest": "sha256:…" }`. Any later edit changes the digest. The report then marks the digest as not matching, and a paired contrast is blocked. A declaration without a candidate gives the repeatability reading alone, so freezing is optional there. A paired contrast needs it.
 
 Describe the saved material in an evidence file. Relative paths resolve against the evidence file:
 
@@ -292,18 +292,17 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
       }
     },
     "quality": {
-      "groundedRiskRecall": {
-        "maxLoss": 0.05
-      },
       "riskPrecision": {
         "maxLoss": 0.05
       },
-      "coverageMappingAccuracy": {
+      "scaleComplianceAccuracy": {
+        "maxLoss": 0.05
+      },
+      "riskLinkResolutionAccuracy": {
         "maxLoss": 0.05
       }
     },
     "floors": {
-      "groundedRiskRecall": 0.8,
       "riskPrecision": 0.8
     },
     "saving": {
@@ -328,7 +327,7 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
     "overhead": []
   },
   "frozen": {
-    "digest": "sha256:b8629293f318900920c82fefde2215e664770fdd4ba4f09c4fbbc0ab3176417e"
+    "digest": "sha256:f3cf2e5f5692ad7fc93ff500d890ccaede793c9bdefd5570e0479281eb699082"
   }
 }
 ```
@@ -340,9 +339,10 @@ The contrast needs all of the following, and names whatever is missing:
 - A frozen declaration whose digest matches.
 - Identity for both arms and for everything that stays fixed. Exactly one of `model`, `effort` or `prompt` differs between the arms. A second difference stops the contrast with `revised-design-required`. An unknown applied setting blocks it.
 - Evidence rows that record the identity they ran under. A changed task, ground truth, rubric, scorer or threshold, or an arm that differs from its declaration, ends in `new-baseline-required`.
-- A fresh-workspace receipt on every attempt, and a complete pair for each planned case and repetition.
+- A fresh-workspace receipt on every attempt, and a complete pair for each planned case and repetition. An attempt for a repetition the schedule does not plan blocks the contrast, and its charge stays in the cost totals.
+- The critical counts and the required metrics recorded on every attempt. A count that is not recorded is unknown and blocks. A required metric has to apply to every case, so gate on metrics that are defined for all of them.
 - Cost recorded for both arms when the objective is cost.
-- An exposure ledger that records which cases the candidate has seen. A confirmation case that was exposed during selection, or used to confirm another candidate, is refused.
+- An exposure ledger that records which cases the candidate has seen. A confirmation declaration pins the ledger head it was frozen against in `exposure.ledgerHeadAtFreeze`, and a ledger that no longer extends that head is refused. A confirmation case that was exposed during selection, or used to confirm another candidate, is refused. A selection case that already served as confirmation is refused too.
 
 ### The estimator
 

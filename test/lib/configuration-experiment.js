@@ -70,6 +70,8 @@ const { projectTestDesignResult } = require('./test-design-result');
 const { readDesign, scoreRun, signatureOf, loadGroundTruth } = require('../eval-test-design');
 
 const SCHEMA_VERSION = '1.0.0';
+const MAX_REPEATS = 1000;
+const MAX_BOOTSTRAP_RESAMPLES = 1_000_000;
 const ANALYSIS_VERSION = '1.0.0';
 const ARMS = Object.freeze(['A', 'B']);
 const STAGES = Object.freeze(['baseline', 'selection', 'confirmation']);
@@ -155,7 +157,7 @@ function deepFreeze(value) {
 const clone = (value) => (value === undefined ? undefined : structuredClone(value));
 
 /** Leaf paths of a nested object. Arrays are leaves. */
-function flatten(value, prefix = '', out = {}) {
+function flatten(value, prefix = '', out = Object.create(null)) {
   if (isObject(value)) {
     for (const key of Object.keys(value).sort()) flatten(value[key], prefix ? `${prefix}.${key}` : key, out);
     if (Object.keys(value).length === 0 && prefix) out[prefix] = {};
@@ -201,7 +203,7 @@ function clusterPlan(declaration) {
   const cases = stageCases(declaration);
   const declared = Array.isArray(declaration?.scope?.clusters) ? declaration.scope.clusters : null;
   if (!declared) return cases.map((caseId) => ({ caseId, clusterId: caseId, weight: 1 / cases.length }));
-  return declared.map((entry) => ({ caseId: entry.caseId, clusterId: entry.clusterId, weight: entry.weight }));
+  return declared.filter(isObject).map((entry) => ({ caseId: entry.caseId, clusterId: entry.clusterId, weight: entry.weight }));
 }
 
 /**
@@ -232,7 +234,27 @@ function validateDeclaration(declaration) {
   need(problems, isObject(scope.memberships), 'scope.memberships', 'is required');
   need(problems, isObject(decl.identity?.fixed), 'identity.fixed', 'is required');
   need(problems, ['none', 'rubric'].includes(scope.judge), 'scope.judge', 'must be none (deterministic scorer) or rubric');
-  need(problems, isPositiveInteger(decl.design?.repeats), 'design.repeats', 'must be a positive integer');
+  need(
+    problems,
+    isPositiveInteger(decl.design?.repeats) && decl.design.repeats <= MAX_REPEATS,
+    'design.repeats',
+    `must be a positive integer of at most ${MAX_REPEATS}`,
+  );
+  need(
+    problems,
+    scope.clusters === undefined || (Array.isArray(scope.clusters) && scope.clusters.every((entry) => isObject(entry))),
+    'scope.clusters',
+    'must be a list of objects',
+  );
+  need(
+    problems,
+    decl.gates?.critical === undefined ||
+      (isObject(decl.gates.critical) &&
+        Array.isArray(decl.gates.critical.rules) &&
+        decl.gates.critical.rules.every((rule) => isObject(rule))),
+    'gates.critical.rules',
+    'must be a list of objects',
+  );
   need(problems, isObject(decl.gates?.success?.metrics), 'gates.success.metrics', 'is required');
   need(
     problems,
@@ -260,6 +282,20 @@ function validateDeclaration(declaration) {
   need(pairs, FACTOR_KINDS.includes(scope.changedFactor?.kind), 'scope.changedFactor.kind', `must be one of ${FACTOR_KINDS.join(', ')}`);
   need(pairs, ['cost', 'quality'].includes(scope.objective), 'scope.objective', 'must be cost or quality');
   need(pairs, isObject(decl.identity?.arms?.A) && isObject(decl.identity?.arms?.B), 'identity.arms', 'needs an A and a B arm');
+  for (const key of ['suiteDigest', 'groundTruthDigest', 'scorerDigest', 'thresholdsDigest', 'rubricDigest']) {
+    need(
+      pairs,
+      decl.identity?.fixed?.[key] !== undefined,
+      `identity.fixed.${key}`,
+      'is required (use "not-applicable" where nothing applies)',
+    );
+  }
+  for (const arm of ARMS) {
+    for (const key of ['model.requested', 'model.resolved', 'effort.requested', 'effort.applied']) {
+      const [group, leaf] = key.split('.');
+      need(pairs, decl.identity?.arms?.[arm]?.[group]?.[leaf] !== undefined, `identity.arms.${arm}.${key}`, 'is required');
+    }
+  }
 
   const plan = Array.isArray(scope.clusters) ? scope.clusters : null;
   need(pairs, plan !== null, 'scope.clusters', 'is required: independent cluster ids and weights per case');
@@ -305,7 +341,12 @@ function validateDeclaration(declaration) {
   }
   const analysis = isObject(design.analysis) ? design.analysis : {};
   need(pairs, isFiniteNumber(analysis.alpha) && analysis.alpha > 0 && analysis.alpha < 0.5, 'design.analysis.alpha', 'must be in (0, 0.5)');
-  need(pairs, isPositiveInteger(analysis.B) && analysis.B >= 1000, 'design.analysis.B', 'must be an integer of at least 1000');
+  need(
+    pairs,
+    isPositiveInteger(analysis.B) && analysis.B >= 1000 && analysis.B <= MAX_BOOTSTRAP_RESAMPLES,
+    'design.analysis.B',
+    `must be an integer from 1000 to ${MAX_BOOTSTRAP_RESAMPLES}`,
+  );
   need(
     pairs,
     Number.isInteger(analysis.seed) && analysis.seed >= 0 && analysis.seed <= 0xff_ff_ff_ff,
@@ -360,9 +401,9 @@ function validateDeclaration(declaration) {
   }
   need(
     pairs,
-    gates.critical?.tolerance === 0 && Array.isArray(gates.critical?.rules),
+    gates.critical?.tolerance === 0 && Array.isArray(gates.critical?.rules) && gates.critical.rules.length > 0,
     'gates.critical',
-    'needs tolerance 0 and a rules list',
+    'needs tolerance 0 and at least one rule',
   );
   for (const [index, rule] of (Array.isArray(gates.critical?.rules) ? gates.critical.rules : []).entries()) {
     need(
@@ -379,6 +420,15 @@ function validateDeclaration(declaration) {
     'is required (null means no live execution)',
   );
   need(pairs, isNonEmptyString(decl.frozen?.digest), 'frozen.digest', 'a paired contrast needs a frozen declaration');
+  if (decl.stage === 'confirmation') {
+    const pin = decl.exposure?.ledgerHeadAtFreeze;
+    need(
+      pairs,
+      isNonEmptyString(pin?.head) && isPositiveInteger(pin?.length),
+      'exposure.ledgerHeadAtFreeze',
+      'a confirmation pins the selection ledger it was frozen against',
+    );
+  }
 
   const digest = declarationDigest(decl);
   const declared = isNonEmptyString(decl.frozen?.digest);
@@ -403,7 +453,7 @@ function validReceipt(raw) {
 }
 
 function numberMap(value) {
-  const out = {};
+  const out = Object.create(null);
   for (const [key, entry] of Object.entries(isObject(value) ? value : {})) out[key] = entry === null || entry === undefined ? null : entry;
   return out;
 }
@@ -428,15 +478,15 @@ function normalizeRow(raw, inputIndex) {
 
   return {
     inputIndex,
-    attemptId: source.attemptId ?? null,
+    attemptId: isNonEmptyString(source.attemptId) ? source.attemptId : null,
     runId: source.runId ?? null,
     stage: source.stage ?? null,
-    arm: source.arm ?? null,
-    caseId: source.caseId ?? null,
-    clusterId: source.clusterId ?? source.caseId ?? null,
+    arm: ARMS.includes(source.arm) ? source.arm : null,
+    caseId: isNonEmptyString(source.caseId) ? source.caseId : null,
+    clusterId: isNonEmptyString(source.clusterId) ? source.clusterId : isNonEmptyString(source.caseId) ? source.caseId : null,
     blockId: source.blockId ?? null,
     buildId: source.buildId ?? null,
-    repetition: source.repetition ?? null,
+    repetition: isPositiveInteger(source.repetition) ? source.repetition : null,
     attemptNumber: isPositiveInteger(source.attempt) ? source.attempt : 1,
     status: source.status ?? null,
     error: source.error ?? null,
@@ -502,9 +552,9 @@ function scopedCost(rows, names, pricing) {
   for (const row of rows) {
     const { components, currency } = attemptCostComponents(row, pricing);
     for (const name of names) {
-      if (isFiniteNumber(components[name]) && components[name] >= 0) {
+      if (isFiniteNumber(components[name]) && components[name] >= 0 && currency !== null) {
         parts.push(components[name]);
-        if (currency !== null) currencies.add(currency);
+        currencies.add(currency);
       } else {
         parts.push(null);
         unknown.push({ attemptId: row.attemptId, component: name });
@@ -668,6 +718,24 @@ const CALIBRATION_FIXTURES = deepFreeze([
     quantile: 'nearest-rank',
     expected: { quality: { estimate: 0.005, lower: -0.01 } },
   },
+  {
+    name: 'twelve distinct clusters, linear quantile between two distinct order statistics',
+    contrasts: { m: [0.013, -0.027, 0.041, 0.008, -0.012, 0.036, 0.022, -0.005, 0.017, -0.031, 0.029, 0.003] },
+    B: 1000,
+    seed: 314_159,
+    alpha: 0.037,
+    quantile: 'linear',
+    expected: { m: { estimate: 0.007_833_333_333_333_333, lower: -0.003_851_833_333_333_332_5 } },
+  },
+  {
+    name: 'twelve distinct clusters, nearest-rank quantile beside a distinct lower neighbour',
+    contrasts: { m: [0.013, -0.027, 0.041, 0.008, -0.012, 0.036, 0.022, -0.005, 0.017, -0.031, 0.029, 0.003] },
+    B: 1000,
+    seed: 314_159,
+    alpha: 0.0435,
+    quantile: 'nearest-rank',
+    expected: { m: { estimate: 0.007_833_333_333_333_333, lower: -0.003_416_666_666_666_667 } },
+  },
 ]);
 
 /** Run a bootstrap implementation against the reference fixtures. */
@@ -700,14 +768,17 @@ function runCalibration(bootstrap = pairedClusterBootstrap) {
 }
 
 /**
- * One gate: the lower bound has to strictly exceed the threshold. Equality does not pass.
+ * One gate: the lower bound has to strictly exceed the threshold, by more than floating-point rounding. Equality does not pass.
  *
  * @param {number} lower
  * @param {number} threshold
  * @returns {boolean}
  */
 function lowerBoundClears(lower, threshold) {
-  return isFiniteNumber(lower) && isFiniteNumber(threshold) && lower > threshold;
+  if (!isFiniteNumber(lower) || !isFiniteNumber(threshold)) return false;
+  // An excess of floating-point rounding size is equality, and equality does not pass.
+  const rounding = 1e-12 * Math.max(1, Math.abs(lower), Math.abs(threshold));
+  return lower - threshold > rounding;
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +809,11 @@ function verifyLedger(ledger, pins = []) {
   const problems = [];
   let previous = LEDGER_GENESIS;
   for (const [index, entry] of ledger.entries()) {
+    if (!isObject(entry)) {
+      problems.push(`entry ${index + 1} is not an object`);
+      previous = null;
+      continue;
+    }
     if (entry.seq !== index + 1) problems.push(`entry ${index + 1} has seq ${entry.seq}`);
     if (entry.hash !== ledgerEntryHash(entry, previous)) problems.push(`entry ${index + 1} does not extend the chain`);
     previous = entry.hash;
@@ -772,7 +848,12 @@ function exposureProblems(declaration, ledger, resume) {
         (confirmation ? entry.kind === 'confirmation-exposure' : entry.kind === 'selection-exposure') && entry.candidateId === candidate,
     );
     if (!recorded) blockers.push(`exposure of ${caseId} to ${candidate} is not recorded in the ledger`);
-    if (!confirmation) continue;
+    if (!confirmation) {
+      for (const entry of entries) {
+        if (entry.kind === 'confirmation-exposure') burned.push({ caseId, reason: `was used to confirm ${entry.candidateId}` });
+      }
+      continue;
+    }
     for (const entry of entries) {
       if (entry.kind === 'selection-exposure') burned.push({ caseId, reason: 'was exposed during selection' });
       else if (entry.kind === 'confirmation-exposure' && entry.candidateId !== candidate) {
@@ -790,16 +871,29 @@ function exposureProblems(declaration, ledger, resume) {
 
 function rowSuccess(row, declaration) {
   if (row.status !== 'completed') return false;
-  if (criticalMisses(row, declaration).length > 0) return false;
+  if (criticalMisses(row, declaration).length > 0 || unknownCriticalCounts(row, declaration).length > 0) return false;
   const floors = declaration.gates.success.metrics;
   return Object.entries(floors).every(
     ([metric, minimum]) => row.notApplicable.includes(metric) || (isFiniteNumber(row.metrics[metric]) && row.metrics[metric] >= minimum),
   );
 }
 
+function criticalRules(declaration) {
+  const rules = declaration?.gates?.critical?.rules;
+  return Array.isArray(rules) ? rules.filter((rule) => isObject(rule) && isNonEmptyString(rule.count)) : [];
+}
+
+/** Critical rules whose count the row does not record. An unrecorded count is unknown, never zero. */
+function unknownCriticalCounts(row, declaration) {
+  return criticalRules(declaration)
+    .filter((rule) => !row.notApplicable.includes(rule.count) && !isFiniteNumber(row.counts[rule.count]))
+    .map((rule) => rule.id)
+    .sort();
+}
+
 function criticalMisses(row, declaration) {
   const hits = new Set(row.critical);
-  for (const rule of declaration?.gates?.critical?.rules ?? []) {
+  for (const rule of criticalRules(declaration)) {
     if (isFiniteNumber(row.counts[rule.count]) && row.counts[rule.count] > 0) hits.add(rule.id);
   }
   return [...hits].sort();
@@ -846,10 +940,11 @@ function describeCases(declaration, rows, plan) {
       .filter((row) => row.status === 'completed')
       .sort((left, right) => left.attemptNumber - right.attemptNumber || left.inputIndex - right.inputIndex);
     for (const row of ordered) {
-      if (byRepetition.has(row.repetition)) extraCompleted.push(row.attemptId);
-      else byRepetition.set(row.repetition, row);
+      const key = `${row.runId ?? ''}\u0000${row.repetition}`;
+      if (byRepetition.has(key)) extraCompleted.push(row.attemptId);
+      else byRepetition.set(key, row);
     }
-    const completed = [...byRepetition.values()].sort((left, right) => left.repetition - right.repetition);
+    const completed = [...byRepetition.values()].sort((left, right) => left.inputIndex - right.inputIndex);
     const successes = completed.filter((row) => rowSuccess(row, declaration));
     const metricNames = [...new Set(completed.flatMap((row) => Object.keys(row.metrics)))].sort();
     const signatures = completed.map((row) => row.native?.signature).filter((signature) => typeof signature === 'string');
@@ -967,7 +1062,8 @@ function describeJudge(declaration, judgeCalls) {
  */
 function analyzeJudgeCalls(calls) {
   const groups = new Map();
-  for (const call of calls) {
+  const malformed = calls.filter((call) => !isObject(call));
+  for (const call of calls.filter((entry) => isObject(entry))) {
     const key = call.outputSha256;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(call);
@@ -975,7 +1071,9 @@ function analyzeJudgeCalls(calls) {
   const outputs = [];
   for (const [outputSha256, members] of groups) {
     const coherent = new Set(members.map((call) => canonicalJson([call.inputSha256, call.rubricSha256, call.judgeIdentity]))).size === 1;
-    const receipted = members.every((call) => isObject(call.receipt) && isNonEmptyString(call.receipt.callId));
+    const receipted =
+      members.every((call) => isObject(call.receipt) && isNonEmptyString(call.receipt.callId) && call.receipt.callId === call.callId) &&
+      new Set(members.map((call) => call.callId)).size === members.length;
     const verdicts = members.map((call) => call.verdict ?? null);
     const known = verdicts.filter((verdict) => verdict !== null);
     const labels = new Set(members.map((call) => call.label ?? null));
@@ -996,15 +1094,18 @@ function analyzeJudgeCalls(calls) {
   }
   const controls = outputs.filter((output) => output.label === 'good' || output.label === 'bad');
   const controlsPresent = controls.some((output) => output.label === 'good') && controls.some((output) => output.label === 'bad');
-  const usable = outputs.every((output) => output.coherentIdentity && output.freshReceipts && output.calls >= 2);
+  const usable = malformed.length === 0 && outputs.every((output) => output.coherentIdentity && output.freshReceipts && output.calls >= 2);
   const valid =
     usable && controlsPresent && controls.every((output) => output.correct === true && output.missing === 0 && !output.disagreement);
   return {
     status: usable ? 'analyzed' : 'blocked',
-    reason: usable ? null : 'every output needs at least two receipted judge calls on one input, rubric and judge identity',
+    reason: usable
+      ? null
+      : 'every call has to be an object, and every output needs at least two receipted judge calls on one input, rubric and judge identity',
     outputs,
     disagreementRate: outputs.length === 0 ? null : outputs.filter((output) => output.disagreement).length / outputs.length,
-    missingRate: calls.length === 0 ? null : calls.filter((call) => (call.verdict ?? null) === null).length / calls.length,
+    missingRate:
+      calls.length === 0 ? null : calls.filter((call) => !isObject(call) || (call.verdict ?? null) === null).length / calls.length,
     controls: { present: controlsPresent, correct: controls.filter((output) => output.correct === true).length, total: controls.length },
     valid,
     validity: valid ? 'valid' : 'invalid: the judge is not shown to be stable and correct on labeled good and bad controls',
@@ -1113,7 +1214,12 @@ function resolveSlots(declaration, rows, plan) {
   const failureValue = declaration.design.failureRules.failureMetricValue;
   const slots = [];
   const stageRows = rows;
-  const problems = { missing: [], duplicate: [], overBudget: [], blockMismatch: [], nonFinite: [], missingMetric: [] };
+  const problems = { missing: [], duplicate: [], overBudget: [], blockMismatch: [], nonFinite: [], missingMetric: [], unplanned: [] };
+  for (const row of stageRows) {
+    if (plan.some((entry) => entry.caseId === row.caseId) && row.repetition > repeats) {
+      problems.unplanned.push(`${row.arm}/${row.caseId}/${row.repetition}`);
+    }
+  }
   for (const entry of plan) {
     for (let repetition = 1; repetition <= repeats; repetition += 1) {
       const slot = { caseId: entry.caseId, clusterId: entry.clusterId, repetition, arms: {} };
@@ -1139,8 +1245,10 @@ function resolveSlots(declaration, rows, plan) {
           for (const metric of required) {
             const value = failureScored ? failureValue : scoring.metrics[metric];
             if (isFiniteNumber(value)) values[metric] = value;
-            else if (value === null || value === undefined) problems.missingMetric.push(`${arm}/${entry.caseId}/${repetition}/${metric}`);
-            else problems.nonFinite.push(`${arm}/${entry.caseId}/${repetition}/${metric}`);
+            else if (value === null || value === undefined) {
+              const reason = scoring.notApplicable.includes(metric) ? 'not applicable to this case' : 'unmeasured';
+              problems.missingMetric.push(`${arm}/${entry.caseId}/${repetition}/${metric} (${reason})`);
+            } else problems.nonFinite.push(`${arm}/${entry.caseId}/${repetition}/${metric}`);
           }
           if (scoring.nonFinite) problems.nonFinite.push(`${arm}/${entry.caseId}/${repetition}`);
         }
@@ -1249,6 +1357,7 @@ function describeArms(declaration, slots, plan, pricing) {
     out[arm] = {
       quality,
       attempts: armRows.length,
+      sources: armRows.map((row) => row.attemptId),
       completed: armRows.filter((row) => row.status === 'completed').length,
       errors: armRows.filter((row) => ['failed', 'invalid', 'timeout'].includes(row.status)).length,
       canceled: armRows.filter((row) => row.status === 'canceled').length,
@@ -1281,7 +1390,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const { slots } = resolved;
 
   // -- critical misses: every candidate attempt counts, retries included ----------
-  const candidateRows = contrastRows.filter((row) => row.arm === 'B' && ['completed', 'timeout'].includes(row.status));
+  const candidateRows = contrastRows.filter((row) => row.arm === 'B');
   const critical = { verified: [], unverified: [] };
   for (const row of candidateRows) {
     const rules = criticalMisses(row, declaration);
@@ -1301,7 +1410,12 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
       critical.unverified.push({ attemptId: entry.row.attemptId, caseId: entry.row.caseId, repetition: entry.row.repetition, rules });
     }
   }
+  critical.unrecorded = candidateRows
+    .filter((row) => row.status === 'completed')
+    .map((row) => ({ attemptId: row.attemptId, rules: unknownCriticalCounts(row, declaration) }))
+    .filter((entry) => entry.rules.length > 0);
   facts.critical = critical;
+  facts.malformedRows = excluded.filter((entry) => entry.reason === 'malformed-row').length;
   facts.conflictingCopies = excluded.filter((entry) => entry.conflicting).map((entry) => entry.row.attemptId);
 
   // -- native binding gates ---------------------------------------------------------
@@ -1317,7 +1431,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     }
   }
   if (declaration.gates?.native?.requireQualification) {
-    for (const row of candidateRows) {
+    for (const row of candidateRows.filter((entry) => entry.status === 'completed')) {
       if (row.native?.qualification !== 'passed')
         nativeRed.push({ attemptId: row.attemptId, reason: 'native qualification is not passed' });
     }
@@ -1557,6 +1671,11 @@ function decide({
   if (critical.unverified.length > 0)
     blocks.push('a candidate critical miss has no fresh generation receipt, so it can be neither dismissed nor verified');
   if (facts.sharedAcrossArms.length > 0) blocks.push(`rows are shared between the arms: ${facts.sharedAcrossArms.join(', ')}`);
+  if (critical.unrecorded.length > 0) {
+    blocks.push(
+      `critical counts are not recorded on ${critical.unrecorded.length} candidate attempt(s): ${critical.unrecorded[0].rules.join(', ')}`,
+    );
+  }
   if (facts.conflictingCopies.length > 0) {
     blocks.push(`rows that share an attempt id or a workspace disagree with the first: ${facts.conflictingCopies.join(', ')}`);
   }
@@ -1564,13 +1683,16 @@ function decide({
   const { problems } = resolved;
   if (problems.missing.length > 0) blocks.push(`missing pairs: ${problems.missing.join(', ')}`);
   if (problems.duplicate.length > 0) blocks.push(`duplicate scoring attempts: ${problems.duplicate.join(', ')}`);
+  if (facts.malformedRows > 0)
+    blocks.push(`${facts.malformedRows} evidence row(s) could not be read, so their charges and results are unknown`);
+  if (problems.unplanned.length > 0) blocks.push(`attempts for repetitions the schedule does not plan: ${problems.unplanned.join(', ')}`);
   if (problems.overBudget.length > 0) blocks.push(`attempts exceed design.maxAttempts: ${problems.overBudget.join(', ')}`);
   if (problems.blockMismatch.length > 0) blocks.push(`pairing blocks differ: ${problems.blockMismatch.join(', ')}`);
   if (problems.missingMetric.length > 0) blocks.push(`required metric unmeasured: ${problems.missingMetric.join(', ')}`);
   if (problems.nonFinite.length > 0 || facts.diagnostics.includes('a contrast was not finite')) blocks.push('non-finite data');
   if (facts.costUnknown) blocks.push('required cost is unknown for at least one cluster');
   if (facts.mixedCurrency) blocks.push('attempts carry more than one currency');
-  blocks.push(...exposure.blockers, ...exposure.burned.map((entry) => `confirmation case ${entry.caseId} ${entry.reason}`));
+  blocks.push(...exposure.blockers, ...exposure.burned.map((entry) => `case ${entry.caseId} ${entry.reason}`));
   if (identity.aa) blocks.push('the arms have identical configuration: this is an A/A control');
   if (blocks.length > 0) {
     if (identity.aa && blocks.length === 1) return result(OUTCOMES.aaControl, blocks);
@@ -1664,7 +1786,7 @@ function evidenceIndexRow(row, status, detail) {
  * @param {Function} [input.bootstrap] The bootstrap implementation (calibrated before use).
  * @returns {{report: object, evidenceIndex: object}}
  */
-function readExperiment({
+function readExperimentChecked({
   declaration,
   attempts = [],
   ledger = null,
@@ -1727,7 +1849,7 @@ function readExperiment({
 
   if (!usable) {
     report.contrast = { status: 'blocked', decision: blockedDecision(validation) };
-    return finish({ report, kept, excluded });
+    return finish({ report, kept, excluded, inputCount: normalized.length });
   }
 
   report.descriptive = describeRepeatability({ declaration: declarationCopy, rows: kept, excluded, replay, judgeCalls });
@@ -1738,6 +1860,12 @@ function readExperiment({
   }
   if (kept.every((row) => !row.usage && !row.cost)) {
     limitations.push('no usage or cost telemetry is recorded, so no saving can be measured from this evidence');
+  }
+  const extras = report.descriptive.groups.flatMap((group) => group.cases.flatMap((entry) => entry.extraCompleted));
+  if (extras.length > 0) {
+    limitations.push(
+      `${extras.length} completed attempt(s) repeat a run and repetition already counted and are listed under extraCompleted: ${extras.join(', ')}`,
+    );
   }
   limitations.push('hashes identify bytes; they do not prove that generation happened. Only a fresh-workspace receipt does');
 
@@ -1759,7 +1887,52 @@ function readExperiment({
   report.cost = costSection(declarationCopy, kept);
   if (report.cost.experimentTotal.total === null)
     limitations.push('total experiment cost is unknown: at least one cost component is not recorded');
-  return finish({ report, kept, excluded, declaration: declarationCopy, analyzedContrast });
+  return finish({ report, kept, excluded, inputCount: normalized.length, declaration: declarationCopy, analyzedContrast });
+}
+
+/**
+ * Read an experiment. A fault inside the reader is reported as a blocked contrast
+ * naming the fault, never thrown at the caller.
+ *
+ * @param {object} input See `readExperimentChecked`.
+ * @returns {{report: object, evidenceIndex: object}}
+ */
+function readExperiment(input) {
+  try {
+    return readExperimentChecked(input);
+  } catch (error) {
+    const validation = {
+      problems: [{ where: 'reader', message: `could not read this input: ${error.message}` }],
+      pairedProblems: [],
+      frozen: {},
+    };
+    const report = {
+      kind: 'configuration-experiment-report',
+      schemaVersion: SCHEMA_VERSION,
+      analysisVersion: ANALYSIS_VERSION,
+      advisory: true,
+      nativeVerdict: null,
+      declaration: {
+        experimentId: null,
+        stage: null,
+        digest: null,
+        frozen: { declared: false, matches: null },
+        problems: validation.problems,
+      },
+      identities: null,
+      descriptive: null,
+      contrast: { status: 'blocked', decision: blockedDecision(validation) },
+      cost: null,
+      denominators: null,
+      exclusions: [],
+      sourceLimitations: ['the reader failed on this input; nothing was analyzed'],
+      evidenceIndex: { rows: 0, digest: digestOf([]) },
+    };
+    return {
+      report,
+      evidenceIndex: { kind: 'configuration-experiment-evidence-index', schemaVersion: SCHEMA_VERSION, declarationDigest: null, rows: [] },
+    };
+  }
 }
 
 function costSection(declaration, rows) {
@@ -1785,6 +1958,7 @@ function costSection(declaration, rows) {
   return {
     includes: 'every attempt: retries, canceled, failed and invalid work stay in the totals',
     attempts: rows.length,
+    sources: rows.map((row) => row.attemptId),
     taskExecution: summarizeCost(scopedCost(rows, taskNames, pricing)),
     judge:
       judgeNames.length === 0
@@ -1830,7 +2004,7 @@ function blockedDecision(validation) {
   };
 }
 
-function finish({ report, kept, excluded, declaration = null, analyzedContrast = null }) {
+function finish({ report, kept, excluded, inputCount, declaration = null, analyzedContrast = null }) {
   const countedAs = new Map();
   if (declaration && analyzedContrast) {
     const contrastRows = kept.filter((row) => ARMS.includes(row.arm));
@@ -1844,7 +2018,9 @@ function finish({ report, kept, excluded, declaration = null, analyzedContrast =
   const evidenceRows = [
     ...kept.map((row) => evidenceIndexRow(row, countedAs.get(row.attemptId) ?? (row.status === 'completed' ? 'described' : 'unscored'))),
     ...excluded.map((entry) => evidenceIndexRow(entry.row, `excluded:${entry.reason}`, entry.detail)),
-  ].sort((left, right) => (left.attemptId ?? '').localeCompare(right.attemptId ?? '') || left.counted.localeCompare(right.counted));
+  ].sort(
+    (left, right) => String(left.attemptId ?? '').localeCompare(String(right.attemptId ?? '')) || left.counted.localeCompare(right.counted),
+  );
 
   if (declaration) {
     const plannedSlotsPerArm = clusterPlan(declaration).length * declaration.design.repeats;
@@ -1871,7 +2047,8 @@ function finish({ report, kept, excluded, declaration = null, analyzedContrast =
       excludedAttempts: excluded.length,
       attemptsInIndex: evidenceRows.length,
       reconciles:
-        evidenceRows.length === kept.length + excluded.length &&
+        evidenceRows.length === inputCount &&
+        kept.length + excluded.length === inputCount &&
         (!analyzedContrast ||
           ARMS.every(
             (arm) =>
