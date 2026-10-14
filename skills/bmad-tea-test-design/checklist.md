@@ -304,7 +304,7 @@
 - [ ] **Test Coverage Plan** with P0/P1/P2/P3 sections
   - [ ] Priority sections have ONLY "Criteria" (no execution context)
   - [ ] Note at top: "P0/P1/P2/P3 = priority, NOT execution timing"
-  - [ ] Test tables with columns: Test ID | Requirement | Test Level | Risk Link | Notes
+  - [ ] Test tables with columns: Test IDs | Requirement | Test Level | Risk Link | Test Count | Notes; one risk-linked row per scored risk
 - [ ] **NFR Test Coverage Plan** section
   - [ ] Maps NFR category to requirement/threshold, planned validation, tool/level, evidence artifact, and priority
   - [ ] Lists missing thresholds or missing evidence sources

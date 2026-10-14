@@ -128,13 +128,13 @@ Each scored risk has one risk-linked row at the level where its failure first be
 
 **Criteria:** Important common workflows, integration boundaries, and high-impact error handling with a workable recovery path.
 
-| Test IDs                        | Requirement                                                                            | Test Level  | Risk Link | Test Count | Notes                                                                         |
-| ------------------------------- | -------------------------------------------------------------------------------------- | ----------- | --------- | ---------: | ----------------------------------------------------------------------------- |
-| 3-API-004, 3-API-005, 3-API-007 | Reject expired and revoked tokens; a cancelled invitation cannot be used               | API         | R-003     |          3 | Token status is decided at one service's HTTP contract; no membership created |
-| 3-API-006, 3-API-008            | Retry after provider timeout returns the original invitation; resend rotates the token | API         | R-004     |          2 | Idempotency by invitation ID at one service's HTTP contract                   |
-| 3-INT-001                       | Role update emits actor, tenant, old role, and new role                                | Integration | R-005     |          1 | Audit event crosses one event boundary                                        |
-| 3-E2E-002                       | Administrator invites a new Member and sees Pending status                             | E2E         | -         |          1 | One browser happy path                                                        |
-| 3-COMP-001                      | Role selector hides Owner and disables the current Owner                               | Component   | -         |          1 | User-level interaction API                                                    |
+| Test IDs                        | Requirement                                                                                                              | Test Level  | Risk Link | Test Count | Notes                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- | --------- | ---------: | ----------------------------------------------------------------------------- |
+| 3-API-004, 3-API-005, 3-API-007 | Reject expired and revoked tokens; a cancelled invitation cannot be used                                                 | API         | R-003     |          3 | Token status is decided at one service's HTTP contract; no membership created |
+| 3-API-006, 3-API-008            | Retry after provider timeout returns the original invitation; resend rotates the token and the old token becomes invalid | API         | R-004     |          2 | Idempotency by invitation ID at one service's HTTP contract                   |
+| 3-INT-001                       | Role update emits actor, tenant, old role, and new role                                                                  | Integration | R-005     |          1 | Audit event crosses one event boundary                                        |
+| 3-E2E-002                       | Administrator invites a new Member and sees Pending status                                                               | E2E         | -         |          1 | One browser happy path                                                        |
+| 3-COMP-001                      | Role selector hides Owner and disables the current Owner                                                                 | Component   | -         |          1 | User-level interaction API                                                    |
 
 **Total P1:** 8 scenarios, about 20 to 30 hours
 

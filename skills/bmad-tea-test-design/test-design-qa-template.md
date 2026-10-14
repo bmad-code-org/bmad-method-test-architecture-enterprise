@@ -183,10 +183,10 @@ test('example test @p0', async ({ apiRequest }) => {
 
 **Criteria:** Critical business, security, data-integrity, or compliance impact with no safe workaround. Risk score is supporting evidence and is not a required condition.
 
-| Test ID    | Requirement   | Test Level | Risk Link | Notes   |
-| ---------- | ------------- | ---------- | --------- | ------- |
-| **P0-001** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
-| **P0-002** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
+| Test IDs   | Requirement   | Test Level | Risk Link | Test Count | Notes   |
+| ---------- | ------------- | ---------- | --------- | ---------: | ------- |
+| **P0-001** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
+| **P0-002** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
 
 **Total P0:** ~{N} tests
 
@@ -196,10 +196,10 @@ test('example test @p0', async ({ apiRequest }) => {
 
 **Criteria:** Core, frequent, or complex behavior with material user reach and a limited workaround. Risk score is supporting evidence and is not a required condition.
 
-| Test ID    | Requirement   | Test Level | Risk Link | Notes   |
-| ---------- | ------------- | ---------- | --------- | ------- |
-| **P1-001** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
-| **P1-002** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
+| Test IDs   | Requirement   | Test Level | Risk Link | Test Count | Notes   |
+| ---------- | ------------- | ---------- | --------- | ---------: | ------- |
+| **P1-001** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
+| **P1-002** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
 
 **Total P1:** ~{N} tests
 
@@ -209,9 +209,9 @@ test('example test @p0', async ({ apiRequest }) => {
 
 **Criteria:** Secondary behavior with narrower user reach and an acceptable workaround. Risk score is supporting evidence and is not a required condition.
 
-| Test ID    | Requirement   | Test Level | Risk Link | Notes   |
-| ---------- | ------------- | ---------- | --------- | ------- |
-| **P2-001** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
+| Test IDs   | Requirement   | Test Level | Risk Link | Test Count | Notes   |
+| ---------- | ------------- | ---------- | --------- | ---------: | ------- |
+| **P2-001** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
 
 **Total P2:** ~{N} tests
 
@@ -221,9 +221,9 @@ test('example test @p0', async ({ apiRequest }) => {
 
 **Criteria:** Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround. Risk score is supporting evidence and is not a required condition.
 
-| Test ID    | Requirement   | Test Level | Risk Link | Notes   |
-| ---------- | ------------- | ---------- | --------- | ------- |
-| **P3-001** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
+| Test IDs   | Requirement   | Test Level | Risk Link | Test Count | Notes   |
+| ---------- | ------------- | ---------- | --------- | ---------: | ------- |
+| **P3-001** | {Requirement} | {Level}    | {R-ID}    |        {N} | {Notes} |
 
 **Total P3:** ~{N} tests
 
