@@ -69,11 +69,11 @@
       "identity": "sha256:2bcf4c7dc9957732f23ebead8c09a2088db9291c3365dbec2f94fbaa22ca8a96",
       "observations": [
         {
-          "evidence": "sha256:5fe2b9ea1d9a7b97926805729035d9077d3749017eda2c81c5074b5244b50651",
+          "digest": "sha256:8a4b9d131955b624efd588912136e14de3d9363567a6372bde5c9154b6c6a077",
           "observationId": "OBS-001"
         },
         {
-          "evidence": "sha256:8e48802c47f7cd9be71a54e98ae4480c89f51207f2417cda751e6f1d895afe8e",
+          "digest": "sha256:a6a2ccf7b882350303027d380c7053746a0db2259657d15c8b2a7dfade5160e7",
           "observationId": "OBS-002"
         }
       ]

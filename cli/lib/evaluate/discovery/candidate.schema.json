@@ -69,19 +69,20 @@
           "$ref": "#/$defs/digest"
         },
         "observations": {
-          "description": "The observations the decision rested on. Each must still be in the record, unchanged.",
+          "description": "The observations the decision rested on. Each must still be in the record, unchanged: same arm, evidence and trial counts.",
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["observationId", "evidence"],
+            "required": ["observationId", "digest"],
             "properties": {
               "observationId": {
                 "type": "string",
                 "pattern": "^OBS-[0-9]{3,}$"
               },
-              "evidence": {
+              "digest": {
+                "description": "The digest of the observation's canonical JSON.",
                 "$ref": "#/$defs/digest"
               }
             }

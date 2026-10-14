@@ -335,6 +335,28 @@ function checkRefusals() {
     dropped,
     /review\.scope\.observations names OBS-002 .* no longer holds/,
   );
+  const hollowed = fixture();
+  hollowed.observations[1].trials = { planned: 3, completed: 0, errors: 3, missing: 0 };
+  hollowed.observations.push({
+    observationId: 'OBS-003',
+    arm: 'candidate',
+    evidence: digest('later rerun'),
+    trials: { planned: 3, completed: 3, errors: 0, missing: 0 },
+  });
+  refuses('the trial counts behind a review changed after it', hollowed, /review\.scope\.observations names OBS-002 .* no longer holds/);
+  const rearmed = fixture();
+  rearmed.observations[1].arm = 'baseline';
+  rearmed.observations.push({
+    observationId: 'OBS-003',
+    arm: 'candidate',
+    evidence: digest('later rerun'),
+    trials: { planned: 3, completed: 3, errors: 0, missing: 0 },
+  });
+  refuses(
+    'the arm of a reviewed observation changed after the review',
+    rearmed,
+    /review\.scope\.observations names OBS-002 .* no longer holds/,
+  );
   const appended = fixture();
   appended.observations.push({
     observationId: 'OBS-003',

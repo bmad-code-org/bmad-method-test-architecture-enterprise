@@ -107,6 +107,11 @@ function candidateIdentity(record) {
   ]);
 }
 
+/** The digest of one observation as recorded: its arm, evidence and trial counts. */
+function observationDigest(observation) {
+  return digest(canonicalJson(observation));
+}
+
 /** The digest of what a reviewer concluded and rested the conclusion on: the disposition and the independent evidence. */
 function determinationDigest(record) {
   return digest(canonicalJson({ disposition: record.disposition, independentEvidence: record.independentEvidence }));
@@ -123,7 +128,10 @@ function decisionScope(record) {
   return {
     identity: candidateIdentity(record),
     determination: determinationDigest(record),
-    observations: record.observations.map(({ observationId, evidence }) => ({ observationId, evidence })),
+    observations: record.observations.map((observation) => ({
+      observationId: observation.observationId,
+      digest: observationDigest(observation),
+    })),
   };
 }
 
@@ -195,7 +203,7 @@ function semanticProblems(record) {
   const seen = new Map();
   for (const [index, observation] of record.observations.entries()) {
     if (seen.has(observation.observationId)) problems.push(`observations[${index}].observationId ${observation.observationId} repeats`);
-    seen.set(observation.observationId, observation.evidence);
+    seen.set(observation.observationId, observationDigest(observation));
     const { planned, completed, errors, missing } = observation.trials;
     if (completed + errors + missing > planned) {
       problems.push(`observations[${index}].trials accounts for ${completed + errors + missing} trials of ${planned} planned`);
@@ -211,9 +219,9 @@ function semanticProblems(record) {
       );
     }
     for (const reviewed of scope.observations) {
-      if (seen.get(reviewed.observationId) !== reviewed.evidence) {
+      if (seen.get(reviewed.observationId) !== reviewed.digest) {
         problems.push(
-          `${label}.scope.observations names ${reviewed.observationId} with ${reviewed.evidence}, which the record no longer holds`,
+          `${label}.scope.observations names ${reviewed.observationId} as ${reviewed.digest}, which the record no longer holds`,
         );
       }
     }
