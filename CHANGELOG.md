@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Test Design plans now keep the same scored structure across identical inputs. The workflow derives one scored risk per source gap statement, one risk-linked coverage row per risk at the level where its failure first becomes observable, and well-formed risk tables. The packaged example follows the same structure.
 - npm 12 tag checks now accept its array-wrapped registry response, so a successful tag update finishes the release workflow.
 
 ## [3.0.0] - 2026-10-14

@@ -47,7 +47,8 @@ For each requirement or risk-driven scenario:
 - Map NFR-derived risks to planned validation scenarios and evidence sources
 - Use the exact `Risk ID` assigned in the risk register in every `Risk Link` cell. A prose description alone is not a traceable mapping.
 - Each `Test Level` cell contains exactly one canonical value: E2E, API, Component, Integration, or Unit. Put performance, operational, device, and other qualifiers in scenario descriptions or notes.
-- Give every material risk at least one coverage row whose `Test Level` is suitable for that risk under `test-levels-framework.md`. Explain the suitability in the row notes when the level is not obvious. Preserve the risk ID when rows are split across priorities or test levels.
+- Give every scored risk exactly one risk-linked coverage row, and give it the single test level where the failure first becomes observable. The failure crosses no boundary: Unit. It lives in one rendered interface unit: Component. It crosses one owned store, queue, file, or event boundary: Integration. It crosses the HTTP or contract boundary of one service: API. It spans two or more deployables, a user journey, or a deadline measured on real devices: E2E. Name the risk's mechanism, the boundary it crosses, and the resulting level in the row notes. Record the individual scenarios in the row's `Notes` and their number in `Test Count`; do not add a second row for the same risk. Rows that cover no scored risk use `-` in `Risk Link`.
+- Place a risk's row under the one priority heading that matches its consequence. A risk never appears under two priority headings.
 
 **Priority rules:** decide each priority on business impact, user reach, and workaround
 availability. Risk score is supporting evidence and is not a required condition for any priority.

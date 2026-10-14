@@ -29,10 +29,10 @@ lastSaved: '2026-08-17'
 **Coverage Summary:**
 
 - P0: 4 scenarios
-- P1: 6 scenarios
-- P2: 5 scenarios
+- P1: 8 scenarios
+- P2: 3 scenarios
 - P3: 2 scenarios
-- Total: 17 scenarios, estimated at 41 to 63 hours across 1.5 to 2.5 weeks
+- Total: 17 scenarios, estimated at 42 to 64 hours across 1.5 to 2.5 weeks
 
 Risk score determines the required governance action. Test priority is assigned separately from business criticality, user impact, workaround availability, and execution value. For example, R-005 scores 3 while its audit-event scenario is P1 because missing actor and role history has compliance impact; the score does not hold it at P2 or P3 automatically.
 
@@ -110,16 +110,17 @@ This plan names future evidence. Final PASS, CONCERNS, and FAIL decisions belong
 
 P0, P1, P2, and P3 describe priority. Execution timing is defined separately below. Risk score is a supporting signal and never assigns priority by itself.
 
+Each scored risk has one risk-linked row at the level where its failure first becomes observable. Rows with `-` cover no scored risk.
+
 ### P0: Critical
 
 **Criteria:** The scenario protects a core authorization or membership-integrity path, has no safe workaround, and a failure would block release.
 
-| Test ID   | Requirement                                                | Test Level | Risk Link    | Notes                            |
-| --------- | ---------------------------------------------------------- | ---------- | ------------ | -------------------------------- |
-| 3-API-001 | Reject a role change for a member in another tenant        | API        | R-001        | Direct tenant-boundary proof     |
-| 3-API-002 | Reject granting Owner through the role-change endpoint     | API        | R-001        | Immutable Owner policy           |
-| 3-API-003 | Accepting the same invitation twice creates one membership | API        | R-002        | Concurrent duplicate submissions |
-| 3-E2E-001 | Invited member accepts once and enters the correct tenant  | E2E        | R-002, R-003 | Core user journey                |
+| Test IDs             | Requirement                                                 | Test Level | Risk Link | Test Count | Notes                                                                   |
+| -------------------- | ----------------------------------------------------------- | ---------- | --------- | ---------: | ----------------------------------------------------------------------- |
+| 3-API-001, 3-API-002 | Reject a cross-tenant role change and reject granting Owner | API        | R-001     |          2 | Tenant authorization crosses one service's HTTP contract                |
+| 3-API-003            | Accepting the same invitation twice creates one membership  | API        | R-002     |          1 | Idempotency crosses one service's HTTP contract; concurrent submissions |
+| 3-E2E-001            | Invited member accepts once and enters the correct tenant   | E2E        | -         |          1 | Core user journey                                                       |
 
 **Total P0:** 4 scenarios, about 14 to 20 hours
 
@@ -127,39 +128,36 @@ P0, P1, P2, and P3 describe priority. Execution timing is defined separately bel
 
 **Criteria:** Important common workflows, integration boundaries, and high-impact error handling with a workable recovery path.
 
-| Test ID    | Requirement                                                  | Test Level  | Risk Link | Notes                          |
-| ---------- | ------------------------------------------------------------ | ----------- | --------- | ------------------------------ |
-| 3-E2E-002  | Administrator invites a new Member and sees Pending status   | E2E         | R-004     | One browser happy path         |
-| 3-API-004  | Reject an expired invitation token                           | API         | R-003     | Boundary time fixed by fixture |
-| 3-API-005  | Reject a revoked invitation token                            | API         | R-003     | No membership created          |
-| 3-API-006  | Retry after provider timeout returns the original invitation | API         | R-004     | Idempotency by invitation ID   |
-| 3-INT-001  | Role update emits actor, tenant, old role, and new role      | Integration | R-005     | Audit event contract           |
-| 3-COMP-001 | Role selector hides Owner and disables the current Owner     | Component   | R-001     | User-level interaction API     |
+| Test IDs                        | Requirement                                                                            | Test Level  | Risk Link | Test Count | Notes                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------- | ----------- | --------- | ---------: | ----------------------------------------------------------------------------- |
+| 3-API-004, 3-API-005, 3-API-007 | Reject expired and revoked tokens; a cancelled invitation cannot be used               | API         | R-003     |          3 | Token status is decided at one service's HTTP contract; no membership created |
+| 3-API-006, 3-API-008            | Retry after provider timeout returns the original invitation; resend rotates the token | API         | R-004     |          2 | Idempotency by invitation ID at one service's HTTP contract                   |
+| 3-INT-001                       | Role update emits actor, tenant, old role, and new role                                | Integration | R-005     |          1 | Audit event crosses one event boundary                                        |
+| 3-E2E-002                       | Administrator invites a new Member and sees Pending status                             | E2E         | -         |          1 | One browser happy path                                                        |
+| 3-COMP-001                      | Role selector hides Owner and disables the current Owner                               | Component   | -         |          1 | User-level interaction API                                                    |
 
-**Total P1:** 6 scenarios, about 16 to 24 hours
+**Total P1:** 8 scenarios, about 20 to 30 hours
 
 ### P2: Medium
 
 **Criteria:** Secondary workflows and bounded edge cases whose failure has a practical workaround.
 
-| Test ID    | Requirement                                                | Test Level | Risk Link | Notes                              |
-| ---------- | ---------------------------------------------------------- | ---------- | --------- | ---------------------------------- |
-| 3-API-007  | Cancel a pending invitation                                | API        | R-003     | Subsequent acceptance rejected     |
-| 3-API-008  | Resend reuses the logical invitation and rotates the token | API        | R-004     | Old token becomes invalid          |
-| 3-COMP-002 | Invalid email displays field-level guidance                | Component  | None      | Atomic validation behavior         |
-| 3-COMP-003 | Pending invitation table handles long names                | Component  | R-006     | Layout at supported small viewport |
-| 3-UNIT-001 | Invitation expiry comparison handles the exact boundary    | Unit       | R-003     | Fake clock, no wall-clock wait     |
+| Test IDs   | Requirement                                             | Test Level | Risk Link | Test Count | Notes                                                  |
+| ---------- | ------------------------------------------------------- | ---------- | --------- | ---------: | ------------------------------------------------------ |
+| 3-COMP-003 | Pending invitation table handles long names             | Component  | R-006     |          1 | One rendered table; layout at supported small viewport |
+| 3-COMP-002 | Invalid email displays field-level guidance             | Component  | -         |          1 | Atomic validation behavior                             |
+| 3-UNIT-001 | Invitation expiry comparison handles the exact boundary | Unit       | -         |          1 | Fake clock, no wall-clock wait                         |
 
-**Total P2:** 5 scenarios, about 8 to 14 hours
+**Total P2:** 3 scenarios, about 5 to 9 hours
 
 ### P3: Low
 
 **Criteria:** Exploratory checks and benchmarks that inform future optimization.
 
-| Test ID    | Requirement                                   | Test Level  | Risk Link | Notes                                   |
-| ---------- | --------------------------------------------- | ----------- | --------- | --------------------------------------- |
-| 3-EXP-001  | Keyboard-only review of the invitation dialog | Exploratory | None      | Record accessibility observations       |
-| 3-PERF-001 | Establish a provisional bulk-invite baseline  | Performance | R-007     | Informational until the SLO is approved |
+| Test IDs   | Requirement                                   | Test Level | Risk Link | Test Count | Notes                                                                           |
+| ---------- | --------------------------------------------- | ---------- | --------- | ---------: | ------------------------------------------------------------------------------- |
+| 3-PERF-001 | Establish a provisional bulk-invite baseline  | API        | R-007     |          1 | k6 against one service's HTTP contract; informational until the SLO is approved |
+| 3-EXP-001  | Keyboard-only review of the invitation dialog | E2E        | -         |          1 | Exploratory session; record accessibility observations                          |
 
 **Total P3:** 2 scenarios, about 3 to 5 hours
 
@@ -176,10 +174,10 @@ P0, P1, P2, and P3 describe priority. Execution timing is defined separately bel
 | Priority  | Scenarios | Estimate           | Complexity Drivers                               |
 | --------- | --------: | ------------------ | ------------------------------------------------ |
 | P0        |         4 | 14 to 20 hours     | Two-tenant setup, concurrency, authorization     |
-| P1        |         6 | 16 to 24 hours     | Provider stub, audit event capture, browser path |
-| P2        |         5 | 8 to 14 hours      | Boundary fixtures and component states           |
+| P1        |         8 | 20 to 30 hours     | Provider stub, audit event capture, browser path |
+| P2        |         3 | 5 to 9 hours       | Boundary fixtures and component states           |
 | P3        |         2 | 3 to 5 hours       | Benchmark setup and exploratory recording        |
-| **Total** |    **17** | **41 to 63 hours** | **About 1.5 to 2.5 weeks**                       |
+| **Total** |    **17** | **42 to 64 hours** | **About 1.5 to 2.5 weeks**                       |
 
 ### Prerequisites
 

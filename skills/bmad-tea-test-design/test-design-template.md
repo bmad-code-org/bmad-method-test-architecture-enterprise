@@ -131,7 +131,7 @@ workaround. Risk score is supporting evidence and is not a required condition.
 | {requirement} | E2E        | R-001     | 3          | QA    | {notes} |
 | {requirement} | API        | R-002     | 5          | QA    | {notes} |
 
-Use the exact `Risk ID` from the risk assessment in `Risk Link`. Select `Test Level` using `test-levels-framework.md`; explain the suitability in `Notes` when the level is not obvious. Every material risk must appear in at least one coverage row at a test level that can establish it.
+Use the exact `Risk ID` from the risk assessment in `Risk Link`. Every scored risk has exactly one risk-linked row, at the one level where its failure first becomes observable: Unit with no boundary, Component for one rendered interface unit, Integration across one owned store, queue, file, or event boundary, API across one service's HTTP contract, E2E across two or more deployables, a user journey, or a deadline on real devices. State the mechanism, boundary, and level in `Notes`, list the scenarios there, and put their number in `Test Count`. Rows that cover no scored risk use `-`.
 
 **Total P0**: {p0_count} tests, {p0_hours} hours
 
