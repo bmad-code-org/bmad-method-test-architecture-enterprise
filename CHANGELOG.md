@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A contributor note in `test/docs/` records the verdict on optional Jev System One support for fragment selection. The semantic-need gate fails on today's corpora, so no helper is built. The note keeps the provider policy, the encoding choice, and the reopen condition.
+
 ## [3.0.2] - 2026-10-14
 
 ### Changed
