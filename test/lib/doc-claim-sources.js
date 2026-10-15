@@ -441,3 +441,76 @@ if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-tea-* skil
 exports.OUTPUTS_IN_WORKFLOW_FOLDERS = layoutSkillDirs.every(
   (skillDir) => declaredOutputPaths(skillDir).length > 0 && misplacedOutputs(skillDir).length === 0,
 );
+
+/** The provenance.json fields a paired configuration contrast needs and only a hand edit supplies. */
+const PAIRED_CAPTURE_FIELDS = Object.freeze(['receipt', 'blockId', 'observed', 'usage', 'cost', 'latency']);
+exports.PAIRED_CAPTURE_FIELDS = PAIRED_CAPTURE_FIELDS;
+
+/**
+ * Files that may name the ledger builder without building a ledger for a run: the
+ * reader that declares it, the reader's test, and this gate module and its test,
+ * which name it to look for it.
+ */
+const LEDGER_NAMERS = Object.freeze([
+  'test/lib/configuration-experiment.js',
+  'test/test-configuration-experiment.js',
+  'test/lib/doc-claim-sources.js',
+  'test/test-doc-claim-sources.js',
+]);
+
+/** The keys of the object `retainSkillArtifacts` serializes into provenance.json, read from its source. */
+function retainedProvenanceKeys(text) {
+  const match = /'provenance\.json'\),\s*`\$\{JSON\.stringify\(\{([^}]*)\}/.exec(text);
+  if (!match) refuse('test/lib/retain-skill-artifacts.js no longer writes provenance.json from one object literal');
+  return match[1].split(',').map((entry) => entry.split(':')[0].trim());
+}
+exports.retainedProvenanceKeys = retainedProvenanceKeys;
+
+/**
+ * Whether paired-contrast inputs are still captured only by hand: the provenance
+ * writer records the requested model and none of the paired fields, the Test Design
+ * runner gives no `usage:` property a non-null value, and no tracked script outside
+ * `LEDGER_NAMERS` names the exposure ledger builder.
+ *
+ * @param {{provenanceKeys: string[], testDesignSource: string, scripts: Array<{file: string, text: string}>}} input
+ */
+function pairedCaptureIsManual({ provenanceKeys, testDesignSource, scripts }) {
+  const usageValues = [...testDesignSource.matchAll(/\busage\s*:\s*([^,\n}]+)/g)].map((match) => match[1].trim());
+  return (
+    provenanceKeys.includes('requestedModel') &&
+    PAIRED_CAPTURE_FIELDS.every((field) => !provenanceKeys.includes(field)) &&
+    usageValues.every((value) => value === 'null') &&
+    scripts.every(({ file, text }) => LEDGER_NAMERS.includes(file) || !/\bappendExposure\b/.test(text))
+  );
+}
+exports.pairedCaptureIsManual = pairedCaptureIsManual;
+
+/** Every tracked JavaScript file in the repository, from git. */
+function trackedScripts() {
+  let listing;
+  try {
+    listing = require('node:child_process').execFileSync('git', ['ls-files', '-z', '--', '*.js', '*.mjs', '*.cjs'], {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (error) {
+    refuse(`git ls-files failed, so the tracked scripts cannot be listed: ${error.message}`);
+  }
+  const files = listing.split('\0').filter((file) => file.length > 0);
+  if (files.length === 0) refuse('git ls-files lists no tracked scripts');
+  return files
+    .filter((file) => fs.existsSync(path.join(PROJECT_ROOT, file)))
+    .map((file) => ({ file, text: fs.readFileSync(path.join(PROJECT_ROOT, file), 'utf8') }));
+}
+
+/**
+ * docs/how-to/evaluate/measure-repeatability-and-compare-a-configuration.md and
+ * docs/reference/configuration-experiment-reader.md, "Capturing these inputs is
+ * manual today."
+ */
+exports.PAIRED_CAPTURE_IS_MANUAL = pairedCaptureIsManual({
+  provenanceKeys: retainedProvenanceKeys(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'lib', 'retain-skill-artifacts.js'), 'utf8')),
+  testDesignSource: fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eval-test-design.js'), 'utf8'),
+  scripts: trackedScripts(),
+});

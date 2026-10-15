@@ -29,6 +29,7 @@ export default [
       'website/**',
       // Gitignored patterns
       'z*/**', // z-samples, z1, z2, etc.
+      'experiment-output/**', // configuration experiment reports the how-to guide writes
       '.claude/**',
       '.codex/**',
       '.github/chatmodes/**',

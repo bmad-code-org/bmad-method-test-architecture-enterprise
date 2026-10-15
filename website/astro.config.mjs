@@ -205,6 +205,7 @@ export default defineConfig({
             { label: 'Execution Targets', slug: 'reference/execution-targets' },
             { label: 'Knowledge Base', slug: 'reference/knowledge-base' },
             { label: 'Live Verification Results', slug: 'reference/live-verification-results' },
+            { label: 'Configuration Experiment Reader', slug: 'reference/configuration-experiment-reader' },
             { label: 'tea-evaluate CLI', slug: 'reference/tea-evaluate-cli' },
             { label: 'tea-teach CLI', slug: 'reference/tea-teach-cli' },
             { label: 'tea-automate CLI', slug: 'reference/tea-automate-cli' },

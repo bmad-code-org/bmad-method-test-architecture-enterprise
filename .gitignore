@@ -103,6 +103,10 @@ _bmad-output/implementation-artifacts/*
 # docs/explanation/eval-quality-command-adapter.md.
 test/eval-artifacts/
 
+# Reports the configuration experiment guide writes when a maintainer runs its
+# commands from the repository root. Each run writes a new directory under it.
+experiment-output/
+
 # bmad-workflow-builder process files: session memory and analysis reports it
 # writes inside a skill directory while building or editing it. Never part of
 # the shipped skill.

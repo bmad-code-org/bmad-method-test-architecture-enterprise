@@ -2098,6 +2098,24 @@
           "reason": "a claim about the absence of a feature; nothing in the tree can decide whether an extension surface was deliberately never built"
         },
         {
+          "file": "docs/how-to/evaluate/measure-repeatability-and-compare-a-configuration.md",
+          "key": "Capturing these inputs is manual today",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "PAIRED_CAPTURE_IS_MANUAL"
+          },
+          "reason": "test/lib/retain-skill-artifacts.js writes none of receipt, blockId, observed, usage, cost or latency into provenance.json, test/eval-test-design.js gives no usage property a non-null value, and no tracked script outside the configuration experiment reader, its test and the doc-claims sources names appendExposure"
+        },
+        {
+          "file": "docs/reference/configuration-experiment-reader.md",
+          "key": "Capturing these inputs is manual today",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "PAIRED_CAPTURE_IS_MANUAL"
+          },
+          "reason": "test/lib/retain-skill-artifacts.js writes none of receipt, blockId, observed, usage, cost or latency into provenance.json, test/eval-test-design.js gives no usage property a non-null value, and no tracked script outside the configuration experiment reader, its test and the doc-claims sources names appendExposure"
+        },
+        {
           "file": "docs/reference/configuration.md",
           "key": "Every module setup key is read by a skill",
           "settles": {

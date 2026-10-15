@@ -1,0 +1,11 @@
+{
+  "declaration": "example-baseline-experiment.json",
+  "recordedRuns": [
+    {
+      "kind": "test-design",
+      "dir": "../../results/codex-test-design/raw/two-run-before-numeric",
+      "arm": "A",
+      "stage": "baseline"
+    }
+  ]
+}

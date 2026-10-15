@@ -1,0 +1,33 @@
+{
+  "declaration": "experiment.json",
+  "recordedRuns": [
+    {
+      "kind": "test-design",
+      "dir": "incumbent-run",
+      "arm": "A",
+      "stage": "selection"
+    },
+    {
+      "kind": "test-design",
+      "dir": "candidate-run",
+      "arm": "B",
+      "stage": "selection"
+    }
+  ],
+  "ledger": [
+    {
+      "seq": 1,
+      "kind": "selection-exposure",
+      "caseId": "seeded-offline-order-capture",
+      "candidateId": "medium-effort-v1",
+      "hash": "sha256:733d18f31d9790d1a2f621a0f2fd4f09959ab03c48e0c75eecb8c695f72657a5"
+    },
+    {
+      "seq": 2,
+      "kind": "selection-exposure",
+      "caseId": "clean-last-sync-indicator",
+      "candidateId": "medium-effort-v1",
+      "hash": "sha256:94520c77ee98d8740c2963cc70a829a5aa81bff4e2df7908eefb00fd100e5498"
+    }
+  ]
+}

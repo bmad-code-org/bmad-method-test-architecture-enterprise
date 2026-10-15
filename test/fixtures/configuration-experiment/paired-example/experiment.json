@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "1.0.0",
+  "experimentId": "test-design-lower-effort",
+  "stage": "selection",
+  "scope": {
+    "workflow": "bmad-tea-test-design",
+    "owner": "TEA maintainers",
+    "claim": "fixed-suite",
+    "judge": "none",
+    "objective": "cost",
+    "baseline": {
+      "id": "incumbent",
+      "description": "The Test Design workflow at high effort."
+    },
+    "candidate": {
+      "id": "medium-effort-v1",
+      "description": "The same workflow and model at medium effort."
+    },
+    "changedFactor": {
+      "kind": "effort",
+      "setting": "effort",
+      "detail": "high effort to medium effort; nothing else differs"
+    },
+    "memberships": {
+      "development": [
+        "seeded-offline-order-capture",
+        "clean-last-sync-indicator"
+      ],
+      "validation": [],
+      "confirmation": []
+    },
+    "clusters": [
+      {
+        "caseId": "seeded-offline-order-capture",
+        "clusterId": "seeded-offline-order-capture",
+        "weight": 0.5
+      },
+      {
+        "caseId": "clean-last-sync-indicator",
+        "clusterId": "clean-last-sync-indicator",
+        "weight": 0.5
+      }
+    ]
+  },
+  "identity": {
+    "fixed": {
+      "suiteDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+      "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
+      "sourceCommit": "2a90c6baaeff7a263a0f7777f441a87a07d98b04",
+      "groundTruthDigest": "sha256:51e4131de21e2f438bcd33af876e8bcf7cec196e99c55fe0eae4bed59016c3ef",
+      "scorerDigest": "sha256:8e86ba175a04cc58967aab1aef5cbc79febc55d12c78c8c831a00a7cfb2ead42",
+      "thresholdsDigest": "sha256:41f5a06b9162743fbfdd92223bf50135b930290657f8ff87755fd3953e151097",
+      "rubricDigest": "not-applicable",
+      "environment": {
+        "cacheRegime": "cold cache on every attempt"
+      }
+    },
+    "arms": {
+      "A": {
+        "model": {
+          "requested": "gpt-6.1-sol",
+          "resolved": "gpt-6.1-sol"
+        },
+        "effort": {
+          "requested": "high",
+          "applied": "high"
+        }
+      },
+      "B": {
+        "model": {
+          "requested": "gpt-6.1-sol",
+          "resolved": "gpt-6.1-sol"
+        },
+        "effort": {
+          "requested": "medium",
+          "applied": "medium"
+        }
+      }
+    }
+  },
+  "design": {
+    "repeats": 2,
+    "order": "interleaved",
+    "isolation": "fresh staged workspace per attempt; every deliverable regenerated",
+    "maxAttempts": 1,
+    "stoppingRule": "fixed repeat schedule; no early stop",
+    "failureRules": {
+      "timeout": "incomplete"
+    },
+    "analysis": {
+      "alpha": 0.05,
+      "B": 10000,
+      "seed": 20261014,
+      "prng": "mulberry32",
+      "quantile": "linear",
+      "simultaneous": true
+    }
+  },
+  "gates": {
+    "success": {
+      "metrics": {
+        "riskPrecision": 0.8,
+        "scaleComplianceAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1
+      }
+    },
+    "quality": {
+      "riskPrecision": {
+        "maxLoss": 0.05
+      },
+      "scaleComplianceAccuracy": {
+        "maxLoss": 0.05
+      },
+      "riskLinkResolutionAccuracy": {
+        "maxLoss": 0.05
+      }
+    },
+    "floors": {
+      "riskPrecision": 0.8
+    },
+    "saving": {
+      "minFraction": 0.25
+    },
+    "critical": {
+      "tolerance": 0,
+      "rules": [
+        {
+          "id": "top-severity-risk-missed",
+          "count": "topSeverityMissed"
+        },
+        {
+          "id": "ungrounded-risk-reported",
+          "count": "ungroundedRisks"
+        }
+      ]
+    }
+  },
+  "resources": {
+    "authorization": null,
+    "overhead": []
+  },
+  "frozen": {
+    "digest": "sha256:22a86d7caf1c44c3440a6b442d1f59274662486959f62c4e6ef7d1797879f4f8"
+  }
+}

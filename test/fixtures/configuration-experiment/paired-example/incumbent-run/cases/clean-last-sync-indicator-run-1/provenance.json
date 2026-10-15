@@ -1,0 +1,49 @@
+{
+  "mode": "live",
+  "caseId": "clean-last-sync-indicator",
+  "agent": "codex",
+  "requestedModel": "gpt-6.1-sol",
+  "repetition": 1,
+  "attempt": 1,
+  "capturedAt": "2026-10-14T00:26:15.424Z",
+  "originalWorkspace": "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-test-design-eval-zKFV0e",
+  "receipt": {
+    "kind": "fresh-workspace",
+    "workspaceId": "incumbent-run-clean-last-sync-indicator-run-1",
+    "startedAt": "2026-10-15T09:20:00.000Z",
+    "endedAt": "2026-10-15T09:24:00.000Z",
+    "artifactSha256": "sha256:e9fdf6a174b9f27b87c24f9030c4071daf1bd0b2174ced33f21fa142015e6a3d"
+  },
+  "blockId": "clean-last-sync-indicator-run-1",
+  "observed": {
+    "fixed": {
+      "suiteDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+      "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
+      "sourceCommit": "2a90c6baaeff7a263a0f7777f441a87a07d98b04",
+      "groundTruthDigest": "sha256:51e4131de21e2f438bcd33af876e8bcf7cec196e99c55fe0eae4bed59016c3ef",
+      "scorerDigest": "sha256:8e86ba175a04cc58967aab1aef5cbc79febc55d12c78c8c831a00a7cfb2ead42",
+      "thresholdsDigest": "sha256:41f5a06b9162743fbfdd92223bf50135b930290657f8ff87755fd3953e151097",
+      "rubricDigest": "not-applicable",
+      "environment": {
+        "cacheRegime": "cold cache on every attempt"
+      }
+    },
+    "arm": {
+      "model": {
+        "requested": "gpt-6.1-sol",
+        "resolved": "gpt-6.1-sol"
+      },
+      "effort": {
+        "requested": "high",
+        "applied": "high"
+      }
+    }
+  },
+  "cost": {
+    "currency": "USD",
+    "components": {
+      "target": 0.3,
+      "tools": 0
+    }
+  }
+}

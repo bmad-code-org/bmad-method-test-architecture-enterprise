@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The repeatability and configuration-comparison guide is now a short task flow for maintainers, with commands that run from the repository root against a committed paired example, a real report excerpt and a table of every outcome with its next step. It states that paired inputs are captured by hand today, describes the declaration digest and the scorer replay accurately, and moves field and rule detail to the new [Configuration Experiment Reader](docs/reference/configuration-experiment-reader.md) reference.
+
 ## [3.1.0] - 2026-10-15
 
 ### Added
