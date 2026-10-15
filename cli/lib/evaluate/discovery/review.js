@@ -355,6 +355,7 @@ function nextMutationId(folder) {
  * @throws {ReviewError} when the candidate is not reviewed with a confirmed conclusion the evidence still supports
  */
 function promoteCandidate(folder, relative, referencePath) {
+  const previous = readHeldFile(folder, relative, 'candidate').toString('utf8');
   const record = readCandidate(folder, relative);
   if (record.state !== 'reviewed') {
     throw new ReviewError([`candidate ${record.candidateId} is ${record.state}; only a reviewed candidate is promoted`]);
@@ -378,10 +379,13 @@ function promoteCandidate(folder, relative, referencePath) {
   next.promotion = { draftMutationId: nextMutationId(folder), qualificationReceipt: null };
   validateCandidate(next);
   const draft = draftMutation(next);
+  if (readHeldFile(folder, relative, 'candidate').toString('utf8') !== previous) {
+    throw new ReviewError([`${relative} changed while the promotion was computed; promote again`]);
+  }
   return {
     record: next,
     draft,
-    previous: readHeldFile(folder, relative, 'candidate').toString('utf8'),
+    previous,
     files: [
       { path: `mutations/${draft.mutationId}.mutation.json`, content: `${JSON.stringify(draft, null, 2)}\n` },
       { path: relative, content: canonicalJson(next) },
@@ -423,27 +427,26 @@ function applyPromotion(folder, promotion) {
   const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;
+  const created = [];
   const create = (file, content, label) => {
     try {
       fs.writeFileSync(file, content, { flag: 'wx' });
     } catch (error) {
       if (error.code === 'EEXIST') throw new ReviewError([`${label} already exists; a promotion never replaces a file`]);
+      created.push(file);
       throw error;
     }
+    created.push(file);
   };
-  create(staging, candidate.content, path.posix.basename(staging));
+  let madeDirectory;
   try {
-    fs.mkdirSync(path.dirname(mutationFile), { recursive: true });
+    create(staging, candidate.content, path.posix.basename(staging));
+    madeDirectory = fs.mkdirSync(path.dirname(mutationFile), { recursive: true });
     create(mutationFile, mutation.content, mutation.path);
-  } catch (error) {
-    fs.rmSync(staging, { force: true });
-    throw error;
-  }
-  try {
     fs.renameSync(staging, candidateFile);
   } catch (error) {
-    fs.rmSync(staging, { force: true });
-    fs.rmSync(mutationFile, { force: true });
+    for (const file of created) fs.rmSync(file, { force: true });
+    if (madeDirectory !== undefined) fs.rmSync(madeDirectory, { recursive: true, force: true });
     throw error;
   }
 }

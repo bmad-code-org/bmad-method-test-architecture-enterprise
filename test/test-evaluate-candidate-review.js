@@ -703,6 +703,27 @@ async function checkPromotion() {
     check(!fs.existsSync(path.join(damaged, 'mutations', 'M-002.mutation.json')), `promoting after ${label} wrote no draft`);
   }
 
+  // A decision written while the promotion is computed is never overwritten by it.
+  const midway = evaluationCopy('promotion-midway');
+  const midwayPath = plantObserved(midway, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
+  const newer = review.reviewCandidate(observed['seeded-gap'].record, observed['seeded-gap'].inputs, {
+    ...DECISION,
+    rationale: 'A newer review, written while the promotion was computed.',
+    disposition: 'confirmed-undesirable-missed',
+  });
+  const realReaddir = fs.readdirSync;
+  fs.readdirSync = (...args) => {
+    fs.readdirSync = realReaddir;
+    plant(midway, midwayPath, serializeCandidate(newer));
+    return realReaddir(...args);
+  };
+  refuses(
+    'promoting while the record is rewritten',
+    () => review.promoteCandidate(midway, midwayPath, REFERENCE_PATH),
+    /changed while the promotion was computed/,
+  );
+  fs.readdirSync = realReaddir;
+
   // A conclusion rewritten after the review, with its binding recomputed, is not the one the evidence supports.
   const rewritten = evaluationCopy('promotion-rewritten');
   const reviewedGap = structuredClone(reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
@@ -741,6 +762,28 @@ async function checkPromotion() {
   );
   fs.rmSync(path.join(racing, 'mutations'), { recursive: true });
 
+  // A write that fails after the file exists leaves nothing behind.
+  const realWrite = fs.writeFileSync;
+  for (const suffix of ['.mutation.json', '.tmp']) {
+    fs.writeFileSync = (file, ...rest) => {
+      if (String(file).endsWith(suffix)) {
+        realWrite(file, 'partial');
+        throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+      }
+      return realWrite(file, ...rest);
+    };
+    const failure = outcome(() => review.applyPromotion(racing, racingPromotion));
+    fs.writeFileSync = realWrite;
+    check(failure?.code === 'ENOSPC', `a write that fails after creating a ${suffix} file reports its error`);
+    check(
+      !fs.existsSync(path.join(racing, `${racingPath}.tmp`)) && !fs.existsSync(path.join(racing, 'mutations')),
+      `a failed ${suffix} write leaves no staging file, partial draft or empty mutations directory`,
+    );
+    check(
+      fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8') === racingBefore,
+      `a failed ${suffix} write keeps the stored record`,
+    );
+  }
   const redecided = review.reviewCandidate(observed['seeded-gap'].record, observed['seeded-gap'].inputs, {
     ...DECISION,
     rationale: 'A second review, made after the promotion was computed.',
