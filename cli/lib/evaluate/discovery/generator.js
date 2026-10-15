@@ -32,14 +32,18 @@
 'use strict';
 
 const { digest } = require('../digest');
-const { CANDIDATE_SCHEMA_VERSION, RECORD_KIND, bytesDigest, candidateIdentity, validateCandidate } = require('./candidate');
+const { CANDIDATE_SCHEMA_VERSION, CandidateError, RECORD_KIND, bytesDigest, candidateIdentity, validateCandidate } = require('./candidate');
 
 const GENERATOR_NAME = 'prompt-edit';
 const GENERATOR_VERSION = '1.0.0';
 const DEFAULT_PER_FAMILY_CAP = 5;
 const REQUIREMENTS_PATH = 'requirements.md';
 const MAX_SAFE_DIGITS = 15;
-/** The largest target a preview reads. A prompt is kilobytes; the cap keeps the repeated-span count affordable. */
+/**
+ * The largest target a preview reads. A prompt is kilobytes. The repeated-span count scans the target once for each
+ * line that holds a site, so the worst case is the number of such lines times the target size. The cap bounds it, and
+ * the many-line cost cases of the generator test pin the bound to seconds.
+ */
 const MAX_TARGET_BYTES = 256 * 1024;
 
 /** A generator input that cannot be used; the message names the option or the file property. */
@@ -429,6 +433,50 @@ function decodeTarget(bytes) {
   return text;
 }
 
+/**
+ * Refuses a campaign ID, requirement digest or target path the candidate schema would refuse, before any scanning, so a
+ * bad input fails the same way whatever the prompt holds. The inputs are held to the schema by validating a stand-in
+ * record that carries them.
+ */
+function checkRecordInputs({ campaignId, requirementDigest, artifact }) {
+  for (const [name, value] of [
+    ['campaignId', campaignId],
+    ['requirementDigest', requirementDigest],
+    ['target.artifact', artifact],
+  ]) {
+    if (typeof value !== 'string') throw new GeneratorError(`${name} must be a string`);
+  }
+  const standIn = {
+    schemaVersion: CANDIDATE_SCHEMA_VERSION,
+    recordKind: RECORD_KIND,
+    candidateId: 'C-001',
+    campaignId,
+    partition: 'development',
+    identity: '',
+    generator: { name: GENERATOR_NAME, version: GENERATOR_VERSION, seed: 'input check' },
+    intent: 'regression',
+    hypothesis: 'input check',
+    requirement: { path: REQUIREMENTS_PATH, digest: requirementDigest },
+    target: { artifact, artifactDigest: bytesDigest(new Uint8Array()) },
+    edit: { find: 'input check', replace: 'input check edited', occurrences: 1 },
+    state: 'generated',
+    disposition: null,
+    observations: [],
+    independentEvidence: [],
+    review: null,
+    acceptedRisk: null,
+    promotion: null,
+  };
+  standIn.identity = candidateIdentity(standIn);
+  try {
+    validateCandidate(standIn);
+  } catch (error) {
+    if (error instanceof CandidateError)
+      throw new GeneratorError(`${error.message} (campaignId, requirementDigest and target.artifact are held to it)`);
+    throw error;
+  }
+}
+
 /** The families a run uses, in catalog order, from the caller's names. */
 function chooseFamilies(names) {
   if (names === undefined) return FAMILIES;
@@ -523,6 +571,7 @@ function previewCandidates({ target, requirementDigest, campaignId, seed, famili
   if (typeof seed !== 'string' || seed.length === 0) throw new GeneratorError('seed must be a non-empty string');
   if (!Number.isInteger(perFamilyCap) || perFamilyCap < 1) throw new GeneratorError('perFamilyCap must be a positive integer');
   if (typeof target?.artifact !== 'string') throw new GeneratorError('target.artifact must name the file');
+  checkRecordInputs({ campaignId, requirementDigest, artifact: target.artifact });
   const chosen = chooseFamilies(families);
   const text = decodeTarget(target.bytes);
   const targetDigest = bytesDigest(target.bytes);

@@ -699,6 +699,25 @@ function checkRefusals() {
     () => generator.previewCandidates(inputs({ target: { artifact: ARTIFACT, bytes: Buffer.from('a\u0000b\n') } })),
     /holds a NUL/,
   );
+  // The inputs are held to the candidate schema before any scan, so a prompt with no editable site refuses them too.
+  const bare = Buffer.from('Nothing here is an instruction.\n');
+  for (const [label, override, pattern] of [
+    ['an escaping artifact path', { target: { artifact: '../prompt.md', bytes: bare } }, /target\/artifact/],
+    ['a bad digest', { requirementDigest: 'sha256:abc' }, /requirement\/digest/],
+    ['a bad campaign', { campaignId: 'Pilot Run' }, /campaignId/],
+    ['a campaign that is not text', { campaignId: 7 }, /campaignId must be a string/],
+  ]) {
+    let refusal;
+    try {
+      generator.previewCandidates(inputs({ target: { artifact: ARTIFACT, bytes: bare }, ...override }));
+    } catch (error) {
+      refusal = error;
+    }
+    check(
+      refusal instanceof generator.GeneratorError && pattern.test(refusal.message),
+      `${label} in a prompt with no editable site is refused with a GeneratorError matching ${pattern}; got ${refusal?.name}: ${refusal?.message}`,
+    );
+  }
   refused(
     'an escaping artifact path',
     () => generator.previewCandidates(inputs({ target: { artifact: '../prompt.md', bytes: promptBytes } })),
@@ -793,6 +812,8 @@ function checkCostStaysLinear() {
     ['twenty thousand sites on one line', `${'must '.repeat(20_000)}\n`],
     ['ten thousand bounds on one line', `${'at most 5 '.repeat(10_000)}\n`],
     ['a long run of path separators', `${'a/'.repeat(100_000)}\n`],
+    ['fourteen thousand distinct editable lines', `${Array.from({ length: 14_000 }, (_, index) => `step ${index} must go`).join('\n')}\n`],
+    ['twenty-five thousand identical editable lines', `${'a must b\n'.repeat(25_000)}`],
   ];
   for (const [label, text] of cases) {
     const started = Date.now();
