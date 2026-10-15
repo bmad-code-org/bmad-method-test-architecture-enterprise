@@ -495,6 +495,9 @@ function applyPromotion(folder, promotion) {
   if (stored.state !== 'reviewed' || canonicalJson(record) !== canonicalJson(expected)) {
     throw new ReviewError(['the promoted record is not the stored reviewed record with a promotion added']);
   }
+  if (record.promotion.draftMutationId !== nextMutationId(folder)) {
+    throw new ReviewError([`${record.promotion.draftMutationId} is not the next free mutation ID; promote again`]);
+  }
   const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;

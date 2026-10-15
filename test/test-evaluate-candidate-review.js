@@ -827,6 +827,49 @@ async function checkPromotion() {
     check(!fs.existsSync(path.join(path.dirname(state.target), 'outside.txt')), `applying ${label} wrote outside the evaluation folder`);
     untouched(state, `applying ${label}`);
   }
+  const forgedId = applied('apply-forged-id');
+  const withId = structuredClone(forgedId.promotion);
+  withId.record.promotion.draftMutationId = 'M-077';
+  withId.draft = candidateModule.draftMutation(withId.record);
+  withId.files = [
+    { path: 'mutations/M-077.mutation.json', content: `${JSON.stringify(withId.draft, null, 2)}\n` },
+    { path: withId.files[1].path, content: candidateModule.canonicalJson(withId.record) },
+  ];
+  refuses(
+    'applying a promotion with a mutation ID that is not the next one',
+    () => review.applyPromotion(forgedId.target, withId),
+    /not the next free mutation ID/,
+  );
+  untouched(forgedId, 'applying a promotion with a mutation ID that is not the next one');
+  check(!fs.existsSync(path.join(forgedId.target, 'mutations', 'M-077.mutation.json')), 'a forged mutation ID wrote its draft');
+  // Evidence that changes after the staging has begun still ends the promotion before the record is swapped.
+  const evidenceMidway = applied('apply-evidenceMidway');
+  const writeFile = fs.writeFileSync;
+  fs.writeFileSync = (file, content, options) => {
+    if (String(file).endsWith('M-002.mutation.json')) {
+      writeFile(
+        path.join(
+          evidenceMidway.target,
+          'discovery',
+          scenarios.campaignId,
+          'evidence',
+          `${evidenceMidway.promotion.record.candidateId}.OBS-002.json`,
+        ),
+        'not the evidence the review used',
+      );
+    }
+    return writeFile(file, content, options);
+  };
+  try {
+    refuses(
+      'applying while an observation changes',
+      () => review.applyPromotion(evidenceMidway.target, evidenceMidway.promotion),
+      /now classifies as undetermined/,
+    );
+  } finally {
+    fs.writeFileSync = writeFile;
+  }
+  untouched(evidenceMidway, 'applying while an observation changes');
   const paths = applied('promote-paths');
   for (const [label, relative, reference] of [
     ['a candidate path that climbs out of the folder', '../valid/discovery/red-phase-review/C-001.candidate.json', REFERENCE_PATH],
@@ -933,14 +976,14 @@ async function checkPromotion() {
   refuses(
     'applying over a draft name taken since the promotion was computed',
     () => review.applyPromotion(racing, racingPromotion),
-    /already exists/,
+    /not the next free mutation ID/,
   );
   check(!fs.existsSync(path.join(racing, `${racingPath}.tmp`)), 'a failed apply removes its staging file');
   check(
     fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8') === racingBefore,
     'a refused draft name leaves the stored record as it was',
   );
-  fs.rmSync(path.join(racing, 'mutations'), { recursive: true });
+  fs.rmSync(path.join(racing, 'mutations', 'M-002.mutation.json'));
 
   // A write that fails after the file exists leaves nothing behind.
   const realWrite = fs.writeFileSync;
@@ -956,8 +999,8 @@ async function checkPromotion() {
     fs.writeFileSync = realWrite;
     check(failure?.code === 'ENOSPC', `a write that fails after creating a ${suffix} file reports its error`);
     check(
-      !fs.existsSync(path.join(racing, `${racingPath}.tmp`)) && !fs.existsSync(path.join(racing, 'mutations')),
-      `a failed ${suffix} write leaves no staging file, partial draft or empty mutations directory`,
+      !fs.existsSync(path.join(racing, `${racingPath}.tmp`)) && !fs.existsSync(path.join(racing, 'mutations', 'M-002.mutation.json')),
+      `a failed ${suffix} write leaves no staging file or partial draft`,
     );
     check(
       fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8') === racingBefore,
