@@ -197,14 +197,17 @@ function pinSelection(confirmationBody, { diffs } = {}) {
   if (body.scope) body.scope.clusters = cases.map((caseId) => ({ caseId, clusterId: caseId, weight: 1 / cases.length }));
   const frozen = freeze(body);
   const selectionDiffs = diffs ?? cases.map((_, i) => 0.04 + 0.01 * i);
-  const report = read(frozen, world({ cases, diffs: selectionDiffs }), { ledger: selectionLedger(cases) }).report;
+  const input = { declaration: frozen, attempts: sealAll(world({ cases, diffs: selectionDiffs })), ledger: selectionLedger(cases) };
+  const { report } = read(input.declaration, input.attempts, { ledger: input.ledger });
   const pin = { declarationDigest: experiment.declarationDigest(frozen), reportDigest: experiment.digestOf(report) };
-  SELECTIONS.set(pin.reportDigest, { declaration: frozen, report });
+  SELECTIONS.set(pin.reportDigest, { input, report });
   return pin;
 }
 
-/** The pinned selection of a confirmation declaration, as `readExperiment` takes it. */
-const selectionOf = (value) => SELECTIONS.get(value?.selection?.reportDigest) ?? null;
+/** The selection input of a confirmation declaration, as `readExperiment` takes it. */
+const selectionOf = (value) => SELECTIONS.get(value?.selection?.reportDigest)?.input ?? null;
+/** The selection report a confirmation declaration pins. */
+const selectionReportOf = (value) => SELECTIONS.get(value?.selection?.reportDigest)?.report ?? null;
 
 /** Freeze a declaration the way an operator does: record the digest of the bytes. */
 function freeze(body) {
@@ -1066,19 +1069,28 @@ function checkAcceptance7() {
   check(outcomeOf(read(declaration(), blockMismatch)) === 'blocked', 'arms from different pairing blocks do not pair');
 
   // Rows of another stage are not read as this stage.
-  const wrongStage = read(declaration(), [
-    ...world(),
-    ...world({ stage: 'confirmation' }).map((row) => ({
-      ...row,
-      attemptId: `x-${row.attemptId}`,
-      receipt: { ...row.receipt, workspaceId: `x-${row.receipt.workspaceId}` },
-    })),
-  ]);
+  const relabeled = (stage, arm) =>
+    world({ stage })
+      .filter((row) => row.arm === arm)
+      .map((row) => ({
+        ...row,
+        attemptId: `x-${row.attemptId}`,
+        receipt: { ...row.receipt, workspaceId: `x-${row.receipt.workspaceId}` },
+      }));
+  const wrongStage = read(declaration(), [...world(), ...relabeled('baseline', 'A')]);
   check(
-    wrongStage.report.exclusions.filter((entry) => entry.reason === 'wrong-stage').length === 24,
+    wrongStage.report.exclusions.filter((entry) => entry.reason === 'wrong-stage').length === 12,
     'rows labeled for another stage are excluded',
   );
-  check(outcomeOf(wrongStage) === 'selection-cleared', 'excluded rows of another stage do not disturb the reading');
+  check(outcomeOf(wrongStage) === 'selection-cleared', 'baseline history on the same cases does not disturb the reading');
+  const mislabeled = read(declaration(), [
+    ...world(),
+    ...relabeled('confirmation', 'B').map((row, index) => (index === 0 ? { ...row, counts: { topSeverityMissed: 2 } } : row)),
+  ]);
+  check(
+    outcomeOf(mislabeled) === 'blocked' && hasReason(mislabeled, /candidate attempts on this stage's cases are labeled with another stage/),
+    'a candidate attempt that hides under another stage label blocks',
+  );
 
   // Two rows that share an attempt id but disagree cannot be dropped silently.
   const conflicting = world();
@@ -2375,14 +2387,18 @@ function checkRuleByRule() {
   const extraAttempt = (attemptNumber) => {
     const rows = world();
     const first = rows.find((row) => row.arm === 'B' && row.caseId === 'c1' && row.repetition === 1);
-    rows.push({
+    const extra = {
       ...clone(first),
       attemptId: `extra-${attemptNumber}`,
       attempt: attemptNumber,
       status: 'failed',
-      receipt: { ...first.receipt, workspaceId: `ws-extra-${attemptNumber}`, artifactSha256: sha(`extra-${attemptNumber}`) },
-      outputSha256: sha(`extra-${attemptNumber}`),
-    });
+      metrics: {},
+      counts: {},
+      receipt: { ...first.receipt, workspaceId: `ws-extra-${attemptNumber}`, artifactSha256: null },
+      outputSha256: null,
+    };
+    delete extra.outputText;
+    rows.push(extra);
     return rows;
   };
   const oneAttempt = declaration({ mutate: (body) => (body.design.maxAttempts = 1) });
@@ -2887,23 +2903,38 @@ function checkOutputsAndCommandLine() {
     });
     check(digest.stdout.trim() === experiment.declarationDigest(exampleBaseline()), 'the freeze command prints the declaration digest');
 
-    // A confirmation through the command line: the selection files load, and a Test
-    // Design declaration gets the Test Design scorer even without recorded runs.
-    const confirmationDeclaration = declaration(CONFIRMATION());
-    const pinned = selectionOf(confirmationDeclaration);
+    // A confirmation through the command line: the selection is analyzed first, its
+    // report digest pinned, and the confirmation reads the selection evidence again. A
+    // Test Design declaration gets the Test Design scorer even without recorded runs.
     const write = (name, value) => {
       fs.writeFileSync(path.join(directory, name), JSON.stringify(value));
       return name;
     };
-    const reportFile = write('selection-report.json', pinned.report);
-    const digestRun = spawnSync(process.execPath, [READER, 'digest', path.join(directory, reportFile)], {
-      encoding: 'utf8',
-      cwd: PROJECT_ROOT,
+    const pinned = selectionOf(declaration(CONFIRMATION()));
+    const selectionEvidence = write('selection-evidence.json', {
+      declaration: write('selection.json', pinned.declaration),
+      attempts: pinned.attempts,
+      ledger: pinned.ledger,
     });
+    const selectionRun = spawnSync(
+      process.execPath,
+      [READER, 'analyze', path.join(directory, selectionEvidence), '--out', path.join(directory, 'selection-out')],
+      { encoding: 'utf8', cwd: PROJECT_ROOT },
+    );
+    const savedSelection = path.join(directory, 'selection-out', 'experiment-report.json');
+    const digestRun = spawnSync(process.execPath, [READER, 'digest', savedSelection], { encoding: 'utf8', cwd: PROJECT_ROOT });
     check(
-      digestRun.status === 0 && digestRun.stdout.trim() === confirmationDeclaration.selection.reportDigest,
+      selectionRun.status === 0 &&
+        digestRun.status === 0 &&
+        digestRun.stdout.trim() === experiment.digestOf(JSON.parse(fs.readFileSync(savedSelection, 'utf8'))),
       'the digest command prints the digest a confirmation pins for a saved report',
     );
+    const confirmationDeclaration = declaration({
+      ...CONFIRMATION(),
+      mutate: (body) => {
+        body.selection = { declarationDigest: experiment.declarationDigest(pinned.declaration), reportDigest: digestRun.stdout.trim() };
+      },
+    });
     const confirmationEvidence = path.join(directory, 'confirmation-evidence.json');
     fs.writeFileSync(
       confirmationEvidence,
@@ -2911,7 +2942,7 @@ function checkOutputsAndCommandLine() {
         declaration: write('confirmation.json', confirmationDeclaration),
         attempts: sealAll(confirmationWorld()),
         ledger: confirmationLedger(),
-        selection: { declaration: write('selection.json', pinned.declaration), report: reportFile },
+        selection: selectionEvidence,
       }),
     );
     const confirmationRun = spawnSync(
@@ -2923,13 +2954,17 @@ function checkOutputsAndCommandLine() {
       },
     );
     const confirmationReport = JSON.parse(fs.readFileSync(path.join(directory, 'confirmation-out', 'experiment-report.json'), 'utf8'));
-    const confirmationReasons = confirmationReport.contrast.decision.reasons;
+    const selectionProblems = confirmationReport.contrast.selection.problems;
     check(
-      confirmationRun.status === 0 && confirmationReport.contrast.selection.problems.length === 0,
-      'the command line reads the pinned selection declaration and report',
+      confirmationRun.status === 0 &&
+        selectionProblems.length > 0 &&
+        !selectionProblems.some((problem) => /not supplied|does not reproduce|does not match/.test(problem)),
+      `the command line reads the selection evidence again and reproduces its pinned report: ${selectionProblems.join(' | ')}`,
     );
     check(
-      confirmationReasons.some((reason) => /the scorer could not score the artifact \(unknown-case\)/.test(reason)),
+      Object.values(confirmationReport.contrast.verification).some((problems) =>
+        problems.some((problem) => /the scorer could not score the artifact \(unknown-case\)/.test(problem)),
+      ),
       'the command line scores a Test Design declaration with the Test Design scorer',
     );
     const usage = spawnSync(process.execPath, [READER], { encoding: 'utf8', cwd: PROJECT_ROOT });
@@ -3081,9 +3116,14 @@ async function checkRecordedEvidenceVerification() {
   const before = experiment.loadRecordedTestDesignRun({ dir: path.join(RAW, 'two-run-before-numeric') });
   for (const row of before.rows) {
     const scored = replay(row.outputText, row);
+    const { fixtureMutations, ...byteCounts } = row.counts;
     check(
-      canonicalJsonOf(scored.metrics) === canonicalJsonOf(row.metrics) && canonicalJsonOf(scored.counts) === canonicalJsonOf(row.counts),
+      canonicalJsonOf(scored.metrics) === canonicalJsonOf(row.metrics) && canonicalJsonOf(scored.counts) === canonicalJsonOf(byteCounts),
       `the Test Design scorer re-derives the recorded metrics and counts of ${row.attemptId}`,
+    );
+    check(
+      fixtureMutations === 0 && !('fixtureMutations' in scored.counts),
+      `the bytes of ${row.attemptId} cannot show fixture mutations, so the scorer reports no count for them`,
     );
   }
 
@@ -3139,6 +3179,26 @@ async function checkRecordedEvidenceVerification() {
   check(
     verificationOf(verified).every((value) => value === 'verified') && outcomeOf(verified) !== 'blocked',
     `recorded documents with receipts and a reproducing scorer are verified, got ${outcomeOf(verified)}: ${reasonsOf(verified).join(' | ')}`,
+  );
+  const mutationRule = freeze({
+    ...clone(recordedDeclaration),
+    gates: {
+      ...clone(recordedDeclaration.gates),
+      critical: {
+        tolerance: 0,
+        rules: [...recordedDeclaration.gates.critical.rules, { id: 'fixture-mutated', count: 'fixtureMutations' }],
+      },
+    },
+  });
+  const mutationResult = experiment.readExperiment({
+    declaration: mutationRule,
+    attempts: sameDocuments,
+    ledger: selectionLedger(caseIds),
+    replay,
+  });
+  check(
+    outcomeOf(mutationResult) === 'blocked' && hasReason(mutationResult, /count fixtureMutations is 0, the scorer gives undefined/),
+    'a fixture mutation count the saved bytes cannot show stays claimed',
   );
   const rescored = interleave(receipted('two-run-before-numeric', 'A', 'before-a'), receipted('two-run-after-numeric', 'B', 'after-b'));
   const recallDeclaration = freeze({
@@ -3268,7 +3328,7 @@ function checkConfirmationFollowsSelection() {
   });
   check(
     outcomeOf(withoutSelection) === 'blocked' &&
-      hasReason(withoutSelection, /selection: the frozen selection declaration and its report are not supplied/),
+      hasReason(withoutSelection, /selection: the frozen selection declaration and its evidence are not supplied/),
     'a confirmation with an exposure-only history and no selection result does not recommend',
   );
   const unpinned = declaration({ ...CONFIRMATION(), mutate: (body) => (body.selection = null) });
@@ -3320,24 +3380,67 @@ function checkConfirmationFollowsSelection() {
     );
   }
 
-  const pinned = selectionOf(confirmationDeclaration);
-  const forged = clone(pinned.report);
+  // An inconclusive selection report edited to read selection-cleared, then pinned.
+  const forged = clone(selectionReportOf(failedSelection));
   forged.contrast.decision.outcome = 'selection-cleared';
   forged.contrast.decision.reasons = ['forged'];
-  const forgedResult = readConfirmation(confirmationWorld(), { selection: { declaration: pinned.declaration, report: forged } });
+  const forgedPin = declaration({
+    ...CONFIRMATION(),
+    mutate: (body) => {
+      body.selection = { declarationDigest: failedSelection.selection.declarationDigest, reportDigest: experiment.digestOf(forged) };
+    },
+  });
+  const forgedResult = readConfirmation(confirmationWorld(), { declaration: forgedPin, selection: selectionOf(failedSelection) });
   check(
-    outcomeOf(forgedResult) === 'blocked' && hasReason(forgedResult, /does not match selection\.reportDigest/),
-    'a selection report other than the pinned one is refused',
+    outcomeOf(forgedResult) === 'blocked' &&
+      hasReason(forgedResult, /selection evidence does not reproduce the report pinned/) &&
+      hasReason(forgedResult, /selection outcome is inconclusive/),
+    `a pinned selection report edited after the fact is refused, got ${outcomeOf(forgedResult)}`,
+  );
+  const pinned = selectionOf(confirmationDeclaration);
+  const tampered = clone(pinned);
+  tampered.attempts = sealAll(
+    tampered.attempts.map((row, index) => (index === 1 ? { ...row, metrics: { ...row.metrics, recall: 0.99 } } : row)),
+  );
+  const tamperedResult = readConfirmation(confirmationWorld(), { selection: tampered });
+  check(
+    outcomeOf(tamperedResult) === 'blocked' && hasReason(tamperedResult, /does not reproduce the report pinned/),
+    'selection evidence other than the evidence behind the pinned report is refused',
   );
   const otherDeclaration = freeze({ ...clone(pinned.declaration), experimentId: 'another-experiment' });
-  const otherResult = readConfirmation(confirmationWorld(), { selection: { declaration: otherDeclaration, report: pinned.report } });
+  const otherResult = readConfirmation(confirmationWorld(), { selection: { ...pinned, declaration: otherDeclaration } });
   check(
     outcomeOf(otherResult) === 'blocked' && hasReason(otherResult, /does not match selection\.declarationDigest/),
     'a selection declaration other than the pinned one is refused',
   );
   const intact = readConfirmation(confirmationWorld());
   check(outcomeOf(intact) === 'recommend', `an intact selection-to-confirmation chain recommends, got ${outcomeOf(intact)}`);
-  const savedReport = JSON.parse(`${JSON.stringify(pinned.report, null, 2)}\n`);
+
+  // The selection report's own ledger head stays pinned, even under an earlier freeze pin.
+  const earlyHead = selectionLedger(['d1', 'd2']);
+  const earlyPin = declaration({
+    ...CONFIRMATION(),
+    mutate: (body) => (body.exposure.ledgerHeadAtFreeze = { head: earlyHead.at(-1).hash, length: earlyHead.length }),
+  });
+  let rewritten = experiment.appendExposure(earlyHead, {
+    kind: 'selection-exposure',
+    caseId: 'v1',
+    candidateId: CANDIDATE,
+    note: 'rewritten',
+  });
+  for (const caseId of CONFIRMATION_CASES) {
+    rewritten = experiment.appendExposure(rewritten, { kind: 'confirmation-exposure', caseId, candidateId: CANDIDATE });
+  }
+  const rewrittenResult = readConfirmation(confirmationWorld(), {
+    declaration: earlyPin,
+    selection: selectionOf(earlyPin),
+    ledger: rewritten,
+  });
+  check(
+    outcomeOf(rewrittenResult) === 'blocked' && hasReason(rewrittenResult, /pinned head at length 3 is no longer in the ledger/),
+    'a ledger that rewrote history the selection report recorded is refused',
+  );
+  const savedReport = JSON.parse(`${JSON.stringify(selectionReportOf(confirmationDeclaration), null, 2)}\n`);
   check(
     experiment.digestOf(savedReport) === confirmationDeclaration.selection.reportDigest,
     'the pinned digest survives writing the report to disk and reading it back',
@@ -3451,24 +3554,29 @@ function checkObservedPairingAndOrder() {
   const allAFirstResult = read(declaration(), allAFirst);
   check(
     outcomeOf(allAFirstResult) === 'blocked' &&
-      hasReason(allAFirstResult, /does not follow the declared interleaved schedule: block c1-1 still starts attempts/),
+      hasReason(allAFirstResult, /does not follow the declared interleaved schedule: block c1-1 does not finish starting attempts before/),
     `all A before all B is no interleaved schedule, got ${outcomeOf(allAFirstResult)}`,
   );
   const oneBlock = world({ mutateRow: (row) => (row.blockId = 'everything') });
   retime(oneBlock, (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
   const oneBlockResult = read(declaration(), oneBlock);
   check(
-    outcomeOf(oneBlockResult) === 'blocked' && hasReason(oneBlockResult, /block everything starts one arm twice in a row/),
+    outcomeOf(oneBlockResult) === 'blocked' && hasReason(oneBlockResult, /block everything does not alternate the arms/),
     'one block holding every A before every B is no interleaved schedule',
   );
   const bFirst = retime(world(), (rows) => rows.map((_, index) => rows[index % 2 === 0 ? index + 1 : index - 1]));
   check(outcomeOf(read(declaration(), bFirst)) === 'selection-cleared', 'an interleaved schedule may start a block with either arm');
   const randomized = declaration({ mutate: (body) => (body.design.order = 'randomized') });
-  const randomOrder = world({ mutateRow: (row) => (row.blockId = 'everything') });
-  retime(randomOrder, (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  const randomOrder = retime(world(), (rows) =>
+    rows.map((_, index) => rows[index % 4 === 0 ? index + 1 : index % 4 === 1 ? index - 1 : index]),
+  );
+  check(outcomeOf(read(randomized, randomOrder)) === 'selection-cleared', 'a randomized schedule may start each pair with either arm');
+  const wholeRun = world({ mutateRow: (row) => (row.blockId = 'whole-run') });
+  retime(wholeRun, (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  const wholeRunResult = read(randomized, wholeRun);
   check(
-    outcomeOf(read(randomized, randomOrder)) === 'selection-cleared',
-    'a randomized schedule inside one block is not held to alternation',
+    outcomeOf(wholeRunResult) === 'blocked' && hasReason(wholeRunResult, /block whole-run holds more than one pair/),
+    'a randomized schedule cannot hide every A before every B in one block',
   );
   const overlapping = retime(world(), (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
   check(outcomeOf(read(randomized, overlapping)) === 'blocked', 'a randomized schedule still runs its blocks one after another');
@@ -3488,6 +3596,186 @@ function checkObservedPairingAndOrder() {
   check(
     outcomeOf(cacheDrift) === 'new-baseline-required' && hasReason(cacheDrift, /fixed\.environment\.cacheRegime/),
     'an arm that ran under another cache regime is no comparable pair',
+  );
+}
+
+function checkEveryAttemptIsAccountedFor() {
+  // A failed retry whose saved document shows a critical miss the row leaves out.
+  for (const [label, claimed] of [
+    ['omits', undefined],
+    ['claims zero for', 0],
+  ]) {
+    const rows = world();
+    const first = candidateRow(rows, 'c1', 1);
+    const retry = seal({
+      ...clone(first),
+      attemptId: 'B-c1-1-failed',
+      attempt: 2,
+      status: 'failed',
+      counts: { topSeverityMissed: 3 },
+      receipt: { ...first.receipt, workspaceId: 'ws-failed' },
+    });
+    retry.counts = claimed === undefined ? {} : { topSeverityMissed: claimed };
+    rows.push(retry);
+    const result = read(declaration(), rows, { seal: false });
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /B-c1-1-failed \(count topSeverityMissed is .*, the scorer gives 3/),
+      `a failed retry that ${label} the miss its saved document shows blocks, got ${outcomeOf(result)}`,
+    );
+  }
+
+  // Attempts that name no receipt, stage, input or native record do not enter the decision.
+  const bare = (row, status) => ({
+    attemptId: `${row.attemptId}-bare`,
+    arm: row.arm,
+    caseId: row.caseId,
+    repetition: row.repetition,
+    blockId: row.blockId,
+    attempt: 2,
+    status,
+    cost: { currency: 'USD', components: { target: 5, tools: 0 } },
+    observed: clone(row.observed),
+  });
+  const padded = world();
+  padded.push(...padded.filter((row) => row.arm === 'A').map((row) => bare(row, 'canceled')));
+  const paddedResult = read(declaration(), padded);
+  check(
+    outcomeOf(paddedResult) === 'blocked' &&
+      hasReason(
+        paddedResult,
+        /-bare \(no fresh generation receipt; the row does not record its stage; no input hash; no native record reference\)/,
+      ),
+    `bare canceled baseline rows cannot inflate the baseline cost, got ${outcomeOf(paddedResult)}`,
+  );
+  const scoredAsFailure = declaration({ mutate: (body) => (body.design.failureRules = { timeout: 'failure', failureMetricValue: 0 }) });
+  const claimedTimeout = world({
+    mutateRow: (row, i, repetition) => {
+      if (row.arm === 'A' && i < 3 && repetition === 1) {
+        row.status = 'timeout';
+        row.metrics = {};
+        delete row.stage;
+        delete row.outputText;
+        row.outputSha256 = 'x';
+        row.receipt.artifactSha256 = 'x';
+      }
+    },
+  });
+  const claimedTimeoutResult = read(scoredAsFailure, claimedTimeout, { seal: false });
+  check(
+    outcomeOf(claimedTimeoutResult) === 'blocked' && hasReason(claimedTimeoutResult, /does not record its stage/),
+    'a timeout scored as a failure still has to identify itself',
+  );
+  const honestTimeout = world({
+    mutateRow: (row, i, repetition) => {
+      if (row.arm === 'B' && i === 0 && repetition === 1) {
+        row.status = 'timeout';
+        row.metrics = {};
+        row.counts = {};
+        delete row.outputText;
+        row.outputSha256 = null;
+        row.receipt.artifactSha256 = null;
+      }
+    },
+  });
+  const honestResult = read(scoredAsFailure, honestTimeout, { seal: false });
+  check(
+    outcomeOf(honestResult) !== 'blocked' &&
+      honestResult.evidenceIndex.rows.find((row) => row.attemptId === 'B-c1-1-1').verification === 'verified',
+    `a timeout that saved nothing carries a receipt without an artifact hash and scores as a failure, got ${outcomeOf(honestResult)}: ${reasonsOf(honestResult).join(' | ')}`,
+  );
+  const successfulFailure = declaration({ mutate: (body) => (body.design.failureRules = { timeout: 'failure', failureMetricValue: 1 }) });
+  check(
+    experiment
+      .validateDeclaration(successfulFailure)
+      .pairedProblems.some((problem) => problem.where === 'design.failureRules.failureMetricValue'),
+    'a failure value that would count as a success is refused',
+  );
+
+  // The dispatch order covers retries, and equal start times show no order.
+  const lateRetry = world();
+  const lateFirst = candidateRow(lateRetry, 'c2', 1);
+  const late = seal({
+    ...clone(lateFirst),
+    attemptId: 'B-c2-1-late',
+    attempt: 2,
+    status: 'failed',
+    receipt: { ...lateFirst.receipt, workspaceId: 'ws-late', startedAt: '2026-10-20T00:00:00.000Z', endedAt: '2026-10-20T00:01:00.000Z' },
+  });
+  lateRetry.push(late);
+  const lateResult = read(declaration(), lateRetry);
+  check(
+    outcomeOf(lateResult) === 'blocked' && hasReason(lateResult, /block c2-1 does not finish starting attempts before/),
+    `a retry dispatched after every other block breaks its block, got ${outcomeOf(lateResult)}`,
+  );
+  const sameInstant = world({
+    mutateRow: (row) => {
+      row.receipt.startedAt = '2026-10-14T00:00:00.000Z';
+      row.receipt.endedAt = '2026-10-14T00:01:00.000Z';
+    },
+  });
+  const sameInstantResult = read(declaration(), sameInstant);
+  check(
+    outcomeOf(sameInstantResult) === 'blocked' && hasReason(sameInstantResult, /does not finish starting attempts before/),
+    'attempts that all start at one instant show no dispatch order',
+  );
+
+  // Judge cost exists only with a rubric judge, and never names a task component.
+  const judgeEscape = declaration({
+    mutate: (body) => (body.resources.costScope = { taskExecution: ['target', 'tools'], judge: ['judge', 'retrieval'] }),
+  });
+  const judgeRows = world({ mutateRow: (row) => (row.cost.components.retrieval = row.arm === 'B' ? 5 : 0) });
+  const judgeResult = read(judgeEscape, judgeRows);
+  check(
+    outcomeOf(judgeResult) === 'blocked' && hasReason(judgeResult, /neither the task execution nor the judge scope: .*retrieval/),
+    'without a rubric judge, a component named as judge cost still has to be classified as task cost',
+  );
+  const overlap = declaration({ mutate: (body) => (body.resources.costScope = { taskExecution: ['target', 'tools'], judge: ['tools'] }) });
+  check(
+    experiment.validateDeclaration(overlap).pairedProblems.some((problem) => problem.where === 'resources.costScope.judge'),
+    'a judge scope that names a task component is refused',
+  );
+  const looseSaving = declaration({ objective: 'quality', mutate: (body) => (body.gates.saving = { minFraction: -0.5 }) });
+  check(
+    experiment.validateDeclaration(looseSaving).pairedProblems.some((problem) => problem.where === 'gates.saving.minFraction'),
+    'a declared saving gate needs a fraction in (0, 1) under any objective',
+  );
+
+  // Unknown latency blocks before an unsupported design is read descriptively.
+  const latencyGate = declaration({
+    mutate: (body) => {
+      body.gates.latency = { maxIncreaseFraction: 0.5 };
+      body.design.sharedBuilds = true;
+    },
+  });
+  const latencyResult = read(latencyGate, world({ mutateRow: (row) => row.arm === 'B' && (row.latency = null) }));
+  check(
+    outcomeOf(latencyResult) === 'blocked' && hasReason(latencyResult, /task latency is unknown/),
+    `unknown latency blocks whatever the design support, got ${outcomeOf(latencyResult)}`,
+  );
+
+  // A prompt region change has to change the whole prompt digest too.
+  const regionOnly = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'prompt', setting: 'promptRegions.examples' };
+      body.identity.arms.A.promptRegions = { examples: 'sha256:examples-1' };
+      body.identity.arms.B = clone(body.identity.arms.A);
+      body.identity.arms.B.promptRegions = { examples: 'sha256:examples-2' };
+    },
+  });
+  const regionOnlyResult = read(regionOnly, world({ mutateRow: (row) => (row.observed.arm = clone(regionOnly.identity.arms[row.arm])) }));
+  check(
+    outcomeOf(regionOnlyResult) === 'revised-design-required' && hasReason(regionOnlyResult, /promptDigest stays the same/),
+    'a prompt region change whose prompt digest stays the same is refused',
+  );
+
+  // A descriptive reading checks no attempt and says so.
+  const descriptive = read(
+    declaration({ mutate: (body) => delete body.scope.candidate }),
+    world().filter((row) => row.arm === 'A'),
+  );
+  check(
+    descriptive.evidenceIndex.rows.length > 0 && descriptive.evidenceIndex.rows.every((row) => row.verification === 'not-checked'),
+    'rows of a descriptive reading are marked not-checked',
   );
 }
 
@@ -3513,6 +3801,7 @@ async function main() {
   checkConfirmationFollowsSelection();
   checkOneNamedSetting();
   checkObservedPairingAndOrder();
+  checkEveryAttemptIsAccountedFor();
   checkAdversarialInputs();
   checkRuleByRule();
   checkOutputsAndCommandLine();

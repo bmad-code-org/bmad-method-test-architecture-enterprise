@@ -382,6 +382,12 @@ function validateDeclaration(declaration) {
   );
   if (design.failureRules?.timeout === 'failure') {
     need(pairs, isFiniteNumber(design.failureRules.failureMetricValue), 'design.failureRules.failureMetricValue', 'is required');
+    need(
+      pairs,
+      Object.values(decl.gates?.success?.metrics ?? {}).every((minimum) => design.failureRules.failureMetricValue < minimum),
+      'design.failureRules.failureMetricValue',
+      'must fall below every success minimum: a timeout scored as a failure cannot count as a success',
+    );
   }
   const analysis = isObject(design.analysis) ? design.analysis : {};
   need(pairs, isFiniteNumber(analysis.alpha) && analysis.alpha > 0 && analysis.alpha < 0.5, 'design.analysis.alpha', 'must be in (0, 0.5)');
@@ -416,11 +422,13 @@ function validateDeclaration(declaration) {
       'gates.quality',
       'a cost objective allows quality loss only',
     );
+  }
+  if (scope.objective === 'cost' || gates.saving !== undefined) {
     need(
       pairs,
       isFiniteNumber(gates.saving?.minFraction) && gates.saving.minFraction > 0 && gates.saving.minFraction < 1,
       'gates.saving.minFraction',
-      'must be in (0, 1) for a cost objective',
+      'must be in (0, 1) for a cost objective or a declared saving gate',
     );
   }
   if (scope.objective === 'quality') {
@@ -484,6 +492,15 @@ function validateDeclaration(declaration) {
       'resources.costScope.judge',
       'must be a list of component names',
     );
+    need(
+      pairs,
+      !(
+        Array.isArray(costScope?.judge) &&
+        costScope.judge.some((name) => (costScope?.taskExecution ?? REQUIRED_TASK_COMPONENTS).includes(name))
+      ),
+      'resources.costScope.judge',
+      'must name no task execution component',
+    );
   }
   need(pairs, isNonEmptyString(decl.frozen?.digest), 'frozen.digest', 'a paired contrast needs a frozen declaration');
   if (decl.stage === 'confirmation') {
@@ -529,7 +546,12 @@ function validReceipt(raw) {
   const ended = timestampMs(receipt.endedAt);
   if (started === null || ended === null) return { receipt: null, problem: 'receipt start and end are not ISO 8601 timestamps' };
   if (ended < started) return { receipt: null, problem: 'receipt ends before it starts' };
-  if (!isNonEmptyString(receipt.artifactSha256) || receipt.artifactSha256 !== raw.outputSha256) {
+  const savedNothing =
+    raw.status !== 'completed' &&
+    (raw.outputSha256 ?? null) === null &&
+    (receipt.artifactSha256 ?? null) === null &&
+    (raw.outputText ?? null) === null;
+  if (!savedNothing && (!isNonEmptyString(receipt.artifactSha256) || receipt.artifactSha256 !== raw.outputSha256)) {
     return { receipt: null, problem: 'receipt artifactSha256 does not match outputSha256' };
   }
   return { receipt: clone(receipt), problem: null };
@@ -961,17 +983,19 @@ function frozenAcrossStages(declaration) {
 
 /**
  * A confirmation runs only for a candidate that cleared selection. The confirmation
- * declaration pins the selection declaration and its report by digest; the report has
- * to come from that declaration with a selection-cleared outcome, and the confirmation
- * may change only its stage, its confirmation cases and their clusters, its ledger pin
- * and these pins. Candidate, baseline, identities, gates, design, analysis and cost
- * rules stay as selection froze them. The selection report's ledger head is pinned too.
+ * declaration pins the selection declaration and its report by digest. The reader reads
+ * the selection again from its own evidence, with the same scorer and bootstrap, and
+ * the report it gets has to be the pinned one, with a selection-cleared outcome. A
+ * report that was edited after the fact therefore never matches. The confirmation may
+ * change only its stage, its confirmation cases and their clusters, its ledger pin and
+ * these pins. Candidate, baseline, identities, gates, design, analysis and cost rules
+ * stay as selection froze them. The selection report's ledger head is pinned too.
  */
-function selectionChainProblems(declaration, selection) {
+function selectionChainProblems(declaration, selection, { replay, bootstrap }) {
   if (declaration.stage !== 'confirmation') return { problems: [], pin: null };
   const selected = isObject(selection?.declaration) ? selection.declaration : null;
-  const report = isObject(selection?.report) ? selection.report : null;
-  if (!selected || !report) return { problems: ['the frozen selection declaration and its report are not supplied'], pin: null };
+  if (!selected) return { problems: ['the frozen selection declaration and its evidence are not supplied'], pin: null };
+  const { report } = readExperimentChecked({ ...selection, selection: null, replay, bootstrap });
   const problems = [];
   const selectedDigest = declarationDigest(selected);
   if (selectedDigest !== declaration.selection.declarationDigest)
@@ -979,9 +1003,8 @@ function selectionChainProblems(declaration, selection) {
   if (selected.frozen?.digest !== selectedDigest) problems.push('the selection declaration is not frozen at its own digest');
   if (selected.stage !== 'selection')
     problems.push(`the pinned declaration is a ${selected.stage} stage; a confirmation follows a selection`);
-  if (digestOf(report) !== declaration.selection.reportDigest) problems.push('the selection report does not match selection.reportDigest');
-  if (report.kind !== 'configuration-experiment-report' || report.declaration?.digest !== selectedDigest) {
-    problems.push('the selection report was not produced from the pinned selection declaration');
+  if (digestOf(report) !== declaration.selection.reportDigest) {
+    problems.push('the selection evidence does not reproduce the report pinned in selection.reportDigest');
   }
   const outcome = report.contrast?.decision?.outcome ?? 'missing';
   if (outcome !== OUTCOMES.selectionCleared) problems.push(`the selection outcome is ${outcome}; a confirmation needs selection-cleared`);
@@ -1313,12 +1336,13 @@ function replayRow(replay, row) {
 }
 
 /**
- * Why a completed attempt's evidence is only claimed. A receipt and a row's numbers
- * are claims; the reader checks what it can recompute offline. The attempt has to
- * name its stage, its input and its native record; its saved artifact bytes have to
- * hash to the output and receipt hashes; and the deterministic scorer, run again over
- * those bytes, has to reproduce every required metric and every critical count the
- * row reports. An empty list means verified.
+ * Why an attempt's evidence is only claimed. A receipt and a row's numbers are
+ * claims; the reader checks what it can recompute offline. Every attempt, whatever
+ * its status, has to carry a receipt and name its stage, its input and its native
+ * record. An attempt that completed or claims an artifact also has to carry the saved
+ * bytes, they have to hash to the output and receipt hashes, and the deterministic
+ * scorer, run again over them, has to reproduce every required metric and every
+ * critical count the row reports. An empty list means verified.
  */
 function verificationProblems(row, declaration, replayed) {
   const problems = [];
@@ -1326,6 +1350,8 @@ function verificationProblems(row, declaration, replayed) {
   if (row.stage !== declaration.stage) problems.push('the row does not record its stage');
   if (!isNonEmptyString(row.inputSha256)) problems.push('no input hash');
   if (!isNonEmptyString(row.native?.ref)) problems.push('no native record reference');
+  const claimsArtifact = row.status === 'completed' || row.outputText !== null || row.outputSha256 !== null || row.receipt?.artifactSha256;
+  if (!claimsArtifact) return problems;
   if (row.outputText === null) {
     problems.push('the artifact bytes are not part of the evidence');
     return problems;
@@ -1487,21 +1513,40 @@ function resolveSlots(declaration, rows, plan) {
 
 /**
  * The recorded dispatch order against the declared schedule, from the receipts' start
- * times of the scoring attempts. Pairing blocks run one after another: every attempt
- * of a block starts before the first attempt of the next block. Inside a block an
- * interleaved schedule never starts one arm twice in a row.
+ * times. A pairing block holds one pair: one case and repetition on both arms. Every
+ * attempt of the pair, retries included, belongs to its block and has to record when
+ * it started. Pairing blocks run one after another:
+ * every attempt of a block starts strictly before the first attempt of the next block,
+ * since equal times show no order. Inside a block an interleaved schedule never starts
+ * one arm's scoring attempt twice in a row, and two scoring attempts that start at the
+ * same time show no alternation.
  */
 function scheduleProblems(slots, order) {
   const byBlock = new Map();
+  const problems = [];
   for (const slot of slots) {
+    const blockId = slot.arms.A.scoring?.blockId;
+    if (!isNonEmptyString(blockId) || blockId !== slot.arms.B.scoring?.blockId) continue;
     for (const arm of ARMS) {
-      const row = slot.arms[arm].scoring;
-      if (!row || !isNonEmptyString(row.blockId)) continue;
-      const start = timestampMs(row.receipt?.startedAt);
-      if (start === null) return [`${row.attemptId} records no start time, so the dispatch order cannot be checked`];
-      if (!byBlock.has(row.blockId)) byBlock.set(row.blockId, []);
-      byBlock.get(row.blockId).push({ arm, start, inputIndex: row.inputIndex });
+      for (const row of slot.arms[arm].attempts) {
+        const start = timestampMs(row.receipt?.startedAt);
+        if (start === null) {
+          problems.push(`${row.attemptId} records no start time`);
+          continue;
+        }
+        if (!byBlock.has(blockId)) byBlock.set(blockId, []);
+        byBlock.get(blockId).push({ arm, start, scoring: row === slot.arms[arm].scoring, inputIndex: row.inputIndex });
+      }
     }
+  }
+  const blockSlots = new Map();
+  for (const slot of slots) {
+    const blockId = slot.arms.A.scoring?.blockId;
+    if (!isNonEmptyString(blockId) || blockId !== slot.arms.B.scoring?.blockId) continue;
+    blockSlots.set(blockId, [...(blockSlots.get(blockId) ?? []), `${slot.caseId}/${slot.repetition}`]);
+  }
+  for (const [blockId, members] of blockSlots) {
+    if (members.length > 1) problems.push(`block ${blockId} holds more than one pair (${members.join(', ')})`);
   }
   const blocks = [...byBlock.entries()]
     .map(([blockId, runs]) => {
@@ -1509,17 +1554,18 @@ function scheduleProblems(slots, order) {
       return { blockId, runs: sorted, first: sorted[0].start, last: sorted.at(-1).start };
     })
     .sort((left, right) => left.first - right.first || left.last - right.last);
-  const problems = [];
   let latest = null;
   for (const block of blocks) {
-    if (latest !== null && latest.last > block.first)
-      problems.push(`block ${latest.blockId} still starts attempts after block ${block.blockId} began`);
+    if (latest !== null && latest.last >= block.first) {
+      problems.push(`block ${latest.blockId} does not finish starting attempts before block ${block.blockId} begins`);
+    }
     if (latest === null || block.last > latest.last) latest = block;
   }
   if (order === 'interleaved') {
     for (const block of blocks) {
-      if (block.runs.some((run, index) => index > 0 && run.arm === block.runs[index - 1].arm)) {
-        problems.push(`block ${block.blockId} starts one arm twice in a row`);
+      const scoring = block.runs.filter((run) => run.scoring);
+      if (scoring.some((run, index) => index > 0 && (run.arm === scoring[index - 1].arm || run.start === scoring[index - 1].start))) {
+        problems.push(`block ${block.blockId} does not alternate the arms`);
       }
     }
   }
@@ -1643,13 +1689,16 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const observed = observedIdentityProblems(declaration, contrastRows);
   facts.observedIdentity = observed;
 
-  const chain = selectionChainProblems(declaration, selection);
+  const chain = selectionChainProblems(declaration, selection, { replay, bootstrap });
   facts.selectionChain = chain.problems;
   const exposure = exposureProblems(declaration, ledger, resume, chain.pin ? [chain.pin] : []);
   facts.exposure = exposure;
 
   const sharedAcrossArms = excluded.filter((entry) => entry.sharedAcrossArms).map((entry) => entry.row.attemptId);
   facts.sharedAcrossArms = sharedAcrossArms;
+  facts.mislabeled = excluded
+    .filter((entry) => entry.reason === 'wrong-stage' && entry.row.arm === 'B')
+    .map((entry) => entry.row.attemptId);
 
   const resolved = resolveSlots(declaration, contrastRows, plan);
   facts.slots = resolved.problems;
@@ -1660,7 +1709,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const verification = new Map();
   for (const row of contrastRows) verification.set(row.attemptId, verificationProblems(row, declaration, replayRow(replay, row)));
   const unverified = contrastRows
-    .filter((row) => row.status === 'completed' && verification.get(row.attemptId).length > 0)
+    .filter((row) => verification.get(row.attemptId).length > 0)
     .map((row) => ({ attemptId: row.attemptId, problems: verification.get(row.attemptId) }));
   facts.unverified = unverified;
 
@@ -1743,7 +1792,8 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
       ? null
       : knownSum(side.attempts.map((row) => (isFiniteNumber(row.latency?.taskMs) && row.latency.taskMs >= 0 ? row.latency.taskMs : null)));
   const needsCost = declaration.scope.objective === 'cost' || isObject(declaration.gates.saving);
-  const classified = new Set([...taskNames, ...(costScope.judge ?? DEFAULT_COST_SCOPE.judge)]);
+  const judgeNames = declaration.scope.judge === 'rubric' ? (costScope.judge ?? DEFAULT_COST_SCOPE.judge) : [];
+  const classified = new Set([...taskNames, ...judgeNames]);
   const unclassified = needsCost
     ? contrastRows.flatMap((row) =>
         Object.keys(row.cost?.components ?? {})
@@ -1752,6 +1802,9 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
       )
     : [];
   facts.unclassifiedCost = unclassified;
+  facts.latencyUnknown =
+    isObject(declaration.gates.latency) &&
+    clusterValues(declaration, slots, plan, (side) => slotLatency(side)).some((cluster) => cluster.A === null || cluster.B === null);
   const costClusters = clusterValues(declaration, slots, plan, (side) => slotCost(side));
   const costUnknown = needsCost && costClusters.some((cluster) => cluster.A === null || cluster.B === null);
   facts.costUnknown = costUnknown;
@@ -1792,7 +1845,6 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     if (isObject(gates.latency)) {
       const clusters = clusterValues(declaration, slots, plan, (side) => slotLatency(side));
       if (clusters.some((cluster) => cluster.A === null || cluster.B === null)) {
-        facts.latencyUnknown = true;
         contrasts.latency = null;
       } else {
         contrasts.latency = clusters.map((cluster) => (1 + gates.latency.maxIncreaseFraction) * cluster.A - cluster.B);
@@ -1977,6 +2029,9 @@ function decide({
       'a candidate critical miss is not verified against its receipt, bytes and scorer, so it can be neither dismissed nor confirmed',
     );
   if (facts.sharedAcrossArms.length > 0) blocks.push(`rows are shared between the arms: ${facts.sharedAcrossArms.join(', ')}`);
+  if (facts.mislabeled.length > 0) {
+    blocks.push(`candidate attempts on this stage's cases are labeled with another stage: ${facts.mislabeled.join(', ')}`);
+  }
   if (critical.unrecorded.length > 0) {
     blocks.push(
       `critical counts are not recorded as nonnegative integers on ${critical.unrecorded.length} candidate attempt(s): ${critical.unrecorded.map((entry) => `${entry.attemptId} (${entry.rules.join(', ')})`).join(', ')}`,
@@ -1987,7 +2042,7 @@ function decide({
   }
   if (unverified.length > 0) {
     blocks.push(
-      `${unverified.length} completed attempt(s) carry claimed evidence the reader could not verify: ${unverified
+      `${unverified.length} attempt(s) carry claimed evidence the reader could not verify: ${unverified
         .map((entry) => `${entry.attemptId} (${entry.problems.join('; ')})`)
         .join(', ')}`,
     );
@@ -2105,8 +2160,9 @@ function evidenceIndexRow(row, status, detail, verification) {
  * @param {Array<object>} input.attempts Evidence rows.
  * @param {Array<object>} [input.ledger] The exposure ledger.
  * @param {object} [input.resume] Heads recorded by an earlier report: `{ ledger: {head, length} }`.
- * @param {{declaration: object, report: object}} [input.selection] For a confirmation: the
- *   frozen selection declaration and its selection-cleared report, both pinned by digest.
+ * @param {object} [input.selection] For a confirmation: the selection stage's own input
+ *   (`declaration`, `attempts`, `ledger`, ...). The reader reads it again and holds the
+ *   result to the selection-cleared report the confirmation pins.
  * @param {Array<object>} [input.judgeCalls] Repeated judgments of identical output.
  * @param {(text: string, row: object) => object} [input.replay] Deterministic scorer over saved bytes.
  *   It returns `{ metrics, counts }` for a document; attempts are verified against it.
@@ -2539,7 +2595,8 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
  * against the case's fixture set; the result is the signature `eval-test-design.js`
  * would have signed, the projection `test/lib/test-design-result.js` reduces it to,
  * and the metrics and counts the native diagnostics record. Fixture mutations happen
- * in the workspace, so the bytes alone score them as zero.
+ * in the workspace, so the bytes cannot show them: the replay signs them as zero and
+ * reports no `fixtureMutations` count, and a row's claimed count stays unverified.
  *
  * @param {{groundTruth: object}} options
  * @returns {(text: string, row: object) => object}
@@ -2553,6 +2610,7 @@ function testDesignReplay({ groundTruth }) {
     if (!read.ok) return { unmeasurable: read.failureClass };
     const scored = scoreRun(set, read.design, categories);
     const { metrics, counts, notApplicable } = metricsFromContributions(numericContributions(testDesignDiagnosticProjection(scored, 0)));
+    delete counts.fixtureMutations;
     return {
       signature: signatureOf(scored, 0),
       projection: projectTestDesignResult(text, set, categories),
@@ -2772,10 +2830,31 @@ function writeOutputs(result, directory) {
 /**
  * `analyze` reads an evidence file that points at saved material:
  * `{ declaration, recordedRuns: [{kind: "test-design", dir, arm, stage}], attempts, ledger, resume, selection, judgeCalls }`,
- * where a confirmation's `selection` is `{ declaration, report }`, two file paths.
+ * where a confirmation's `selection` is the path of the selection stage's evidence file.
  * Relative paths resolve against the evidence file. `digest` prints the digest a
  * confirmation pins for a selection report.
  */
+/** The `readExperiment` input an evidence file describes; manifest problems go into `integrity`. */
+function loadEvidence(file, integrity) {
+  const base = path.dirname(file);
+  const evidence = readJson(file);
+  const attempts = [...(evidence.attempts ?? [])];
+  const references = evidence.recordedRuns ?? [];
+  for (const reference of references) {
+    const loaded = loadRecordedTestDesignRun({ dir: path.resolve(base, reference.dir), arm: reference.arm, stage: reference.stage });
+    attempts.push(...loaded.rows);
+    integrity.push(...loaded.integrity.problems);
+  }
+  return {
+    declaration: readJson(path.resolve(base, evidence.declaration)),
+    attempts,
+    ledger: evidence.ledger ?? null,
+    resume: evidence.resume ?? null,
+    judgeCalls: evidence.judgeCalls ?? null,
+    recordedRuns: references.length,
+  };
+}
+
 async function main(argv) {
   const [command, file, ...rest] = argv;
   if (command === 'freeze' && file) {
@@ -2794,38 +2873,27 @@ async function main(argv) {
       console.error('analyze needs --out <directory>');
       return 2;
     }
-    const base = path.dirname(path.resolve(file));
-    const evidence = readJson(file);
-    const declaration = readJson(path.resolve(base, evidence.declaration));
-    const attempts = [...(evidence.attempts ?? [])];
-    let replay = null;
     const integrity = [];
-    for (const reference of evidence.recordedRuns ?? []) {
-      const loaded = loadRecordedTestDesignRun({ dir: path.resolve(base, reference.dir), arm: reference.arm, stage: reference.stage });
-      attempts.push(...loaded.rows);
-      integrity.push(...loaded.integrity.problems);
-      replay ??= testDesignReplay({ groundTruth: await loadGroundTruth() });
+    const input = loadEvidence(path.resolve(file), integrity);
+    const base = path.dirname(path.resolve(file));
+    const selectionFile = readJson(path.resolve(file)).selection;
+    if (selectionFile !== undefined && selectionFile !== null) {
+      if (!isNonEmptyString(selectionFile)) {
+        console.error('selection names the evidence file of the selection stage');
+        return 2;
+      }
+      input.selection = loadEvidence(path.resolve(base, selectionFile), integrity);
     }
     if (integrity.length > 0) {
       console.error(`recorded evidence does not match its manifest:\n${integrity.join('\n')}`);
       return 1;
     }
-    if (declaration?.scope?.workflow === 'bmad-tea-test-design') replay ??= testDesignReplay({ groundTruth: await loadGroundTruth() });
-    const selection = isObject(evidence.selection)
-      ? {
-          declaration: readJson(path.resolve(base, evidence.selection.declaration)),
-          report: readJson(path.resolve(base, evidence.selection.report)),
-        }
-      : null;
-    const result = readExperiment({
-      declaration,
-      attempts,
-      ledger: evidence.ledger ?? null,
-      resume: evidence.resume ?? null,
-      selection,
-      judgeCalls: evidence.judgeCalls ?? null,
-      replay,
-    });
+    const testDesign = [input, input.selection].some(
+      (entry) => entry?.recordedRuns > 0 || entry?.declaration?.scope?.workflow === 'bmad-tea-test-design',
+    );
+    const replay = testDesign ? testDesignReplay({ groundTruth: await loadGroundTruth() }) : null;
+    const strip = ({ recordedRuns, ...rest }) => (void recordedRuns, rest);
+    const result = readExperiment({ ...strip(input), selection: input.selection ? strip(input.selection) : null, replay });
     for (const file of writeOutputs(result, path.resolve(out))) console.log(file);
     return 0;
   }
