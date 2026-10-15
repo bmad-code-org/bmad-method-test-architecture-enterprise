@@ -70,6 +70,11 @@
  *   leaves `assets/` alone and this rule keeps the runtime from loading a
  *   template, whose eval-quality import would then bypass `engine-import`.
  *
+ * - `discovery-import`: the exploratory candidate module (`cli/lib/evaluate/discovery/`) and the scored runtime never meet.
+ *   No load outside it resolves into it, relatively or through this package's own name, and no string literal outside it
+ *   other than `check.js`'s placement rule names the `discovery` directory. A load inside it takes only `node:fs`,
+ *   `node:path`, `node:crypto`, `ajv/dist/2020`, `../digest` and `../formats`, so the candidate code reaches no module that
+ *   decides a score or reads a run.
  * - `install-probe` (Story 1.6, AD-4): `cli/skill-runner.js` takes its skill
  *   from `--skill-root` alone, so it names no home directory (`homedir`, a
  *   `HOME`, `USERPROFILE` or `XDG_CONFIG_HOME` read), no agent-specific or
@@ -193,6 +198,15 @@ const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
 const TEST_TREE = 'test';
 /** The Evaluate skill's templates, adopter code the runtime never loads (Story 1.11). */
 const ASSET_TREE = path.join('skills', 'bmad-tea-evaluate', 'assets');
+const DISCOVERY_TREE = path.join('cli', 'lib', 'evaluate', 'discovery');
+/** The one module outside the candidate module that names the `discovery` directory: its placement rule. */
+const DISCOVERY_NAMING_MODULE = path.join('cli', 'lib', 'evaluate', 'check.js');
+const DISCOVERY_LOADS = new Set(['node:fs', 'node:path', 'node:crypto', 'ajv/dist/2020']);
+const DISCOVERY_RELATIVE_LOADS = new Set([
+  path.join('cli', 'lib', 'evaluate', 'digest.js'),
+  path.join('cli', 'lib', 'evaluate', 'formats.js'),
+]);
+const DISCOVERY_SEGMENT = /(^|\/)discovery(\/|$)/;
 const SKILL_RUNNER = 'skill-runner.js';
 const INSTALL_IDENTIFIERS = new Set(['homedir', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']);
 const INSTALL_PATH = /(?:^|[/\\])\.(?:claude|agents|codex|cursor|gemini)(?:[/\\]|$)|_bmad/;
@@ -586,6 +600,11 @@ function skillRunnerViolations(node, value, report) {
   }
 }
 
+/** A specifier with its separators spelled `/`. */
+function normalizedSpecifier(value) {
+  return value.replaceAll('\\', '/');
+}
+
 /** Every boundary violation in one parsed file. */
 function fileViolations({ source, ast, isEngine, isReproduction, callerModule = null, isSkillRunner, file, projectRoot }) {
   const found = [];
@@ -714,6 +733,27 @@ function fileViolations({ source, ast, isEngine, isReproduction, callerModule = 
   walk(ast, (node, parent) => {
     parentOf.set(node, parent);
 
+    // discovery-import: the directory's name is the candidate module's own, and check.js's placement rule.
+    if (
+      !file.startsWith(`${path.join(projectRoot, DISCOVERY_TREE)}${path.sep}`) &&
+      file !== path.join(projectRoot, DISCOVERY_NAMING_MODULE)
+    ) {
+      const spelled =
+        node.type === 'Literal' && typeof node.value === 'string'
+          ? [node.value]
+          : node.type === 'TemplateElement'
+            ? [node.value.cooked ?? '']
+            : [];
+      for (const text of spelled) {
+        if (DISCOVERY_SEGMENT.test(text))
+          report(
+            node,
+            'discovery-import',
+            `names the discovery directory in ${JSON.stringify(text)}; only check.js's candidate placement rule does`,
+          );
+      }
+    }
+
     // engine-import and dynamic-specifier.
     const specifier = loadedSpecifier(node, requires);
     if (specifier !== undefined) {
@@ -738,6 +778,41 @@ function fileViolations({ source, ast, isEngine, isReproduction, callerModule = 
             `loads ${value}, which resolves into the Evaluate skill's assets/; an adopter's HTTP port runs as a process of its own`,
           );
         }
+      }
+      const discoveryRoot = path.join(projectRoot, DISCOVERY_TREE);
+      const insideDiscovery = file.startsWith(`${discoveryRoot}${path.sep}`);
+      const reachedAbsolute = value !== undefined && value.startsWith('.') ? path.resolve(path.dirname(file), value) : '';
+      const discoverySelf =
+        value !== undefined &&
+        (normalizedSpecifier(value) === `${PACKAGE_NAME}/${DISCOVERY_TREE.split(path.sep).join('/')}` ||
+          normalizedSpecifier(value).startsWith(`${PACKAGE_NAME}/${DISCOVERY_TREE.split(path.sep).join('/')}/`));
+      if (
+        value !== undefined &&
+        !insideDiscovery &&
+        (discoverySelf || reachedAbsolute === discoveryRoot || reachedAbsolute.startsWith(`${discoveryRoot}${path.sep}`))
+      ) {
+        report(
+          node,
+          'discovery-import',
+          `loads ${value}, which resolves into the exploratory candidate module; the scored runtime never reads a candidate`,
+        );
+      }
+      if (value !== undefined && insideDiscovery) {
+        const allowed =
+          DISCOVERY_LOADS.has(value) ||
+          (value.startsWith('.') &&
+            (reachedAbsolute.startsWith(`${discoveryRoot}${path.sep}`) ||
+              [...DISCOVERY_RELATIVE_LOADS].some(
+                (module) =>
+                  reachedAbsolute === path.join(projectRoot, module) ||
+                  reachedAbsolute === path.join(projectRoot, module.replace(/\.js$/, '')),
+              )));
+        if (!allowed)
+          report(
+            node,
+            'discovery-import',
+            `loads ${value}; the candidate module reads digests and formats and nothing that decides a score`,
+          );
       }
       if (value === undefined) {
         report(node, 'dynamic-specifier', `"${excerpt(node)}" takes a computed specifier; cli/ names every module it loads as a literal`);
@@ -1154,6 +1229,55 @@ const PLANTS = [
     rule: 'asset-import',
     file: 'other-runner.js',
     source: `const port = require('${PACKAGE_NAME}/skills/bmad-tea-evaluate/assets/http-probe-port.mjs');\nmodule.exports = { port };\n`,
+  },
+  // discovery-import
+  {
+    name: 'a scored module requiring the candidate module',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/other.js',
+    source: "const candidate = require('./discovery/candidate');\nmodule.exports = { candidate };\n",
+  },
+  {
+    name: 'a scored module importing the candidate module dynamically',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/other.js',
+    source: "module.exports = { load: () => import('./discovery/candidate.js') };\n",
+  },
+  {
+    name: 'a scored module reaching the candidate module through the package name',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/other.js',
+    source: `const candidate = require('${PACKAGE_NAME}/cli/lib/evaluate/discovery/candidate');\nmodule.exports = { candidate };\n`,
+  },
+  {
+    name: 'a scored module requiring the candidate module with a template literal',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/other.js',
+    source: 'const candidate = require(`./discovery/candidate`);\nmodule.exports = { candidate };\n',
+  },
+  {
+    name: 'a scored module reading the discovery directory',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/other.js',
+    source: "const fs = require('node:fs');\nmodule.exports = { ids: (folder) => fs.readdirSync(`${folder}/discovery`) };\n",
+  },
+  {
+    name: 'a scored module building the discovery path with a join',
+    rule: 'dynamic-specifier',
+    file: 'lib/evaluate/other.js',
+    source: "const path = require('node:path');\nmodule.exports = require(path.join(__dirname, 'disco' + 'very', 'candidate'));\n",
+  },
+  {
+    name: 'the candidate module loading a scoring module',
+    rule: 'discovery-import',
+    file: 'lib/evaluate/discovery/candidate.js',
+    source: "const { score } = require('../score');\nmodule.exports = { score };\n",
+  },
+  {
+    name: 'the candidate module loading a module through a computed specifier',
+    rule: 'dynamic-specifier',
+    file: 'lib/evaluate/discovery/candidate.js',
+    source: "module.exports = require('../' + 'score');\n",
   },
   // engine-import
   {

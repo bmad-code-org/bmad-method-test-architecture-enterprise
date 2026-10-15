@@ -1,0 +1,563 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:discovery-candidate",
+  "title": "discovery/<campaignId>/C-NNN.candidate.json",
+  "description": "One exploratory candidate: a proposed edit, what was observed when it ran, the independent evidence that its behavior is undesirable, the review decision and the draft promotion. It lives outside every native scored artifact and carries no native outcome, verdict or qualification. The tea-evaluate runtime owns this schema; evaluation.json, probes and mutations never reference it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordKind",
+    "candidateId",
+    "campaignId",
+    "partition",
+    "identity",
+    "generator",
+    "intent",
+    "hypothesis",
+    "requirement",
+    "target",
+    "edit",
+    "state",
+    "disposition",
+    "observations",
+    "independentEvidence",
+    "review",
+    "acceptedRisk",
+    "promotion"
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "disposition": {
+      "description": "Why the candidate stopped, or what review concluded. None of these is a native outcome.",
+      "enum": [
+        "generation-error",
+        "inapplicable",
+        "binding-not-consumed",
+        "unexercised",
+        "target-error",
+        "judge-failure",
+        "budget-exhausted",
+        "observationally-unchanged",
+        "undetermined",
+        "confirmed-undesirable-caught",
+        "confirmed-undesirable-missed"
+      ]
+    },
+    "reviewDisposition": {
+      "description": "What a review can conclude.",
+      "enum": ["inapplicable", "observationally-unchanged", "undetermined", "confirmed-undesirable-caught", "confirmed-undesirable-missed"]
+    },
+    "confirmedDisposition": {
+      "enum": ["confirmed-undesirable-caught", "confirmed-undesirable-missed"]
+    },
+    "scope": {
+      "description": "What a decision was made against. The reader refuses the decision once any part no longer matches the candidate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "determination", "observations"],
+      "properties": {
+        "identity": {
+          "description": "The candidate identity at decision time. It covers the edit, the target and the requirement digest.",
+          "$ref": "#/$defs/digest"
+        },
+        "determination": {
+          "description": "The digest of the disposition and the independent evidence at decision time.",
+          "$ref": "#/$defs/digest"
+        },
+        "observations": {
+          "description": "The observations the decision rested on. Each must still be in the record, unchanged: same arm, evidence and trial counts.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["observationId", "digest"],
+            "properties": {
+              "observationId": {
+                "type": "string",
+                "pattern": "^OBS-[0-9]{3,}$"
+              },
+              "digest": {
+                "description": "The digest of the observation's canonical JSON.",
+                "$ref": "#/$defs/digest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "recordKind": {
+      "const": "exploratory-candidate",
+      "description": "Names the record's kind so no native artifact can be read as a candidate, and no candidate as a native one."
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^C-[0-9]{3,}$",
+      "description": "Disjoint from the native M-NNN, P-NNN, B-NNN, D-NNN and O-NNN identifiers."
+    },
+    "campaignId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "partition": {
+      "const": "development",
+      "description": "Discovery reads development evidence only. A held-out partition never appears in a candidate."
+    },
+    "identity": {
+      "description": "The digest of every field that defines the candidate, computed by the reader. A review or accepted risk binds to it.",
+      "$ref": "#/$defs/digest"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "seed"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": {
+          "type": "string"
+        }
+      }
+    },
+    "intent": {
+      "enum": ["regression", "robustness"]
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {
+          "const": "requirements.md",
+          "description": "The evaluation's committed requirements statement."
+        },
+        "digest": {
+          "description": "eval-quality's digestBytes over the requirements file, as evaluation.json records it.",
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "artifactDigest"],
+      "properties": {
+        "artifact": {
+          "description": "The edited file, spelled as a mutation's targetArtifact.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        },
+        "artifactDigest": {
+          "description": "eval-quality's digestBytes over the file before the edit.",
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["find", "replace", "occurrences"],
+      "properties": {
+        "find": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replace": {
+          "type": "string"
+        },
+        "occurrences": {
+          "const": 1
+        }
+      }
+    },
+    "state": {
+      "enum": ["generated", "applicable", "observed", "reviewed", "promoted"]
+    },
+    "disposition": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/disposition"
+        }
+      ]
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observationId", "arm", "evidence", "trials"],
+        "properties": {
+          "observationId": {
+            "type": "string",
+            "pattern": "^OBS-[0-9]{3,}$"
+          },
+          "arm": {
+            "enum": ["baseline", "candidate"]
+          },
+          "evidence": {
+            "description": "The digest of the recorded evidence the observation summarizes.",
+            "$ref": "#/$defs/digest"
+          },
+          "trials": {
+            "description": "Completed, errored and missing trials never exceed the planned count. A run that stopped early leaves the rest unaccounted.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["planned", "completed", "errors", "missing"],
+            "properties": {
+              "planned": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "errors": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "missing": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "independentEvidence": {
+      "description": "Evidence that the edited behavior is wrong, from a source other than the target, the evaluator or the requirement the edit is judged against.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "reference", "digest"],
+        "properties": {
+          "kind": {
+            "enum": ["domain-invariant", "separate-specification", "historical-defect", "reference-computation", "blinded-human-annotation"]
+          },
+          "reference": {
+            "description": "A snapshot of the material the reviewer saw, kept in the campaign's evidence directory: discovery/<campaignId>/evidence/<file>. A source outside the folder is archived there, and a human annotation is recorded there as written.",
+            "type": "string",
+            "pattern": "^discovery/[a-z0-9]+(-[a-z0-9]+)*/evidence/(?!.*\\.candidate\\.json$)[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "digest": {
+            "description": "eval-quality's digestBytes over the snapshot file.",
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    },
+    "review": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer", "decidedAt", "rationale", "scope"],
+          "properties": {
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decidedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "$ref": "#/$defs/scope"
+            }
+          }
+        }
+      ]
+    },
+    "acceptedRisk": {
+      "description": "A waived survivor stays in the record and in every total.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer", "decidedAt", "rationale", "scope", "revisitWhen"],
+          "properties": {
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decidedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "$ref": "#/$defs/scope"
+            },
+            "revisitWhen": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "promotion": {
+      "description": "A draft only. Native check, compile, seal, qualification and scoring stay authoritative.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["draftMutationId", "qualificationReceipt"],
+          "properties": {
+            "draftMutationId": {
+              "type": "string",
+              "pattern": "^M-[0-9]{3,}$"
+            },
+            "qualificationReceipt": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["path", "digest"],
+                  "properties": {
+                    "path": {
+                      "description": "The mutated arm's evidence of the native qualification of the draft mutation, as a qualification writes it: baseline/qualification/<probeId>/mutated-fail.json. The reader holds it, with the baseline-pass and rollback evidence beside it, to the draft mutation, the probe and the target.",
+                      "type": "string",
+                      "pattern": "^baseline/qualification/P-[0-9]{3,}/mutated-fail\\.json$"
+                    },
+                    "digest": {
+                      "description": "eval-quality's digestBytes over the receipt file.",
+                      "$ref": "#/$defs/digest"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": ["generated", "applicable"]
+          }
+        },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "observations": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "review": {
+            "type": "null"
+          },
+          "acceptedRisk": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "observed"
+          }
+        },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "observations": {
+            "type": "array",
+            "minItems": 1
+          },
+          "review": {
+            "type": "null"
+          },
+          "acceptedRisk": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": ["reviewed", "promoted"]
+          }
+        },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "observations": {
+            "type": "array",
+            "minItems": 1
+          },
+          "review": {
+            "type": "object"
+          },
+          "disposition": {
+            "$ref": "#/$defs/reviewDisposition"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "promoted"
+          }
+        },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "promotion": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "promotion": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "disposition": {
+            "$ref": "#/$defs/confirmedDisposition"
+          }
+        },
+        "required": ["disposition"]
+      },
+      "then": {
+        "properties": {
+          "review": {
+            "type": "object"
+          },
+          "independentEvidence": {
+            "type": "array",
+            "minItems": 1
+          },
+          "observations": {
+            "type": "array",
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "arm": {
+                      "const": "baseline"
+                    }
+                  },
+                  "required": ["arm"]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "arm": {
+                      "const": "candidate"
+                    }
+                  },
+                  "required": ["arm"]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "promotion": {
+            "type": "object"
+          }
+        },
+        "required": ["promotion"]
+      },
+      "then": {
+        "properties": {
+          "disposition": {
+            "$ref": "#/$defs/confirmedDisposition"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "acceptedRisk": {
+            "type": "object"
+          }
+        },
+        "required": ["acceptedRisk"]
+      },
+      "then": {
+        "properties": {
+          "review": {
+            "type": "object"
+          },
+          "disposition": {
+            "const": "confirmed-undesirable-missed"
+          }
+        }
+      }
+    }
+  ]
+}

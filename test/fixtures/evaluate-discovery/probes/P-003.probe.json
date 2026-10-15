@@ -1,0 +1,7 @@
+{
+  "probeId": "P-003",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}

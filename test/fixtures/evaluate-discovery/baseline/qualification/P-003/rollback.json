@@ -1,0 +1,28 @@
+{
+  "probeId": "P-003",
+  "mutationId": "M-002",
+  "targetArtifact": "skill/steps-c/step-04-generate-tests.md",
+  "preDigest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2",
+  "mutatedDigest": "sha256:36b4686e69a884762e06bd396b3e7cc40289a356b164926536d2fd662ac3823a",
+  "restoredDigest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-001",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-red-phase"
+          ]
+        }
+      ],
+      "steps": []
+    }
+  ],
+  "rollbackVerified": true
+}

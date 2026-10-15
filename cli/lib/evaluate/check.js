@@ -15,6 +15,10 @@
  *   regular file held by the evaluation folder, its committed bytes disagree with the recorded digest, or
  *   they digest to something other than the contract's `sourceSpecDigest` (contract-source freshness, Story
  *   2.2: a requirements change the contract has not absorbed blocks the pull request).
+ * - `candidate-placement`: a `*.candidate.json` file sits anywhere in the folder outside its top-level `discovery/` directory
+ *   (the lane exploratory candidates live in, which no scored artifact reads), so a candidate cannot be digested into the corpus,
+ *   the evaluator layer, the policy or the baseline. A development check leaves `corpus/held-out/` unopened, as it does for the
+ *   corpus index.
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
@@ -195,7 +199,7 @@ const {
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
-const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
+const { CorpusIndexError, INDEX_NAME, corpusIndexProblem, unreadPaths } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -221,6 +225,11 @@ const QUALIFICATION_PREFIX = 'baseline/qualification/';
 const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
 const MUTATION_FILE = /^(.+)\.mutation\.json$/;
+/** The one directory of an evaluation folder that holds exploratory candidates, and the suffix of their files. */
+const CANDIDATE_LANE = 'discovery';
+const CANDIDATE_SUFFIX = '.candidate.json';
+/** Top-level entries a placement scan leaves out: the lane itself, runtime output and installed packages. */
+const PLACEMENT_SKIPPED = new Set([CANDIDATE_LANE, 'runs', 'node_modules']);
 const WRITTEN_FILE_POINTER = /^\/interactions\/[^/]+\/artifact(?:\/|$)/;
 const INTERACTION_POINTER = /^\/interactions\/([^/]+)(?:\/|$)/;
 /** The step budget a signature's regular-expression operators get while `check` resolves them. */
@@ -512,6 +521,36 @@ function optionSetsByOperation(contract) {
     }
   }
   return sets;
+}
+
+/**
+ * `candidate-placement`: a candidate file anywhere a scored artifact could read it. Links are not followed, so the scan stays
+ * inside the folder the way `listDirectory` does. `unread` is the `unreadPaths` of the directories the scan leaves unopened, the
+ * same set the corpus index leaves unread, so a development check never opens a sealed held-out folder in any spelling.
+ */
+function checkCandidatePlacement(report, folder, unread, relativeDirectory = '') {
+  let entries;
+  try {
+    entries = listDirectory(folder, relativeDirectory);
+  } catch (error) {
+    // A directory this process cannot read is reported by the rule that owns it (the corpus index for corpus/), and a
+    // candidate cannot be read from it either.
+    if (error.code === 'EACCES' || error.code === 'EPERM') return;
+    throw error;
+  }
+  for (const entry of entries ?? []) {
+    const relative = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
+    if (relativeDirectory === '' && PLACEMENT_SKIPPED.has(entry.name)) continue;
+    if (entry.isDirectory && unread.has(relative)) continue;
+    if (entry.isDirectory) checkCandidatePlacement(report, folder, unread, relative);
+    else if (entry.name.endsWith(CANDIDATE_SUFFIX)) {
+      report.add(
+        relative,
+        'candidate-placement',
+        `a candidate file belongs under ${CANDIDATE_LANE}/<campaignId>/, which no scored artifact reads; here it would be digested into the evaluation`,
+      );
+    }
+  }
 }
 
 /**
@@ -2482,6 +2521,9 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
   checkHeldOut(report, folder, evaluation);
   const openPlan = partition !== 'development';
+  const planFile = evaluation.partitionPlan?.heldOutPlan;
+  const heldOutUnread = openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY];
+  checkCandidatePlacement(report, folder, unreadPaths(heldOutUnread));
   const heldOutPlan = checkPartitionPlan(report, folder, evaluation, context, { openPlan });
   // The answers a gameability probe gives the held-out plan's steps sit beside the plan, so a check that opens a sound plan reads them
   // and a development check never does (Story 1.109).
@@ -2520,10 +2562,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   });
 
   try {
-    const planFile = evaluation.partitionPlan?.heldOutPlan;
-    const stale = await corpusIndexProblem(folder, {
-      unread: openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY],
-    });
+    const stale = await corpusIndexProblem(folder, { unread: heldOutUnread });
     if (stale !== null) report.add(INDEX_NAME, 'stale-index', stale);
   } catch (error) {
     if (!(error instanceof CorpusIndexError)) throw error;

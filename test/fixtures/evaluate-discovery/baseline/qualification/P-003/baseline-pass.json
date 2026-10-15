@@ -1,0 +1,21 @@
+{
+  "probeId": "P-003",
+  "mutationId": "M-002",
+  "phase": "baseline-pass",
+  "workspace": "qualification",
+  "targetArtifact": "skill/steps-c/step-04-generate-tests.md",
+  "targetArtifactDigest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-red-phase"
+      ]
+    }
+  ],
+  "steps": []
+}

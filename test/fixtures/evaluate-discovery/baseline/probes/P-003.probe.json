@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-003",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "red-phase-pilot",
+  "implementationDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "artifactDigest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2",
+  "commitDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "rationale": "Seeded defect: test.fixme( in place of test.skip( leaves the scaffold failing for the wrong reason.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "skill/steps-c/step-04-generate-tests.md",
+    "mutationOperator": "replace-exact: \"test.skip(\" -> \"test.fixme(\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "skill/steps-c/step-04-generate-tests.md",
+      "privateRef": null,
+      "digest": "sha256:b3f1f584b8954ba40773c2448b61e86aa6b654fd7b76764ae3ad761fe54792b2"
+    },
+    "expectedObservableFailure": "Marking the generated tests fixme instead of skip leaves the scaffold failing for the wrong reason, which the red-phase gate must still report.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261014T121538011Z-f4b4471a/qualification/P-003/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:48cfba21000ea85f429ac2c5fcccf96c18f580709af0db561a0fe82eac13ddee"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261014T121538011Z-f4b4471a/qualification/P-003/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:282721eb1f57e84b88fbc54c82a21d6137239094fddf4f0957aae0833aea91bb"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [],
+  "defectSignature": null
+}
