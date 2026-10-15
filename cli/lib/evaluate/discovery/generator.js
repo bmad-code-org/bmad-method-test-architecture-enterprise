@@ -4,8 +4,8 @@
  *
  * The generator is a function from the target file's bytes to a preview. It reads no file, starts no process, opens no
  * socket and calls no model, so a preview costs nothing and runs anywhere. The caller supplies the bytes and the digest
- * of the requirements statement and writes the records it keeps; `test/test-evaluate-generator.js` holds the module to
- * that by its source and by running it with the network and process entry points broken.
+ * of the requirements statement and writes the records it keeps. The generator's test holds the module to that by its source and by running it with the
+ * network and process entry points broken.
  *
  * Families (the catalog, versioned by `GENERATOR_VERSION`):
  *
