@@ -3748,8 +3748,39 @@ function checkEveryAttemptIsAccountedFor() {
   });
   const allTimeoutsResult = read(scoredAsFailure, allTimeouts, { seal: false });
   check(
-    outcomeOf(allTimeoutsResult) === 'inconclusive',
+    outcomeOf(allTimeoutsResult) === 'blocked' && hasReason(allTimeoutsResult, /the candidate completed no attempt/),
     `a candidate that only times out does not clear, got ${outcomeOf(allTimeoutsResult)}`,
+  );
+  const anyLoss = declaration({ mutate: (body) => (body.gates.quality.recall.maxLoss = 1) });
+  check(
+    experiment.validateDeclaration(anyLoss).pairedProblems.some((problem) => problem.where === 'gates.quality.recall'),
+    'an allowed loss of the whole [0, 1] scale is refused',
+  );
+  const zeroSuccess = declaration({
+    mutate: (body) => {
+      body.design.failureRules = { timeout: 'failure', failureMetricValue: 0 };
+      body.gates.success.metrics = { recall: 0, precision: 0.5 };
+    },
+  });
+  check(
+    experiment.validateDeclaration(zeroSuccess).pairedProblems.some((problem) => problem.where === 'gates.success.metrics'),
+    'a success minimum of 0 under a failure rule is refused',
+  );
+  const retryOverRange = world();
+  const overRangeRetry = seal({
+    ...clone(candidateRow(retryOverRange, 'c4', 2)),
+    attemptId: 'B-c4-2-retry',
+    attempt: 2,
+    status: 'failed',
+    metrics: { recall: 1.2, precision: 0.5 },
+  });
+  overRangeRetry.receipt.workspaceId = 'ws-c4-retry';
+  retryOverRange.push(overRangeRetry);
+  const retryOverRangeResult = read(declaration(), retryOverRange);
+  check(
+    outcomeOf(retryOverRangeResult) === 'blocked' &&
+      hasReason(retryOverRangeResult, /required metric outside \[0, 1\]: B-c4-2-retry\/recall/),
+    'a required metric outside [0, 1] on a retry blocks too',
   );
   const overRange = read(declaration(), world({ mutateRow: (row, i) => row.arm === 'B' && i === 0 && (row.metrics.recall = 1.2) }));
   check(
@@ -3794,6 +3825,8 @@ function checkEveryAttemptIsAccountedFor() {
   );
   for (const [label, change] of [
     ['a retry with no first attempt', (rows) => (candidateRow(rows, 'c2', 1).attempt = 2)],
+    ['an attempt with no attempt number', (rows) => delete candidateRow(rows, 'c2', 1).attempt],
+    ['an attempt numbered 0', (rows) => (candidateRow(rows, 'c2', 1).attempt = 0)],
     [
       'two first attempts',
       (rows) => {
@@ -3832,6 +3865,7 @@ function checkEveryAttemptIsAccountedFor() {
     ['input hash', (row) => (row.inputSha256 = sha('another prompt'))],
     ['observed identity', (row) => (row.observed.arm.model.resolved = 'cheaper-2026-11')],
     ['stage', (row) => (row.stage = 'baseline')],
+    ['attempt number', (row) => (row.attempt = 0)],
   ]) {
     const rows = world();
     const copy = clone(candidateRow(rows, 'c1', 1));

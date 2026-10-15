@@ -388,6 +388,13 @@ function validateDeclaration(declaration) {
       'design.failureRules.failureMetricValue',
       'must be 0, the bottom of the [0, 1] scale of a required metric: a timeout scored as a failure scores the worst outcome',
     );
+    need(
+      pairs,
+      Object.keys(decl.gates?.success?.metrics ?? {}).length > 0 &&
+        Object.values(decl.gates.success.metrics).every((minimum) => minimum > 0),
+      'gates.success.metrics',
+      'needs a minimum above 0 on every metric under a failure rule, so a failure never counts as a success',
+    );
   }
   const analysis = isObject(design.analysis) ? design.analysis : {};
   need(pairs, isFiniteNumber(analysis.alpha) && analysis.alpha > 0 && analysis.alpha < 0.5, 'design.analysis.alpha', 'must be in (0, 0.5)');
@@ -411,9 +418,9 @@ function validateDeclaration(declaration) {
   const quality = isObject(gates.quality) ? gates.quality : {};
   need(pairs, Object.keys(quality).length > 0, 'gates.quality', 'needs at least one required metric');
   for (const [metric, rule] of Object.entries(quality)) {
-    const loss = isFiniteNumber(rule?.maxLoss) && rule.maxLoss >= 0;
+    const loss = isFiniteNumber(rule?.maxLoss) && rule.maxLoss >= 0 && rule.maxLoss < 1;
     const gain = isFiniteNumber(rule?.minImprovement) && rule.minImprovement > 0;
-    need(pairs, loss !== gain, `gates.quality.${metric}`, 'needs exactly one of maxLoss (>= 0) or minImprovement (> 0)');
+    need(pairs, loss !== gain, `gates.quality.${metric}`, 'needs exactly one of maxLoss in [0, 1) or minImprovement (> 0)');
   }
   if (scope.objective === 'cost') {
     need(
@@ -592,7 +599,7 @@ function normalizeRow(raw, inputIndex) {
     blockId: source.blockId ?? null,
     buildId: source.buildId ?? null,
     repetition: isPositiveInteger(source.repetition) ? source.repetition : null,
-    attemptNumber: isPositiveInteger(source.attempt) ? source.attempt : 1,
+    attemptNumber: isPositiveInteger(source.attempt) ? source.attempt : null,
     status: source.status ?? null,
     error: source.error ?? null,
     retryOf: source.retryOf ?? null,
@@ -1098,7 +1105,7 @@ function describeCases(declaration, rows, plan) {
     const extraCompleted = [];
     const ordered = own
       .filter((row) => row.status === 'completed')
-      .sort((left, right) => left.attemptNumber - right.attemptNumber || left.inputIndex - right.inputIndex);
+      .sort((left, right) => (left.attemptNumber ?? 0) - (right.attemptNumber ?? 0) || left.inputIndex - right.inputIndex);
     for (const row of ordered) {
       const key = `${row.runId ?? ''}\u0000${row.repetition}`;
       if (byRepetition.has(key)) extraCompleted.push(row.attemptId);
@@ -1465,7 +1472,7 @@ function resolveSlots(declaration, rows, plan) {
       for (const arm of ARMS) {
         const attempts = stageRows
           .filter((row) => row.arm === arm && row.caseId === entry.caseId && row.repetition === repetition)
-          .sort((left, right) => left.attemptNumber - right.attemptNumber || left.inputIndex - right.inputIndex);
+          .sort((left, right) => (left.attemptNumber ?? 0) - (right.attemptNumber ?? 0) || left.inputIndex - right.inputIndex);
         const completed = attempts.filter((row) => row.status === 'completed');
         const timeouts = attempts.filter((row) => row.status === 'timeout');
         let scoring = null;
@@ -1807,6 +1814,12 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
       )
     : [];
   facts.unclassifiedCost = unclassified;
+  facts.outOfRange = contrastRows.flatMap((row) =>
+    Object.keys(declaration.gates.quality)
+      .filter((metric) => isFiniteNumber(row.metrics[metric]) && (row.metrics[metric] < 0 || row.metrics[metric] > 1))
+      .map((metric) => `${row.attemptId}/${metric}`),
+  );
+  facts.nothingCompleted = !contrastRows.some((row) => row.arm === 'B' && row.status === 'completed');
   facts.latencyUnknown =
     isObject(declaration.gates.latency) &&
     clusterValues(declaration, slots, plan, (side) => slotLatency(side)).some((cluster) => cluster.A === null || cluster.B === null);
@@ -2062,7 +2075,10 @@ function decide({
   if (problems.attemptGap.length > 0) {
     blocks.push(`attempt numbers do not run 1, 2, ... without a gap or a repeat: ${problems.attemptGap.join(', ')}`);
   }
-  if (problems.outOfRange.length > 0) blocks.push(`required metric outside [0, 1]: ${problems.outOfRange.join(', ')}`);
+  if (problems.outOfRange.length > 0 || facts.outOfRange.length > 0) {
+    blocks.push(`required metric outside [0, 1]: ${[...problems.outOfRange, ...facts.outOfRange].join(', ')}`);
+  }
+  if (facts.nothingCompleted) blocks.push('the candidate completed no attempt, so nothing it produced was measured');
   if (problems.missingBlock.length > 0) blocks.push(`pairing block not recorded on both arms: ${problems.missingBlock.join(', ')}`);
   if (problems.blockMismatch.length > 0) blocks.push(`pairing blocks differ: ${problems.blockMismatch.join(', ')}`);
   if (facts.schedule.length > 0) {
