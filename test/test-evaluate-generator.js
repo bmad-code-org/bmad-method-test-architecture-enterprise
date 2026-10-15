@@ -104,6 +104,14 @@ function keptBy(module, seed, family) {
     .join(',');
 }
 
+/** Twelve sites per family on twelve lines each, so a cap of three has a choice to make. */
+const MANY_SITES = [
+  ...Array.from({ length: 12 }, (_, index) => `Step ${index + 1}: you must run check ${index + 1}.`),
+  ...Array.from({ length: 12 }, (_, index) => `Rule ${index + 1}: do not skip case ${index + 1}.`),
+  ...Array.from({ length: 12 }, (_, index) => `Limit ${index + 1}: wait at most ${index + 1}0 seconds.`),
+  '',
+].join('\n');
+
 // Seeds whose cap-of-three selections differ for both families the seed test uses; the golden preview pins the rest.
 const SEED_A = 'alpha';
 const SEED_B = 'beta';
@@ -127,6 +135,21 @@ function contractProblems(module) {
     const b = keptBy(module, SEED_B, family);
     expect(a === keptBy(module, SEED_A, family), `${family}: one seed chose two different sets`);
     expect(a !== b, `${family}: the seeds ${SEED_A} and ${SEED_B} keep the same sites (${a}), so the seed orders nothing`);
+  }
+  // Seeds that share a first character and a length still order the sites differently, for every family.
+  for (const family of generator.FAMILY_NAMES) {
+    const kept = (seed) =>
+      module
+        .previewCandidates(
+          inputs({ target: { artifact: ARTIFACT, bytes: Buffer.from(MANY_SITES) }, seed, families: [family], perFamilyCap: 3 }),
+        )
+        .candidates.map((candidate) => candidate.line)
+        .join(',');
+    expect(kept('seed-1') === kept('seed-1'), `${family}: one seed chose two different sets`);
+    expect(
+      kept('seed-1') !== kept('seed-2'),
+      `${family}: the seeds seed-1 and seed-2 keep the same sites (${kept('seed-1')}), so most of the seed is ignored`,
+    );
   }
   const seeded = module.previewCandidates(inputs({ seed: SEED_A, perFamilyCap: 100 }));
   expect(
@@ -213,6 +236,14 @@ function checkContractHoldsAndBreaks() {
       replacements: [['    seed,\n    site.family,', '    "",\n    site.family,']],
     },
     {
+      label: 'ranks by the first character of the seed',
+      replacements: [['    seed,\n    site.family,', '    seed[0],\n    site.family,']],
+    },
+    {
+      label: 'ignores the seed for one family',
+      replacements: [['    seed,\n    site.family,', "    site.family === 'modal-strength' ? '' : seed,\n    site.family,"]],
+    },
+    {
       label: 'does not record the seed',
       replacements: [
         [
@@ -266,7 +297,7 @@ const RULES = [
   { line: 'NEVER invent findings.', family: 'negation', edited: 'ALWAYS invent findings.' },
   { line: 'The cache has never been warm.', family: 'negation', code: 'descriptive' },
   { line: 'We do not store findings.', family: 'negation', code: 'descriptive' },
-  { line: 'Do not never invent findings.', family: 'negation', code: 'double-negation', count: 1 },
+  { line: 'Do not never invent findings.', family: 'negation', code: 'double-negation' },
   { line: 'Is it true that you do not invent findings?', family: 'negation', code: 'question' },
   { line: 'Say "do not invent" exactly.', family: 'negation', code: 'protected-span' },
   // numeric-threshold
@@ -294,15 +325,221 @@ const RULES = [
   { line: 'Say "at most 5" exactly.', family: 'numeric-threshold', code: 'protected-span' },
 ];
 
-/** Each row of `RULES` previews as stated, in a prompt of its own. */
+const LOWER_BOUNDS = [
+  'at least',
+  'no fewer than',
+  'no less than',
+  'minimum of',
+  'minimum',
+  'min',
+  'more than',
+  'greater than',
+  'above',
+  'over',
+  'exceeds',
+  'exceeding',
+  '>=',
+  '≥',
+  '>',
+];
+const UPPER_BOUNDS = [
+  'at most',
+  'no more than',
+  'up to',
+  'maximum of',
+  'maximum',
+  'max',
+  'fewer than',
+  'less than',
+  'under',
+  'below',
+  'within',
+  '<=',
+  '≤',
+  '<',
+];
+
+/** Rows built from lists: each placeholder form, each guard word, each negation form and each bound phrase. */
+const GENERATED_RULES = [
+  // A placeholder holds its site whatever its form.
+  ...[
+    ['{{you must}}', 'double braces'],
+    ['${you must}', 'dollar braces'],
+    ['{must}', 'single braces'],
+    ['<must>', 'angle'],
+    ['[[must]]', 'double brackets'],
+    ['%(must)s', 'format'],
+    ['$must', 'variable'],
+  ].map(([form]) => ({ line: `Fill ${form} in.`, family: 'modal-strength', code: 'protected-span', reason: 'placeholder' })),
+  // A word before a negation that makes it a statement of fact.
+  ...['we', 'they', 'i', 'he', 'she', 'it', 'which', 'who', 'that', 'has', 'have', 'had', 'was', 'were', 'is', 'are', 'am', 'been'].map(
+    (word) => ({
+      line: `${word} never runs.`,
+      family: 'negation',
+      code: 'descriptive',
+    }),
+  ),
+  // A negation word after a negation, and a contraction after it.
+  ...['not', 'no', 'never', 'neither', 'nor', 'without', 'nothing', 'none', 'nobody', 'cannot'].map((word) => ({
+    line: `Do not ${word} go.`,
+    family: 'negation',
+    code: 'double-negation',
+  })),
+  { line: "Never isn't ok.", family: 'negation', code: 'double-negation' },
+  { line: 'Never isn’t ok.', family: 'negation', code: 'double-negation' },
+  // A determiner before a modal makes it a noun.
+  ...['a', 'an', 'the', 'this', 'that', 'no', 'any', 'every', 'each', 'its', 'their', 'our', 'your', 'my'].map((word) => ({
+    line: `${word} must matter.`,
+    family: 'modal-strength',
+    code: 'not-a-directive',
+  })),
+  // Every bound phrase loosens in the direction it constrains, in any case and across any whitespace.
+  ...LOWER_BOUNDS.map((phrase) => ({
+    line: `Keep it ${phrase} 8 total.`,
+    family: 'numeric-threshold',
+    edited: `Keep it ${phrase} 4 total.`,
+  })),
+  ...UPPER_BOUNDS.map((phrase) => ({
+    line: `Keep it ${phrase} 8 total.`,
+    family: 'numeric-threshold',
+    edited: `Keep it ${phrase} 16 total.`,
+  })),
+];
+
+/** Rows that need more than one line, or an exact reason. */
+const MULTI_LINE_RULES = [
+  { text: 'Keep it <!-- you must not edit --> short.\n', family: 'modal-strength', code: 'protected-span', reason: 'html comment' },
+  { text: 'Keep it <!-- you must edit\nstill you must edit\n', family: 'modal-strength', code: 'protected-span', reason: 'html comment' },
+  { text: 'See [guide](docs/must.md) first.\n', family: 'modal-strength', code: 'protected-span', reason: 'link target' },
+  { text: 'Open https://example.test/must now.\n', family: 'modal-strength', code: 'protected-span', reason: 'url' },
+  { text: 'Say "you must act.\n', family: 'modal-strength', code: 'protected-span', reason: 'quotation' },
+  { text: '# Use `must` here\n', family: 'modal-strength', code: 'protected-span', reason: 'heading' },
+  { text: '---\r\nname: you must\r\n---\r\nBody.\r\n', family: 'modal-strength', code: 'protected-span', reason: 'front matter' },
+  { text: 'Intro.\n~~~\nYou must not cite.\n~~~\nOutro.\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
+  {
+    text: '```\nyou must\n~~~\nyou must again\n```\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    rejections: 2,
+  },
+  {
+    text: '````\nyou must\n```\nyou must again\n````\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    rejections: 2,
+  },
+  {
+    text: '```\nyou must\n```js\nyou must again\n```\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    rejections: 2,
+  },
+  { text: '```text you must\nx\n```\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
+  { text: '```\nx\n```\nYou must act.\n', family: 'modal-strength', edited: 'You should act.' },
+];
+
+/** Forms, boundaries and limits of each rule. */
+const EDGE_RULES = [
+  { line: 'You shall not cite.', family: 'negation', edited: 'You shall cite.' },
+  { line: "You mustn't cite.", family: 'negation', edited: 'You must cite.' },
+  { line: 'The tool can not cite.', family: 'negation', edited: 'The tool can cite.' },
+  { line: "The tool can't cite.", family: 'negation', edited: 'The tool can cite.' },
+  { line: 'Cannot cite.', family: 'negation', edited: 'Can cite.' },
+  { line: 'CANNOT cite.', family: 'negation', edited: 'CAN cite.' },
+  { line: 'Never cite.', family: 'negation', edited: 'Always cite.' },
+  // A word that only contains a trigger is no trigger.
+  { line: 'The mustard is hot.', family: 'modal-strength', code: 'none' },
+  { line: 'This must-have item.', family: 'modal-strength', code: 'none' },
+  { line: 'Use the kudo not here.', family: 'negation', code: 'none' },
+  { line: 'Nevertheless, continue.', family: 'negation', code: 'none' },
+  { line: 'Plan a rollover 5 times.', family: 'numeric-threshold', code: 'none' },
+  // A question mark ends a question only at the end of the line.
+  { line: 'Why? You must act.', family: 'modal-strength', edited: 'Why? You should act.' },
+  { text: 'Must it act? \n', family: 'modal-strength', code: 'question' },
+  // Bounds in any case, across any whitespace, and the limits of a number.
+  { line: 'AT LEAST 8 findings.', family: 'numeric-threshold', edited: 'AT LEAST 4 findings.' },
+  { line: 'at  least 8 findings.', family: 'numeric-threshold', edited: 'at  least 4 findings.' },
+  { line: 'Hold at most 8/10 tests.', family: 'numeric-threshold', code: 'not-a-threshold' },
+  { line: 'Hold at most 99999999999999999999 tests.', family: 'numeric-threshold', code: 'not-a-threshold', reason: 'too large' },
+  { line: 'Hold at most 1234567890123456 tests.', family: 'numeric-threshold', code: 'not-a-threshold', reason: 'too large' },
+  { line: 'Hold at most 123456789012345 tests.', family: 'numeric-threshold', edited: 'Hold at most 246913578024690 tests.' },
+  { line: 'Finish within 1ms.', family: 'numeric-threshold', edited: 'Finish within 2ms.' },
+  { line: 'Finish within 1 day.', family: 'numeric-threshold', code: 'number-agreement' },
+  // A byte order mark leaves the first line a first line.
+  {
+    text: '﻿---\nname: x\ndescription: You must do x\n---\nbody\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'front matter',
+  },
+  { text: '﻿# You must read\n', family: 'modal-strength', code: 'protected-span', reason: 'heading' },
+  { text: '﻿```\nYou must not\n```\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
+  // Code in a list item, indented code and setext headings.
+  {
+    text: '- item\n    ```\n    You must not\n    ```\nYou must go\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  {
+    text: 'Intro.\n\n    echo you must not\n    echo you must again\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'indented code',
+    rejections: 2,
+  },
+  { text: '- item\n    - You must act.\n', family: 'modal-strength', edited: 'You should act.' },
+  { text: 'Title you must\n-----\n', family: 'modal-strength', code: 'protected-span', reason: 'heading' },
+  // A bound under a negation constrains the other way.
+  { line: 'Do not use more than 4 bullets.', family: 'numeric-threshold', code: 'negated-bound' },
+  { line: 'Never write over 6 sentences.', family: 'numeric-threshold', code: 'negated-bound' },
+  { line: 'Keep not less than 4 items.', family: 'numeric-threshold', code: 'negated-bound' },
+  { line: "Don't go over 5 words.", family: 'numeric-threshold', code: 'negated-bound' },
+  { line: 'Do not skip; keep at most 5 items.', family: 'numeric-threshold', edited: 'Do not skip; keep at most 10 items.' },
+  // A percentage is a percentage however it is spelled.
+  { line: 'Use up to 60 % of the quota.', family: 'numeric-threshold', code: 'beyond-range' },
+  { line: 'Keep it under 60 percent.', family: 'numeric-threshold', code: 'beyond-range' },
+  { line: 'Keep it under 40 percent.', family: 'numeric-threshold', edited: 'Keep it under 80 percent.' },
+  { line: 'Use up to 1 % extra.', family: 'numeric-threshold', edited: 'Use up to 2 % extra.' },
+  // A number that starts a range, an alternative or an ordinal is no bound.
+  { line: 'Pick at least 3–5 items.', family: 'numeric-threshold', code: 'not-a-threshold' },
+  { line: 'Pick at least 3 - 5 items.', family: 'numeric-threshold', code: 'not-a-threshold' },
+  { line: 'Pick at least 3 to 5 items.', family: 'numeric-threshold', code: 'not-a-threshold' },
+  { line: 'Pick at most 3 or 4 items.', family: 'numeric-threshold', code: 'not-a-threshold' },
+  { line: 'Rank above 3rd place.', family: 'numeric-threshold', code: 'not-a-threshold', reason: 'ordinal' },
+  { line: 'Rank at least 2nd.', family: 'numeric-threshold', code: 'not-a-threshold', reason: 'ordinal' },
+  { line: 'Result => 3', family: 'numeric-threshold', code: 'none' },
+  // Addresses, paths and single-quoted text.
+  { line: 'Open www.example.test/must now.', family: 'modal-strength', code: 'protected-span', reason: 'url' },
+  { line: 'Mail mailto:must@example.test now.', family: 'modal-strength', code: 'protected-span', reason: 'url' },
+  { line: 'Read docs/never/x.md first.', family: 'negation', code: 'protected-span', reason: 'path' },
+  { line: "He said 'you must not skip' then left.", family: 'modal-strength', code: 'protected-span', reason: 'quotation' },
+  { line: 'He said ‘you must act’ then left.', family: 'modal-strength', code: 'protected-span', reason: 'quotation' },
+  { line: "The user's rule: you must act, isn't it.", family: 'modal-strength', edited: "The user's rule: you should act, isn't it." },
+  // A collocation that "always" cannot take.
+  { line: 'Never ever skip.', family: 'negation', code: 'grammar' },
+  { line: 'Never again skip.', family: 'negation', code: 'grammar' },
+  { line: 'Fill <!-- x --> and keep at most 5 items.', family: 'numeric-threshold', edited: 'Fill <!-- x --> and keep at most 10 items.' },
+];
+
+/** The rows above in one table, with the count of candidates a rejection row leaves. */
+const ALL_RULES = [...RULES, ...GENERATED_RULES, ...MULTI_LINE_RULES, ...EDGE_RULES];
+
+/** Each row previews as stated, in a prompt of its own. */
 function checkRules() {
-  for (const rule of RULES) {
-    const preview = previewOf(generator, `${rule.line}\n`, { families: [rule.family] });
-    const label = `${rule.family}: ${JSON.stringify(rule.line)}`;
+  for (const rule of ALL_RULES) {
+    const text = rule.text ?? `${rule.line}\n`;
+    const preview = previewOf(generator, text, { families: [rule.family] });
+    const label = `${rule.family}: ${JSON.stringify(rule.line ?? text)}`;
     if (rule.edited !== undefined) {
       check(preview.candidates.length === 1, `${label} gives ${preview.candidates.length} candidates, not one`);
       check(
-        preview.candidates[0]?.record.edit.find === rule.line && preview.candidates[0]?.record.edit.replace === rule.edited,
+        preview.candidates[0]?.record.edit.replace.endsWith(rule.edited) &&
+          (rule.line === undefined || preview.candidates[0].record.edit.find === rule.line),
         `${label} edits to ${JSON.stringify(preview.candidates[0]?.record.edit.replace)}, not ${JSON.stringify(rule.edited)}`,
       );
       check(preview.rejected.length === 0, `${label} also rejects ${JSON.stringify(preview.rejected.map((site) => site.code))}`);
@@ -310,45 +547,56 @@ function checkRules() {
       check(preview.candidates.length === 0 && preview.rejected.length === 0, `${label} proposes or rejects something; it holds no site`);
     } else {
       check(
-        preview.candidates.length === rule.count || (rule.count === undefined && preview.candidates.length === 0),
-        `${label} still proposes ${preview.candidates.length} candidate(s)`,
+        preview.candidates.length === (rule.count ?? 0),
+        `${label} proposes ${preview.candidates.length} candidate(s), not ${rule.count ?? 0}`,
       );
-      check(
-        preview.rejected.some((site) => site.code === rule.code),
-        `${label} is not rejected as ${rule.code}: ${JSON.stringify(preview.rejected.map((site) => site.code))}`,
-      );
+      const coded = preview.rejected.filter((site) => site.code === rule.code);
+      check(coded.length > 0, `${label} is not rejected as ${rule.code}: ${JSON.stringify(preview.rejected.map((site) => site.code))}`);
+      if (rule.reason !== undefined) {
+        check(
+          coded.every((site) => site.message.includes(rule.reason)) && coded.length === (rule.rejections ?? coded.length),
+          `${label} is not rejected for ${rule.reason}: ${JSON.stringify(coded.map((site) => site.message))}`,
+        );
+      }
     }
   }
 }
 
 /** Text encoded differently from the fixture still edits exactly the bytes it states. */
 function checkEncodings() {
-  const spaced = previewOf(generator, 'Do not invent findings.\n', { families: ['negation'] });
+  const spaced = previewOf(generator, 'Do\u00A0not invent findings.\n', { families: ['negation'] });
   check(
     spaced.candidates.length === 1 && spaced.candidates[0].record.edit.replace === 'Do invent findings.',
     'a no-break space inside "Do not" is not read as the negation',
   );
-  check(spaced.candidates[0]?.record.edit.find === 'Do not invent findings.', 'the find text does not keep the no-break space as written');
+  check(
+    spaced.candidates[0]?.record.edit.find === 'Do\u00A0not invent findings.',
+    'the find text does not keep the no-break space as written',
+  );
 
   const windows = previewOf(generator, 'You must cite.\r\nYou must quote.\r\n', { families: ['modal-strength'] });
   check(
     windows.candidates.length === 2 && windows.candidates.every((candidate) => !candidate.record.edit.find.includes('\r')),
     'a carriage return became part of a find text',
   );
-  const bom = previewOf(generator, '﻿You must cite.\n', { families: ['modal-strength'] });
+  const bom = previewOf(generator, '\uFEFFYou must cite.\n', { families: ['modal-strength'] });
   check(
-    bom.candidates.length === 1 && bom.candidates[0].record.edit.find === '﻿You must cite.',
+    bom.candidates.length === 1 && bom.candidates[0].record.edit.find === '\uFEFFYou must cite.',
     'a byte order mark is dropped from the find text',
+  );
+  check(
+    bom.target.artifactDigest === bytesDigest(Buffer.from('\uFEFFYou must cite.\n', 'utf8')),
+    'the digest of a target with a byte order mark is not the digest of its bytes',
   );
   const folder = scratch.make('encoded');
   fs.mkdirSync(path.join(folder, 'skill'), { recursive: true });
-  fs.writeFileSync(path.join(folder, ARTIFACT), '﻿You must cite.\n');
+  fs.writeFileSync(path.join(folder, ARTIFACT), '\uFEFFYou must cite.\n');
   const planned = planReplaceExact(folder, {
     mutationId: 'M-001',
     targetArtifact: ARTIFACT,
     operator: { find: bom.candidates[0].record.edit.find, replace: bom.candidates[0].record.edit.replace },
   });
-  check(planned.mutated.toString('utf8') === '﻿You should cite.\n', 'the native planner turns the BOM line into a different edit');
+  check(planned.mutated.toString('utf8') === '\uFEFFYou should cite.\n', 'the native planner turns the BOM line into a different edit');
   releasePlan(planned);
 
   const decomposed = previewOf(generator, 'Café must open.\nCafé must open.\n', { families: ['modal-strength'] });
@@ -518,17 +766,48 @@ function checkCandidatesAreCandidates() {
 
 /** The numeric hypotheses name the direction, the unit and the boundary the edit changes. */
 function checkNumericHypothesis() {
-  const preview = previewOf(generator, 'Report at least 8 findings and wait up to 30 seconds, then stop within 500ms or 40%.\n', {
-    families: ['numeric-threshold'],
-  });
+  const preview = previewOf(
+    generator,
+    'Report at least 8 findings and wait up to 30 seconds, then stop within 500ms, keep at least 80% and at least 8 Of them.\n',
+    {
+      families: ['numeric-threshold'],
+    },
+  );
   const text = preview.candidates.map((candidate) => candidate.record.hypothesis).join('\n');
   for (const part of [
-    'lower bound "at least 8" (unit findings) to 4',
-    'upper bound "up to 30" (unit seconds) to 60',
-    'upper bound "within 500" (unit ms) to 1000',
+    'lower bound "at least 8" (unit findings) to "at least 4"',
+    'upper bound "up to 30" (unit seconds) to "up to 60"',
+    'upper bound "within 500ms" (unit ms) to "within 1000ms"',
+    'lower bound "at least 80%" (unit %) to "at least 40%"',
+    'lower bound "at least 8" (unit none) to "at least 4"',
   ]) {
     check(text.includes(part), `a numeric hypothesis lacks ${JSON.stringify(part)}: ${text}`);
   }
+}
+
+/** A long or crowded line costs time in proportion to its length, and a target past the cap is refused. */
+function checkCostStaysLinear() {
+  const cases = [
+    ['a run of apostrophes before a digit', `${"'".repeat(5000)}1 must go\n`],
+    ['a long word before a digit', `${'a'.repeat(200_000)}1b must go\n`],
+    ['twenty thousand sites on one line', `${'must '.repeat(20_000)}\n`],
+    ['ten thousand bounds on one line', `${'at most 5 '.repeat(10_000)}\n`],
+    ['a long run of path separators', `${'a/'.repeat(100_000)}\n`],
+  ];
+  for (const [label, text] of cases) {
+    const started = Date.now();
+    previewOf(generator, text);
+    const elapsed = Date.now() - started;
+    check(elapsed < 5000, `${label} took ${elapsed} ms to preview`);
+  }
+  let message = '';
+  try {
+    previewOf(generator, 'a'.repeat(256 * 1024 + 1));
+  } catch (error) {
+    message = error.message;
+  }
+  check(/not a prompt/.test(message), `a target past the size cap is not refused: ${JSON.stringify(message)}`);
+  check(previewOf(generator, `${'a'.repeat(256 * 1024 - 1)}\n`).candidates.length === 0, 'a target at the size cap is not accepted');
 }
 
 /** A preview reads no file, starts no process, opens no connection and calls no model. */
@@ -613,6 +892,7 @@ function main() {
     checkRefusals();
     checkCandidatesAreCandidates();
     checkNumericHypothesis();
+    checkCostStaysLinear();
     checkZeroCalls();
     checkGolden();
     checkNoCommand();

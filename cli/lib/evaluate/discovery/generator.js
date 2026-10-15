@@ -39,6 +39,8 @@ const GENERATOR_VERSION = '1.0.0';
 const DEFAULT_PER_FAMILY_CAP = 5;
 const REQUIREMENTS_PATH = 'requirements.md';
 const MAX_SAFE_DIGITS = 15;
+/** The largest target a preview reads. A prompt is kilobytes; the cap keeps the repeated-span count affordable. */
+const MAX_TARGET_BYTES = 256 * 1024;
 
 /** A generator input that cannot be used; the message names the option or the file property. */
 class GeneratorError extends Error {
@@ -121,7 +123,7 @@ function boundPattern(phrases) {
 /** A word phrase needs a space before its number (`over3` is no bound); a symbol phrase may touch it (`>=3`). */
 const GAP = String.raw`\s+|(?<=[^\p{L}])\s*`;
 const BOUND_SITE = new RegExp(
-  String.raw`(?<![\w-])(?<lower>${boundPattern(LOWER_BOUNDS)})(?<gap>${GAP})(?<number>\d+)(?<tail>[A-Za-z%]*)|(?<![\w-])(?<upper>${boundPattern(UPPER_BOUNDS)})(?<gap2>${GAP})(?<number2>\d+)(?<tail2>[A-Za-z%]*)`,
+  String.raw`(?<![\w=-])(?<lower>${boundPattern(LOWER_BOUNDS)})(?<gap>${GAP})(?<number>\d+)(?<tail>[A-Za-z%]*)|(?<![\w=-])(?<upper>${boundPattern(UPPER_BOUNDS)})(?<gap2>${GAP})(?<number2>\d+)(?<tail2>[A-Za-z%]*)`,
   'giu',
 );
 
@@ -132,14 +134,24 @@ function matchCase(word, replacement) {
   return replacement;
 }
 
+/** How far a rule looks around a site, so the cost of a line stays linear in its length. */
+const WINDOW = 64;
+/** The words that negate what follows them. */
+const NEGATED = /\b(?:not|no|never|nor|without|cannot)\b|n['’]t\b/i;
+
 /** The word before `index` in `line`, lower-cased, or an empty string. */
 function wordBefore(line, index) {
-  return /([\p{L}']+)\W*$/u.exec(line.slice(0, index))?.[1].toLowerCase() ?? '';
+  return /([\p{L}']+)\W*$/u.exec(line.slice(Math.max(0, index - WINDOW), index))?.[1].toLowerCase() ?? '';
 }
 
 /** The word after `index` in `line`, lower-cased, or an empty string. */
 function wordAfter(line, index) {
-  return /^\W*([\p{L}']+)/u.exec(line.slice(index))?.[1].toLowerCase() ?? '';
+  return /^\W*([\p{L}']+)/u.exec(line.slice(index, index + WINDOW))?.[1].toLowerCase() ?? '';
+}
+
+/** Whether the line ends in a question mark. */
+function asks(line) {
+  return line.trimEnd().endsWith('?');
 }
 
 /** A site the family recognized but cannot edit safely. */
@@ -160,11 +172,12 @@ function edit(start, end, replacement, hypothesis) {
  */
 function modalSites(line) {
   const sites = [];
+  const question = asks(line);
   for (const match of line.matchAll(/(?<![\w-])(must|shall)(?![\w-])/giu)) {
     const [word] = match;
     const start = match.index;
     const end = start + word.length;
-    if (/\?\s*$/.test(line)) {
+    if (question) {
       sites.push(refuse(start, end, 'question', `"${word}" sits in a question, which asks and does not instruct`));
     } else if (NOUN_DETERMINERS.has(wordBefore(line, start))) {
       sites.push(
@@ -193,9 +206,10 @@ function modalSites(line) {
  */
 function negationSites(line) {
   const sites = [];
+  const question = asks(line);
   const patterns = [
     { pattern: /(?<![\w-])(do|must|shall|should)(\s+)not(?![\w-])/giu, keep: (m) => m[1] },
-    { pattern: /(?<![\w-])(do|must|shall|should)n['’]t(?![\w-])/giu, keep: (m) => m[1] },
+    { pattern: /(?<![\w-])(do|must|should)n['’]t(?![\w-])/giu, keep: (m) => m[1] },
     { pattern: /(?<![\w-])can(?:not|\s+not|['’]t)(?![\w-])/giu, keep: (m) => matchCase(m[0], 'can') },
     { pattern: /(?<![\w-])never(?![\w-])/giu, keep: (m) => matchCase(m[0], 'always') },
   ];
@@ -205,17 +219,19 @@ function negationSites(line) {
       const end = start + match[0].length;
       const before = wordBefore(line, start);
       const after = wordAfter(line, end);
-      if (/\?\s*$/.test(line)) {
+      if (question) {
         sites.push(refuse(start, end, 'question', `"${match[0]}" sits in a question, which asks and does not instruct`));
-      } else if (NEGATION_WORDS.has(after) || /^\W*\p{L}*n['’]t\b/iu.test(line.slice(end))) {
+      } else if (NEGATION_WORDS.has(after) || NEGATION_WORDS.has(before) || /^\W*\p{L}*n['’]t\b/iu.test(line.slice(end, end + WINDOW))) {
         sites.push(
           refuse(
             start,
             end,
             'double-negation',
-            `"${match[0]}" is followed by "${after}", so removing it would leave a negation reading as the opposite of both`,
+            `"${match[0]}" sits beside another negation ("${NEGATION_WORDS.has(before) ? before : after}"), so removing it would leave a negation reading as the opposite of both`,
           ),
         );
+      } else if (match[0].toLowerCase() === 'never' && ['ever', 'again'].includes(after)) {
+        sites.push(refuse(start, end, 'grammar', `"${match[0]} ${after}" has no form with "always" that is English`));
       } else if (DESCRIPTIVE_SUBJECTS.has(before)) {
         sites.push(
           refuse(start, end, 'descriptive', `"${match[0]}" follows "${before}", which reads as a statement of fact and not an instruction`),
@@ -253,21 +269,28 @@ function numericSites(line) {
     const tail = lower ? groups.tail : groups.tail2;
     const start = match.index + phrase.length + gap.length;
     const end = start + number.length;
-    const after = line.slice(end + tail.length);
+    const after = line.slice(end + tail.length, end + tail.length + WINDOW);
     const bound = `${phrase}${gap}${number}${tail}`;
-    const percent = tail.startsWith('%');
+    const percent = tail.startsWith('%') || tail.toLowerCase() === 'percent' || /^\s*(?:%|percent\b|per cent\b)/i.test(after);
     // Attached letters are the unit (`500ms`); a spaced word is the unit too (`3 retries`).
     const next = /^\s+(\p{L}+)/u.exec(after)?.[1];
     const unit = percent ? '%' : tail === '' ? (next === undefined || FILLER.has(next.toLowerCase()) ? 'none' : next) : tail;
-    if (/^[-.,:/][0-9]/.test(after)) {
+    const clause = /[^.;:!?,]*$/.exec(line.slice(Math.max(0, match.index - 200), match.index))[0];
+    if (NEGATED.test(clause)) {
+      sites.push(
+        refuse(start, end, 'negated-bound', `"${bound}" follows a negation, which turns the direction the bound constrains around`),
+      );
+    } else if (/^(?:[.,:/-]|\s*[–—-]\s*|\s+(?:to|or|and)\s+)[0-9]/i.test(after)) {
       sites.push(
         refuse(
           start,
           end,
           'not-a-threshold',
-          `"${bound}" continues as a decimal, a version, a date, a time or a range, and a part of it is not a bound`,
+          `"${bound}" continues as a decimal, a version, a date, a time, a range or an alternative, and a part of it is not a bound`,
         ),
       );
+    } else if (/^(?:st|nd|rd|th)$/i.test(tail)) {
+      sites.push(refuse(start, end, 'not-a-threshold', `"${bound}" is an ordinal, not a quantity`));
     } else if (number.length > MAX_SAFE_DIGITS) {
       sites.push(refuse(start, end, 'not-a-threshold', `"${bound}" is too large to loosen exactly`));
     } else {
@@ -275,7 +298,7 @@ function numericSites(line) {
       const loosened = lower ? Math.floor(value / 2) : value * 2;
       if (loosened === value) {
         sites.push(refuse(start, end, 'no-change', `"${bound}" is already as loose as the rule loosens it`));
-      } else if (tail === '' && unit !== 'none' && (value === 1) !== (loosened === 1)) {
+      } else if (!percent && tail === '' && unit !== 'none' && (value === 1) !== (loosened === 1)) {
         sites.push(
           refuse(
             start,
@@ -293,7 +316,7 @@ function numericSites(line) {
             start,
             end,
             String(loosened),
-            `Loosens the ${direction} bound "${phrase} ${number}" (unit ${unit}) to ${loosened}, so a ${lower ? 'smaller' : 'larger'} value than the requirement allows still meets the instruction`,
+            `Loosens the ${direction} bound "${bound}" (unit ${unit}) to "${phrase}${gap}${loosened}${tail}", so a ${lower ? 'smaller' : 'larger'} value than the requirement allows still meets the instruction`,
           ),
         );
       }
@@ -316,32 +339,42 @@ function protect(reasons, from, to, reason) {
 }
 
 /**
- * The reason each character of `text` is protected from an edit, or `undefined`: front matter, fenced code, headings,
- * block quotes, HTML comments, inline code, quotations, link targets, URLs and placeholders.
+ * The reason each character of `text` is protected from an edit, or `undefined`: front matter, fenced and indented
+ * code, headings, block quotes, HTML comments, inline code, quotations, link targets, URLs, paths and placeholders.
+ * A leading byte order mark is skipped, so the first line is read as a first line.
  *
  * @param {string} text
  * @returns {Array<string|undefined>}
  */
 function protectedSpans(text) {
+  if (text.startsWith('﻿')) return [undefined, ...protectedSpans(text.slice(1))];
   const reasons = Array.from({ length: text.length });
   const front = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
   if (front) protect(reasons, 0, front[0].length, 'front-matter');
   for (const comment of text.matchAll(/<!--[\s\S]*?(?:-->|$)/g))
     protect(reasons, comment.index, comment.index + comment[0].length, 'html-comment');
 
+  const lines = text.split('\n');
   let fence = null;
   let at = 0;
-  for (const rawLine of text.split('\n')) {
+  let blankBefore = true;
+  let indentedCode = false;
+  for (const [index, rawLine] of lines.entries()) {
     const lineEnd = at + rawLine.length;
-    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(rawLine);
+    const marker = /^[ \t]*(`{3,}|~{3,})/.exec(rawLine);
+    const blank = rawLine.trim() === '';
     if (fence !== null) {
       protect(reasons, at, lineEnd, 'code-fence');
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && /^ {0,3}[`~]+\s*$/.test(rawLine)) fence = null;
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && /^[ \t]*[`~]+\s*$/.test(rawLine)) fence = null;
     } else if (marker) {
       fence = marker[1];
       protect(reasons, at, lineEnd, 'code-fence');
     } else {
+      // A line indented four spaces or a tab after a blank line, or after such a line, is an indented code block.
+      indentedCode = !blank && /^(?: {4}|\t)/.test(rawLine) && (blankBefore || indentedCode);
+      if (indentedCode) protect(reasons, at, lineEnd, 'indented-code');
       if (/^ {0,3}#{1,6}(\s|$)/.test(rawLine)) protect(reasons, at, lineEnd, 'heading');
+      if (!blank && /^ {0,3}(?:=+|-+)[ \t]*\r?$/.test(lines[index + 1] ?? '')) protect(reasons, at, lineEnd, 'heading');
       if (/^ {0,3}>/.test(rawLine)) protect(reasons, at, lineEnd, 'block-quote');
       for (const code of rawLine.matchAll(/(`+)(?:(?!\1).)+?\1/g))
         protect(reasons, at + code.index, at + code.index + code[0].length, 'inline-code');
@@ -350,17 +383,24 @@ function protectedSpans(text) {
       for (let pair = 0; pair < quotes.length; pair += 2) {
         protect(reasons, at + quotes[pair], quotes[pair + 1] === undefined ? lineEnd : at + quotes[pair + 1] + 1, 'quotation');
       }
-      for (const quote of rawLine.matchAll(/“[^”]*(?:”|$)/g))
+      for (const quote of rawLine.matchAll(/“[^”]*(?:”|$)|‘[^’]*(?:’|$)|(?<![\p{L}\p{N}])'[^'\n]+'(?![\p{L}\p{N}])/gu))
         protect(reasons, at + quote.index, at + quote.index + quote[0].length, 'quotation');
       for (const link of rawLine.matchAll(/\]\([^)]*\)/g))
         protect(reasons, at + link.index, at + link.index + link[0].length, 'link-target');
-      for (const url of rawLine.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi))
-        protect(reasons, at + url.index, at + url.index + url[0].length, 'url');
+      for (const token of rawLine.matchAll(/\S+/g)) {
+        const scheme = token[0].indexOf('://');
+        const start = scheme === -1 ? -1 : token[0].slice(0, scheme).search(/[a-z][a-z0-9+.-]*$/i);
+        if (start !== -1) protect(reasons, at + token.index + start, at + token.index + token[0].length, 'url');
+        else if (/(?:^|[^\p{L}\p{N}])(?:www\.|mailto:)/iu.test(token[0].slice(0, 12)))
+          protect(reasons, at + token.index, at + token.index + token[0].length, 'url');
+        else if (/[/\\]/.test(token[0])) protect(reasons, at + token.index, at + token.index + token[0].length, 'path');
+      }
       const placeholder =
-        /\{\{[^}]*\}\}|\$\{[^}]*\}|\{[A-Za-z_][\w.-]*\}|<[A-Za-z_][\w.:-]*>|\[\[[^\]]*\]\]|%\([^)]*\)[sd]|%[sd]|\$[A-Za-z_]\w*|\$\d+/g;
+        /\{\{[^}]*\}\}|\$\{[^}]*\}|\{[A-Za-z_][\w.-]*\}|<[A-Za-z_][\w.:-]*>|\[\[[^\]]*\]\]|%\([^)]*\)[sd]|\$[A-Za-z_]\w*/g;
       for (const found of rawLine.matchAll(placeholder))
         protect(reasons, at + found.index, at + found.index + found[0].length, 'placeholder');
     }
+    blankBefore = blank;
     at = lineEnd + 1;
   }
   return reasons;
@@ -376,6 +416,9 @@ function countOccurrences(text, find) {
 /** The text of the bytes, which must be well-formed UTF-8 without a NUL. */
 function decodeTarget(bytes) {
   if (!ArrayBuffer.isView(bytes)) throw new GeneratorError('target.bytes must be a Buffer or Uint8Array holding the target file');
+  if (bytes.byteLength > MAX_TARGET_BYTES) {
+    throw new GeneratorError(`target.bytes is ${bytes.byteLength} bytes; a prompt past ${MAX_TARGET_BYTES} bytes is not a prompt`);
+  }
   let text;
   try {
     text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
@@ -407,8 +450,8 @@ function rank(seed, site) {
     site.family,
     String(site.line),
     String(site.column),
-    site.find,
-    site.replace,
+    site.original,
+    site.replacement,
   ]);
 }
 
@@ -420,6 +463,7 @@ function scan(text, families) {
   let lineStart = 0;
   for (const [index, raw] of text.split('\n').entries()) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    let repeats;
     for (const family of families) {
       for (const site of family.sites(line)) {
         const where = { family: family.name, line: index + 1, column: site.start + 1 };
@@ -433,13 +477,13 @@ function scan(text, families) {
               : { code: 'protected-span', message: `the site sits in ${covered.replace('-', ' ')}, which an edit leaves alone` }
             : { code: site.code, message: site.message };
         if (refusal === null) {
-          const replace = line.slice(0, site.start) + site.replacement + line.slice(site.end);
-          const repeats = countOccurrences(text, line);
+          repeats ??= countOccurrences(text, line);
           if (repeats === 1)
             found.push({
               ...where,
               find: line,
-              replace,
+              start: site.start,
+              end: site.end,
               original: line.slice(site.start, site.end),
               replacement: site.replacement,
               hypothesis: site.hypothesis,
@@ -516,7 +560,7 @@ function previewCandidates({ target, requirementDigest, campaignId, seed, famili
       hypothesis: `${site.family}, line ${site.line}: ${site.hypothesis}.`,
       requirement: { path: REQUIREMENTS_PATH, digest: requirementDigest },
       target: { artifact: target.artifact, artifactDigest: targetDigest },
-      edit: { find: site.find, replace: site.replace, occurrences: 1 },
+      edit: { find: site.find, replace: site.find.slice(0, site.start) + site.replacement + site.find.slice(site.end), occurrences: 1 },
       state: 'generated',
       disposition: null,
       observations: [],
