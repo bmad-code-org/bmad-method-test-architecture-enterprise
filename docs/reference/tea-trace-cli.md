@@ -107,4 +107,4 @@ Reports for other scopes remain in place.
 
 ## Diagnostic harness
 
-The repository's `tea-trace-runner` diagnostic harness, which skill evaluations use, takes `--artifacts-dir <path>` to retain staged projects, prompts and output streams. Point it outside the repository to keep the evaluated Git state unchanged. Public CLI checks run `tea-trace`.
+The repository's `test/eval-trace.js` diagnostic harness runs `tea-trace-runner` for skill evaluations and takes `--artifacts-dir <path>` to retain staged projects, prompts and output streams. Point it outside the repository to keep the evaluated Git state unchanged. Public CLI checks run `tea-trace`.

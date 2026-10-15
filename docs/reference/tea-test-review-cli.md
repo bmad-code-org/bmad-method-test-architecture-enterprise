@@ -60,7 +60,7 @@ The CLI is the whole integration: the skill, the retry, the pull-request base lo
 tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```
 
-The complete, copyable recipes live in [Run Test Review in CI](/docs/how-to/workflows/run-test-review-in-ci.md).
+The complete recipes live in [Run Test Review in CI](/docs/how-to/workflows/run-test-review-in-ci.md). [Adapting the templates](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/README.md) covers a central reusable-workflows repo, a repo that already uses a review bot, and GitLab.
 
 ### GitHub Actions
 
@@ -68,7 +68,7 @@ The complete, copyable recipes live in [Run Test Review in CI](/docs/how-to/work
 
 ### GitLab
 
-GitLab has no `--github` equivalent. The CLI writes the comment text with `--comment-out` and the job posts it. Recipe: [GitLab](/docs/how-to/workflows/run-test-review-in-ci.md#gitlab).
+GitLab has no `--github` equivalent. The CLI writes the comment text with `--comment-out` and the job posts it. The note is a new one on every pipeline; to update one in place, find your earlier note by its hidden marker, as `--github` does. Recipe: [GitLab](/docs/how-to/workflows/run-test-review-in-ci.md#gitlab).
 
 ### Jenkins, Buildkite and other CIs
 
@@ -246,7 +246,7 @@ The model that ran travels in the verdict JSON as `model`, alongside `agent`. Wi
 
 `--claude-arg` remains accepted as a deprecated alias for workflows created before multi-vendor support. It emits a migration warning and preserves argument order. New workflows should use `--agent-arg`.
 
-Why the model is pinned rather than left to the vendor CLI: [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md).
+Why the model is pinned: [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md).
 
 ## TEA config resolution
 
@@ -460,7 +460,7 @@ The agent writes a short report: the score summary, one paragraph, the criteria 
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
-The score is computed rather than trusted. The CLI first evaluates the raw deduction score: `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus`. It then caps the effective `qualityScore` by the highest finding severity: Critical 69, High 79, Medium 89, Low 99, or 100 with no findings. `rawQualityScore` preserves the uncapped ledger result. `scoreOverrideRule` and `verdictRule` state the exact rules used. The effective score controls the grade and `--min-score` gate.
+The CLI computes the score. It first evaluates the raw deduction score: `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus`. It then caps the effective `qualityScore` by the highest finding severity: Critical 69, High 79, Medium 89, Low 99, or 100 with no findings. `rawQualityScore` preserves the uncapped ledger result. `scoreOverrideRule` and `verdictRule` state the exact rules used. The effective score controls the grade and `--min-score` gate.
 
 The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. The published report is normalized to show the raw score, cap, effective score, grade, and verdict rule.
 
@@ -502,7 +502,7 @@ Supervision governs process lifetime. It does not restrict filesystem writes.
 With isolation on, the agent may read the project but cannot modify the tree under review. It writes only the report, the verdict, and the temp files the skill's own subagent steps declare.
 
 - **macOS and Linux:** the CLI uses `sandbox-exec` on macOS or `bwrap` on Linux when the tool is installed, and otherwise falls back to `chmod`. The fallback clears the project's write permission bits for the run and restores them afterward. It is weaker than an OS sandbox, because a process owned by the same user can change permission bits.
-- **Windows:** no backend exists. The Job Object above supervises process lifetime, not filesystem writes.
+- **Windows:** no backend exists. The Job Object above supervises process lifetime only.
 - **When it applies:** CI requests isolation by default (`CI` set). If no backend is available, the run prints a warning and continues without filesystem isolation. Pass `--isolate` explicitly to exit 2 in that case instead, or `--no-isolate` to turn isolation off.
 
 ### Publishing credentials
