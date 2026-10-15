@@ -3756,6 +3756,11 @@ function checkEveryAttemptIsAccountedFor() {
     experiment.validateDeclaration(anyLoss).pairedProblems.some((problem) => problem.where === 'gates.quality.recall'),
     'an allowed loss of the whole [0, 1] scale is refused',
   );
+  const bothRules = declaration({ mutate: (body) => (body.gates.quality.recall = { maxLoss: 1, minImprovement: 0.01 }) });
+  check(
+    experiment.validateDeclaration(bothRules).pairedProblems.some((problem) => problem.where === 'gates.quality.recall'),
+    'a quality rule that names both a loss and an improvement is refused',
+  );
   const zeroSuccess = declaration({
     mutate: (body) => {
       body.design.failureRules = { timeout: 'failure', failureMetricValue: 0 };

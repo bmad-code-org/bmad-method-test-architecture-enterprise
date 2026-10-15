@@ -420,7 +420,13 @@ function validateDeclaration(declaration) {
   for (const [metric, rule] of Object.entries(quality)) {
     const loss = isFiniteNumber(rule?.maxLoss) && rule.maxLoss >= 0 && rule.maxLoss < 1;
     const gain = isFiniteNumber(rule?.minImprovement) && rule.minImprovement > 0;
-    need(pairs, loss !== gain, `gates.quality.${metric}`, 'needs exactly one of maxLoss in [0, 1) or minImprovement (> 0)');
+    const keys = isObject(rule) ? ['maxLoss', 'minImprovement'].filter((key) => key in rule) : [];
+    need(
+      pairs,
+      keys.length === 1 && (loss || gain),
+      `gates.quality.${metric}`,
+      'needs exactly one of maxLoss in [0, 1) or minImprovement (> 0)',
+    );
   }
   if (scope.objective === 'cost') {
     need(
