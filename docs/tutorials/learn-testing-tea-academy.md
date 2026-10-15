@@ -15,7 +15,9 @@ For QA engineers, developers, leads, and managers learning testing.
 
 ## Prerequisites
 
-- TEA installed and set up: `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise`, then `bmad setup tea` in your assistant chat
+- An AI coding assistant that supports skills, such as Claude Code, Cursor, Windsurf or Codex
+- BMad core and TEA installed, then `bmad setup tea` run in your assistant chat; follow [Install BMad Method and TEA](/docs/tutorials/tea-lite-quickstart.md#install-bmad-method-and-tea), which also lists Node.js and uv
+- A [`user_name`](/docs/reference/configuration.md#user_name) in your BMad core configuration; the skill names your progress and notes files with it
 
 <a id="step-1-start-the-workflow"></a>
 
@@ -57,7 +59,7 @@ Pick **Session 1: Quick Start** (30 minutes):
 ## Step 4: Confirm Your Progress Saved
 
 Progress is saved after the assessment, each quiz, session notes, and exit.
-Look under your configured `test_artifacts` folder (default `_bmad-output/test-artifacts`):
+Look under your configured `test_artifacts` folder (default `_bmad-output/test-artifacts`); `alex` stands for your `user_name`:
 
 ```text
 _bmad-output/test-artifacts/

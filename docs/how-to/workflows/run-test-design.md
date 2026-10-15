@@ -97,10 +97,11 @@ See [Output Layout](/docs/reference/configuration.md#output-layout) for how ever
 
 **System-level outputs:**
 
-System-level mode produces two documents:
+System-level mode writes three files:
 
 - `test-design-architecture.md`: blockers, scored risks, testability gaps, NFR thresholds, and mitigation plans for architecture and development teams.
 - `test-design-qa.md`: P0-P3 scenarios, planned NFR validation, evidence artifacts, and Sprint 0 setup for QA.
+- `{project_name}-handoff.md`: P0/P1 risks, quality gates and a risk-to-story map that BMad's epic and story creation reads.
 
 `test-design` defines the thresholds and evidence that `nfr-assess` audits after implementation.
 
@@ -126,12 +127,7 @@ System-level mode produces two documents:
 
 ## Examples
 
-**System-Level (Two Documents):**
-
-- `cluster-search/cluster-search-test-design-architecture.md`: Architecture doc with Quick Guide
-- `cluster-search/cluster-search-test-design-qa.md`: QA doc with test scenarios
-
-Cross-reference shared requirements:
+**System-level documents cross-reference each other:**
 
 - Architecture doc: "ASR-1: OAuth 2.1 required (see QA doc for 12 test scenarios)"
 - QA doc: "OAuth tests: 12 P0 scenarios (see Architecture doc R-001 for risk details)"

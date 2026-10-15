@@ -185,6 +185,19 @@ if (atddStepFiles.length === 0) refuse(`${atddStepsRoot} has no step files`);
 exports.ATDD_EMITS_TEST_SKIP = atddStepFiles.some((name) => fs.readFileSync(path.join(atddStepsRoot, name), 'utf8').includes('test.skip('));
 
 /**
+ * docs/how-to/brownfield/use-tea-for-enterprise.md, "Missing execution results are a gap in release evidence and do
+ * not skip the trace gate." True while trace's gate step decides eligibility from `allow_gate` and the COLLECTED
+ * status alone: exactly one `gateEligible` assignment, naming those two inputs and nothing else.
+ */
+function traceGateIsCoverageOnly(body) {
+  const assignments = body.split('\n').filter((line) => /\bgateEligible\s*=[^=]/.test(line));
+  return assignments.length === 1 && /^\s*const gateEligible = allowGate && collectionStatus === 'COLLECTED';\s*$/.test(assignments[0]);
+}
+exports.traceGateIsCoverageOnly = traceGateIsCoverageOnly;
+const traceGateStep = path.join(PROJECT_ROOT, 'skills', 'bmad-tea-trace', 'steps-c', 'step-05-gate-decision.md');
+exports.TRACE_GATE_IS_COVERAGE_ONLY = traceGateIsCoverageOnly(fs.readFileSync(traceGateStep, 'utf8'));
+
+/**
  * A key is read either as a bare `{key}` interpolation (the template
  * substitution shape, e.g. `harness-pipeline-template.yaml`'s
  * `Framework: {test_framework}`) or as the key name on its own word boundary
@@ -441,6 +454,17 @@ if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-tea-* skil
 exports.OUTPUTS_IN_WORKFLOW_FOLDERS = layoutSkillDirs.every(
   (skillDir) => declaredOutputPaths(skillDir).length > 0 && misplacedOutputs(skillDir).length === 0,
 );
+
+/**
+ * run-test-design.md, "System-level mode writes three files": the file names
+ * of the outputs test-design's workflow.yaml declares for its system-level mode.
+ */
+const testDesignOutputs = yaml.parse(fs.readFileSync(path.join(testarchRoot, 'bmad-tea-test-design', 'workflow.yaml'), 'utf8')).outputs;
+if (!Array.isArray(testDesignOutputs)) refuse('bmad-tea-test-design/workflow.yaml declares no outputs array');
+exports.TEST_DESIGN_SYSTEM_OUTPUTS = testDesignOutputs
+  .filter((output) => output.mode === 'system-level')
+  .map((output) => path.posix.basename(output.path));
+if (exports.TEST_DESIGN_SYSTEM_OUTPUTS.length === 0) refuse('bmad-tea-test-design/workflow.yaml declares no system-level output');
 
 /** The provenance.json fields a paired configuration contrast needs and only a hand edit supplies. */
 const PAIRED_CAPTURE_FIELDS = Object.freeze(['receipt', 'blockId', 'observed', 'usage', 'cost', 'latency']);

@@ -16,6 +16,15 @@ It supports red and expand, saved-run continuation, validation, and edits.
 
 Choose [red mode](#red-mode) before implementation or [expand mode](#expand-mode) for existing code. Both modes support Create, Resume, Validate, and Edit. Each keeps its customization files and saved progress.
 
+## Quick Path
+
+1. **Request.** Invoke the skill and say what to cover, for example `Expand coverage for story-profile-management.md: API tests for P0 and P1, one E2E test for the P0 journey.`
+2. **Let it run.** TEA generates the tests, runs them, and repairs test issues for up to three rounds.
+3. **Read the summary.** `{test_artifacts}/automate/automation-summary-{run_key}.md` lists the files added, the repairs, and any remaining failures; a product defect keeps its failing assertion.
+4. **Verify.** Run the suite with your project's test command and review the diff before you commit.
+
+The sections below cover each step's options, with examples.
+
 ## Expand Mode
 
 ### When to Use This
@@ -200,13 +209,10 @@ test.describe('Profile API', () => {
 });
 ```
 
-**With Playwright Utils:**
+**With Playwright Utils:** the spec imports the shared module, which merges the API and auth fixtures ([setup](/docs/how-to/customization/integrate-playwright-utils.md#step-3-create-the-shared-fixture-module)).
 
 ```typescript
-import { test as base, expect } from '@playwright/test';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { createAuthFixtures } from '@seontechnologies/playwright-utils/auth-session';
-import { mergeTests } from '@playwright/test';
+import { test, expect } from '../support/merged-fixtures';
 import { z } from 'zod';
 
 const ProfileSchema = z.object({
@@ -215,12 +221,8 @@ const ProfileSchema = z.object({
   email: z.string().email(),
 });
 
-// Merge API and auth fixtures
-const authFixtureTest = base.extend(createAuthFixtures());
-export const testWithAuth = mergeTests(apiRequestFixture, authFixtureTest);
-
-testWithAuth.describe('Profile API', () => {
-  testWithAuth('should fetch user profile', async ({ apiRequest, authToken }) => {
+test.describe('Profile API', () => {
+  test('should fetch user profile', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'GET',
       path: '/api/profile',
@@ -232,7 +234,7 @@ testWithAuth.describe('Profile API', () => {
     expect(body.name).toBeDefined();
   });
 
-  testWithAuth('should update profile successfully', async ({ apiRequest, authToken }) => {
+  test('should update profile successfully', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -244,7 +246,7 @@ testWithAuth.describe('Profile API', () => {
     expect(body.name).toBe('Updated Name');
   });
 
-  testWithAuth('should validate email format', async ({ apiRequest, authToken }) => {
+  test('should validate email format', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -330,57 +332,55 @@ export const test = base.extend<ProfileFixtures>({
 });
 ```
 
-**With Playwright Utils:**
+**With Playwright Utils:** the custom fixture lives in its own file and joins the shared module, so specs keep one entry point.
 
 ```typescript
+// tests/support/fixtures/profile-fixture.ts
 import { test as base } from '@playwright/test';
-import { createAuthFixtures } from '@seontechnologies/playwright-utils/auth-session';
-import { mergeTests } from '@playwright/test';
 import { faker } from '@faker-js/faker';
 
 type ProfileFixtures = {
-  testProfile: {
-    name: string;
-    email: string;
-    bio: string;
-  };
+  testProfile: { name: string; email: string; bio: string };
 };
 
-// Merge auth fixtures with custom fixtures
-const authTest = base.extend(createAuthFixtures());
-const profileTest = base.extend<ProfileFixtures>({
+export const test = base.extend<ProfileFixtures>({
   testProfile: async ({}, use) => {
     // Dynamic test data with faker
-    const profile = {
+    await use({
       name: faker.person.fullName(),
       email: faker.internet.email(),
       bio: faker.person.bio(),
-    };
-
-    await use(profile);
+    });
   },
 });
+```
 
-export const test = mergeTests(authTest, profileTest);
-export { expect } from '@playwright/test';
+```typescript
+// tests/support/merged-fixtures.ts: add the fixture to the existing mergeTests call
+import { test as profileFixture } from './fixtures/profile-fixture';
+
+export const test = mergeTests(apiRequestFixture, authFixture, profileFixture /* , ... */);
 ```
 
 **Usage:**
 
 ```typescript
-import { test, expect } from '../support/fixtures/profile';
+import { test, expect } from '../support/merged-fixtures';
 
-test('should update profile', async ({ page, authToken, testProfile }) => {
-  // authToken from auth-session (automatic, persisted)
-  // testProfile from custom fixture (dynamic data)
+test('should update profile', async ({ apiRequest, authToken, testProfile }) => {
+  const { status } = await apiRequest({
+    method: 'PATCH',
+    path: '/api/profile',
+    body: testProfile,
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
 
-  await page.goto('/profile');
-  // Test with dynamic, unique data
+  expect(status).toBe(200);
 });
 ```
 
-The merged fixture exposes an auth token and generates profile data for each test.
-Configure the auth provider and browser session separately before visiting an authenticated page.
+`authToken` authenticates API requests only.
+A test that drives a signed-in `page` also needs the browser session wired from the auth provider; see [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
 Add cleanup if the test creates persistent records.
 
 #### 5. Review Additional Artifacts
@@ -413,7 +413,7 @@ npx playwright test tests/api/profile.spec.ts
 tests/
 ├── api/ # API tests (fast, reliable)
 ├── e2e/ # E2E tests (full workflows)
-├── fixtures/ # Shared test utilities
+├── support/ # merged-fixtures.ts, fixtures, helpers
 └── README.md
 
 ## Writing Tests
@@ -448,19 +448,12 @@ The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you
 
 Run the generated tests against the implemented feature:
 
-**For Playwright:**
-
 ```bash
-npx playwright test
+npm run test:e2e   # Playwright via TEA's framework scaffold, which carries the config path
+npx cypress run    # Cypress
 ```
 
-**For Cypress:**
-
-```bash
-npx cypress run
-```
-
-Expected output:
+Example output; the counts depend on the scope you requested:
 
 ```text
 Running 6 tests using 4 workers
@@ -590,26 +583,10 @@ See [Configure Browser Automation](/docs/how-to/customization/configure-browser-
 
 Don't generate all tests at once:
 
-**Iteration 1:**
-
 ```text
-Generate P0 tests only (critical path)
-Run: automate
-```
-
-**Iteration 2:**
-
-```text
-Generate P1 tests (high value scenarios)
-Run: automate
-Tell TEA to avoid P0 coverage
-```
-
-**Iteration 3:**
-
-```text
-Generate P2 tests (if time permits)
-Run: automate
+Run 1: P0 tests only (critical path)
+Run 2: P1 tests (high value scenarios); avoid duplicating P0 coverage
+Run 3: P2 tests (if time permits)
 ```
 
 Run and review each batch before generating the next one.
@@ -662,14 +639,6 @@ We already have these tests:
 
 Generate tests for scenarios NOT covered by those files
 ```
-
-#### Browser Automation for Better Selectors
-
-If browser automation is configured (`tea_browser_automation: "auto"`, `"cli"`, or `"mcp"`), TEA verifies selectors against live browser using CLI snapshots or MCP.
-Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
-
-Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or configure MCP servers.
-See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md).
 
 ### Related Guides
 
@@ -839,10 +808,10 @@ TEA generates **red-phase test scaffolds** in appropriate directories:
 
 ##### API Tests (`tests/api/profile.spec.ts`):
 
-Both API variants use the project's existing `tests/support/fixtures.ts`, which exports `test` with an `authToken` fixture for the seeded `test@example.com` user.
+Both API variants import the project's existing fixture entry point, which exports `test` with an `authToken` fixture for the seeded `test@example.com` user: `tests/support/fixtures.ts` in vanilla Playwright, `tests/support/merged-fixtures.ts` with Playwright Utils.
 The fixture must supply a valid Bearer token through the working authentication flow before profile scaffolds are activated.
 Verify authentication independently and report fixture setup failures as prerequisite failures; criterion red evidence comes from the profile response's first status assertion.
-For Playwright Utils, configure that auth fixture with a registered provider and `createAuthFixtures()` from [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
+For Playwright Utils, build that auth fixture with a registered provider and `createAuthFixtures()` and merge it into the module, as [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session) shows.
 The examples reuse that fixture and send its token on every profile request.
 
 **Vanilla Playwright:**
@@ -897,12 +866,8 @@ test.describe('Profile API', () => {
 **With Playwright Utils:**
 
 ```typescript
-import { test as authTest } from '../support/fixtures';
-import { test as apiRequestTest } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect, mergeTests } from '@playwright/test';
+import { test, expect } from '../support/merged-fixtures';
 import { z } from 'zod';
-
-const test = mergeTests(authTest, apiRequestTest);
 
 const ProfileSchema = z.object({
   name: z.string(),
@@ -1028,19 +993,12 @@ TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/a
 TEA verifies the TDD red phase using an isolated, un-skipped copy. The saved scaffolds keep `test.skip()` until you're ready to work on a task.
 Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
 
-**For Playwright:**
-
 ```bash
-npx playwright test
+npm run test:e2e   # Playwright via TEA's framework scaffold, which carries the config path
+npx cypress run    # Cypress
 ```
 
-**For Cypress:**
-
-```bash
-npx cypress run
-```
-
-Initial output with scaffolds still skipped:
+Example initial output with scaffolds still skipped:
 
 ```text
 Running 4 tests using 1 worker
@@ -1072,21 +1030,8 @@ Now implement the feature following the test guidance:
 
 #### 7. Verify Tests Pass
 
-After implementation, run your test suite.
-
-**For Playwright:**
-
-```bash
-npx playwright test
-```
-
-**For Cypress:**
-
-```bash
-npx cypress run
-```
-
-Expected output:
+After implementation, run your test suite with the same command.
+Example output:
 
 ```text
 Running 4 tests using 1 worker
