@@ -22,7 +22,6 @@ The mandate binds only when both hold:
 1. `tea_use_pactjs_utils` is `true`.
 2. `@seontechnologies/pactjs-utils` is a dependency in your `package.json`.
 
-Install the package before enabling the mandate.
 Without the dependency, TEA skips utility imports and the utility-bypass review rule.
 
 ### The relevance gate
@@ -43,6 +42,23 @@ Most frontends have all three and call a backend that ships in the same deploy.
 They count only when the called service has no source in this repo and is not started by this repo's compose file, dev script, or CI, and a second signal is present.
 
 When no boundary is established, TEA skips Pact scaffolding and records why.
+
+## Install and Verify
+
+```bash
+npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
+# peer dependency: @pact-foundation/pact >= 16.2.0, Node.js >= 18
+```
+
+The local monorepo flow needs no broker.
+For the remote broker flow, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (set it explicitly: `${{ github.head_ref || github.ref_name }}`).
+
+After `framework` or `automate` writes the suite, check four things:
+
+1. `@seontechnologies/pactjs-utils` appears in `package.json`.
+2. The run summary names the consumer-provider boundary it found, or records why it skipped Pact.
+3. `npm run test:pact:consumer` passes and writes a pact file under `pacts/`.
+4. Provider verification, `npm run test:pact:provider` or the provider's CI job, reports each interaction verified or names the one that failed.
 
 ## Substitutions
 
@@ -214,16 +230,6 @@ tea_pact_mcp = "none"          # TEA never attempts a broker call
 
 With `tea_use_pactjs_utils` off, TEA writes contract tests against raw `@pact-foundation/pact`.
 The determinism rules and provider scrutiny still apply.
-
-## Installation
-
-```bash
-npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
-# peer dependency: @pact-foundation/pact >= 16.2.0, Node.js >= 18
-```
-
-For the remote broker flow, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (set it explicitly: `${{ github.head_ref || github.ref_name }}`).
-The local monorepo flow needs no broker.
 
 ## Related Guides
 

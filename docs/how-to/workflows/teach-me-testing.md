@@ -35,6 +35,7 @@ The completion summary records your scores and the topics covered.
 
 ## Prerequisites
 
+- An AI coding assistant that supports skills, with BMad core and TEA installed and `bmad setup tea` run; [Getting Started](/docs/tutorials/tea-lite-quickstart.md#install-bmad-method-and-tea) shows the install
 - 30-90 minutes per session (you can pause and resume)
 
 ## How It Works
@@ -80,11 +81,11 @@ Each session follows this pattern:
 
 ### Progress Tracking
 
-Your progress is automatically saved:
+Your progress is automatically saved, named by the [`user_name`](/docs/reference/configuration.md#user_name) in your BMad core configuration:
 
-- **Progress file:** `{test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml`
-- **Session notes:** `{test_artifacts}/tea-academy/{your-name}/session-{N}-notes.md`
-- **Completion summary:** `{test_artifacts}/tea-academy/{your-name}/tea-completion-summary.md` (after all 7 sessions)
+- **Progress file:** `{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml`
+- **Session notes:** `{test_artifacts}/tea-academy/{user_name}/session-{N}-notes.md`
+- **Completion summary:** `{test_artifacts}/tea-academy/{user_name}/tea-completion-summary.md` (after all 7 sessions)
 
 ### Resuming Later
 
@@ -143,7 +144,10 @@ Skip fundamentals, focus on:
 - Probability × Impact scoring
 - Definition of Done (7 quality principles)
 
-**Resources:** Testing as Engineering, Risk-Based Testing, Test Quality Standards docs **Knowledge Fragments:** test-quality.md, probability-impact.md
+**Resources:**
+
+- Docs: Testing as Engineering, Risk-Based Testing, Test Quality Standards
+- Knowledge fragments: test-quality.md, probability-impact.md
 
 ### Session 3: Architecture & Patterns (60 min)
 
@@ -154,7 +158,10 @@ Skip fundamentals, focus on:
 - Data factories
 - Step-file architecture
 
-**Resources:** Fixture Architecture, Network-First Patterns, Step-File Architecture docs **Knowledge Fragments:** fixture-architecture.md, network-first.md, data-factories.md
+**Resources:**
+
+- Docs: Fixture Architecture, Network-First Patterns, Step-File Architecture
+- Knowledge fragments: fixture-architecture.md, network-first.md, data-factories.md
 
 ### Session 4: Test Design (60 min)
 
@@ -165,7 +172,10 @@ Skip fundamentals, focus on:
 - Coverage planning (unit/integration/E2E)
 - Test priorities matrix (P0-P3 coverage targets)
 
-**Resources:** Test Design skill docs **Knowledge Fragments:** test-levels-framework.md, test-priorities-matrix.md
+**Resources:**
+
+- Docs: Test Design skill
+- Knowledge fragments: test-levels-framework.md, test-priorities-matrix.md
 
 ### Session 5: ATDD & Automate (60 min)
 
@@ -176,7 +186,10 @@ Skip fundamentals, focus on:
 - Automate expand mode (coverage for existing code)
 - API testing patterns
 
-**Resources:** Automate red and expand mode docs **Knowledge Fragments:** component-tdd.md, api-testing-patterns.md, api-request.md
+**Resources:**
+
+- Docs: Automate red and expand mode
+- Knowledge fragments: component-tdd.md, api-testing-patterns.md, api-request.md
 
 ### Session 6: Quality & Trace (45 min)
 
@@ -198,7 +211,10 @@ Skip fundamentals, focus on:
 - Deep-dive into specific patterns as needed
 - GitHub links for browsing source
 
-**Resources:** All 59 knowledge fragments **GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
+**Resources:**
+
+- Knowledge fragments: all 59
+- GitHub: [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/skills/bmod-tea/knowledge)
 
 ## Completion Summary
 
@@ -219,7 +235,10 @@ Pause whenever needed; the skill saves progress after each quiz.
 
 The skill adapts examples based on your role:
 
-**QA Engineers:** Practical testing focus, skill usage, coverage expansion **Developers:** Integration perspective, TDD approach, API testing **Tech Leads:** Architecture decisions, team patterns, code review standards **VPs/Managers:** Strategy, ROI, quality metrics, team scaling
+- **QA Engineers:** Practical testing focus, skill usage, coverage expansion
+- **Developers:** Integration perspective, TDD approach, API testing
+- **Tech Leads:** Architecture decisions, team patterns, code review standards
+- **VPs/Managers:** Strategy, ROI, quality metrics, team scaling
 
 ## Troubleshooting
 
@@ -227,8 +246,8 @@ The skill adapts examples based on your role:
 
 If you've run the skill before but it doesn't detect your progress:
 
-- Check: `{test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml`
-- Skill auto-creates on first run
+- Check: `{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml`
+- A changed `user_name` looks for a different file; the skill creates a new one on first run
 
 ### Quiz failing repeatedly
 
@@ -240,12 +259,15 @@ If scoring <70% on quizzes:
 ### Want to restart from scratch
 
 Delete your progress file.
-`{test_artifacts}` is the `test_artifacts` value under `[modules.tea]` in `_bmad/config.toml` (default `{project-root}/_bmad-output/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment.
-With those defaults and the name `alex`:
+`{test_artifacts}` is the `test_artifacts` value under `[modules.tea]` in `_bmad/config.toml` (default `{project-root}/_bmad-output/test-artifacts`), and `{user_name}` is the `user_name` from your BMad core configuration.
+List `teaching-progress/` first to confirm the file name. With the default folder and the example name `alex`:
 
 ```bash
+ls _bmad-output/test-artifacts/teaching-progress/
 rm _bmad-output/test-artifacts/teaching-progress/alex-tea-progress.yaml
 ```
+
+Your session notes under `tea-academy/` stay; delete them separately if you want them gone.
 
 <a id="related-workflows"></a>
 

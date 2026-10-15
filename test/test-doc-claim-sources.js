@@ -95,6 +95,40 @@ check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of 
   assert.deepStrictEqual(source.PLAYWRIGHT_UTILS_ROW_IDS, playwrightUtilsIds);
 });
 
+check('TEST_DESIGN_SYSTEM_OUTPUTS is the system-level output file names of an independent read of test-design workflow.yaml', () => {
+  // Line-based, independent of the yaml parser the module uses: each `path:`
+  // line is paired with the `mode:` line that follows it in the same entry.
+  const lines = fs.readFileSync(path.join(__dirname, '..', 'skills', 'bmad-tea-test-design', 'workflow.yaml'), 'utf8').split('\n');
+  const systemPaths = [];
+  let pending = null;
+  for (const line of lines) {
+    const pathMatch = line.match(/^\s+path:\s*"([^"]+)"/);
+    if (pathMatch) pending = pathMatch[1];
+    const modeMatch = line.match(/^\s+mode:\s*([\w-]+)/);
+    if (modeMatch && pending !== null) {
+      if (modeMatch[1] === 'system-level') systemPaths.push(pending.split('/').pop());
+      pending = null;
+    }
+  }
+  assert.ok(systemPaths.length > 0, 'fixture setup: expected at least one system-level output in test-design workflow.yaml');
+  assert.deepStrictEqual(source.TEST_DESIGN_SYSTEM_OUTPUTS, systemPaths);
+});
+
+check('traceGateIsCoverageOnly holds for the gate step and refuses an eligibility that reads execution results', () => {
+  const step = fs.readFileSync(path.join(__dirname, '..', 'skills', 'bmad-tea-trace', 'steps-c', 'step-05-gate-decision.md'), 'utf8');
+  const eligibility = "const gateEligible = allowGate && collectionStatus === 'COLLECTED';";
+  assert.ok(step.includes(eligibility), 'fixture setup: expected the eligibility line in step-05-gate-decision.md');
+  assert.strictEqual(source.TRACE_GATE_IS_COVERAGE_ONLY, true);
+  assert.strictEqual(source.traceGateIsCoverageOnly(step), true);
+  // The enterprise guide once said Phase 2 is skipped without execution results; either shape of that rule fails.
+  assert.strictEqual(
+    source.traceGateIsCoverageOnly(step.replace(eligibility, eligibility.replace(';', ' && executionResults.length > 0;'))),
+    false,
+  );
+  assert.strictEqual(source.traceGateIsCoverageOnly(`${step}\ngateEligible = gateEligible && hasExecutionResults;\n`), false);
+  assert.strictEqual(source.traceGateIsCoverageOnly(step.replace(eligibility, '')), false);
+});
+
 check(
   'EXIT_CODE_STRINGS is every exit code cli/test-review.js, cli/evaluate.js and the runner table declare, stringified, each once',
   () => {

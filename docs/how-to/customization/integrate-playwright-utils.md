@@ -65,14 +65,56 @@ tea_use_playwright_utils = "true"
 
 `"true"` is the setup default, so if you accepted it during `bmad setup tea`, it's already set.
 
-### Step 3: Verify Installation
+### Step 3: Create the Shared Fixture Module
+
+Every spec imports `test` and `expect` from one module under your configured `test_dir`.
+The examples on this page use `tests/`; substitute your own `test_dir` (`e2e/`, `playwright/`) in every path.
+TEA's `framework` skill scaffolds this file when the flag is on; create it yourself on an existing suite.
+
+```typescript
+// tests/support/merged-fixtures.ts
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as interceptFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test as networkErrorFixture } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+export const test = mergeTests(apiRequestFixture, interceptFixture, networkErrorFixture, recurseFixture);
+
+export { expect } from '@playwright/test';
+export { log };
+```
+
+To use another utility fixture, import it here and add it to the `mergeTests` call; specs keep the same import.
+The [auth-session](#auth-session) fixture joins the same way once your project has an auth provider.
+
+### Step 4: Write One Spec Against It
+
+```typescript
+// tests/api/users.spec.ts
+import { test, expect, log } from '../support/merged-fixtures';
+
+test('lists users', async ({ apiRequest }) => {
+  await log.step('Fetch users');
+
+  const { status } = await apiRequest({ method: 'GET', path: '/api/users' });
+
+  expect(status).toBe(200);
+});
+```
+
+`apiRequest` resolves `path` against the `baseURL` in your Playwright config.
+
+### Step 5: Verify
 
 ```bash
-# Check package installed
+# Package and TEA flag
 npm list @seontechnologies/playwright-utils
-
-# Check TEA config
 grep tea_use_playwright_utils _bmad/config.toml
+
+# Imports resolve and the spec is discovered (no server needed)
+npx playwright test users.spec --list
 ```
 
 Example output; the installed version may differ:
@@ -81,6 +123,10 @@ Example output; the installed version may differ:
 └── @seontechnologies/playwright-utils@4.4.0
 tea_use_playwright_utils = "true"
 ```
+
+`--list` fails on a wrong import path or a missing fixture.
+If your config is not at the project root, use the test script your setup created: TEA's scaffold adds `test:e2e` with the config path, so `npm run test:e2e -- users.spec --list`.
+Drop `--list` to run the spec against your running application.
 
 ## What Changes When Enabled
 
@@ -108,7 +154,7 @@ Use `page.route` directly to block analytics, fonts, or third-party scripts.
 For other package gaps, TEA adds `// playwright-utils deviation: <reason>` and lists the reason in its summary.
 
 The entry-point rule is about **spec files**.
-The merged-fixtures module itself imports `mergeTests` and re-exports `expect` from `@playwright/test`, and the examples below show exactly that; it is the one file that must reach for Playwright directly.
+The merged-fixtures module and the fixture files it merges import from `@playwright/test` directly, as [Step 3](#step-3-create-the-shared-fixture-module) shows; spec files import `test` from the module.
 
 **Scope.** The mandate covers JavaScript/TypeScript suites on the Playwright runner, browser and API alike.
 Cypress, Maestro flows, Pact/Vitest contract suites, and backend suites in pytest, JUnit, Go test, xUnit, or RSpec are untouched by it.
@@ -130,20 +176,13 @@ test('api test', async ({ request }) => {
 });
 ```
 
-**With Playwright Utils (Merged Fixtures):**
+**With Playwright Utils:** the skill scaffolds `tests/support/merged-fixtures.ts` ([Step 3](#step-3-create-the-shared-fixture-module)) and writes specs against it:
 
 ```typescript
-// Merge the fixtures your project needs into one test object
-import { expect, mergeTests } from '@playwright/test';
-import { log } from '@seontechnologies/playwright-utils';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-// Auth fixture built in your project (setAuthProvider + createAuthFixtures)
-import { test as authFixture } from './support/auth/auth-fixture';
-
-const test = mergeTests(authFixture, apiRequestFixture);
+import { test, expect, log } from '../support/merged-fixtures';
 
 test('api test', async ({ apiRequest, authToken }) => {
-  const { status, body } = await apiRequest({
+  const { status } = await apiRequest({
     method: 'GET',
     path: '/api/users',
     headers: { Authorization: `Bearer ${authToken}` },
@@ -154,26 +193,7 @@ test('api test', async ({ apiRequest, authToken }) => {
 });
 ```
 
-**With Playwright Utils (Selective Merge):**
-
-```typescript
-import { expect, mergeTests } from '@playwright/test';
-import { log } from '@seontechnologies/playwright-utils';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as interceptNetworkCallFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
-
-export const test = mergeTests(apiRequestFixture, interceptNetworkCallFixture);
-export { expect, log };
-
-test('api test', async ({ apiRequest }) => {
-  await log.info('Fetching users');
-  const { status, body } = await apiRequest({
-    method: 'GET',
-    path: '/api/users',
-  });
-  expect(status).toBe(200);
-});
-```
+`authToken` comes from the auth fixture the skill merges into the module when your project has an auth provider; see [auth-session](#auth-session).
 
 <a id="automation-red-and-expand-modes"></a>
 
@@ -193,7 +213,10 @@ test('should fetch profile', async ({ page, request }) => {
 **With Playwright Utils:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { z } from 'zod';
+import { test, expect } from '../support/merged-fixtures';
+
+const ProfileSchema = z.object({ id: z.string(), name: z.string(), email: z.string().email() });
 
 test('should fetch profile', async ({ apiRequest }) => {
   const { status, body } = await apiRequest({
@@ -241,17 +264,18 @@ Enhanced with smart testing:
 
 ## Available Utilities
 
+Each example below is a spec that imports from the shared module.
+A utility whose fixture is not in the Step 3 module needs one import and one `mergeTests` entry there first; the example says which.
+The upstream documentation shows the same calls with a `playwright/support/` layout, which is that repository's own test directory.
+
 ### api-request
 
 Typed HTTP client with schema validation.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/api-request.html>
 
-**Usage:**
-
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { expect } from '@playwright/test';
+import { test, expect } from '../support/merged-fixtures';
 import { z } from 'zod';
 
 const UserSchema = z.object({
@@ -276,34 +300,24 @@ test('should create user', async ({ apiRequest }) => {
 ### auth-session
 
 Authentication session management with token persistence.
+It needs a project-owned auth provider: the code that signs in and stores the session.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/auth-session.html>
 
-**Usage:**
+Build the auth fixture from your provider, then merge it in `tests/support/merged-fixtures.ts`:
 
 ```typescript
-import { test as base, expect } from '@playwright/test';
+// tests/support/auth-fixture.ts
+import { test as base } from '@playwright/test';
 import { createAuthFixtures, setAuthProvider } from '@seontechnologies/playwright-utils/auth-session';
-import myCustomProvider from './support/auth/provider';
+import myCustomProvider from './auth/provider';
 
 setAuthProvider(myCustomProvider); // Register before creating the fixtures
-const test = base.extend(createAuthFixtures());
-
-test('should access protected route', async ({ page, authToken }) => {
-  // authToken automatically fetched and persisted
-  // The fixture provides the token.
-
-  await page.goto('/dashboard');
-  await expect(page).toHaveURL('/dashboard');
-
-  // Token is reused across tests (persisted to disk)
-});
+export const test = base.extend(createAuthFixtures());
 ```
 
-**Configuration required** (see auth-session docs for provider setup):
-
 ```typescript
-// global-setup.ts
+// tests/global-setup.ts (registered as globalSetup in the Playwright config)
 import { authStorageInit, setAuthProvider, authGlobalInit } from '@seontechnologies/playwright-utils/auth-session';
 import myCustomProvider from './support/auth/provider';
 
@@ -314,29 +328,43 @@ export default async function globalSetup() {
 }
 ```
 
+With `import { test as authFixture } from './auth-fixture'` added to the module's `mergeTests` call, specs get `authToken` for API calls:
+
+```typescript
+import { test, expect } from '../support/merged-fixtures';
+
+test('reads a protected endpoint', async ({ apiRequest, authToken }) => {
+  const { status } = await apiRequest({
+    method: 'GET',
+    path: '/api/profile',
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+
+  expect(status).toBe(200);
+});
+```
+
+The auth-session fixtures also replace `context` and `page`.
+With `authSessionEnabled` on (the default), the context opens with the storage state your provider saved, so `page` starts signed in when that state carries your app's session cookies.
+Your provider performs the real sign-in or token exchange and returns that state; `authToken` is the token extracted from it for API calls.
+The official auth-session docs cover provider setup and per-worker accounts.
+
 ### network-recorder
 
 Record and replay network traffic (HAR) for offline testing.
+Add `@seontechnologies/playwright-utils/network-recorder/fixtures` to the shared module first.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/network-recorder.html>
 
-**Usage:**
-
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/network-recorder/fixtures';
-
-// Choose the mode with PW_NET_MODE when running the suite.
+import { test } from '../support/merged-fixtures';
 
 test('should work with recorded traffic', async ({ page, context, networkRecorder }) => {
-  // Setup recorder (records or replays based on PW_NET_MODE)
+  // Records or replays based on PW_NET_MODE
   await networkRecorder.setup(context);
 
-  // Your normal test code
   await page.goto('/dashboard');
   await page.click('#add-item');
-
-  // First run (record): Saves traffic to HAR file
-  // Subsequent runs (playback): Uses HAR file, no backend needed
 });
 ```
 
@@ -356,13 +384,11 @@ Spy or stub network requests with automatic JSON parsing.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/intercept-network-call.html>
 
-**Usage:**
-
 ```typescript
-import { expect } from '@playwright/test';
-import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test, expect } from '../support/merged-fixtures';
 
-test('should handle API errors', async ({ page, interceptNetworkCall }) => {
+// The stubbed 500 is expected, so opt out of the module's network-error-monitor
+test('should handle API errors', { annotation: [{ type: 'skipNetworkMonitoring' }] }, async ({ page, interceptNetworkCall }) => {
   // Stub API to return error (set up BEFORE navigation)
   const profileCall = interceptNetworkCall({
     method: 'GET',
@@ -390,32 +416,18 @@ Async polling for eventual consistency (Cypress-style).
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/recurse.html>
 
-**Usage:**
-
 ```typescript
-import { expect, mergeTests } from '@playwright/test';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
-
-const test = mergeTests(apiRequestFixture, recurseFixture);
+import { test, expect } from '../support/merged-fixtures';
 
 test('should wait for async job completion', async ({ apiRequest, recurse }) => {
-  // Start async job
-  const { body: job } = await apiRequest({
-    method: 'POST',
-    path: '/api/jobs'
-  });
+  const { body: job } = await apiRequest({ method: 'POST', path: '/api/jobs' });
 
-  // Poll until complete (smart waiting)
+  // Poll until complete
   const completed = await recurse(
     () => apiRequest({ method: 'GET', path: `/api/jobs/${job.id}` }),
     (result) => result.body.status === 'completed',
-    {
-      timeout: 30000,
-      interval: 2000,
-      log: 'Waiting for job to complete'
-    }
-  });
+    { timeout: 30000, interval: 2000, log: 'Waiting for job to complete' },
+  );
 
   expect(completed.body.status).toBe('completed');
 });
@@ -427,11 +439,8 @@ Structured logging that integrates with Playwright reports.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/log.html>
 
-**Usage:**
-
 ```typescript
-import { log } from '@seontechnologies/playwright-utils';
-import { test, expect } from '@playwright/test';
+import { test, log } from '../support/merged-fixtures';
 
 test('should login', async ({ page }) => {
   await log.info('Starting login test');
@@ -441,40 +450,33 @@ test('should login', async ({ page }) => {
 
   await page.getByLabel('Email').fill('test@example.com');
   await log.debug('Filled email field');
-
-  await log.info('Login credentials entered');
-  // Logs appear in test output and Playwright reports
 });
 ```
 
 ### file-utils
 
 Read and validate CSV, PDF, XLSX, ZIP files.
+These are plain functions, so they need no fixture entry.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/file-utils.html>
 
-**Usage:**
-
 ```typescript
+import { test, expect } from '../support/merged-fixtures';
 import { handleDownload, readCSV } from '@seontechnologies/playwright-utils/file-utils';
-import { test, expect } from '@playwright/test';
 import path from 'node:path';
 
 const DOWNLOAD_DIR = path.join(__dirname, '../downloads');
 
 test('should export valid CSV', async ({ page }) => {
-  // Handle download and get file path
   const downloadPath = await handleDownload({
     page,
     downloadDir: DOWNLOAD_DIR,
     trigger: () => page.click('button:has-text("Export")'),
   });
 
-  // Read and parse CSV
   const csvResult = await readCSV({ filePath: downloadPath });
   const { data, headers } = csvResult.content;
 
-  // Validate structure
   expect(headers).toEqual(['Name', 'Email', 'Status']);
   expect(data.length).toBeGreaterThan(0);
   expect(data[0]).toMatchObject({
@@ -490,8 +492,6 @@ test('should export valid CSV', async ({ page }) => {
 Smart test selection with git diff analysis for CI optimization.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/burn-in.html>
-
-**Usage:**
 
 ```typescript
 // scripts/burn-in-changed.ts
@@ -538,112 +538,38 @@ export default config;
 ### network-error-monitor
 
 Automatically detect HTTP 4xx/5xx errors during tests.
+The Step 3 module includes it, so every spec that imports the module is monitored.
 
 **Official Docs:** <https://seontechnologies.github.io/playwright-utils/network-error-monitor.html>
 
-**Usage:**
-
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+import { test, expect } from '../support/merged-fixtures';
 
-// Network monitoring is enabled from here on
 test('should not have API errors', async ({ page }) => {
   await page.goto('/dashboard');
   await page.click('button');
 
   // Test fails automatically if any HTTP 4xx/5xx errors occur
   // Error message shows: "Network errors detected: 2 request(s) failed"
-  //   GET 500 https://api.example.com/users
-  //   POST 503 https://api.example.com/metrics
 });
-```
 
-**Opt-out for validation tests:**
-
-```typescript
-// When testing error scenarios, opt-out with annotation
+// When testing error scenarios, opt out with an annotation
 test(
   'should show error message on 404',
   { annotation: [{ type: 'skipNetworkMonitoring' }] }, // Array format
   async ({ page }) => {
     await page.goto('/invalid-page'); // Will 404
     await expect(page.getByText('Page not found')).toBeVisible();
-    // Test won't fail on 404 because of annotation
   },
 );
 
-// Or opt-out entire describe block
+// Or opt out an entire describe block
 test.describe('error handling', { annotation: [{ type: 'skipNetworkMonitoring' }] }, () => {
   test('handles 404', async ({ page }) => {
     // Monitoring disabled for all tests in block
   });
 });
 ```
-
-## Fixture Composition
-
-### Option 1: Merge Fixtures Inline (Simplest)
-
-```typescript
-// Merge the fixtures this spec needs
-import { expect, mergeTests } from '@playwright/test';
-import { log } from '@seontechnologies/playwright-utils';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as interceptNetworkCallFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
-
-const test = mergeTests(apiRequestFixture, interceptNetworkCallFixture);
-
-test('api test', async ({ apiRequest, interceptNetworkCall }) => {
-  await log.info('Fetching users');
-
-  const { status, body } = await apiRequest({
-    method: 'GET',
-    path: '/api/users',
-  });
-
-  expect(status).toBe(200);
-});
-```
-
-### Option 2: Create Custom Merged Fixtures (Selective)
-
-#### File 1: support/merged-fixtures.ts
-
-```typescript
-import { test as base, mergeTests } from '@playwright/test';
-import { test as apiRequest } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as interceptNetworkCall } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
-import { test as networkErrorMonitor } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
-import { log } from '@seontechnologies/playwright-utils';
-
-// Merge only what you need
-export const test = mergeTests(base, apiRequest, interceptNetworkCall, networkErrorMonitor);
-
-export const expect = base.expect;
-export { log };
-```
-
-#### File 2: tests/api/users.spec.ts
-
-```typescript
-import { test, expect, log } from '../support/merged-fixtures';
-
-test('api test', async ({ apiRequest, interceptNetworkCall }) => {
-  await log.info('Fetching users');
-
-  const { status, body } = await apiRequest({
-    method: 'GET',
-    path: '/api/users',
-  });
-
-  expect(status).toBe(200);
-});
-```
-
-Inline merging keeps the selected fixtures in the spec file.
-A shared module gives specs a common fixture entry point.
-
-**See working examples:** <https://github.com/seontechnologies/playwright-utils/tree/main/playwright/support>
 
 ## Troubleshooting
 
@@ -652,15 +578,13 @@ A shared module gives specs a common fixture entry point.
 Cannot find module '@seontechnologies/playwright-utils/api-request'
 
 ```bash
-# Verify package installed
+# Verify the package is installed, then reinstall if it is missing
 npm list @seontechnologies/playwright-utils
-
-# Check package.json has correct version
-"@seontechnologies/playwright-utils": "^2.0.0"
-
-# Reinstall if needed
 npm install -D @seontechnologies/playwright-utils
 ```
+
+Cannot find module '../support/merged-fixtures': the spec's relative path does not reach `{test_dir}/support/merged-fixtures.ts`.
+Count directories from the spec to `test_dir`; `tests/api/users.spec.ts` uses `../support/merged-fixtures`.
 
 ### TEA Not Using Utilities
 
@@ -668,7 +592,7 @@ TEA generates tests without playwright-utils.
 
 **Causes:**
 
-1. Config not set: `tea_use_playwright_utils: false`
+1. Config not set: `tea_use_playwright_utils = "false"`
 2. Skill run before config change
 3. Package not installed
 

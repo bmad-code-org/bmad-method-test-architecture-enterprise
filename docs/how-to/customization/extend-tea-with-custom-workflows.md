@@ -52,7 +52,7 @@ skill = "my-custom-workflow"
 ```
 
 The `bmad-customize` skill can write this file for you.
-Start a fresh chat so `bmad-tea` picks up the new menu.
+Start a fresh chat so `bmad-tea` picks up the new menu; `MW` then appears in it and invokes `my-custom-workflow`.
 
 ## What Not to Do
 

@@ -42,6 +42,9 @@ Run the trace skill and select Phase 1 (Requirements Traceability):
 - Test location (`tests/` or wherever tests live)
 - Focus areas (specific features if large codebase)
 
+No requirements docs? TEA traces against journeys it infers from routes, screens, and auth flows (`allow_synthetic_oracle`, on by default) and states its confidence.
+Confirm those journeys with the product owner before ranking gaps; below high confidence the gate gives at most CONCERNS.
+
 **Output:** `trace/traceability-matrix-{run_key}.md` under `{test_artifacts}` (`run_key` is `system` for a whole-project baseline) showing:
 
 - Which requirements have tests
@@ -87,14 +90,14 @@ Run the test review skill and answer `tests/` when it asks for scope:
 **Example Baseline Quality:**
 
 ```markdown
-# Quality Score: 55/100
+# Quality Score: 40/100
 
-**Critical Issues:** 12
+**High findings:** 12 (12 × 5 = 60 points deducted)
 
 - 8 hard waits
-- 4 conditional flow control
+- 4 conditional assertions
 
-**Recommendations:** 25
+**Recommendations:**
 
 - Extract fixtures
 - Improve selectors
@@ -145,11 +148,10 @@ test('checkout completes', async ({ page }) => {
 **After (With Playwright Utils: Cleaner API):**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
-import { expect } from '@playwright/test';
+// tests/e2e/checkout.spec.ts
+import { test, expect } from '../support/merged-fixtures';
 
 test('checkout completes', async ({ page, interceptNetworkCall }) => {
-  // Use interceptNetworkCall for cleaner network interception
   const checkoutCall = interceptNetworkCall({
     method: 'POST',
     url: '**/api/checkout',
@@ -170,11 +172,10 @@ test('checkout completes', async ({ page, interceptNetworkCall }) => {
 ```
 
 `interceptNetworkCall` waits for the matching response and parses it as `responseJson`.
-
-**For automatic error detection,** use `network-error-monitor` fixture separately.
+The spec imports the project's one fixture module, `tests/support/merged-fixtures.ts` under your configured `test_dir`; merge `network-error-monitor` there for automatic error detection.
 See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#network-error-monitor).
 
-**Priority 3: P1 Requirements.** Goal: P1 coverage at 80% or above.
+**Priority 3: P1 Requirements.** Goal: P1 coverage at 80% as an interim milestone; the trace gate needs 90% for PASS.
 
 1. Generate tests for the highest-risk P1 gaps
 2. Improve test quality incrementally
@@ -200,7 +201,7 @@ See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright
 
 - [ ] Add 10 missing P1 tests
 - [ ] Improve selector resilience
-- [ ] P1 coverage target: 80%
+- [ ] P1 coverage milestone: 80% (PASS needs 90%)
 
 ## Week 4: Quality Polish
 
@@ -235,11 +236,13 @@ Apply TEA skills to new work while improving legacy tests.
 
 #### For Refactoring (Regression Safety)
 
-**Before refactoring:**
+1. Run the relevant suite and record the results as the execution baseline
+2. Run `/bmad-tea-trace` and note coverage by priority as the trace baseline
+3. Refactor the code
+4. Rerun the same suite and investigate every new failure before going further
+5. Run `/bmad-tea-trace` again and compare priority coverage with the baseline
 
-1. Run `/bmad-tea-trace` for a baseline and note the coverage percentage
-2. Refactor the code
-3. Run `/bmad-tea-trace` again; no priority's coverage should have decreased
+An unchanged matrix shows the tests still map to requirements; only the test run shows behavior still passes.
 
 ### Phase 4: Continuous Improvement
 
@@ -249,7 +252,7 @@ Track improvement over time.
 
 | Quarter       | Coverage          | Quality score | Flakiness     |
 | ------------- | ----------------- | ------------- | ------------- |
-| Q1 (baseline) | 30%               | 55/100        | 15% fail rate |
+| Q1 (baseline) | 30%               | 40/100        | 15% fail rate |
 | Q2 target     | 50% (focus on P0) | 65/100        | 5%            |
 | Q3 target     | 70%               | 75/100        | 1%            |
 | Q4 target     | 85%               | 85/100        | <0.5%         |
@@ -267,29 +270,8 @@ Keep existing coverage while improving the suite:
 
 ### Use Regression Hotspots
 
-**Identify regression-prone areas:**
-
-```markdown
-## Regression Hotspots
-
-**Based on:**
-
-- Bug reports (last 6 months)
-- Customer complaints
-- Code complexity (cyclomatic complexity >10)
-- Frequent changes (git log analysis)
-
-**High-Risk Areas:**
-
-1. Authentication flow (12 bugs in 6 months)
-2. Checkout process (8 bugs)
-3. Payment integration (6 bugs)
-
-**Test Priority:**
-
-- Add regression tests for these areas FIRST
-- Ensure P0 coverage before touching code
-```
+Rank areas by bug reports from the last six months, customer complaints, code complexity (cyclomatic complexity above 10), and change frequency in `git log`.
+For example, authentication (12 bugs in six months), checkout (8), and payments (6) get regression tests first, and their P0 coverage is complete before anyone touches the code.
 
 ### Quarantine Flaky Tests
 
@@ -358,12 +340,10 @@ Take one directory per week (`tests/auth/`, then `tests/api/`, then `tests/e2e/`
 
 No documentation, unclear what tests do.
 
-1. Run `/bmad-tea-trace`; TEA analyzes the tests and maps them to requirements
+1. Run `/bmad-tea-trace`; TEA maps the tests to requirements, or to inferred journeys when none exist (see the confidence note in Phase 1, Step 1)
 2. Review the traceability matrix
 3. Document the findings
 4. Use it as your improvement baseline
-
-TEA reverse-engineers test coverage even without documentation.
 
 ### "Tests Are Too Brittle to Touch"
 
@@ -398,18 +378,8 @@ Measure the result with your suite and runner capacity.
 3. Run the full suite nightly only
 4. Optimize slow tests by removing hard waits and improving selectors
 
-**How Framework CI Setup Helps:**
-
-- Scaffolds CI configuration with parallel sharding examples
-- Provides selective testing script templates
-- Documents burn-in and optimization strategies
-- Configure workers and test selection for your repository
-
-**With Playwright Utils burn-in:**
-
-- Smart selective testing based on git diff
-- Volume control (run percentage of affected tests)
-- See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#burn-in)
+`/bmad-tea-framework` with CI scope scaffolds sharded CI, selective-testing scripts, and burn-in for your repository.
+With Playwright Utils, [burn-in](/docs/how-to/customization/integrate-playwright-utils.md#burn-in) selects tests from the git diff and can run a percentage of them.
 
 ### "We Have Tests But They Always Fail"
 

@@ -1838,7 +1838,9 @@ async function checkAgentVersionFaults() {
     const began = Date.now();
     const result = evaluate(['run', '--evaluation', project.folder], project.env);
     check(result.status === 12, `${mode} agent version probe exited ${result.status}; expected 12: ${result.output}`);
-    if (mode === 'hang') check(Date.now() - began < 12_000, 'agent version probe inherited the evaluator timeout');
+    // The probe's own 3 s timeout ends a hang; inheriting the evaluator's 60 s timeout would hold the whole run past
+    // 60 s. Half of that separates the two with room for a loaded CI runner's Node startup and project setup.
+    if (mode === 'hang') check(Date.now() - began < 30_000, 'agent version probe inherited the evaluator timeout');
     if (refusedShapes.includes(mode))
       check(
         result.output.includes('{"agentVersion":"1.2.3"}'),

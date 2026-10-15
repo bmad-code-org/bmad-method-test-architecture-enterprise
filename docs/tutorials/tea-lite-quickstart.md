@@ -89,10 +89,11 @@ Tell TEA:
 ```text
 We're testing the React TodoMVC app at https://todomvc.com/examples/react/dist/.
 Use Playwright with TypeScript for browser E2E tests.
+Put playwright.config.ts at the project root and enable the HTML reporter.
 Set up the test framework only. We'll add CI later.
 ```
 
-Review the generated `tests/` structure, `playwright.config.ts`, environment example, and Node version file.
+Review the generated `tests/` structure, the root `playwright.config.ts`, environment example, and Node version file.
 Install the dependencies and browsers:
 
 ```bash
@@ -111,6 +112,7 @@ npx playwright install
 Ask for an epic-level plan for epic 1:
 
 ```text
+Use epic-level mode for epic 1.
 Plan browser tests for TodoMVC's create, complete, delete, and filter actions.
 Focus on creating todos and the All, Active, and Completed filters.
 ```
@@ -208,7 +210,7 @@ Read any failure before continuing; the public demo can change.
 npx playwright show-report
 ```
 
-The HTML reporter must be enabled in your Playwright configuration.
+The report comes from the HTML reporter you asked for in the scaffold request.
 Use the report's screenshots and traces to investigate failures when those artifacts are configured.
 
 ### What Just Happened?

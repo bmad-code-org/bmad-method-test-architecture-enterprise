@@ -337,9 +337,25 @@ Yes, run tests 5 times on PRs to catch flaky tests early
 
 #### 4. Review Generated CI Configuration
 
-TEA generates platform-specific workflow files.
-The GitHub Actions sample runs selective tests on pull requests, the full sharded suite on pushes to `main` or `develop` and on the nightly schedule, and full-suite burn-in on the nightly schedule.
-The GitLab sample runs the full sharded suite on pushes to the default branch or `develop` and on schedules, with full-suite burn-in on schedules.
+TEA generates the pipeline file from the command contract agreed during preflight.
+The samples below assume the defaults the framework phase writes for a Node.js Playwright suite; replace each with your project's recorded values:
+
+- **Test command:** `npm run test:e2e`, the script the framework phase adds to `package.json`. With the config under `tests/`, as in the [scaffold above](#framework-what-you-get), the script runs `playwright test --config tests/playwright.config.ts`. A bare `npx playwright test` from the repository root does not find that config.
+- **Dependencies:** `npm ci` from a committed `package-lock.json`, then `npx playwright install --with-deps chromium` for browser suites.
+- **Application:** the suite reads `BASE_URL`. Point it at a deployed environment through a CI variable, or start the app in the job before the test step (Playwright's `webServer` config option can start it and wait for it).
+- **Secrets:** none for the sample suite; add yours in [step 5](#ci-5-configure-secrets).
+- **Node:** the `.nvmrc` the framework phase writes.
+
+The generated file also runs your lint command before the tests and a report job after them; the samples leave both out.
+The samples run these jobs per trigger:
+
+| Trigger                           | Jobs                       |
+| --------------------------------- | -------------------------- |
+| `pull_request` to main or develop | `test` (4 shards), burn-in |
+| `push` to main or develop         | `test` (4 shards)          |
+| `schedule` (nightly)              | `test` (4 shards), burn-in |
+
+Burn-in follows the generated template's default, pull requests and the nightly schedule. Answering "Nightly burn-in" in [step 3](#ci-burn-in-loops) limits it to `schedule`; "No burn-in" drops the job.
 
 <a id="ci-github-actions-githubworkflowstestyml"></a>
 
@@ -350,127 +366,74 @@ name: Test Suite
 
 on:
   pull_request:
+    branches: [main, develop]
   push:
     branches: [main, develop]
   schedule:
-    - cron: '0 2 * * *' # Nightly at 2 AM
+    - cron: '0 2 * * *' # Nightly at 2 AM UTC
 
 jobs:
-  # Main test job with sharding
   test:
     name: Test (Shard ${{ matrix.shard }})
-    if: github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Run tests
-        run: npx playwright test --shard=${{ matrix.shard }}/4
-
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.shard }}
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report/
           retention-days: 7
 
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ matrix.shard }}
-          path: playwright-report/
-          retention-days: 7
-
-  # Full-suite burn-in on the nightly schedule
   burn-in:
     name: Burn-In (Flakiness Detection)
+    needs: test
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    timeout-minutes: 30
-
+    timeout-minutes: 60
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Run burn-in loop
         run: |
-          for i in {1..5}; do
+          for i in 1 2 3 4 5; do
             echo "=== Burn-in iteration $i/5 ==="
-            npx playwright test --grep-invert "@skip" --retries=0 || exit 1
+            npm run test:e2e -- --retries=0 || exit 1
           done
-
       - name: Upload burn-in results
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: burn-in-failures
           path: test-results/
-
-  # Selective testing (changed files only)
-  selective:
-    name: Selective Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Full history for git diff
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
-      - name: Run selective tests
-        run: npm run test:changed
 ```
 
 <a id="ci-gitlab-ci-gitlab-ciyml"></a>
 
 ##### GitLab CI (`.gitlab-ci.yml`):
+
+The GitLab sample runs the same jobs on merge request, branch push, and scheduled pipelines.
 
 ```yaml
 variables:
@@ -480,15 +443,14 @@ stages:
   - test
   - burn-in
 
-# Test job with parallel execution
 test:
   stage: test
   image: node:$NODE_VERSION
   parallel: 4
   script:
     - npm ci
-    - npx playwright install --with-deps
-    - npx playwright test --shard=$CI_NODE_INDEX/$CI_NODE_TOTAL
+    - npx playwright install --with-deps chromium
+    - npm run test:e2e -- --shard=$CI_NODE_INDEX/$CI_NODE_TOTAL
   artifacts:
     when: always
     paths:
@@ -496,28 +458,68 @@ test:
       - playwright-report/
     expire_in: 7 days
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "develop")
 
-# Burn-in job for flakiness detection
 burn-in:
   stage: burn-in
   image: node:$NODE_VERSION
   script:
     - npm ci
-    - npx playwright install --with-deps
+    - npx playwright install --with-deps chromium
     - |
-      for i in {1..5}; do
+      for i in 1 2 3 4 5; do
         echo "=== Burn-in iteration $i/5 ==="
-        npx playwright test --retries=0 || exit 1
+        npm run test:e2e -- --retries=0 || exit 1
       done
   artifacts:
     when: on_failure
     paths:
       - test-results/
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "schedule"
 ```
+
+<a id="ci-optional-selective-tests-on-pull-requests"></a>
+
+##### Optional: Selective Tests on Pull Requests
+
+Selective testing runs only the tests a change affects. It needs a `test:changed` script that you define and check first, for example with Playwright's `--only-changed`:
+
+```json
+{
+  "scripts": {
+    "test:changed": "playwright test --config tests/playwright.config.ts --only-changed=origin/main"
+  }
+}
+```
+
+The CI phase can also write a `git diff` based selection script when your project needs one.
+On a branch that edits one spec, run `npm run test:changed` and confirm it selects that spec before you wire it in.
+Then add a PR job and change the `test` job's condition to `if: github.event_name != 'pull_request'`, so pushes and the schedule keep the full suite:
+
+```yaml
+jobs:
+  selective:
+    name: Selective Tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # The diff needs the base branch history
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:changed
+```
+
+A change that touches no test or tested source, such as a docs-only edit, can select no tests.
 
 <a id="ci-burn-in-testing"></a>
 
@@ -530,8 +532,8 @@ burn-in:
 ```json
 {
   "scripts": {
-    "test": "playwright test",
-    "test:burn-in": "playwright test --repeat-each=5 --retries=0"
+    "test:e2e": "playwright test --config tests/playwright.config.ts",
+    "test:burn-in": "playwright test --config tests/playwright.config.ts --repeat-each=5 --retries=0"
   }
 }
 ```
@@ -672,15 +674,8 @@ git push
 - GitLab CI: Go to CI/CD → Pipelines
 - Circle CI: Go to Pipelines
 
-**Expected Result:**
-
-```text
-✓ test (shard 1/4) - 3m 24s
-✓ test (shard 2/4) - 3m 18s
-✓ test (shard 3/4) - 3m 31s
-✓ test (shard 4/4) - 3m 15s
-✓ burn-in - 15m 42s
-```
+**Expected result:** the push runs the four `test` shards, and each must pass.
+Burn-in runs on pull requests and the nightly schedule; the [trigger table](#ci-4-review-generated-ci-configuration) lists the jobs per trigger.
 
 <a id="ci-test-on-pull-request"></a>
 
@@ -688,20 +683,21 @@ git push
 
 **Create test PR:**
 
+Change a spec, so a selective job has a test to select:
+
 ```bash
 git checkout -b test-ci-setup
-echo "# Test" > test.md
-git add test.md
+echo "// CI check" >> tests/e2e/example.spec.ts
+git add tests/e2e/example.spec.ts
 git commit -m "test: verify CI setup"
 git push -u origin test-ci-setup
 ```
 
 **Open PR and verify:**
 
-- Tests run automatically
-- Burn-in runs (if configured for PRs)
-- Selective tests run (if applicable)
-- All checks pass ✓
+- The four `test` shards run and pass, or the `selective` job does if you added it
+- Burn-in runs after the shards pass, unless you chose nightly or no burn-in
+- Close the PR without merging the change
 
 <a id="ci-what-you-get"></a>
 
@@ -725,15 +721,14 @@ git push -u origin test-ci-setup
 
 #### Selective Testing
 
-- **Run only affected tests**: Git diff-based selection
-- **Faster PR feedback**: Don't run entire suite every time
+- **Optional**: run only the tests a PR affects, once a `test:changed` script is [verified](#ci-optional-selective-tests-on-pull-requests)
 
 <a id="ci-flakiness-detection"></a>
 
 #### Flakiness Detection
 
 - **Burn-in loops**: Run tests multiple times
-- **Early detection**: Catch flaky tests in PRs
+- **Early detection**: Catch flaky tests in PRs when you choose PR burn-in
 
 <a id="ci-artifact-collection"></a>
 
@@ -752,33 +747,10 @@ git push -u origin test-ci-setup
 
 #### Start Simple, Add Complexity
 
-**Week 1:** Basic pipeline
-
-```yaml
-- Run tests on PR
-- Single worker (no sharding)
-```
-
-**Week 2:** Add parallelization
-
-```yaml
-- Shard across 4 workers
-- Faster feedback
-```
-
-**Week 3:** Add selective testing
-
-```yaml
-- Git diff-based selection
-- Skip unaffected tests
-```
-
-**Week 4:** Add burn-in
-
-```yaml
-- Detect flaky tests
-- Run on PR and nightly
-```
+1. **Week 1:** run the full suite on every PR in one job.
+2. **Week 2:** shard across 4 jobs.
+3. **Week 3:** add [selective tests](#ci-optional-selective-tests-on-pull-requests) on PRs once `test:changed` is verified.
+4. **Week 4:** add nightly burn-in, then PR burn-in.
 
 <a id="ci-optimize-for-feedback-speed"></a>
 
@@ -793,7 +765,7 @@ git push -u origin test-ci-setup
 - Cache dependencies (`actions/cache`, `cache: 'npm'`)
 - Run smoke tests first, full suite after
 
-**Example fast workflow:**
+**Example fast workflow**, using the `@smoke` tag from [Use Test Tags](#ci-use-test-tags):
 
 ```yaml
 name: Fast Test Feedback
@@ -814,7 +786,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:smoke
+      - run: npm run test:e2e -- --grep @smoke
 
   full:
     needs: smoke
@@ -827,7 +799,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm test
+      - run: npm run test:e2e
 ```
 
 <a id="ci-use-test-tags"></a>
@@ -854,28 +826,17 @@ test('@local-only should use local service', async ({ page }) => {});
 
 ```bash
 # PR: Run critical and smoke only
-npx playwright test --grep "@critical|@smoke"
+npm run test:e2e -- --grep "@critical|@smoke"
 
 # Nightly: Run everything except local-only
-npx playwright test --grep-invert "@local-only"
+npm run test:e2e -- --grep-invert "@local-only"
 ```
 
 <a id="ci-monitor-ci-performance"></a>
 
 #### Monitor CI Performance
 
-Track metrics:
-
-```markdown
-## CI Metrics
-
-| Metric           | Target   | Current | Status |
-| ---------------- | -------- | ------- | ------ |
-| PR feedback time | < 5 min  | 3m 24s  | ✅     |
-| Full suite time  | < 15 min | 12m 18s | ✅     |
-| Flakiness rate   | < 1%     | 0.3%    | ✅     |
-| CI cost/month    | < $100   | $75     | ✅     |
-```
+Track PR feedback time, full-suite time, flakiness rate, and CI cost against targets your team sets, for example PR feedback under 5 minutes and flakiness under 1%.
 
 <a id="ci-handle-flaky-tests"></a>
 
@@ -905,7 +866,7 @@ When burn-in detects flakiness:
 4. **Verify fix:**
 
    ```bash
-   npx playwright test tests/flaky.spec.ts --repeat-each=20 --retries=0
+   npm run test:e2e -- tests/e2e/flaky.spec.ts --repeat-each=20 --retries=0
    ```
 
 <a id="ci-secure-secrets"></a>
@@ -916,10 +877,10 @@ When burn-in detects flakiness:
 
 ```yaml
 # ❌ Bad
-- run: API_KEY=sk-1234... npm test
+- run: API_KEY=sk-1234... npm run test:e2e
 
 # ✅ Good
-- run: npm test
+- run: npm run test:e2e
   env:
     API_KEY: ${{ secrets.API_KEY }}
 ```
@@ -982,7 +943,7 @@ Speed up CI with caching:
 - run: npx playwright install --with-deps chromium
 
 # Set the test process timezone.
-- run: npx playwright test
+- run: npm run test:e2e
   env:
     TZ: 'America/New_York'
 ```
@@ -1007,10 +968,10 @@ Find the failing tests in the burn-in report and check whether failures repeat c
 
 1. Identify flaky tests (check which iteration fails)
 2. Fix flaky tests using `test-review`
-3. Re-run burn-in on specific files:
+3. Re-run the classic burn-in script on specific files:
 
 ```bash
-npm run test:burn-in tests/flaky.spec.ts
+npm run test:burn-in -- tests/e2e/flaky.spec.ts
 ```
 
 <a id="ci-out-of-ci-minutes"></a>
@@ -1059,17 +1020,7 @@ For each tier the plan places a check on, the pipeline gets one job, `evaluation
 - **The tooling stays in the evaluations folder.** The job installs the private `package.json` Evaluate wrote there with `npm ci --prefix` (`npm install --prefix` when no lockfile is committed), so the repository's own manifest stays untouched and a repository in any language works.
 - **The Node version respects the tooling's floor.** The evaluation job runs the project's `.nvmrc` version only when it is at or above the Node floor TeA and eval-quality declare (22.20.0), and the current LTS otherwise, so a project pinned to an older Node is not blocked.
 - **Checks and tiers come from the plan.** Framework preserves the complete check set and every check's tier placement, without adding, dropping, or moving checks. The evaluation plan stays unchanged.
-- **A job the plan gates waits for its tier's evaluation job.**
-  A check's optional `gates` names existing publish or deploy jobs by job id, so a blocking exit stops the shipment.
-  A gated job in the pipeline file gets the evaluation job appended to its `needs`, and Framework changes only that job's `needs`; its `if:` and every other key stay unchanged.
-  A gated job in another workflow file gets a `workflow_run` trigger on the pipeline, an `if:` that requires a successful run of the pipeline file on the tier's event, and the evaluated commit as the `ref` of its checkout steps, and that workflow's other jobs get an event guard.
-  Framework reports each edit in the summary and restores the wait when it rewrites the evaluation jobs.
-  Across files, Framework limits changes to the gated job's `if:` and checkout `ref:`, its workflow's `workflow_run` trigger, and event guards on that workflow's other jobs.
-  All other job settings stay unchanged.
-  A plan renders nothing and is reported when a name matches no job or a gate cannot hold.
-  Inside the pipeline file a gate cannot hold when the gated job already ran in a run where its tier's evaluation job is skipped (a deploy on every push beside an evaluation job guarded to tags), when the job already waits for another plan's evaluation job through the cross-file form, when the tier's evaluation job runs on a run the job did not run on before (a `workflow_dispatch` the plan adds to a tag-push release file; a deploy file that already starts on a dispatch gains no run), or when its `if:` calls a status function other than `success()` (`always()`, `!cancelled()`, `failure()`).
-  A run the render adds, such as a merge tier's branch filter or a new cron, is skipped through the wait and is no conflict.
-  Across files a gate also cannot hold for a pull request tier, a `pull_request_target` tier or another event that runs code of a fork, for an evaluation job behind a ref or cron guard, for a gated workflow that already follows another workflow, for a job gated by another plan or by a second tier, and for a job with `needs`, a `uses:` job, a job with an `if:` of its own, or a job that reads `github.ref`, `github.ref_name`, `github.sha`, `github.head_ref` or `github.event.*`.
+- **A job the plan gates waits for its tier's evaluation job.** See [gated publish and deploy jobs](#gated-publish-and-deploy-jobs).
 - **Evidence is kept whatever the result.** The job uploads `<evaluation folder>/runs/` with `if: always()` under the artifact name `<job id>-runs`, so no two jobs upload one name, and each invocation writes `runs/<invocationId>/` under that folder.
 - **Triggers follow the plan.** The workflow gains the events the checks name, and each evaluation job gets an `if:` on the event that starts its tier when the workflow carries more events than the tier names. When an event is new to the workflow, or an event it already has gains a branch filter, a tag pattern or a cron, the jobs that existed before get an `if:` that keeps them on the events and filters they already ran on, and the summary names each guard. A job the plan gates inside the pipeline file is exempt, since its wait keeps it off the added runs. `workflow_dispatch` goes to every tier whose checks name `manual-dispatch`.
 - **Timeouts.** The `pr` and `merge` jobs get 30 minutes and the `scheduled` and `release` jobs 120, since their live checks spend model calls.
@@ -1079,3 +1030,16 @@ For each tier the plan places a check on, the pipeline gets one job, `evaluation
 The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run, in create or edit mode, rewrites each of them under the id the current plan gives, renames one whose id differs and leaves every job without the marker as it was, apart from the event guards and gate waits described above.
 Edit mode never writes the create run's checkpoint.
 See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
+
+### Gated Publish and Deploy Jobs
+
+A check's optional `gates` names existing publish or deploy jobs by job id, so a blocking exit stops the shipment.
+A gated job in the pipeline file gets the evaluation job appended to its `needs`, and Framework changes only that job's `needs`; its `if:` and every other key stay unchanged.
+A gated job in another workflow file gets a `workflow_run` trigger on the pipeline, an `if:` that requires a successful run of the pipeline file on the tier's event, and the evaluated commit as the `ref` of its checkout steps, and that workflow's other jobs get an event guard.
+Framework reports each edit in the summary and restores the wait when it rewrites the evaluation jobs.
+Across files, Framework limits changes to the gated job's `if:` and checkout `ref:`, its workflow's `workflow_run` trigger, and event guards on that workflow's other jobs.
+All other job settings stay unchanged.
+A plan renders nothing and is reported when a name matches no job or a gate cannot hold.
+Inside the pipeline file a gate cannot hold when the gated job already ran in a run where its tier's evaluation job is skipped (a deploy on every push beside an evaluation job guarded to tags), when the job already waits for another plan's evaluation job through the cross-file form, when the tier's evaluation job runs on a run the job did not run on before (a `workflow_dispatch` the plan adds to a tag-push release file; a deploy file that already starts on a dispatch gains no run), or when its `if:` calls a status function other than `success()` (`always()`, `!cancelled()`, `failure()`).
+A run the render adds, such as a merge tier's branch filter or a new cron, is skipped through the wait and is no conflict.
+Across files a gate also cannot hold for a pull request tier, a `pull_request_target` tier or another event that runs code of a fork, for an evaluation job behind a ref or cron guard, for a gated workflow that already follows another workflow, for a job gated by another plan or by a second tier, and for a job with `needs`, a `uses:` job, a job with an `if:` of its own, or a job that reads `github.ref`, `github.ref_name`, `github.sha`, `github.head_ref` or `github.event.*`.
