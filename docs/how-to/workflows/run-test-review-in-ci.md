@@ -7,12 +7,13 @@ description: 'Gate pull requests on a headless Test Review with GitHub Actions, 
 
 Make Test Review a required check on every pull request. The job installs `tea-test-review` and an agent CLI, logs the agent in, and runs one command. The job's exit code is the verdict.
 
-You choose the agent and the gate policy (`--min-score`, `--max-critical`, `--min-files`, `--fail-on`); flags, exit codes and the verdict schema are in the [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md).
+You choose the agent and the gate policy. The [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md) lists the flags, exit codes and verdict schema.
 
-Before you start, check out the full history (the review diffs changed test files against the base ref) and:
+Before you start:
 
+- Check out the full history; the review diffs changed test files against the base ref.
 - Store the agent's credential as a CI secret. The templates use `--agent claude` with `ANTHROPIC_API_KEY`. A Codex runner has no interactive login, so follow the `--agent codex` note in the [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) first.
-- Pin both installs to published versions you vetted. The templates pin TEA `3.1.0` and Claude Code `2.1.220`. The installed CLI is the reviewer's control plane, and a pin that is not a published version fails the install step.
+- Pin both installs to published versions you vetted. The templates pin TEA `3.1.0` and Claude Code `2.1.220`. The installed CLI is the reviewer's control plane, and an unpublished version fails the install.
 
 ## GitHub Actions
 
@@ -22,7 +23,7 @@ Before you start, check out the full history (the review diffs changed test file
 tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```
 
-`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. Make the job a required status check to gate merges.
+`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. Make the job a required status check to gate merges. The standalone [`tea-test-review` action](https://github.com/muratkeremozcan/tea-test-review) wraps a CLI run for GitHub: `@mention` triggers with a trusted-author gate, agent install and login, and artifact upload.
 
 ## GitLab
 

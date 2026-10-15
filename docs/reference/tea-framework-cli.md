@@ -25,7 +25,7 @@ This grants unrestricted outbound network access for that run.
 ## Operations
 
 ```bash
-# Preview the resolved request: no setup files, no model call; the prompt is retained in the run directory.
+# Print the resolved request without writing project files or calling a model.
 tea-framework --agent none --scope both
 
 # Resume the scope and original operation saved in the setup journal.
