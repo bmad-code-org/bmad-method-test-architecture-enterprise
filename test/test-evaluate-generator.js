@@ -834,6 +834,7 @@ function checkRefusals() {
     ['a bad digest', { requirementDigest: 'sha256:abc' }, /requirement\/digest/],
     ['a bad campaign', { campaignId: 'Pilot Run' }, /campaignId/],
     ['a campaign that is not text', { campaignId: 7 }, /campaignId must be a string/],
+    ['a seed with a lone surrogate', { seed: '\uD800' }, /generator\/seed holds a lone surrogate/],
   ]) {
     let refusal;
     try {

@@ -621,7 +621,7 @@ function decodeTarget(bytes) {
  * bad input fails the same way whatever the prompt holds. The inputs are held to the schema by validating a stand-in
  * record that carries them.
  */
-function checkRecordInputs({ campaignId, requirementDigest, artifact }) {
+function checkRecordInputs({ campaignId, requirementDigest, artifact, seed }) {
   for (const [name, value] of [
     ['campaignId', campaignId],
     ['requirementDigest', requirementDigest],
@@ -636,7 +636,7 @@ function checkRecordInputs({ campaignId, requirementDigest, artifact }) {
     campaignId,
     partition: 'development',
     identity: '',
-    generator: { name: GENERATOR_NAME, version: GENERATOR_VERSION, seed: 'input check' },
+    generator: { name: GENERATOR_NAME, version: GENERATOR_VERSION, seed },
     intent: 'regression',
     hypothesis: 'input check',
     requirement: { path: REQUIREMENTS_PATH, digest: requirementDigest },
@@ -655,7 +655,7 @@ function checkRecordInputs({ campaignId, requirementDigest, artifact }) {
     validateCandidate(standIn);
   } catch (error) {
     if (error instanceof CandidateError)
-      throw new GeneratorError(`${error.message} (campaignId, requirementDigest and target.artifact are held to it)`);
+      throw new GeneratorError(`${error.message} (campaignId, requirementDigest, target.artifact and seed are held to it)`);
     throw error;
   }
 }
@@ -754,7 +754,7 @@ function previewCandidates({ target, requirementDigest, campaignId, seed, famili
   if (typeof seed !== 'string' || seed.length === 0) throw new GeneratorError('seed must be a non-empty string');
   if (!Number.isInteger(perFamilyCap) || perFamilyCap < 1) throw new GeneratorError('perFamilyCap must be a positive integer');
   if (typeof target?.artifact !== 'string') throw new GeneratorError('target.artifact must name the file');
-  checkRecordInputs({ campaignId, requirementDigest, artifact: target.artifact });
+  checkRecordInputs({ campaignId, requirementDigest, artifact: target.artifact, seed });
   const chosen = chooseFamilies(families);
   const text = decodeTarget(target.bytes);
   const targetDigest = bytesDigest(target.bytes);
