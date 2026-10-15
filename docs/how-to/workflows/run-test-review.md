@@ -1,28 +1,26 @@
 ---
 title: 'How to Run Test Review with TEA'
-description: Audit test quality using TEA's comprehensive knowledge base and get 0-100 scoring
+description: Audit test quality against TEA's criteria registry and get a deduction-based 0-100 score with a computed recommendation
 ---
 
 # How to Run Test Review with TEA
 
-Use TEA's `test-review` skill to audit test quality with objective scoring and actionable feedback. TEA reviews tests against its knowledge base of best practices.
+Use TEA's `test-review` skill to audit existing tests and get a scored report with actionable findings. Each finding cites the criteria-registry row that produced it, and the score and recommendation are computed from those findings.
 
 Coverage scoring is intentionally excluded from `test-review`. Use `trace` for requirements coverage analysis and coverage gate decisions.
 
 ## When to Use This
 
-- Want to validate test quality objectively
-- Need quality metrics for test quality gates
-- Preparing for production deployment
-- Reviewing team-written tests
-- Auditing AI-generated tests
-- Onboarding new team members (show good patterns)
-- Validating migration quality before coverage expansion
+- Validate test quality before a release or merge
+- Review team-written or AI-generated tests
+- Gate pull requests on test quality in CI
+- Establish a baseline before migrating or expanding a suite
 
 ## Prerequisites
 
-- Tests written (to review)
+- Tests to review
 - Test framework configured
+- For unattended or CI runs: the [`tea-test-review` CLI](/docs/reference/tea-test-review-cli.md)
 
 ## Steps
 
@@ -33,181 +31,114 @@ Coverage scoring is intentionally excluded from `test-review`. Use `trace` for r
 - **Claude Code / Cursor / Windsurf:** `/bmad-tea-test-review`
 - **Codex:** `$bmad-tea-test-review`
 - **Inside a `/bmad-tea` chat:** `RV`
+- **Unattended or in CI:** [`tea-test-review`](/docs/reference/tea-test-review-cli.md) runs the same skill headlessly and turns the report into an exit code
 
 Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
 ### 2. Specify Review Scope
 
-TEA will ask what to review.
+TEA asks what to review:
 
-#### Option A: Single File
+| Scope        | Example                      | Best for                                              |
+| ------------ | ---------------------------- | ----------------------------------------------------- |
+| Single file  | `tests/e2e/checkout.spec.ts` | A failing test, quick feedback on a new test          |
+| Directory    | `tests/e2e/`                 | One suite, comparing files, finding repeated patterns |
+| Entire suite | `tests/`                     | Release check, full audit, baseline metrics           |
 
-Review one test file:
+### 3. Read the Quality Report
 
-```text
-tests/e2e/checkout.spec.ts
+TEA writes the report to `{test_artifacts}/test-review/test-review-{run_key}.md`. The `run_key` names what was reviewed: `story-{story_key}` or `epic-{epic_num}` when a story or epic is in context, `system` for the entire suite, and `target-{slug}` for a file or directory, such as `target-tests-e2e` for `tests/e2e/`. Reviews of different scopes never overwrite each other, and re-reviewing the same scope replaces its report.
+
+#### How the score is calculated
+
+Rubric 5.0 uses one deduction ledger:
+
+1. Start at 100. Deduct 10 per Critical, 5 per High, 2 per Medium and 1 per Low finding.
+2. Add bonus points: five categories (comprehensive fixtures, data factories, network-first, perfect isolation, all test IDs), each worth 0 or 5, awarded only when the criterion holds in every reviewed file.
+3. Clamp to 0-100. This is the raw deduction score.
+4. Cap by the highest finding severity: Critical 69, High 79, Medium 89, Low 99. The result is the effective score, and it sets the grade (A 90+, B 80+, C 70+, D 60+, F below 60).
+
+The recommendation is derived from the same findings:
+
+| Findings                               | Recommendation        |
+| -------------------------------------- | --------------------- |
+| Any Critical                           | Block                 |
+| Any High, or effective score below 70  | Request Changes       |
+| Medium or Low findings only, score 70+ | Approve with Comments |
+| No findings                            | Approve               |
+
+Severity comes from the registry row the finding cites: a hard wait is row H1 (High); a test that cannot fail, such as a committed `.skip` or `expect(true).toBe(true)`, is Critical. The skill also scores four dimensions (determinism, isolation, maintainability, performance) and shows them in its summary. The overall score ignores those per-dimension scores; they are diagnostic.
+
+#### Sample report excerpt
+
+The excerpt below is the start of the skill's bundled example report: one High, one Medium and one Low finding, and the all-test-IDs bonus. Raw score 100 - 5 - 2 - 1 + 5 = 97; the High finding caps it at 79.
+
+```markdown
+# Test Quality Review: profile-notifications.spec.ts
+
+**Quality Score**: 79/100 (C - Needs Improvement)
+**Raw Deduction Score**: 97/100
+**Score Cap**: 79/100
+
+**Recommendation**: Request Changes
+**Verdict Rule**: Critical = 0 and High > 0 => Request Changes (1 High).
+
+### 1. Replace the Fixed Notification Delay
+
+**Severity**: P1 (High)
+**Location**: `tests/e2e/profile-notifications.spec.ts:37`
+**Row**: H1
+
+**Issue**: The test sleeps for two seconds after saving notification preferences. It can pass before persistence finishes on a fast response and fail on a slow runner.
 ```
 
-**Best for:**
+Every finding carries a location, its registry row, the issue and a fix. The full report adds a criteria table, the printed deduction breakdown, and the decision section.
 
-- Reviewing specific failing tests
-- Quick feedback on new tests
-- Learning from specific examples
+### 4. Apply the Fixes
 
-#### Option B: Directory
+The fixes below are the ones reports suggest most often.
 
-Review all tests in a directory:
+#### Hard wait (H1, High)
 
-```text
-tests/e2e/
-```
-
-**Best for:**
-
-- Reviewing E2E test suite
-- Comparing test quality across files
-- Finding patterns of issues
-
-#### Option C: Entire Suite
-
-Review all tests:
-
-```text
-tests/
-```
-
-**Best for:**
-
-- Release gate quality check
-- Comprehensive audit
-- Establishing baseline metrics
-
-### 3. Review the Quality Report
-
-TEA generates a comprehensive quality report with scoring and writes it to `{test_artifacts}/test-review/test-review-{run_key}.md`. The `run_key` names what was reviewed: `story-{story_key}` or `epic-{epic_num}` when a story or epic is in context, `system` for the entire suite, and `target-{slug}` for a file or directory, such as `target-tests-e2e` for `tests/e2e/`. Reviews of different scopes never overwrite each other, and re-reviewing the same scope replaces its report.
-
-#### Report Structure (`test-review/test-review-{run_key}.md`):
-
-````markdown
-# Test Quality Review Report
-
-**Date:** 2026-01-13
-**Scope:** tests/e2e/
-**Overall Score:** 76/100
-
-## Summary
-
-- **Tests Reviewed:** 12
-- **Passing Quality:** 9 tests (75%)
-- **Needs Improvement:** 3 tests (25%)
-- **Critical Issues:** 2
-- **Recommendations:** 6
-
-## Critical Issues
-
-### 1. Hard Waits Detected
-
-**File:** `tests/e2e/checkout.spec.ts:45`
-**Issue:** Using `page.waitForTimeout(3000)`
-**Impact:** Test is flaky and unnecessarily slow
-**Severity:** Critical
-
-**Current Code:**
+Register the response listener before the action that triggers the request, then await it. A listener registered after the click can miss a response that returns immediately.
 
 ```typescript
+// Before: fixed delay
 await page.click('button[type="submit"]');
-await page.waitForTimeout(3000); // ❌ Hard wait
+await page.waitForTimeout(3000);
 await expect(page.locator('.success')).toBeVisible();
-```
-````
 
-**Fix:**
-
-```typescript
+// After: listen first, then act
+const checkoutResponse = page.waitForResponse((response) => response.url().includes('/api/checkout') && response.ok());
 await page.click('button[type="submit"]');
-// Wait for the API response that triggers success message
-await page.waitForResponse((resp) => resp.url().includes('/api/checkout') && resp.ok());
+await checkoutResponse;
 await expect(page.locator('.success')).toBeVisible();
 ```
 
-**Why This Matters:**
+With Playwright Utils enabled, the same order applies: create the `interceptNetworkCall` before the action and await it after.
 
-- Hard waits are fixed timeouts that don't wait for actual conditions
-- Tests fail intermittently on slower machines
-- Wastes time waiting even when response is fast
-- Network-first patterns are more reliable
+#### Conditional assertion (H3, High)
 
----
-
-### 2. Conditional Flow Control
-
-**File:** `tests/e2e/profile.spec.ts:28`
-**Issue:** Using if/else to handle optional elements
-**Impact:** Non-deterministic test behavior
-**Severity:** Critical
-
-**Current Code:**
+Row H3 fires when a branch lets an assertion be skipped or picks the expected value from the system's own output. A branch on test inputs where every path asserts the expected value does not fire it.
 
 ```typescript
-if (await page.locator('.banner').isVisible()) {
-  await page.click('.dismiss');
+// Before: when the banner is absent, the test asserts nothing
+if (await page.getByTestId('promo-banner').isVisible()) {
+  await expect(page.getByTestId('promo-banner')).toContainText('20% off');
 }
-// ❌ Test behavior changes based on banner presence
+
+// After: seed the state that shows the banner, then assert unconditionally
+await expect(page.getByTestId('promo-banner')).toContainText('20% off');
 ```
 
-**Fix:**
+Cover the no-banner state in its own test with its own setup.
+
+#### Repeated login setup
+
+Move the login into a fixture so each test starts authenticated:
 
 ```typescript
-// Option 1: Make banner presence deterministic
-await expect(page.locator('.banner')).toBeVisible();
-await page.click('.dismiss');
-
-// Option 2: Test both scenarios separately
-test('should show banner for new users', async ({ page }) => {
-  // Test with banner
-});
-
-test('should not show banner for returning users', async ({ page }) => {
-  // Test without banner
-});
-```
-
-**Why This Matters:**
-
-- Tests should be deterministic (same result every run)
-- Conditionals hide bugs (what if banner should always show?)
-- Makes debugging harder
-- Violates test isolation principle
-
-## Recommendations
-
-### 1. Extract Repeated Setup
-
-**File:** `tests/e2e/profile.spec.ts`
-**Issue:** Login code duplicated in every test
-**Severity:** Medium
-**Impact:** Maintenance burden, test verbosity
-
-**Current:**
-
-```typescript
-test('test 1', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"]', 'test@example.com');
-  await page.fill('[name="password"]', 'password');
-  await page.click('button[type="submit"]');
-  // Test logic...
-});
-
-test('test 2', async ({ page }) => {
-  // Same login code repeated
-});
-```
-
-**Fix (Vanilla Playwright):**
-
-```typescript
-// Create fixture in tests/support/fixtures/auth.ts
+// tests/support/fixtures/auth.ts
 import { test as base, Page } from '@playwright/test';
 
 export const test = base.extend<{ authenticatedPage: Page }>({
@@ -220,374 +151,87 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     await use(page);
   },
 });
-
-// Use in tests
-test('test 1', async ({ authenticatedPage }) => {
-  // Already logged in
-});
 ```
 
-**Better (With Playwright Utils):**
+With Playwright Utils enabled, compose the auth-session fixture into the project's single fixture module, `tests/support/merged-fixtures.ts` (under your configured `test_dir`), and import `test` and `expect` from it in every spec. The auth provider performs a real login or token exchange and saves the session; the fixtures open `page` with that storage state and expose `authToken` as the Bearer token for API calls. [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) shows the setup.
 
-```typescript
-// Use built-in auth-session fixture
-import { test as base } from '@playwright/test';
-import { createAuthFixtures } from '@seontechnologies/playwright-utils/auth-session';
+#### Missing network assertion
 
-export const test = base.extend(createAuthFixtures());
-
-// Use in tests - even simpler
-test('test 1', async ({ page, authToken }) => {
-  // authToken already available (persisted, reused)
-  await page.goto('/dashboard');
-  // Already authenticated via authToken
-});
-```
-
-**Playwright Utils Benefits:**
-
-- Token persisted to disk (faster subsequent runs)
-- Multi-user support out of the box
-- Automatic token renewal if expired
-- No manual login flow needed
-
----
-
-### 2. Add Network Assertions
-
-**File:** `tests/e2e/api-calls.spec.ts`
-**Issue:** No verification of API responses
-**Severity:** Low
-**Impact:** Tests don't catch API errors
-
-**Current:**
-
-```typescript
-await page.click('button[name="save"]');
-await expect(page.locator('.success')).toBeVisible();
-// ❌ What if API returned 500 but UI shows cached success?
-```
-
-**Enhancement:**
+Assert on the response as well as the UI, so an API error behind a cached success message fails the test:
 
 ```typescript
 const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/profile') && resp.status() === 200);
 await page.click('button[name="save"]');
 const response = await responsePromise;
-
-// Verify API response
-const data = await response.json();
-expect(data.success).toBe(true);
-
-// Verify UI
+expect((await response.json()).success).toBe(true);
 await expect(page.locator('.success')).toBeVisible();
 ```
 
-## Quality Scores by Category
+### 5. Re-run and Compare
 
-| Category            | Score | Target | Status               |
-| ------------------- | ----- | ------ | -------------------- |
-| **Determinism**     | 72    | 80     | ⚠️ Needs Improvement |
-| **Isolation**       | 88    | 80     | ✅ Good              |
-| **Maintainability** | 70    | 80     | ⚠️ Needs Improvement |
-| **Performance**     | 60    | 80     | ❌ Critical          |
+Re-run `test-review` on the same scope after fixing. Because the new report replaces the old one, commit each report or copy its score into a trend table:
 
-### Scoring Breakdown
+```markdown
+| Date       | Score | Recommendation        | Notes                 |
+| ---------- | ----- | --------------------- | --------------------- |
+| 2026-01-01 | 64    | Block                 | Baseline              |
+| 2026-01-15 | 79    | Request Changes       | Fixed Critical issues |
+| 2026-02-01 | 88    | Approve with Comments | Fixed hard waits      |
+```
 
-**Determinism (30% weight):**
+## Set a Quality Gate in CI
 
-- Hard waits and race conditions penalized
-- Unstable control flow patterns penalized
+Use the CLI. It reviews the test files the branch changed against `origin/main`, scores the findings the branch introduced or worsened, and exits with the verdict:
 
-**Isolation (30% weight):**
+```bash
+tea-test-review --min-score 80 --output test-review.md --json test-review.json
+```
 
-- Shared state and order dependency penalized
-- Cleanup and parallel-safety rewarded
+- Exit `0`: the review passed, or the branch changed no test files (add `--fail-on-skip` to fail that case).
+- Exit `1`: a failing verdict, such as a score below `--min-score` or a Request Changes or Block recommendation.
+- Exit `3`: the agent wrote no report or the report failed validation. A missing or malformed report never passes.
+- Exit `2`: a setup error, such as a missing or logged-out agent CLI.
 
-**Maintainability (25% weight):**
+Run it from a checkout with full history. The [CLI reference](/docs/reference/tea-test-review-cli.md) has the GitHub Actions job, the agent login, waivers and every gate flag.
 
-- Overly large files and copy-paste patterns penalized
-- Structure and appropriate size rewarded
-
-**Performance (15% weight):**
-
-- Serial bottlenecks and inefficient setup penalized
-- Parallel-friendly structure rewarded
-
-## Files Reviewed
-
-| File                         | Score  | Issues | Status               |
-| ---------------------------- | ------ | ------ | -------------------- |
-| `tests/e2e/checkout.spec.ts` | 65/100 | 4      | ❌ Needs Work        |
-| `tests/e2e/profile.spec.ts`  | 72/100 | 3      | ⚠️ Needs Improvement |
-| `tests/e2e/search.spec.ts`   | 88/100 | 1      | ✅ Good              |
-| `tests/api/profile.spec.ts`  | 92/100 | 0      | ✅ Excellent         |
-
-## Next Steps
-
-### Immediate (Fix Critical Issues)
-
-1. Remove hard waits in `checkout.spec.ts` (line 45, 67, 89)
-2. Fix conditional in `profile.spec.ts` (line 28)
-3. Optimize slow tests in `checkout.spec.ts`
-
-### Short-term (Apply Recommendations)
-
-1. Extract login fixture from `profile.spec.ts`
-2. Add network assertions to `api-calls.spec.ts`
-
-### Long-term (Continuous Improvement)
-
-1. Re-run `test-review` after fixes (target: 85/100)
-2. Add performance budgets to CI
-3. Document test patterns for team
-
-## Knowledge Base References
-
-TEA reviewed against these patterns:
-
-- [test-quality.md](/docs/reference/knowledge-base.md) - Execution limits, isolation
-- [network-first.md](/docs/reference/knowledge-base.md) - Deterministic waits
-- [timing-debugging.md](/docs/reference/knowledge-base.md) - Race conditions
-- [selector-resilience.md](/docs/reference/knowledge-base.md) - Robust selectors
-
-## Understanding the Scores
-
-### What Do Scores Mean?
-
-| Score Range | Interpretation    | Action                                     |
-| ----------- | ----------------- | ------------------------------------------ |
-| **90-100**  | Excellent         | Minimal changes needed, production-ready   |
-| **80-89**   | Good              | Minor improvements recommended             |
-| **70-79**   | Acceptable        | Address recommendations before release     |
-| **60-69**   | Needs Improvement | Fix critical issues, apply recommendations |
-| **< 60**    | Critical          | Significant refactoring needed             |
-
-### Scoring Criteria
-
-**Determinism (30%):**
-
-- Tests produce same result every run
-- No random failures (flakiness)
-- No environment-dependent behavior
-
-**Isolation (30%):**
-
-- Tests don't depend on each other
-- Can run in any order
-- Clean up after themselves
-
-**Maintainability (25%):**
-
-- Readable and maintainable
-- Appropriate size
-
-**Performance (15%):**
-
-- Fast execution
-- Efficient selectors
-- No unnecessary waits
-
-**Coverage:**
-
-- Not scored in `test-review`
-- Use `trace` for coverage percentage, requirement mapping, and gate decisions
-
-## What You Get
-
-### Quality Report
-
-- Overall score (0-100)
-- Category scores (Determinism, Isolation, etc.)
-- File-by-file breakdown
-
-### Critical Issues
-
-- Specific line numbers
-- Code examples (current vs fixed)
-- Why it matters explanation
-- Impact assessment
-
-### Recommendations
-
-- Actionable improvements
-- Code examples
-- Priority/severity levels
-
-### Next Steps
-
-- Immediate actions (fix critical)
-- Short-term improvements
-- Long-term quality goals
+`trace` owns coverage gate checks.
 
 ## Tips
 
-### Review Before Release
-
-Make test review part of release checklist:
-
-```markdown
-## Quality Checklist (Test-Review)
-
-- [ ] All tests passing
-- [ ] Test-review quality score > 80
-- [ ] Critical issues resolved
-- [ ] Performance within budget
-```
-
-### Review After AI Generation
-
-Always review AI-generated tests:
-
-```text
-1. Run Automate in red or expand mode
-2. Run test-review on generated tests
-3. Fix critical issues
-4. Commit tests
-```
-
-### Set Quality Gates
-
-Use scores as quality gates:
-
-```yaml
-# .github/workflows/test.yml
-- name: Review test quality
-  run: |
-    # Run test-review quality gate
-    # Parse quality score from report
-    if [ $SCORE -lt 80 ]; then
-      echo "Test-review quality gate below threshold"
-      exit 1
-    fi
-```
-
-Coverage gate checks are handled by `trace`, not `test-review`.
-
-### Review Regularly
-
-Schedule periodic reviews:
-
-- **Per story:** Optional (spot check new tests)
-- **Per epic:** Recommended (ensure consistency)
-- **Per release:** Recommended for test quality gates (coverage gates remain in `trace`)
-- **Quarterly:** Audit entire suite
-
-### Focus Reviews
-
-For large suites, review incrementally:
-
-**Week 1:** Review E2E tests
-**Week 2:** Review API tests
-**Week 3:** Review component tests (Cypress CT or Vitest)
-**Week 4:** Apply fixes across all suites
-
-**Component Testing Note:** TEA reviews component tests using framework-specific knowledge:
-
-- **Cypress:** Reviews Cypress Component Testing specs (\*.cy.tsx)
-- **Playwright:** Reviews Vitest component tests (\*.test.tsx)
-
-### Use Reviews for Learning
-
-Share reports with team:
-
-```text
-Team Meeting:
-- Review test-review/test-review-{run_key}.md
-- Discuss critical issues
-- Agree on patterns
-- Update team guidelines
-```
-
-### Compare Over Time
-
-Re-reviewing a scope replaces its report, so commit each report or copy its score into a trend table to track improvement:
-
-```markdown
-## Quality Trend
-
-| Date       | Score | Critical Issues | Notes                 |
-| ---------- | ----- | --------------- | --------------------- |
-| 2026-01-01 | 65    | 5               | Baseline              |
-| 2026-01-15 | 72    | 2               | Fixed hard waits      |
-| 2026-02-01 | 84    | 0               | All critical resolved |
-```
+- **Review after AI generation.** Run Automate in red or expand mode, review the generated tests, fix Critical and High findings, then commit.
+- **Review regularly.** Spot-check per story, review per epic and per release, and audit the full suite quarterly.
+- **Review large suites incrementally.** One directory at a time (E2E, API, component), then apply fixes across suites. TEA reviews Cypress Component Testing specs (`*.cy.tsx`) and Vitest component tests (`*.test.tsx`) with framework-specific knowledge.
+- **Fix in severity order.** Critical first, then High, then the top Medium findings; re-run after each pass.
 
 ## Common Issues
 
-### Low Determinism Score
+### Low Determinism Dimension Score
 
-**Symptoms:**
+**Symptoms:** tests fail randomly, pass locally and fail in CI.
 
-- Tests fail randomly
-- "Works on my machine"
-- CI failures that don't reproduce locally
+**Common causes:** hard waits (`waitForTimeout`), conditional assertions, a `try`/`catch` that swallows a failure, interception registered after navigation.
 
-**Common Causes:**
+**Fix:** apply network-first patterns: register listeners before the action, wait on conditions.
 
-- Hard waits (`waitForTimeout`)
-- Conditional flow control (`if/else`)
-- Try-catch for flow control
-- Missing network-first patterns
+### Low Performance Dimension Score
 
-**Fix:** Review determinism section, apply network-first patterns
+**Symptoms:** slow tests, long suites, CI timeouts.
 
-### Low Performance Score
+**Common causes:** fixed waits, heavy setup in every test, serial bottlenecks.
 
-**Symptoms:**
+**Fix:** wait on conditions, move setup into fixtures, keep tests parallel-safe.
 
-- Tests take > 1.5 minutes each
-- Test suite takes hours
-- CI times out
+### Low Isolation Dimension Score
 
-**Common Causes:**
+**Symptoms:** tests fail in a different order or in parallel; test data conflicts.
 
-- Unnecessary waits (hard timeouts)
-- Inefficient selectors (XPath, complex CSS)
-- Not using parallelization
-- Heavy setup in every test
+**Common causes:** shared mutable state without a reset, missing cleanup, hard-coded test data.
 
-**Fix:** Optimize waits, improve selectors, use fixtures
+**Fix:** use fixtures with cleanup and unique test data.
 
-### Low Isolation Score
+### Too Many Findings
 
-**Symptoms:**
-
-- Tests fail when run in different order
-- Tests fail in parallel
-- Test data conflicts
-
-**Common Causes:**
-
-- Shared global state
-- Tests don't clean up
-- Hard-coded test data
-- Database not reset between tests
-
-**Fix:** Use fixtures, clean up in afterEach, use unique test data
-
-### "Too Many Issues to Fix"
-
-**Problem:** Report shows 50+ issues, overwhelming.
-
-**Solution:** Prioritize:
-
-1. Fix all critical issues first
-2. Apply top 3 recommendations
-3. Re-run review
-4. Iterate
-
-Don't try to fix everything at once.
-
-### Reviews Take Too Long
-
-**Problem:** Reviewing entire suite takes hours.
-
-**Solution:** Review incrementally:
-
-- Review new tests in PR review
-- Schedule directory reviews weekly
-- Full suite review quarterly
+Fix every Critical and High finding first; each one caps the score and decides the recommendation. Then re-run and take the Medium findings in batches.
 
 ## Related Guides
 
@@ -603,5 +247,6 @@ Don't try to fix everything at once.
 
 ## Reference
 
+- [`tea-test-review` CLI](/docs/reference/tea-test-review-cli.md) - Headless runner, exit codes, CI setup
 - [Command: test-review](/docs/reference/commands.md#test-review) - Full command reference
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Patterns TEA reviews against

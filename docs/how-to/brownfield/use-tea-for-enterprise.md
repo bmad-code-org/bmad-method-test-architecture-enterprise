@@ -61,7 +61,7 @@ Evidence:
 **Purpose:** Requirements traceability with an audit trail.
 Auditors, certification bodies, and regulators all ask for requirements-to-test mapping in a form they can read.
 
-**When:** Phase 2 (baseline), Phase 4 (refresh), Release Gate
+**When:** Phase 2 (brownfield baseline), Phase 4 (refresh), Release Gate
 
 **What you give Phase 1:**
 
@@ -107,29 +107,18 @@ Run the BMM `research` workflow on industry compliance (SOC 2, HIPAA, GDPR), sec
 
 ### Phase 2: Planning (Required)
 
-**1.
-Define NFRs early.** Run the BMM `prd` workflow and include security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
-
-**2.
-Plan NFR evidence.** Run `/bmad-tea-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence.
-It produces `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
-
-**3.
-Baseline (brownfield only).** Run `/bmad-tea-trace` Phase 1 to establish baseline coverage before new work.
+1. **Define NFRs early.** Run the BMM `prd` workflow and record the agreed thresholds with the evidence planned for each: security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
+2. **Baseline (brownfield only).** Run `/bmad-tea-trace` Phase 1 to establish baseline coverage before new work.
 
 ### Phase 3: Solutioning (Required)
 
-**1.
-Architecture with testability review.** Run the BMM `architecture` workflow, then `/bmad-tea-test-design` at system-level scope, focused on security architecture testability, performance testing strategy, and compliance requirement mapping.
-
-**2.
-Test infrastructure.** Run `/bmad-tea-framework`.
-Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
-To set up CI in the same run, ask for the framework and CI together and give it the step 3 requirements.
-
-**3.
-CI/CD with compliance.** Run `/bmad-tea-framework` and ask for CI.
-Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
+1. **Architecture with testability review.** Run the BMM `architecture` workflow.
+   System-level test design needs the finished architecture, so run `/bmad-tea-test-design` at system-level scope after it, focused on NFR thresholds and planned evidence, security architecture testability, performance testing strategy, and compliance requirement mapping.
+2. **Test infrastructure.** Run `/bmad-tea-framework`.
+   Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
+   To set up CI in the same run, ask for the framework and CI together and give it the step 3 requirements.
+3. **CI/CD with compliance.** Run `/bmad-tea-framework` and ask for CI.
+   Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
 
 ### Phase 4: Implementation (Required)
 
@@ -139,34 +128,28 @@ Per epic:
 2. `/bmad-tea-automate` in red mode (optional) to generate tests including security and compliance scenarios
 3. A developer implements the story
 4. `/bmad-tea-automate` to expand coverage, including compliance edge cases
-5. `/bmad-tea-test-review` to audit quality (target above 80 per epic, rising to above 85 at release)
+5. `/bmad-tea-test-review` to audit quality (example policy: above 80 per epic, rising to above 85 at release)
 6. `/bmad-tea-trace` Phase 1 to refresh coverage and verify compliance requirements are tested
 
 ### Release Gate (Required)
 
-**1.
-Final NFR evidence audit.** Run `/bmad-tea-nfr` across all categories that have evidence, using the latest performance tests and security scans.
-
-**2.
-Final quality audit.** Run `/bmad-tea-test-review` over the full suite, answering `tests/` for scope.
-Enterprise quality target: above 85.
-
-**3.
-Gate decision.** Run `/bmad-tea-trace` Phase 2.
-It reads the Phase 1 matrix from `trace/`, the test-design documents from `test-design/`, the NFR evidence audit from `nfr/`, and actual test execution results.
-The quality audit from step 2 goes into the release record beside the gate decision; trace does not read it.
-Without execution results, Phase 2 is skipped.
-The derived decision is PASS, CONCERNS, or FAIL.
-Trace validates any filed waiver and reports it alongside the unchanged decision.
-
-**4.
-Archive for audit.** Keep test results, coverage reports, NFR audits, gate decisions, and approver signatures according to the retention policy your compliance team approves.
+1. **Final NFR evidence audit.** Run `/bmad-tea-nfr` across all categories that have evidence, using the latest performance tests and security scans.
+2. **Final quality audit.** Run `/bmad-tea-test-review` over the full suite, answering `tests/` for scope.
+3. **Gate decision.** Run `/bmad-tea-trace` Phase 2 after Phase 1.
+   Trace Phase 2 derives the coverage decision when `allow_gate` is true and the collection status is COLLECTED.
+   It reads the Phase 1 matrix from `trace/` and takes the test design and the NFR audit as context; the derived decision is PASS, CONCERNS, or FAIL.
+   Trace validates any filed waiver and reports it alongside the unchanged decision.
+   Keep test execution results, the quality audit, and the NFR audit in the release record and assess each under your release policy.
+   Missing execution results are a gap in release evidence and do not skip the trace gate.
+4. **Archive for audit.** Keep test results, coverage reports, NFR audits, gate decisions, and approver signatures according to the retention policy your compliance team approves.
 
 ## Enterprise-Specific Requirements
 
+The artifacts, approvals, and checklists below are example project policy for your compliance team to adapt; TEA does not enforce them.
+
 ### Evidence Collection
 
-**Required artifacts:**
+**Artifacts auditors ask for:**
 
 - Requirements traceability matrix
 - Test execution results (with timestamps)
@@ -199,7 +182,7 @@ Confirm retention periods with your compliance team for each artifact type.
 
 ### Approver Workflows
 
-**Multi-level approval required:**
+**Example multi-level approval:**
 
 ```markdown
 ## Gate Approvals Required
@@ -309,63 +292,55 @@ test('should enforce role-based access', async ({ request }) => {
 });
 ```
 
-**With Playwright Utils (Cleaner, Reusable):**
+**With Playwright Utils:**
 
 ```typescript
-import { test as base, expect } from '@playwright/test';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { createAuthFixtures } from '@seontechnologies/playwright-utils/auth-session';
-import { mergeTests } from '@playwright/test';
+// tests/api/admin-users.spec.ts
+import { test, expect } from '../support/merged-fixtures';
 
-const authFixtureTest = base.extend(createAuthFixtures());
-export const testWithAuth = mergeTests(apiRequestFixture, authFixtureTest);
-
-testWithAuth('should enforce role-based access', async ({ apiRequest, authToken }) => {
-  // Auth token from fixture (configured for 'user' role)
+test('regular user is denied the admin endpoint', async ({ apiRequest, authToken }) => {
+  // authToken belongs to the default user your auth provider signs in
   const { status } = await apiRequest({
-    method: 'GET',
-    path: '/api/admin/users', // Admin endpoint
-    headers: { Authorization: `Bearer ${authToken}` },
-  });
-
-  expect(status).toBe(403); // Regular user denied
-});
-
-testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, authOptions }) => {
-  // Override to admin role
-  authOptions.userIdentifier = 'admin';
-
-  const { status, body } = await apiRequest({
     method: 'GET',
     path: '/api/admin/users',
     headers: { Authorization: `Bearer ${authToken}` },
   });
 
-  expect(status).toBe(200); // Admin allowed
-  expect(body).toBeInstanceOf(Array);
+  expect(status).toBe(403);
+});
+
+test.describe('as admin', () => {
+  test.use({ authOptions: { userIdentifier: 'admin' } });
+
+  test('admin can list users', async ({ apiRequest, authToken }) => {
+    const { status, body } = await apiRequest({
+      method: 'GET',
+      path: '/api/admin/users',
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toBeInstanceOf(Array);
+  });
 });
 ```
 
-Auth-session requires provider setup in global-setup.ts.
-See [auth-session configuration](https://seontechnologies.github.io/playwright-utils/auth-session.html).
-
-**Playwright Utils Benefits for Compliance:**
-
-- Multi-user auth testing (regular, admin, etc.)
-- Token persistence (faster test execution)
-- Consistent auth patterns (audit trail)
-- Automatic cleanup
+The spec imports the project's one fixture module, `tests/support/merged-fixtures.ts`, which merges `apiRequest` with the auth fixtures ([Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) sets it up; use your configured `test_dir` in place of `tests/`).
+`authToken` needs an auth provider registered with `setAuthProvider` that performs a real login or token exchange for each user identifier; see [auth-session configuration](https://seontechnologies.github.io/playwright-utils/auth-session.html).
+These tests send the token as a Bearer header. A browser test using the same fixtures gets a `page` opened with the provider's saved storage state.
 
 ### Set Higher Quality Thresholds
 
-**Enterprise quality targets:**
+**Example enterprise policy:**
 
-- Test coverage: >85% (vs 80% for non-enterprise)
-- Quality score: >85 (vs 75 for non-enterprise)
-- P0 coverage: 100% (non-negotiable)
-- P1 coverage: >95% (vs 90% for non-enterprise)
+- Quality score: above 85
+- P0 coverage: 100%
+- P1 coverage: above 95%
+- Overall coverage: above 85%
 
 Set targets from the risks and contracts that apply to your project.
+Trace derives its decision from fixed thresholds: P0 at 100%, P1 at 90% or more for PASS, and overall at 80% or more.
+Your approvers apply a stricter policy to the percentages the report shows.
 
 ### Document Everything
 
@@ -385,13 +360,7 @@ Confirm lead times with the provider.
 
 ### Use External Validators
 
-**Don't self-certify:**
-
-- Penetration testing: Hire external firm
-- Security audits: Independent auditor
-- Compliance: Certification body
-- Performance: Load testing service
-
+Don't self-certify: use an external firm for penetration tests, an independent auditor for security audits, a certification body for compliance, and a load testing service for performance.
 TEA organizes test evidence for independent review.
 
 ## Related Guides

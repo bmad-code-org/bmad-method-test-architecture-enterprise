@@ -38,6 +38,19 @@ TEA will mark categories as CONCERNS where evidence is missing and document what
 
 Full invocation rules: [Invoking a TEA Skill](/docs/reference/commands.md#invoking-a-tea-skill).
 
+One request can answer every question in steps 2 to 4 up front: scope, categories, threshold source, evidence paths, and the revision and window each measurement covers.
+
+```text
+Audit NFR evidence for epic 3 (User Profile Management).
+Categories: security, performance, reliability. Skip maintainability.
+Thresholds: the NFR section of docs/prd.md and test-design/test-design-epic-3.md.
+Evidence, all from commit a1b2c3d on staging:
+- reports/npm-audit.json and the auth specs in reports/junit.xml
+- reports/k6-results.json, load test of 2026-01-12, 10:00-10:30 UTC
+- Datadog error-rate export reports/error-rate.csv, 2026-01-05 to 2026-01-12
+No uptime baseline yet: mark it CONCERNS and name the monitoring we need.
+```
+
 ### 2. Specify NFR Categories
 
 TEA will ask which NFR categories to audit.
@@ -51,28 +64,16 @@ TEA will ask which NFR categories to audit.
 | **Reliability**     | Error handling, recovery mechanisms, availability, failover, data backup                       |
 | **Maintainability** | Code quality, test coverage, technical debt, documentation, dependency health                  |
 
-**Example Response:**
-
-```text
-Assess:
-- Security (critical for user data)
-- Performance (API must be fast)
-- Reliability (99.9% uptime requirement)
-
-Skip maintainability for now
-```
-
 ### 3. Provide NFR Thresholds
 
 TEA will use specific thresholds for each category, preferably from PRD, architecture, or `test-design`.
 
 Use agreed thresholds for every judgment.
+The targets below are one example project's policy; substitute your own.
 
 If you don't know the exact requirement, tell TEA to mark it as UNKNOWN/CONCERNS and request clarification from stakeholders.
 
 #### Security Thresholds
-
-**Example:**
 
 ```text
 Requirements:
@@ -85,8 +86,6 @@ Requirements:
 
 #### Performance Thresholds
 
-**Example:**
-
 ```text
 Requirements:
 - API response time P99: < 200ms
@@ -98,8 +97,6 @@ Requirements:
 
 #### Reliability Thresholds
 
-**Example:**
-
 ```text
 Requirements:
 - Error handling: All endpoints return structured errors
@@ -110,8 +107,6 @@ Requirements:
 ```
 
 #### Maintainability Thresholds
-
-**Example:**
 
 ```text
 Requirements:
@@ -140,19 +135,6 @@ TEA will ask where to find evidence for each requirement.
 | Reliability     | Uptime data           | StatusPage, PagerDuty logs                   |
 | Maintainability | Coverage reports      | `/reports/coverage/index.html`               |
 | Maintainability | Code quality          | SonarQube dashboard                          |
-
-**Example Response:**
-
-```text
-Evidence:
-- Security: npm audit results (clean), auth tests 15/15 passing
-- Performance: k6 load test at /reports/k6-results.json
-- Reliability: Error rate 0.01% in staging (logs in Datadog)
-
-Don't have:
-- Uptime data (new system, no baseline)
-- Mark as CONCERNS and request monitoring setup
-```
 
 ### 5. Review NFR Evidence Audit Report
 

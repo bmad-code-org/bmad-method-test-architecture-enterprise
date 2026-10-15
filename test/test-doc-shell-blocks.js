@@ -13,6 +13,11 @@
  * A synopsis belongs in a `text` block, which this gate leaves alone.
  * Each rule has revert cases below: a block that breaks it fails here.
  *
+ * The Test Review guide's CI gate is run, too: its one `tea-test-review` block executes against the real CLI with the
+ * stub review agent, and has to fail on a missing report, a malformed report and a score below the threshold, and
+ * pass on a passing review. A pseudo-gate that compares an unset `$SCORE` is the revert case: it exits 0 with no
+ * report at all.
+ *
  * Usage: node test/test-doc-shell-blocks.js
  */
 
@@ -21,6 +26,7 @@
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const DOCS_ROOT = path.join(__dirname, '..', 'docs');
@@ -154,10 +160,95 @@ function checkRules() {
   return failing.length + passing.length;
 }
 
+const REVIEW_GUIDE = 'how-to/workflows/run-test-review.md';
+const REVIEW_CLI = path.join(__dirname, '..', 'cli', 'test-review.js');
+const STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 'stub-agent.js');
+
+/** Each stub review agent mode, what it leaves behind, and whether a quality gate at 80 has to pass it. */
+const GATE_CASES = [
+  ['nothing', 'no report', false],
+  ['partial', 'a malformed report', false],
+  ['approve-low', 'a report scoring 70', false],
+  ['approve', 'a report scoring 93', true],
+];
+
+/** The environment without the GIT_* variables a git hook exports, so nested git commands find their own repository. */
+function cleanEnv(extra) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  return { ...env, ...extra };
+}
+
+/**
+ * A branch that adds one test file over `origin/main`, and a `tea-test-review` on PATH that runs this checkout's CLI
+ * with the stub agent in place of the vendor CLI.
+ */
+function gateSandbox() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-review-gate-'));
+  const bin = path.join(root, 'bin');
+  const repo = path.join(root, 'repo');
+  fs.mkdirSync(bin);
+  fs.mkdirSync(path.join(repo, 'tests'), { recursive: true });
+  fs.writeFileSync(
+    path.join(bin, 'tea-test-review'),
+    `#!/bin/sh\nexec "${process.execPath}" "${REVIEW_CLI}" "$@" --agent-cmd "${STUB_AGENT}" --no-isolate --env-pass STUB_MODE\n`,
+    { mode: 0o755 },
+  );
+  const git = (...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=docs', '-c', 'user.email=docs@example.com', ...args], {
+      cwd: repo,
+      encoding: 'utf8',
+      env: cleanEnv(),
+    });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  };
+  git('init', '-q', '-b', 'main');
+  git('commit', '-q', '--allow-empty', '-m', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'main');
+  fs.writeFileSync(path.join(repo, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
+  git('add', '.');
+  git('commit', '-q', '-m', 'add a test');
+  return { root, bin, repo };
+}
+
+/** What is wrong with a gate block, as messages: every case it lets through that it has to stop, and every passing review it stops. */
+function gateProblems(body, sandbox) {
+  return GATE_CASES.flatMap(([mode, leaves, shouldPass]) => {
+    fs.rmSync(path.join(sandbox.repo, 'test-review.md'), { force: true });
+    fs.rmSync(path.join(sandbox.repo, 'test-review.json'), { force: true });
+    const run = spawnSync('bash', ['-c', body], {
+      cwd: sandbox.repo,
+      encoding: 'utf8',
+      env: cleanEnv({ PATH: `${sandbox.bin}${path.delimiter}${process.env.PATH}`, STUB_MODE: mode }),
+    });
+    if ((run.status === 0) === shouldPass) return [];
+    return [`exits ${run.status} on ${leaves}; a quality gate has to ${shouldPass ? 'pass' : 'fail'} it`];
+  });
+}
+
+function checkReviewGate() {
+  const gates = fencedBlocks(fs.readFileSync(path.join(DOCS_ROOT, REVIEW_GUIDE), 'utf8')).filter(
+    (block) => SHELL_LANGUAGES.has(block.language) && /\btea-test-review\b/.test(block.body),
+  );
+  assert.equal(gates.length, 1, `${REVIEW_GUIDE} holds ${gates.length} shell blocks running tea-test-review; its CI gate is the one`);
+  const sandbox = gateSandbox();
+  try {
+    const problems = gateProblems(gates[0].body, sandbox).map((problem) => `${REVIEW_GUIDE}:${gates[0].line}: ${problem}`);
+    assert.deepEqual(problems, [], `the documented quality gate does not fail closed:\n${problems.join('\n')}`);
+    const pseudoGate = 'if [ $SCORE -lt 80 ]; then\n  echo "Test-review quality gate below threshold"\n  exit 1\nfi';
+    assert.notDeepEqual(gateProblems(pseudoGate, sandbox), [], 'the gate check passes a pseudo-gate that never reads a report');
+  } finally {
+    fs.rmSync(sandbox.root, { recursive: true, force: true });
+  }
+  return GATE_CASES.length;
+}
+
 try {
   const rules = checkRules();
   const blocks = checkPages();
-  console.log(`Doc shell blocks: ${blocks} blocks on ${PAGES.length} pages copy cleanly; ${rules} rule cases hold.`);
+  const gateCases = checkReviewGate();
+  console.log(
+    `Doc shell blocks: ${blocks} blocks on ${PAGES.length} pages copy cleanly; ${rules} rule cases hold; the Test Review gate fails closed on ${gateCases} cases.`,
+  );
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

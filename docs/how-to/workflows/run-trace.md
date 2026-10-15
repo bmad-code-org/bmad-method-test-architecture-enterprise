@@ -5,8 +5,9 @@ description: Map requirements, specs, or inferred journeys to tests and make qua
 
 # How to Run Trace with TEA
 
-Use TEA's `trace` skill for coverage traceability and quality gate decisions.
-This is a two-phase skill: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
+Use TEA's `trace` skill for coverage traceability and a coverage gate decision.
+This is a two-phase skill: Phase 1 analyzes coverage, Phase 2 derives the coverage gate decision.
+The gate measures requirements coverage only; passing tests, NFR evidence, test quality, and release approval remain separate decisions under your release policy.
 
 The skill resolves the best available coverage oracle automatically: formal requirements first, contract/spec artifacts second, resolvable external pointers third, and synthetic journeys inferred from source as the brownfield fallback.
 
@@ -21,8 +22,7 @@ The skill resolves the best available coverage oracle automatically: formal requ
 
 ### Phase 2: Quality Gate Decision
 
-- Make go/no-go decision for release
-- Validate coverage meets thresholds
+- Decide whether coverage meets the gate thresholds for a story, epic, or release
 - Document gate decision with evidence
 - Support business-approved waivers
 
@@ -196,9 +196,9 @@ test('should update bio via API', async ({ request }) => {
 
 ```typescript
 // tests/e2e/profile-edit.spec.ts
-import { test } from '../support/fixtures'; // Composed with authToken
+import { test, expect } from '../support/merged-fixtures';
 
-test('should edit bio field', async ({ page, authToken }) => {
+test('should edit bio field', async ({ page }) => {
   await page.goto('/profile');
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Bio').fill('New bio text');
@@ -207,14 +207,7 @@ test('should edit bio field', async ({ page, authToken }) => {
 });
 
 // tests/api/profile.spec.ts
-import { test as base, expect } from '@playwright/test';
-import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { createAuthFixtures } from '@seontechnologies/playwright-utils/auth-session';
-import { mergeTests } from '@playwright/test';
-
-// Merge API request + auth fixtures
-const authFixtureTest = base.extend(createAuthFixtures());
-const test = mergeTests(apiRequestFixture, authFixtureTest);
+import { test, expect } from '../support/merged-fixtures';
 
 test('should update bio via API', async ({ apiRequest, authToken }) => {
   const { status, body } = await apiRequest({
@@ -229,8 +222,9 @@ test('should update bio via API', async ({ apiRequest, authToken }) => {
 });
 ```
 
-`authToken` requires auth-session fixture setup.
-See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
+Both specs import the project's shared fixture module, which merges the API and auth fixtures.
+`authToken` authenticates API requests; the E2E test reaches `/profile` signed in because the merged auth-session fixtures open `page` with the storage state the auth provider saved.
+See [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session) for both.
 
 Add avatar upload tests the same way:
 
@@ -289,7 +283,7 @@ After Phase 1 coverage analysis is complete, run Phase 2 for the gate decision.
 - Phase 1 traceability matrix complete
 - Collection eligible for a gate decision
 
-A collection is gate-eligible when `allow_gate` is true and `collection_status` is COLLECTED.
+Trace Phase 2 derives the coverage decision when `allow_gate` is true and the collection status is COLLECTED.
 Statuses `waived`, `restricted`, `inaccessible`, and `deferred_shared` leave the gate unevaluated.
 TEA still writes the trace summary for these runs, with no `gate_status` or `gate-decision-{run_key}.json` artifact.
 
@@ -398,15 +392,9 @@ For a gate-eligible collection, TEA applies these coverage thresholds:
 | Any         | <80%        | Any              | **FAIL** ❌     |
 | Any         | Any         | <80%             | **FAIL** ❌     |
 
-**Detailed Rules:**
-
-- **PASS:** P0=100%, P1≥90%, Overall≥80%
-- **CONCERNS:** P0=100%, P1 80-89%, Overall≥80%
-- **FAIL:** P0<100% OR P1<80% OR Overall<80% (critical gaps)
-
 **PASS** ✅: Coverage thresholds and evidence overlays met
 
-For a CONCERNS decision, document:
+Proceeding on CONCERNS needs the approval your release policy names. Document:
 
 - Mitigation plan exists
 - Risk is acceptable
@@ -450,7 +438,7 @@ Trace checks the filed waiver and records its validity; the reported coverage an
 ```markdown
 ## Decision Summary
 
-**Verdict:** FAIL: release is blocked
+**Verdict:** FAIL: coverage gate not met
 
 **Evidence:**
 
@@ -469,7 +457,7 @@ Trace checks the filed waiver and records its validity; the reported coverage an
 2. Cover the remaining requirements to reach 80% overall coverage
 3. Re-run trace after fixes
 
-**Cannot proceed until all blockers resolved.**
+**Release is blocked unless the release policy permits a valid approved waiver.**
 ```
 
 ## What You Get
@@ -517,7 +505,7 @@ Before deployment:
 1. Run trace Phase 1 (final coverage check)
 2. Run trace Phase 2 (make gate decision)
 3. Record release approval under the team's policy, including any approved waiver
-4. Deploy for PASS, or for FAIL with a valid waiver approved under the team's release policy
+4. Deploy for PASS, for CONCERNS with the approval the policy requires, or for FAIL with a valid approved waiver
 ```
 
 ### Brownfield Projects
