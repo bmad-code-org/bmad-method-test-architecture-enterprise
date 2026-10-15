@@ -251,20 +251,30 @@ function exportNative(row) {
     row.native.ref = `native/${row.attemptId}/${sha(canonicalJsonOf({ ...row, native: { ...row.native, ref: undefined } })).slice(7, 19)}`;
     row.native.manifestSha256 = SYNTHETIC_MANIFEST;
   }
-  NATIVE[row.native.ref] = clone({
-    ref: row.native.ref,
-    manifestSha256: SYNTHETIC_MANIFEST,
-    caseId: row.caseId,
-    repetition: row.repetition,
-    attempt: Number.isInteger(row.attempt) && row.attempt > 0 ? row.attempt : null,
-    status: row.status,
-    inputSha256: row.inputSha256 ?? null,
-    outputSha256: row.outputSha256 ?? null,
-    receipt: row.receipt ?? null,
-    observed: row.observed ?? null,
-    signature: row.native.signature ?? null,
-    qualification: row.native.qualification ?? null,
-  });
+  const normalized = experiment.normalizeRow(row, 0);
+  Object.assign(
+    NATIVE,
+    experiment.trustNativeRecords({
+      [row.native.ref]: {
+        ref: row.native.ref,
+        manifestSha256: SYNTHETIC_MANIFEST,
+        caseId: normalized.caseId,
+        repetition: normalized.repetition,
+        attempt: normalized.attemptNumber,
+        status: normalized.status,
+        inputSha256: normalized.inputSha256,
+        outputSha256: normalized.outputSha256,
+        receipt: normalized.receipt ?? row.receipt ?? null,
+        observed: normalized.observed,
+        blockId: normalized.blockId,
+        usage: normalized.usage,
+        cost: normalized.cost,
+        latency: normalized.latency,
+        signature: row.native.signature ?? null,
+        qualification: row.native.qualification ?? null,
+      },
+    }),
+  );
 }
 
 /**
@@ -1704,8 +1714,9 @@ async function checkAcceptance9() {
       delete row.native.qualification;
     },
   });
+  const unrecordedQualification = read(qualified, missingQualification);
   check(
-    outcomeOf(read(qualified, missingQualification)) === 'rejected',
+    outcomeOf(unrecordedQualification) === 'blocked' && hasReason(unrecordedQualification, /has no native qualification verdict/),
     'a qualification that was never recorded does not satisfy the gate',
   );
 
@@ -1783,7 +1794,7 @@ async function checkRecordedRuns() {
   // Descriptive repeatability of each capture.
   const readings = {};
   for (const [name, run] of Object.entries(loaded)) {
-    const result = experiment.readExperiment({ declaration: baseline, attempts: run.rows, replay });
+    const result = experiment.readExperiment({ declaration: baseline, attempts: run.rows, replay, nativeRecords: run.records });
     readings[name] = result;
     const descriptive = result.report.descriptive;
     check(
@@ -1833,10 +1844,41 @@ async function checkRecordedRuns() {
     ...row,
     runId: 'second-run',
     attemptId: `second-${row.attemptId}`,
-    native: { ...row.native, signature: index === 0 ? `${row.native.signature} changed` : row.native.signature },
+    native: {
+      ...row.native,
+      ref: `second-run/${row.native.ref}`,
+      signature: index === 0 ? `${row.native.signature} changed` : row.native.signature,
+    },
   }));
-  const twoRuns = experiment.readExperiment({ declaration: baseline, attempts: [...before.rows, ...second] });
+  const secondRecords = experiment.trustNativeRecords(
+    Object.fromEntries(
+      second.map((row) => [
+        row.native.ref,
+        { ...clone(before.records[row.native.ref.slice('second-run/'.length)]), ref: row.native.ref, signature: row.native.signature },
+      ]),
+    ),
+  );
+  const twoRuns = experiment.readExperiment({
+    declaration: baseline,
+    attempts: [...before.rows, ...second],
+    nativeRecords: { ...before.records, ...secondRecords },
+  });
   const seededCase = twoRuns.report.descriptive.groups[0].cases.find((entry) => entry.caseId === before.rows[0].caseId);
+  const claimedSignatures = before.rows.map((row) => ({ ...row, native: { ...row.native, signature: 'claimed-by-the-row' } }));
+  const stabilityOf = (result) =>
+    canonicalJsonOf(result.report.descriptive.groups.map((group) => group.cases.map((entry) => entry.stability)));
+  check(
+    stabilityOf(experiment.readExperiment({ declaration: baseline, attempts: claimedSignatures, nativeRecords: before.records })) ===
+      stabilityOf(experiment.readExperiment({ declaration: baseline, attempts: before.rows, nativeRecords: before.records })),
+    'descriptive stability reports the signatures the native runs signed, whatever the rows claim',
+  );
+  const recordless = experiment.readExperiment({ declaration: baseline, attempts: before.rows });
+  check(
+    recordless.report.descriptive.groups.every((group) =>
+      group.cases.every((entry) => entry.stability.signed === 0 && entry.stability.stable === null),
+    ),
+    'without native records the stability of a case is unknown',
+  );
   check(seededCase.completed === 4 && seededCase.extraCompleted.length === 0, 'repetitions of two runs are all counted');
   check(seededCase.stability.distinct === 3, 'a signature that differs in the second run is seen');
 
@@ -1957,7 +1999,12 @@ async function checkRecordedRuns() {
   }
 
   // Mixing two captures keeps their identities apart.
-  const mixed = experiment.readExperiment({ declaration: baseline, attempts: [...before.rows, ...after.rows], replay });
+  const mixed = experiment.readExperiment({
+    declaration: baseline,
+    attempts: [...before.rows, ...after.rows],
+    replay,
+    nativeRecords: { ...before.records, ...after.records },
+  });
   check(
     mixed.report.descriptive.mixedIdentity === true && mixed.report.descriptive.groups.length === 2,
     'rows from two source revisions are never pooled',
@@ -3219,6 +3266,9 @@ async function checkRecordedEvidenceVerification() {
         endedAt: iso(start + 30_000),
         artifactSha256: sha(observation.artifacts.design.value),
       };
+      provenance.blockId = `${provenance.caseId}-${provenance.repetition}`;
+      provenance.observed = { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) };
+      provenance.cost = { currency: 'USD', components: { target: arm === 'A' ? 1 : 0.5, tools: 0 } };
       const bytes = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`);
       fs.writeFileSync(file, bytes);
       entry.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
@@ -3232,11 +3282,7 @@ async function checkRecordedEvidenceVerification() {
     const loaded = experiment.loadRecordedTestDesignRun({ dir, arm, stage: 'selection', runId: path.basename(dir) });
     check(loaded.integrity.problems.length === 0, `the native run ${path.basename(dir)} matches its manifest`);
     Object.assign(records, loaded.records);
-    return loaded.rows.map((row) => ({
-      ...row,
-      blockId: `${row.caseId}-${row.repetition}`,
-      cost: { currency: 'USD', components: { target: arm === 'A' ? 1 : 0.5, tools: 0 } },
-    }));
+    return loaded.rows;
   };
   const beforeA = load(nativeRun('two-run-before-numeric', 'before-a', 'A'), 'A');
   const beforeB = load(nativeRun('two-run-before-numeric', 'before-b', 'B'), 'B');
@@ -3247,14 +3293,14 @@ async function checkRecordedEvidenceVerification() {
     experiment.readExperiment({ declaration: declarationValue, attempts, ledger: selectionLedger(caseIds), replay, nativeRecords });
   const verified = readRecorded(recordedDeclaration, sameDocuments);
   check(
-    verificationOf(verified).every((value) => value === 'verified'),
-    `attempts bound to a manifest-checked native run, with matching saved bytes and scorer output, are verified: ${reasonsOf(verified).join(' | ')}`,
+    verificationOf(verified).every((value) => value === 'verified') && outcomeOf(verified) === 'inconclusive',
+    `attempts bound to a manifest-checked native run, with matching saved bytes and scorer output, are verified and reach the interval, got ${outcomeOf(verified)}: ${reasonsOf(verified).join(' | ')}`,
   );
   check(
     verificationOf(readRecorded(recordedDeclaration, sameDocuments, {})).every((value) => value === 'claimed'),
     'the same rows without their native records are claimed',
   );
-  const forgeRecorded = (label, change, pattern) => {
+  const forgeRecorded = (label, change, pattern, expected = 'blocked') => {
     const rows = clone(sameDocuments);
     change(
       rows.find((row) => row.arm === 'B' && row.caseId === caseIds[0] && row.repetition === 1),
@@ -3263,10 +3309,10 @@ async function checkRecordedEvidenceVerification() {
     const result = readRecorded(recordedDeclaration, rows);
     const indexed = result.evidenceIndex.rows.find((row) => row.attemptId === `before-b/${caseIds[0]}/1/1`);
     check(
-      outcomeOf(result) !== 'selection-cleared' &&
+      outcomeOf(result) === expected &&
         indexed.verification === 'claimed' &&
         indexed.verificationProblems.some((problem) => pattern.test(problem)),
-      `${label} leaves a recorded attempt claimed: ${indexed.verificationProblems.join(' | ')}`,
+      `${label} leaves a recorded attempt claimed, got ${outcomeOf(result)}: ${indexed.verificationProblems.join(' | ')}`,
     );
   };
   forgeRecorded('a nonexistent native reference', (row) => (row.native.ref = '/nonexistent/native-record.json'), /not among the records/);
@@ -3296,8 +3342,75 @@ async function checkRecordedEvidenceVerification() {
   forgeRecorded('a changed input hash', (row) => (row.inputSha256 = sha('another prompt')), /inputSha256 differs from the native record/);
   forgeRecorded(
     'a changed observed identity',
-    (row) => (row.observed.arm.runner = 'another-runner'),
+    (row) => (row.observed.arm.model.resolved = 'another-model'),
     /observed differs from the native record/,
+    'new-baseline-required',
+  );
+
+  check(
+    verified.evidenceIndex.rows.every((row) => row.nativeSource === 'manifest-checked'),
+    'the evidence index names records of a manifest-checked run',
+  );
+  const withFailureClass = (name, failureClass) => {
+    const dir = nativeRun('two-run-before-numeric', name, 'A');
+    const result = JSON.parse(fs.readFileSync(path.join(dir, 'result.json'), 'utf8'));
+    if (failureClass === undefined) delete result.failureClass;
+    else result.failureClass = failureClass;
+    const bytes = Buffer.from(JSON.stringify(result));
+    fs.writeFileSync(path.join(dir, 'result.json'), bytes);
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    const entry = manifest.files.find((file) => file.path === 'result.json');
+    entry.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    entry.bytes = bytes.length;
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
+    const loaded = experiment.loadRecordedTestDesignRun({ dir });
+    return [...new Set(Object.values(loaded.records).map((record) => record.qualification))];
+  };
+  check(canonicalJsonOf(withFailureClass('passing', 'none')) === '["passed"]', 'a run with failure class none passed qualification');
+  check(
+    canonicalJsonOf(withFailureClass('failing', 'quality')) === '["failed"]',
+    'a run with any other failure class failed qualification',
+  );
+  check(canonicalJsonOf(withFailureClass('silent')) === '[null]', 'a run with no failure class has no qualification verdict');
+
+  // The command line binds free-form attempts to the native runs an evidence file lists.
+  const cliRun = (name, evidence) => {
+    const file = path.join(workspace, `${name}.json`);
+    fs.writeFileSync(file, JSON.stringify(evidence));
+    const run = spawnSync(process.execPath, [READER, 'analyze', file, '--out', path.join(workspace, `${name}-out`)], {
+      encoding: 'utf8',
+      cwd: PROJECT_ROOT,
+    });
+    const reportFile = path.join(workspace, `${name}-out`, 'experiment-report.json');
+    return { run, report: fs.existsSync(reportFile) ? JSON.parse(fs.readFileSync(reportFile, 'utf8')) : null };
+  };
+  fs.writeFileSync(path.join(workspace, 'recorded-declaration.json'), JSON.stringify(recordedDeclaration));
+  const cliEvidence = {
+    declaration: 'recorded-declaration.json',
+    attempts: sameDocuments,
+    ledger: selectionLedger(caseIds),
+    nativeRuns: ['before-a', 'before-b'],
+  };
+  const bound = cliRun('cli-bound', cliEvidence);
+  check(
+    bound.run.status === 0 &&
+      Object.values(bound.report.contrast.verification).every((problems) => problems.length === 0) &&
+      outcomeOf({ report: bound.report }) === 'inconclusive',
+    `the command line binds attempts to the native runs it lists, got ${bound.run.status} ${bound.report && outcomeOf({ report: bound.report })}: ${bound.run.stderr}`,
+  );
+  const unbound = cliRun('cli-unbound', { ...cliEvidence, nativeRuns: [] });
+  check(
+    unbound.run.status === 0 &&
+      outcomeOf({ report: unbound.report }) === 'blocked' &&
+      /not among the records/.test(JSON.stringify(unbound.report.contrast.verification)),
+    'the command line leaves attempts claimed without their native runs',
+  );
+  const impostorParent = fs.mkdtempSync(path.join(workspace, 'impostor-'));
+  fs.cpSync(path.join(workspace, 'after-b'), path.join(impostorParent, 'before-a'), { recursive: true });
+  const conflict = cliRun('cli-conflict', { ...cliEvidence, nativeRuns: ['before-a', path.join(impostorParent, 'before-a')] });
+  check(
+    conflict.run.status === 1 && /two native runs hold different records under one reference/.test(conflict.run.stderr),
+    'the command line refuses two native runs that hold different records under one reference',
   );
 
   // A native run whose bytes or listing do not match its manifest is refused on load.
@@ -3334,7 +3447,7 @@ async function checkRecordedEvidenceVerification() {
   });
   const mutationResult = readRecorded(mutationRule, sameDocuments);
   check(
-    outcomeOf(mutationResult) !== 'selection-cleared' &&
+    outcomeOf(mutationResult) === 'blocked' &&
       mutationResult.evidenceIndex.rows.every(
         (row) =>
           row.verification === 'claimed' &&
@@ -3352,7 +3465,7 @@ async function checkRecordedEvidenceVerification() {
   });
   const stale = readRecorded(recallDeclaration, rescored);
   check(
-    outcomeOf(stale) !== 'selection-cleared' &&
+    outcomeOf(stale) === 'blocked' &&
       stale.evidenceIndex.rows.some(
         (row) =>
           row.verification === 'claimed' &&
@@ -4121,6 +4234,41 @@ function checkNativeGatesReadTheRecord() {
   forged('a native manifest the row does not pin', (row) => delete row.native.manifestSha256, /does not pin the manifest/);
   forged('an attempt number the native record does not hold', (row) => (row.attempt = 2), /attempt differs from the native record/);
   forged('a status the native record does not hold', (row) => (row.status = 'failed'), /status differs from the native record/);
+  forged('a lower cost than the native record', (row) => (row.cost.components.target = 0.01), /cost differs from the native record/);
+  forged('a shorter latency than the native record', (row) => (row.latency.taskMs = 1), /latency differs from the native record/);
+  forged('usage the native record does not hold', (row) => (row.usage = { inputTokens: 1 }), /usage differs from the native record/);
+  forged(
+    'a pairing block the native record does not hold',
+    (row, rows) => {
+      row.blockId = 'c9-9';
+      candidateRow(rows, 'c2', 1).blockId = 'c9-9';
+    },
+    /blockId differs from the native record/,
+  );
+
+  // Records are native records only when a loader or the trusted test adapter made them.
+  const exported = sealAll(world());
+  const plain = Object.fromEntries(Object.entries(NATIVE).map(([ref, record]) => [ref, clone(record)]));
+  check(outcomeOf(read(declaration(), exported, { seal: false })) === 'selection-cleared', 'the exported rows clear with their records');
+  const unbranded = read(declaration(), exported, { seal: false, nativeRecords: plain });
+  check(
+    outcomeOf(unbranded) === 'blocked' && verificationOf(unbranded).every((value) => value === 'claimed'),
+    'records a caller builds as plain objects are no native records',
+  );
+  const adapted = read(declaration(), world());
+  check(
+    adapted.evidenceIndex.rows.every((row) => row.nativeSource === 'trusted-adapter'),
+    'the evidence index names records of the trusted test adapter',
+  );
+  const anyRecord = Object.values(NATIVE)[0];
+  let changed = false;
+  try {
+    anyRecord.signature = 'rewritten';
+    changed = anyRecord.signature === 'rewritten';
+  } catch {
+    changed = false;
+  }
+  check(!changed, 'a native record cannot be rewritten after it is made');
 
   // A qualification gate reads the run's own verdict.
   const failedRun = world({
@@ -4163,6 +4311,12 @@ function checkNativeGatesReadTheRecord() {
       inventedResult.report.contrast.nativeRed.length === 0 &&
       hasReason(inventedResult, /native signature differs/),
     `invented stable signatures do not satisfy the stability gate, got ${outcomeOf(inventedResult)}`,
+  );
+  const unsigned = world({ mutateRow: (row) => row.arm === 'B' && (row.native.signature = null) });
+  const unsignedResult = read(stability, unsigned, { seal: false });
+  check(
+    outcomeOf(unsignedResult) === 'blocked' && hasReason(unsignedResult, /has no native signature for the stability gate/),
+    `native records with no signature do not satisfy the stability gate, got ${outcomeOf(unsignedResult)}`,
   );
   const signedStable = world({ mutateRow: (row) => row.arm === 'B' && (row.native.signature = `stable-${row.caseId}`) });
   check(

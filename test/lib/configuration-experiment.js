@@ -1110,7 +1110,7 @@ function identityGroupOf(row) {
   return row.observed ? digestOf(row.observed) : 'unobserved';
 }
 
-function describeCases(declaration, rows, plan) {
+function describeCases(declaration, rows, plan, nativeSignature) {
   const cases = [];
   for (const entry of plan) {
     const own = rows.filter((row) => row.caseId === entry.caseId);
@@ -1127,7 +1127,7 @@ function describeCases(declaration, rows, plan) {
     const completed = [...byRepetition.values()].sort((left, right) => left.inputIndex - right.inputIndex);
     const successes = completed.filter((row) => rowSuccess(row, declaration));
     const metricNames = [...new Set(completed.flatMap((row) => Object.keys(row.metrics)))].sort();
-    const signatures = completed.map((row) => row.native?.signature).filter((signature) => typeof signature === 'string');
+    const signatures = completed.map((row) => nativeSignature(row)).filter((signature) => typeof signature === 'string');
     const distinct = new Set(signatures);
     cases.push({
       caseId: entry.caseId,
@@ -1164,7 +1164,7 @@ function describeCases(declaration, rows, plan) {
  * Replay the deterministic scorer over the saved bytes of each document, twice.
  * Rows are grouped by output hash, so a replay only ever compares identical bytes.
  */
-function replayControl(rows, replay) {
+function replayControl(rows, replay, nativeSignatureOf) {
   if (typeof replay !== 'function') return { status: 'not-provided', reason: 'no deterministic scorer was supplied', results: [] };
   const results = [];
   for (const row of rows) {
@@ -1187,7 +1187,7 @@ function replayControl(rows, replay) {
       continue;
     }
     const deterministic = canonicalJson(first) === canonicalJson(second);
-    const nativeSignature = row.native?.signature ?? null;
+    const nativeSignature = nativeSignatureOf(row);
     let nativeAgreement = 'not-comparable';
     if (typeof first?.signature === 'string' && typeof nativeSignature === 'string') {
       nativeAgreement = first.signature === nativeSignature ? 'match' : 'differs';
@@ -1300,8 +1300,13 @@ function analyzeJudgeCalls(calls) {
   };
 }
 
-function describeRepeatability({ declaration, rows, excluded, replay, judgeCalls }) {
+function describeRepeatability({ declaration, rows, excluded, replay, judgeCalls, nativeRecords }) {
   const baselineRows = rows.filter((row) => row.arm === 'A');
+  // Stability is what the native runs signed; a row without a loaded record has no known signature.
+  const nativeSignature = (row) => {
+    const signature = nativeRecordOf(row, nativeRecords)?.signature;
+    return typeof signature === 'string' ? signature : null;
+  };
   const groups = new Map();
   for (const row of baselineRows) {
     const key = identityGroupOf(row);
@@ -1312,7 +1317,7 @@ function describeRepeatability({ declaration, rows, excluded, replay, judgeCalls
   const identityGroups = [...groups.entries()].map(([identity, members]) => ({
     identity,
     observed: members[0].observed,
-    cases: describeCases(declaration, members, plan),
+    cases: describeCases(declaration, members, plan, nativeSignature),
   }));
   return {
     mixedIdentity: identityGroups.length > 1,
@@ -1324,7 +1329,7 @@ function describeRepeatability({ declaration, rows, excluded, replay, judgeCalls
     importedHistoricalTrials: baselineRows.filter((row) => row.status === 'completed' && !row.receipt).length,
     excludedCopies: excluded.filter((entry) => entry.row.arm === 'A').length,
     groups: identityGroups,
-    replay: replayControl(baselineRows, replay),
+    replay: replayControl(baselineRows, replay, nativeSignature),
     judge: describeJudge(declaration, judgeCalls),
   };
 }
@@ -1347,11 +1352,37 @@ function replayRow(replay, row) {
   }
 }
 
-/** The native record a row references, from the records loaded off manifest-checked runs. */
+/**
+ * Native records the reader accepts, by where they came from. `loadRecordedTestDesignRun`
+ * adds each record it builds from a manifest-checked run; `trustNativeRecords` adds
+ * records a test adapter builds, and says so in the evidence index. An object built any
+ * other way is not a native record, whatever it holds.
+ */
+const NATIVE_SOURCES = new WeakMap();
+
+function brandNativeRecord(record, source) {
+  const frozen = deepFreeze(clone(record));
+  NATIVE_SOURCES.set(frozen, source);
+  return frozen;
+}
+
+/**
+ * Mark records as native records of a trusted test adapter. For synthetic fixtures only:
+ * the evidence index names them `trusted-adapter`, apart from manifest-checked records.
+ *
+ * @param {Object<string, object>} records Records by reference.
+ * @returns {Object<string, object>} The marked records, frozen.
+ */
+function trustNativeRecords(records) {
+  return Object.fromEntries(Object.entries(records).map(([ref, record]) => [ref, brandNativeRecord(record, 'trusted-adapter')]));
+}
+
+/** The native record a row references, when it is one the reader accepts. */
 function nativeRecordOf(row, nativeRecords) {
   const ref = row.native?.ref;
   if (!isNonEmptyString(ref) || !isObject(nativeRecords) || !Object.hasOwn(nativeRecords, ref)) return null;
-  return isObject(nativeRecords[ref]) ? nativeRecords[ref] : null;
+  const record = nativeRecords[ref];
+  return NATIVE_SOURCES.has(record) && record.ref === ref ? record : null;
 }
 
 /** The record fields a row has to repeat exactly. */
@@ -1364,12 +1395,17 @@ const NATIVE_BINDING = Object.freeze([
   ['outputSha256', (row) => row.outputSha256],
   ['receipt', (row) => row.receipt],
   ['observed', (row) => row.observed],
+  ['blockId', (row) => row.blockId],
+  ['usage', (row) => row.usage],
+  ['cost', (row) => row.cost],
+  ['latency', (row) => row.latency],
 ]);
 
 /**
  * Why a row does not match the native record it names. The record comes from a run
  * whose manifest was checked against its bytes; the row pins that manifest's digest
- * and repeats the record's attempt identity, hashes, receipt and observed identity.
+ * and repeats the record's attempt identity, hashes, receipt, observed identity,
+ * pairing block, usage, cost and latency.
  * A signature or qualification the row states has to be the record's own: the native
  * gates read the record, never the row.
  */
@@ -1824,23 +1860,29 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const nativeRed = [];
   const bound = candidateRows.filter((row) => row.status === 'completed' && verification.get(row.attemptId).length === 0);
   const recordOf = (row) => nativeRecordOf(row, nativeRecords);
+  const unsigned = [];
+  const unjudged = [];
   if (declaration.gates?.native?.requireStableSignatures) {
     for (const entry of plan) {
-      const signatures = bound
-        .filter((row) => row.caseId === entry.caseId)
-        .map((row) => recordOf(row).signature)
-        .filter((signature) => typeof signature === 'string');
+      const signed = bound.filter((row) => row.caseId === entry.caseId).map((row) => [row.attemptId, recordOf(row).signature]);
+      for (const [attemptId, signature] of signed) if (!isNonEmptyString(signature)) unsigned.push(attemptId);
+      const signatures = signed.map(([, signature]) => signature).filter((signature) => isNonEmptyString(signature));
       if (new Set(signatures).size > 1)
         nativeRed.push({ caseId: entry.caseId, reason: 'native stability signatures differ between repetitions' });
     }
   }
   if (declaration.gates?.native?.requireQualification) {
     for (const row of bound) {
-      if (recordOf(row).qualification !== 'passed')
+      if (recordOf(row).qualification === null || recordOf(row).qualification === undefined) unjudged.push(row.attemptId);
+      else if (recordOf(row).qualification !== 'passed')
         nativeRed.push({ attemptId: row.attemptId, reason: 'native qualification is not passed' });
     }
   }
   facts.nativeRed = nativeRed;
+  facts.nativeUnknown = [
+    ...unsigned.map((attemptId) => `${attemptId} has no native signature for the stability gate`),
+    ...unjudged.map((attemptId) => `${attemptId} has no native qualification verdict for the qualification gate`),
+  ];
 
   // -- design support ---------------------------------------------------------------
   const unsupported = [];
@@ -2114,6 +2156,7 @@ function decide({
       'a candidate critical miss is not verified against its receipt, bytes and scorer, so it can be neither dismissed nor confirmed',
     );
   if (facts.sharedAcrossArms.length > 0) blocks.push(`rows are shared between the arms: ${facts.sharedAcrossArms.join(', ')}`);
+  if (facts.nativeUnknown.length > 0) blocks.push(`native gate evidence is missing: ${facts.nativeUnknown.join('; ')}`);
   if (facts.mislabeled.length > 0) {
     blocks.push(`candidate attempts belong to no stage this declaration plans: ${facts.mislabeled.join(', ')}`);
   }
@@ -2209,7 +2252,7 @@ function decide({
 // the reader
 // ---------------------------------------------------------------------------
 
-function evidenceIndexRow(row, status, detail, verification) {
+function evidenceIndexRow(row, status, detail, verification, nativeSource) {
   return {
     stage: row.stage,
     arm: row.arm,
@@ -2225,6 +2268,7 @@ function evidenceIndexRow(row, status, detail, verification) {
     receipt: row.receipt,
     receiptProblem: row.receiptProblem,
     verification: verification === undefined ? 'not-checked' : verification.length === 0 ? 'verified' : 'claimed',
+    nativeSource: nativeSource ?? null,
     verificationProblems: verification ?? [],
     inputSha256: row.inputSha256,
     outputSha256: row.outputSha256,
@@ -2331,7 +2375,7 @@ function readExperimentChecked({
     return finish({ report, kept, excluded, inputCount: normalized.length });
   }
 
-  report.descriptive = describeRepeatability({ declaration: declarationCopy, rows: kept, excluded, replay, judgeCalls });
+  report.descriptive = describeRepeatability({ declaration: declarationCopy, rows: kept, excluded, replay, judgeCalls, nativeRecords });
   if (report.descriptive.importedHistoricalTrials > 0) {
     limitations.push(
       `${report.descriptive.importedHistoricalTrials} baseline attempt(s) are imported historical captures without a fresh generation receipt: they describe what was recorded and are not fresh executions`,
@@ -2377,7 +2421,7 @@ function readExperimentChecked({
   report.cost = costSection(declarationCopy, kept);
   if (report.cost.experimentTotal.total === null)
     limitations.push('total experiment cost is unknown: at least one cost component is not recorded');
-  return finish({ report, kept, excluded, inputCount: normalized.length, declaration: declarationCopy, analyzedContrast });
+  return finish({ report, kept, excluded, inputCount: normalized.length, declaration: declarationCopy, analyzedContrast, nativeRecords });
 }
 
 /**
@@ -2497,7 +2541,7 @@ function blockedDecision(validation) {
 }
 
 /** The evidence index, the denominators and their reconciliation, added to the report. */
-function finish({ report, kept, excluded, inputCount, declaration = null, analyzedContrast = null }) {
+function finish({ report, kept, excluded, inputCount, declaration = null, analyzedContrast = null, nativeRecords = null }) {
   const countedAs = new Map();
   if (declaration && analyzedContrast) {
     const contrastRows = kept.filter((row) => ARMS.includes(row.arm));
@@ -2515,6 +2559,7 @@ function finish({ report, kept, excluded, inputCount, declaration = null, analyz
         countedAs.get(row.attemptId) ?? (row.status === 'completed' ? 'described' : 'unscored'),
         null,
         analyzedContrast?.verification[row.attemptId],
+        NATIVE_SOURCES.get(nativeRecordOf(row, nativeRecords)),
       ),
     ),
     ...excluded.map((entry) => evidenceIndexRow(entry.row, `excluded:${entry.reason}`, entry.detail)),
@@ -2606,9 +2651,12 @@ function metricsFromContributions(contributions) {
  * (`manifest.json`, `result.json`, `cases/<case>-run-<n>/`). The manifest's hashes
  * are checked against the bytes on disk first, and every file the loader reads has
  * to be listed in it. Each attempt's native record holds what the run itself wrote:
- * its identity, input and output hashes, signature, the run's qualification, the
- * generation receipt the runner recorded in `provenance.json`, and the observed
- * identity, under the digest of the manifest. A run without a recorded receipt is
+ * its identity, input and output hashes, signature, the run's qualification (failure
+ * class `none`), and what the runner recorded in `provenance.json`: the observed
+ * identity, generation receipt, pairing block, usage, cost and latency. Without a
+ * recorded identity the record holds what `result.json` shows (suite, prompt, source,
+ * requested model and runner), and without the others they are null, so such an
+ * attempt cannot back a decision. The records are frozen under the digest of the manifest. A run without a recorded receipt is
  * imported historical evidence: a recorded workspace path is provenance, not a receipt.
  *
  * @param {object} options
@@ -2636,7 +2684,8 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
   };
   const result = JSON.parse(read('result.json').toString('utf8'));
   const [runner] = result.runners;
-  const qualification = (result.failureClass ?? null) === null ? 'passed' : 'failed';
+  // The run's own verdict: failure class `none` passed, any other class failed, none recorded unknown.
+  const qualification = typeof result.failureClass === 'string' ? (result.failureClass === 'none' ? 'passed' : 'failed') : null;
   const rows = [];
   const records = {};
   for (const [index, diagnostic] of (runner.diagnostics ?? []).entries()) {
@@ -2647,10 +2696,16 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
     const text = observation.artifacts?.design?.value ?? null;
     const { metrics, counts, notApplicable } = metricsFromContributions(diagnostic.metricContributions ?? {});
     const ref = `${path.basename(dir)}/result.json#/runners/0/diagnostics/${index}`;
-    const observed = {
-      fixed: { suiteDigest: result.suite.fixtureDigest, promptDigest: result.suite.promptDigest, sourceCommit: result.repository.commit },
-      arm: { model: { requested: provenance.requestedModel, resolved: null }, runner: runner.version },
-    };
+    const observed = isObject(provenance.observed)
+      ? clone(provenance.observed)
+      : {
+          fixed: {
+            suiteDigest: result.suite.fixtureDigest,
+            promptDigest: result.suite.promptDigest,
+            sourceCommit: result.repository.commit,
+          },
+          arm: { model: { requested: provenance.requestedModel, resolved: null }, runner: runner.version },
+        };
     const record = {
       ref,
       manifestSha256,
@@ -2662,10 +2717,16 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
       outputSha256: text === null ? null : `sha256:${sha256Hex(text)}`,
       receipt: isObject(provenance.receipt) ? clone(provenance.receipt) : null,
       observed,
+      blockId: provenance.blockId ?? null,
+      usage: isObject(provenance.usage) ? numberMap(provenance.usage) : null,
+      cost: isObject(provenance.cost)
+        ? { currency: provenance.cost.currency ?? null, components: numberMap(provenance.cost.components) }
+        : null,
+      latency: isObject(provenance.latency) ? numberMap(provenance.latency) : null,
       signature: diagnostic.signature,
       qualification,
     };
-    records[ref] = record;
+    records[ref] = brandNativeRecord(record, 'manifest-checked');
     rows.push({
       attemptId: `${runId}/${diagnostic.caseId}/${diagnostic.repetition}/${provenance.attempt ?? 1}`,
       runId,
@@ -2673,6 +2734,7 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
       arm,
       caseId: diagnostic.caseId,
       clusterId: diagnostic.caseId,
+      blockId: record.blockId,
       repetition: diagnostic.repetition,
       attempt: record.attempt,
       status: record.status,
@@ -2695,9 +2757,9 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
       metrics,
       counts,
       notApplicable,
-      usage: runner.usage ?? null,
-      cost: null,
-      latency: null,
+      usage: clone(record.usage),
+      cost: clone(record.cost),
+      latency: clone(record.latency),
       observed: clone(observed),
       provenance: {
         mode: provenance.mode,
@@ -3089,5 +3151,6 @@ module.exports = {
   renderReport,
   writeOutputs,
   loadRecordedTestDesignRun,
+  trustNativeRecords,
   testDesignReplay,
 };
