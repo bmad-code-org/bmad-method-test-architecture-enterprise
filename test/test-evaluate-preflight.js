@@ -1135,7 +1135,7 @@ function checkSupervisorTraceRetries() {
   }
 }
 function checkWindowsRunnerReference() {
-  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
+  const section = sectionOf(readDocsPage(REFERENCE_PAGE), '### How the skill runner supervises its agent') ?? '';
   check(
     section.includes('Windows Job Object') &&
       section.includes('kill-on-close') &&
@@ -1143,7 +1143,7 @@ function checkWindowsRunnerReference() {
       WINDOWS_SETUP_MS === 90_000 &&
       section.includes('The guardian allows 90 s for setup') &&
       section.includes('wall clock starts when the guardian reports the actual agent PID'),
-    'the confinement page and the supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
+    "the reference's supervision section and the supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound",
   );
   const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
   check(
@@ -1153,7 +1153,7 @@ function checkWindowsRunnerReference() {
 }
 
 function checkPosixRunnerReference() {
-  const section = sectionOf(readDocsPage(CONFINEMENT_PAGE), '## How the skill runner supervises its agent') ?? '';
+  const section = sectionOf(readDocsPage(REFERENCE_PAGE), '### How the skill runner supervises its agent') ?? '';
   check(
     section.includes('detached watchdog') &&
       section.includes('leader-only pipe') &&
@@ -1162,7 +1162,14 @@ function checkPosixRunnerReference() {
       section.includes('four processes supervise the agent') &&
       section.includes('25 s startup reserve') &&
       section.includes('7 s for supervisor backstop and output drain'),
-    'the confinement page must name POSIX watchdog ownership, its four-process layout, startup and completion bound and 10 s descendant bound',
+    "the reference's supervision section must name POSIX watchdog ownership, its four-process layout, startup and completion bound and 10 s descendant bound",
+  );
+  // The confinement page keeps the section's old anchor, pointing at the reference, so a link made before the move still lands.
+  check(
+    readDocsPage(CONFINEMENT_PAGE).includes(
+      '<a id="how-the-skill-runner-supervises-its-agent"></a>\n\nThe skill runner\'s process lifecycle is in [How the skill runner supervises its agent](/docs/reference/tea-evaluate-cli.md#how-the-skill-runner-supervises-its-agent)',
+    ),
+    "the confinement page must keep the supervision section's old anchor with a pointer to the reference",
   );
   const runner = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(readDocsPage(REFERENCE_PAGE))?.[1] ?? '';
   check(

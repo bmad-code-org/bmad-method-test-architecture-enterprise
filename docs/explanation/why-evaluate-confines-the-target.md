@@ -48,7 +48,10 @@ In a confined run, four things stay apart.
 - A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list leaves the trial unproven.
 
 The sections below show how the runtime enforces each part, for readers who audit or maintain it: [the target's git](#the-targets-view-of-your-repository), [call directories](#call-directories), [the audit](#what-the-audit-watches), [host services](#host-services), [the bridge's admission token](#the-bridges-admission-token), [the run directory](#the-run-directory) and [score integrity](#score-integrity).
-[How the skill runner supervises its agent](#how-the-skill-runner-supervises-its-agent) covers the runner's process lifecycle.
+
+<a id="how-the-skill-runner-supervises-its-agent"></a>
+
+The skill runner's process lifecycle is in [How the skill runner supervises its agent](/docs/reference/tea-evaluate-cli.md#how-the-skill-runner-supervises-its-agent) in the tea-evaluate CLI reference.
 
 ## The target's view of your repository
 
@@ -265,42 +268,3 @@ After the call, `run` reads every input again through the writer and compares th
 A rewrite that stays, a rewrite put back before the check, a well-formed artifact with altered votes, the same artifact in other bytes, an artifact removed or staged afresh, and an exit or reason that does not follow from the held bytes exit 12 with no vote recorded for the call, no `evidence-artifact.json` under the attempt's directory and no `evaluator-qualification.json`.
 The staged bytes the comparison accepted are the bytes copied into the run directory and read for the vote.
 Rerunning an accepted attempt's recorded argv with a fresh `--out` reproduces its evidence bytes.
-
-## How the skill runner supervises its agent
-
-`tea-skill-runner` runs one headless agent turn and has to report how it ended, whatever the agent does.
-It cannot trust the agent to end its own children, to answer a signal or to stay in one process.
-A registry entry's `maxElapsedMs` must leave room for the startup and shutdown reserves below.
-
-On POSIX, the agent runs in its own process group.
-When the agent exits, every process left in that group receives `SIGKILL` at once.
-The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
-Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the group `SIGKILL` 2 s later if it is still running.
-An agent the `SIGKILL` ends is reported as killed by `SIGKILL` once it outlived the grace period after the signal that asked it to stop; a `SIGQUIT` can end that way wherever the system hands core files to a collector, since writing the core can take longer than the grace period.
-A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
-Once resumed, the runner reports how the agent ended, however long it was suspended.
-On POSIX, four processes supervise the agent: one in the runner's process group, a leader in a session of its own, a guardian that leads the agent's process group, and a detached watchdog.
-The guardian's lifeline closes even if the supervisor and leader receive `SIGKILL` together; it then stops its group.
-While the runner remains active, a missing-report transport failure is bounded by a 25 s startup reserve, the agent's `--timeout-ms` wall clock, and 7 s for supervisor backstop and output drain.
-On POSIX, a detached watchdog owns the guardian's group through a leader-only pipe.
-It confirms readiness before the guardian starts the agent.
-If the leader dies, the pipe closes and the watchdog sends `SIGKILL` to the group, even while the guardian is stopped.
-After a normal agent exit, the leader kills the group and releases the watchdog.
-The process integration gate requires the guardian, agent, and ordinary child to end within 10 s of a simultaneous leader and supervisor kill.
-The guardian allows 10 s for watchdog setup, and the agent's `--timeout-ms` wall clock starts when its PID is reported.
-If the watchdog cannot arm, the agent does not start and the runner reports a setup failure.
-The agent's standard input, output and error are pipes the group leader owns, and the leader copies the runner's input to the agent and the agent's output to the runner.
-Once the agent exits, the leader copies what those pipes still hold and closes each one when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it; output any process writes after that is lost.
-A process that leaves the group, such as a daemon that starts its own session, keeps running, and the runner does not wait for it.
-If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it and the agent's group, and the runner exits 4.
-On Windows, a PowerShell helper creates a Windows Job Object with kill-on-close ownership and assigns the guardian before the agent starts.
-The guardian launches the helper from the host's absolute SystemRoot path, so a project-local `powershell.exe` cannot claim readiness.
-The agent and its ordinary descendants inherit that job.
-The helper holds its sole job handle until the guardian closes their pipe after the agent exits, or the pipe closes when the guardian dies.
-Closing the handle stops every process in the job.
-The guardian allows 90 s for setup.
-The supervisor has a 105 s startup backstop measured from its own start, covering cold Node startup before the guardian's timer begins.
-If the helper cannot establish ownership, the agent does not start and the runner exits 4 with the setup failure.
-The leader reports its guardian PID, agent readiness, and completion to the supervisor over a dedicated pipe with a 2 s write bound; a failed report stops the guardian.
-The `--timeout-ms` wall clock starts when the guardian reports the actual agent PID; the supervisor's 5 s agent backstop follows that clock.
-The Windows process integration gate requires the direct agent and its child to end within 10 s of normal agent exit or a dual leader and supervisor kill.

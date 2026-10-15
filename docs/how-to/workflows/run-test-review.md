@@ -238,6 +238,7 @@ Fix every Critical and High finding first; each one caps the score and decides t
 - [Automate Red Mode](/docs/how-to/workflows/run-automate.md#red-mode) - Generate tests to review
 - [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Expand and improve tests before review
 - [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Coverage analysis and gate decisions
+- [Run Test Review in CI](/docs/how-to/workflows/run-test-review-in-ci.md) - Gate pull requests with the headless CLI
 
 ## Understanding the Concepts
 

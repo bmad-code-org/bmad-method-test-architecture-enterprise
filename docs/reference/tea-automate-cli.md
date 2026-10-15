@@ -8,13 +8,19 @@ description: Generate red acceptance scaffolds or expand test coverage through a
 `tea-automate` runs the merged Automate skill shipped in the npm package.
 It supplies project configuration and mode customizations, runs the agent, and validates the generated manifest and summary.
 
+Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+
+A live run writes tests and runs the project's tests.
+
 ```bash
 npm install -g bmad-method-test-architecture-enterprise
-tea-automate --agent codex --allow-network --mode expand --target src \
+tea-automate --agent codex --mode expand --target src \
   "Add API coverage for the voucher redemption rules"
 
 tea-automate --agent codex --mode red --story docs/stories/reserve-a-locker.md
 ```
+
+Preview with `--agent none` first. Add `--allow-network` only when the tests need it (see below).
 
 An explicit `--mode` selects red or expand.
 Without it, acceptance-test wording selects red, coverage wording selects expand, and unspecified requests default to expand.
@@ -85,12 +91,15 @@ Prepend steps, facts, append steps, and completion hooks retain their order.
 | `--skill-root <dir>`                         | Explicit canonical skill copy with sibling TEA knowledge       |
 | `--evidence-dir <dir>`                       | Project directory for retained run evidence                    |
 | `--json <path>`                              | Additional JSON result file inside the project                 |
-| `--model <name>`                             | Model override; Codex adapter default: `gpt-6.1-sol`           |
+| `--model <name>`                             | Model override; not accepted with `custom` or `none`.          |
 | `--timeout-ms <n>`                           | Wall-clock limit per attempt; default 1,200,000 ms             |
 | `--retries <n>`                              | Validate transport/timeout retries, 0-3; generation requires 0 |
+| `--allow-network`                            | Codex only: allow outbound network access (see above)          |
 | `--agent-cmd <path>`                         | Agent executable override                                      |
 | `--agent-arg <arg>`                          | Extra agent argument; repeat as needed                         |
 | `--env-pass <NAME>`                          | Additional environment variable passed to the agent            |
+
+Claude and Codex default to an adapter model (Codex: `gpt-6.1-sol`) and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
 
 ## Results and evidence
 
@@ -103,6 +112,11 @@ JSON output includes request identity, selected mode and operation, execution st
 Each Create summary identifies the current request, story, and targets.
 Its summary and generated files must be saved during that attempt.
 Resume updates the exact selected checkpoint and retains its saved scope and spent repair budget.
+
+### Which generated tests can be verified
+
+Tests registered at runtime (loops, table registrations, computed titles, reassigned test bindings) cannot produce a verified success: dynamic scopes cannot be verified from source, so the outcome is failed.
+The rest of this section applies to statically registered tests.
 
 Passing expand and verified red outcomes require supported native Playwright JSON or ATDD verifier reports for every final scope.
 Counts must match recorded attempts.
@@ -121,7 +135,8 @@ Native source locations follow the binding and module format, including `.mjs` a
 Nested Playwright configs keep the consuming project root as the file identity base.
 Project selection follows native glob and serialized RegExp `testMatch`/`testIgnore` rules, including flags.
 A filtered native run must still cover every generated leaf in each matching project.
-Runtime loops, table registrations, computed titles, and reassigned test bindings require a failed outcome because dynamic scopes cannot be verified from source.
+
+### Completion and retained inventories
 
 Each successful attempt retains `generated-test-inventory.json` with source hashes and `validated-test-scopes.json` with reconciled runner identities.
 These are controller checks of the final generated source.

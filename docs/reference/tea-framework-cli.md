@@ -8,10 +8,8 @@ description: Run test framework and CI setup without an interactive chat
 `tea-framework` runs the framework skill shipped in the npm package.
 Choose framework setup, CI setup, or both, then select Create, Resume, Validate, or Edit.
 It keeps the prompt and agent output for each attempt and checks the skill's saved journal before reporting completion.
-Create also reruns the frozen test commands through the process supervisor.
-CI completion requires a pipeline with runnable jobs that invoke a frozen test command.
-Every native summary contributes its failure and cancellation counts, including separate suites in one shell command.
-Package scripts resolve from their selected directory, including `npm --prefix` subprojects.
+
+Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
 
 ```bash
 npm install -g bmad-method-test-architecture-enterprise
@@ -27,7 +25,7 @@ This grants unrestricted outbound network access for that run.
 ## Operations
 
 ```bash
-# Preview the resolved request without writing project files or calling a model.
+# Print the resolved request without writing project files or calling a model.
 tea-framework --agent none --scope both
 
 # Resume the scope and original operation saved in the setup journal.
@@ -75,7 +73,7 @@ Framework and CI customizations keep their existing scope and hook rules.
 | `--output <dir>`                             | Directory for retained CLI runs; default `{test_artifacts}/framework/cli-runs/` |
 | `--json <path>`                              | Additional project-relative `.json` result file                                 |
 | `--agent <name>`                             | Required vendor adapter; `none` previews the prompt                             |
-| `--model <name>`                             | Model override; default is the adapter's pinned model                           |
+| `--model <name>`                             | Model override; not accepted with `custom` or `none`.                           |
 | `--allow-network`                            | Allow outbound network access in the Codex workspace sandbox                    |
 | `--timeout-ms <n>`                           | Wall-clock limit per attempt; default 1,200,000 ms                              |
 | `--retries <n>`                              | Additional transport or timeout attempts; default 0, maximum 3                  |
@@ -84,6 +82,8 @@ Framework and CI customizations keep their existing scope and hook rules.
 | `--env-pass <NAME>`                          | Additional environment variable passed to the agent                             |
 | `--no-use-playwright-utils`                  | Disable the optional Playwright utilities                                       |
 | `--no-use-pactjs-utils`                      | Disable the optional Pact utilities                                             |
+
+Claude and Codex default to an adapter model and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
 
 Input and output paths stay inside the selected project, including through symlinks.
 Result publication protects configuration, input files, and generated setup outputs, including symlink and hard-link aliases.
@@ -104,7 +104,10 @@ Once the skill creates a journal run ID, the CLI also saves `cli-request-<hash>.
 
 The skill keeps its shared journal at `{test_artifacts}/framework/setup-run-progress.md` and its existing per-phase progress files.
 Create completion requires a completed matching journal, completed requested phases, a finished hook ledger, and existing referenced artifacts.
-Create also requires nonempty test source and positive native execution of every frozen test command.
+Create also reruns the frozen test commands through the process supervisor and requires nonempty test source and positive native execution of every frozen test command.
+CI completion requires a pipeline with runnable jobs that invoke a frozen test command.
+Every native summary contributes its failure and cancellation counts, including separate suites in one shell command.
+Package scripts resolve from their selected directory, including `npm --prefix` subprojects.
 The controller recognizes Node test, unittest, pytest, Playwright, Vitest, Jest, Cypress, Go, Cargo, .NET, and PHPUnit summaries.
 Standard npm, pnpm, Yarn, and shell commands resolve to their declared runner.
 An unknown runner, an empty suite, or a skipped-only suite marks the run incomplete and retains logs.
@@ -112,11 +115,11 @@ Each command inherits the caller's project environment, uses `--timeout-ms` as i
 `attempt-N/verification.json` and `verification-N.stdout.txt` / `verification-N.stderr.txt` retain its command, budget, status, and raw output.
 Validate findings remain in the skill outputs and captured agent transcript.
 
-| Exit | Meaning                                                           |
-| ---- | ----------------------------------------------------------------- |
-| `0`  | Requested operation completed, or prompt preview succeeded        |
-| `1`  | Agent finished, but setup completion checks found unresolved work |
-| `2`  | Invalid arguments, configuration, paths, or unavailable agent     |
-| `3`  | Agent transport, timeout, or artifact parsing failure             |
+| Exit | Meaning                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------ |
+| `0`  | Operation completed (Validate completion does not mean all checks passed), or prompt preview succeeded |
+| `1`  | Agent finished, but setup completion checks found unresolved work                                      |
+| `2`  | Invalid arguments, configuration, paths, or unavailable agent                                          |
+| `3`  | Agent transport, timeout, or artifact parsing failure                                                  |
 
 For the interactive workflow and its stack choices, see [framework and CI setup](../how-to/workflows/setup-test-framework.md).

@@ -75,7 +75,7 @@ const {
   extractFindings,
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');
-const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom } = require('../cli/test-review');
+const { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom } = require('../cli/test-review');
 const { verdictIsWhole } = require('../tools/generate-contracts');
 const {
   computeConventionBaseline,
@@ -9715,6 +9715,54 @@ async function runTests() {
           `${label} carries no hand-rolled comment script, no skill pack step and no --skill-root`,
         );
       }
+
+      // ---- the documented install pins, exit codes and isolation backends are real ----
+      const semver = (version) => version.split('.').map(Number);
+      const atLeast = (version, floor) => {
+        const [a, b] = [semver(version), semver(floor)];
+        const first = a.findIndex((part, index) => part !== b[index]);
+        return first === -1 || a[first] > b[first];
+      };
+      const packageVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version;
+      const pinned = [];
+      for (const file of [path.join('cli', 'examples', 'pr-test-review.yml'), path.join('cli', 'examples', 'gitlab-ci.yaml')]) {
+        const text = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+        const pins = [...text.matchAll(/bmad-method-test-architecture-enterprise@(\d+\.\d+\.\d+)|TEA_VERSION: (\d+\.\d+\.\d+)/g)].map(
+          (match) => match[1] || match[2],
+        );
+        assert(pins.length > 0, `${file} pins the CLI to an exact version`);
+        for (const pin of pins) {
+          assert(
+            atLeast(pin, '2.0.0') && atLeast(packageVersion, pin),
+            `${file} pins ${pin}, which must be a published release that ships --github (2.0.0) and is not newer than ${packageVersion}`,
+          );
+        }
+        pinned.push(...pins);
+      }
+      const ciGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'how-to', 'workflows', 'run-test-review-in-ci.md'), 'utf8');
+      assert(
+        pinned.every((pin) => ciGuide.includes(`TEA \`${pin}\``)),
+        'the CI guide names the same TEA pin the shipped templates use',
+      );
+
+      const reference = fs.readFileSync(path.join(repoRoot, 'docs', 'reference', 'tea-test-review-cli.md'), 'utf8');
+      const highestExit = Math.max(...Object.values(EXIT));
+      for (const match of reference.matchAll(/\bexits? `?(\d+)\b/gi)) {
+        assert(
+          Number(match[1]) <= highestExit,
+          `the reference names exit ${match[1]}, but the CLI's public exit codes stop at ${highestExit} (${JSON.stringify(EXIT)})`,
+        );
+      }
+      assert(
+        selectBackend({ PATH: '' }, 'win32') === null &&
+          selectBackend({ PATH: '' }, 'linux') === 'chmod' &&
+          selectBackend({ PATH: '' }, 'darwin') === 'chmod',
+        'Windows has no isolation backend, while macOS and Linux always fall back to chmod',
+      );
+      assert(
+        /Windows:\*\* no backend exists/.test(reference) && /falls back to `chmod`/.test(reference),
+        'the reference states the backend each platform gets, as selectBackend resolves it',
+      );
 
       console.log('');
     } else {

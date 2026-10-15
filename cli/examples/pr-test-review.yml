@@ -61,10 +61,10 @@ jobs:
       checks: write
     env:
       # Pin both, so the reviewer's control plane is the exact code you vetted
-      # and not whatever `latest` resolves to when a pull request lands. 1.28.0
+      # and not whatever `latest` resolves to when a pull request lands. 2.0.0
       # is the first release that ships --github and the packaged skill: use
-      # the exact version you vetted.
-      TEA_VERSION: 1.28.0
+      # the exact published version you vetted.
+      TEA_VERSION: 3.1.0
       CLAUDE_CODE_VERSION: 2.1.220
     steps:
       - name: Checkout (full history for the PR diff)

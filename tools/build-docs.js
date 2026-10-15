@@ -87,6 +87,10 @@ const LLM_EXCLUDE_PATTERNS = [
   // "Reference lookups". With it in, the bundle left less than the 50k characters the headroom check
   // requires once the Evaluate how-to guides carried commands a reader can paste as they stand.
   'reference/execution-targets',
+  // The CI recipes for the headless test review, split out of the tea-test-review CLI reference (which
+  // is excluded above for the same lookup use): an agent opens them when a task names a CI system, and
+  // llms.txt links the guide under "Skills".
+  'how-to/workflows/run-test-review-in-ci',
   // The offline experiment reader, which maintainers run from a TEA checkout and Evaluate never calls:
   // its task-flow guide (about 12k characters) and its reference with both example declarations, every
   // field and the full decision order (about 38k). An agent opens them when a task names an experiment,
@@ -243,6 +247,7 @@ function buildLlmsTxt() {
     '',
     `- **[Automate (TA)](${SITE_URL}/how-to/workflows/run-automate)**: Generate red acceptance scaffolds or expand coverage`,
     `- **[Test Review (RV)](${SITE_URL}/how-to/workflows/run-test-review)**: Audit test quality and score findings`,
+    `- **[Run Test Review in CI](${SITE_URL}/how-to/workflows/run-test-review-in-ci)**: Gate pull requests on a headless Test Review with GitHub Actions, GitLab or another CI`,
     `- **[Test Design (TD)](${SITE_URL}/how-to/workflows/run-test-design)**: Plan risks, coverage, and NFR evidence`,
     `- **[Framework (TF)](${SITE_URL}/how-to/workflows/setup-test-framework)**: Set up a test framework, CI, or both`,
     `- **[NFR (NR)](${SITE_URL}/how-to/workflows/run-nfr-assess)**: Audit implemented NFR evidence`,

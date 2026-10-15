@@ -7,6 +7,8 @@ description: 'Learn testing one caller-owned message at a time with durable teac
 It saves the tutor's next question or menu, the conversation, and the skill's progress YAML.
 Run the command again with your answer to continue.
 
+Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+
 ```bash
 npm install --save-dev bmad-method-test-architecture-enterprise
 npx tea-teach --learner Murat --message "I want to learn testing" --agent codex
@@ -17,6 +19,14 @@ Supply your role, experience and goals as the tutor asks.
 The learner name is the durable identity; repeat the same name and project on later turns.
 Roles include QA, Dev, Lead and VP.
 Experience levels include Beginner, Intermediate and Experienced.
+
+## Continue a lesson
+
+Each run prints a JSON result on stdout.
+Its `reply` field is the tutor's next question or menu.
+Read `reply`, then run the command again with the same `--learner` and your answer as the next `--message`.
+
+## Options
 
 | Option                  | Meaning                                                             |
 | ----------------------- | ------------------------------------------------------------------- |
@@ -30,22 +40,25 @@ Experience levels include Beginner, Intermediate and Experienced.
 | `--skill-root <dir>`    | Trusted installed teaching skill override.                          |
 | `--evidence-dir <dir>`  | Retained attempts; defaults to `.tea-runs`.                         |
 | `--json <path>`         | Additional result JSON outside state, evidence and supplied inputs. |
-| `--model <name>`        | Override the selected vendor's default model.                       |
+| `--model <name>`        | Model override; not accepted with `custom` or `none`.               |
 | `--agent-cmd <path>`    | Agent executable override; required for custom.                     |
 | `--agent-arg <arg>`     | Repeatable extra agent argument.                                    |
 | `--env-pass <NAME>`     | Repeatable additional environment name passed to the agent.         |
 | `--timeout-ms <n>`      | Attempt budget in milliseconds; defaults to 1,200,000.              |
 | `--retries <n>`         | Additional transport/timeout attempts, 0 through 3; defaults to 0.  |
 
+Claude and Codex default to an adapter model and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
+
 Supply exactly one message option.
 `--agent none` retains the full prompt and a prompt-only run record; it leaves published progress unchanged.
 Each live attempt receives a fresh copy of the original learner state.
 Opted-in retries replay the same incoming message from that original state.
 
-The JSON result on stdout contains the tutor reply and paths to conversation, progress and evidence.
 Each attempt retains the exact prompt, response artifact, raw agent streams and outcome.
 The host writes learner messages into the conversation from command input.
 The tutor cannot add learner responses to that record.
+
+## Quizzes and grading
 
 Quiz questions use the selected skill's canonical question bank.
 Answer the current multiple-choice question with one letter, A through D.
@@ -55,6 +68,11 @@ The skill permits an explicit C at its below-pass review menu to finish the sess
 Retaking a scored quiz records the new caller answers as a separate round while questions remain open.
 A finished retake replaces an in-progress grade; a completed session keeps its original grade and notes while the retake serves as practice.
 The exploratory seventh session records completion without a quiz mastery claim.
+
+## Saved progress and recovery
+
+By default learner state lives in `{test_artifacts}/teaching-progress/<learner-key>/`, with `conversation.json`, the progress YAML and the session notes.
+The key derives from the learner name, so repeat the same name to continue. `--state-dir` chooses another directory.
 
 Generated artifacts must be separate regular files inside the current attempt.
 New learner facts must cite caller messages.
@@ -78,6 +96,8 @@ An explicit `--progress` import preserves existing skill facts and completions a
 Its conversation records that provenance.
 A legacy file with one populated YAML document followed by one empty document is normalized during import; new generated progress always requires one document.
 Imported progress must belong to the exact learner and retain the seven canonical sessions.
+
+## Exit codes
 
 | Exit | Meaning                                                                    |
 | ---- | -------------------------------------------------------------------------- |
