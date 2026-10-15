@@ -10,12 +10,12 @@ Proposal source: the Jev System One support spec handed off against TeA 3.0.0; w
 
 Every fragment-selection rule in the eight corpora under `test/evals/`, except the NFR relevance rule below, is a function of the config flag, the stack, the runner, `package.json` dependencies, named repository facts, and one explicit-request branch: contract testing is also relevant when the task explicitly requests it (`step-02-load-context.md` line 132 and four sibling step files).
 The `automate-playwright-ui-utils-on` and `automate-backend-pytest` cases are pure code decisions (flag AND package evidence). A model call there buys nothing.
-Contract-testing relevance is decided by repository facts (Pact artifacts, dependencies, configuration, broker variables) or by a phrase match on an explicit request, which no case exercises.
+Contract-testing relevance is decided by repository facts (Pact artifacts, dependencies, configuration, broker variables) or by recognizing an explicit request, which no case isolates from Pact repository facts.
 
 ## What is a semantic decision
 
-Exactly one condition needs reading natural language: `skills/bmad-tea-test-design/steps-c/step-02-load-context.md` line 155 loads `nfr-criteria.md` when the epic or story "includes security, performance, reliability, scalability, compliance, maintainability, or operational requirements".
-The other candidate, "the task explicitly requests contract testing", appears in five step files. It is deterministic as a phrase match with negation handling, such as "no contract tests". No case exercises it without Pact repository facts also being present, so no case measures it and it does not qualify as a second semantic decision.
+Exactly one condition clearly needs reading natural language: `skills/bmad-tea-test-design/steps-c/step-02-load-context.md` line 155 loads `nfr-criteria.md` when the epic or story "includes security, performance, reliability, scalability, compliance, maintainability, or operational requirements".
+The other candidate, "the task explicitly requests contract testing", appears in five step files. A phrase match recognizes plain wording, yet paraphrases ("set up Pact consumer verification") and negations ("no contract tests") would need testing. No case exercises it without Pact repository facts also being present, so the corpus cannot say whether recognition needs a model. Test deterministic recognition first when this reopens.
 
 ## Is there an adequate independent truth set
 
