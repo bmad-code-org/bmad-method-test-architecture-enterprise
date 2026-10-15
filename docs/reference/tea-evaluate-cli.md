@@ -23,10 +23,10 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 
 :::caution[Exit 0 does not always mean the target passed]
 
-- `score` exits 0 for PASS, WAIVED and CONCERNS alike; its summary and each probe's evidence artifact say which.
+- `score` exits 0 for PASS, WAIVED and CONCERNS alike, and its summary names only the exit; each probe's evidence artifact under `scores/` says which, in `contractVerdict`.
 - `compare` exits 0 for every comparison outcome: `compared` (whatever the relation, a run weaker than the baseline included), `first-run` and `refused`. Read its lines for the outcome.
-- `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL) or 3 (Invalid). Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
-- Exits 2 to 5 carry eval-quality's verdicts and faults; 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.
+- `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL), and after an exit 3 (Invalid) whenever every probe still has its evidence artifact. Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
+- Exits 2 to 5 carry eval-quality's verdicts and faults, apart from `ci`'s 2 for a breached strength floor on `release`; `ci` adds 1 for a gate's policy violation, and 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.
 - `ci` is where enforcement lives: the CI plan places each check on a tier, and one fixed table of exits and actions decides what blocks, what warns and what passes. [Exits and the evidence](#exits-and-the-evidence) gives that table's order, and [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md) wires it into a pipeline.
 
 :::
@@ -64,6 +64,7 @@ Check the host before the first live command:
 - Windows: no confinement mechanism exists, so a confined `preflight` or `run` exits 12.
 
 `check`, `digest`, `status`, `score` and `compare` launch no target and need none of these.
+`ci` needs them for the checks that run `preflight` or `run` (`preflight-live` and the live tiers); the checks of its `pr` tier launch no confined target.
 [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement) gives the full requirements, including the observer versions and the paths a host may not hold.
 
 ### File-system confinement
@@ -105,7 +106,7 @@ Under a `partitionPlan`, add `--partition development` to `run` while you author
 Capture the ID right after the run, while that directory is the newest entry under `runs/`, and name the run explicitly in the commands that follow:
 
 ```bash
-RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+RUN_ID=$(command ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
 npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
 npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID"
 ```
@@ -544,7 +545,7 @@ The statement for a control that passes stays `No known defect at this revision.
 
 ```bash
 npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --before-state
-RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+RUN_ID=$(command ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
 npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
 ```
 
@@ -576,7 +577,7 @@ tea-evaluate status --evaluation <path> [--run <invocationId>] [--follow]
 Examples, one snapshot of a named run and a follower that reports until it ends:
 
 ```bash
-RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+RUN_ID=$(command ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
 npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run "$RUN_ID"
 npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run "$RUN_ID" --follow
 ```
@@ -603,7 +604,7 @@ tea-evaluate score --evaluation <path> [--run <invocationId>]
 Example, scoring a named run:
 
 ```bash
-RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+RUN_ID=$(command ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
 npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
 ```
 
@@ -670,7 +671,7 @@ Each probe names its evidence artifact path, scorer exit code, score record path
 These fields remain available when eval-quality emits no evidence artifact.
 The `engine` object copies outcomes, reduced outcomes, strength and the applicable verdict from that artifact; it is `null` when there is no artifact.
 Every call's exit is eval-quality's own: 0 (PASS, WAIVED or CONCERNS), 2 FAIL, 3 Invalid, 4 a structural failure, 5 a runtime fault, 64 usage.
-`score` exits with the most severe of them and of the aggregate call below, in the order 64, 5, 4, 3, 2, 0, and the call that produced it is on record; rerunning `eval-quality score` by hand on a persisted argv, from the evaluation folder, gives the same exit and byte-identical evidence.
+`score` exits with the most severe of them and of the aggregate call (see [Run-wide strength aggregate](/docs/reference/tea-evaluate-evidence.md#run-wide-strength-aggregate)), in the order 64, 5, 4, 3, 2, 0, and the call that produced it is on record; rerunning `eval-quality score` by hand on a persisted argv, from the evaluation folder, gives the same exit and byte-identical evidence.
 A call that cannot run, is killed or exits with a code the CLI does not document is recorded, the other calls still run, and `score` exits 12.
 
 ### When score exits 12
@@ -693,7 +694,7 @@ tea-evaluate compare --evaluation <path> [--run <invocationId>] [--accept]
 Examples, comparing a named run with the baseline and, after review, accepting it:
 
 ```bash
-RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+RUN_ID=$(command ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
 npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID"
 npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID" --accept
 ```

@@ -225,7 +225,7 @@ Only `score` produces a PASS, WAIVED, or CONCERNS verdict; a successful `run` me
 Read the verdict and outcome states from the run's newest score:
 
 ```bash
-(cd evals/stub-skill-preflight/runs && cd "$(ls | tail -n 1)/scores" && cd "$(ls | tail -n 1)" &&
+(cd evals/stub-skill-preflight/runs && cd "$(command ls | tail -n 1)/scores" && cd "$(command ls | tail -n 1)" &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u)
 ```

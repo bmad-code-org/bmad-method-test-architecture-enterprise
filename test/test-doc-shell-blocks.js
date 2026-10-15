@@ -80,8 +80,8 @@ function problemsOf(block) {
   if (/^synopsis\b/i.test(block.label)) return problems;
   const parsed = spawnSync('bash', ['-n'], { input: `${block.body}\n`, encoding: 'utf8' });
   if (parsed.status !== 0) problems.push(`bash -n refuses it: ${parsed.stderr.trim()}`);
-  const code = withoutComments(block.body);
-  const notation = code.match(/\[[^\]\n]*(--|\|)[^\]\n]*\]|(^|[\s=])<[A-Za-z][\w.|-]*>/m);
+  const code = withoutComments(block.body).replaceAll(/\s*\\\n\s*/g, ' ');
+  const notation = code.match(/(?<!\[)\[(?!\[)[^\]\n]*(--|\|)[^\]\n]*\]|(^|[\s="'])<[A-Za-z][\w.|-]*>/m);
   if (notation) problems.push(`synopsis notation in an executable block: ${notation[0].trim()}`);
   for (const match of code.matchAll(/\btea-(evaluate|skill-runner)\b/g)) {
     const preceding = code.slice(0, match.index);
@@ -127,6 +127,7 @@ function checkRules() {
     ['npx tea-evaluate', fenced('npx tea-evaluate check --evaluation evals/e')],
     ['prefix without evals', fenced('npm exec -- tea-evaluate check --evaluation evals/e')],
     ['a syntax error', fenced('npm exec --prefix evals -- tea-evaluate check --evaluation "evals/e')],
+    ['quoted angle placeholder', fenced('npm exec --prefix evals -- tea-evaluate score --evaluation evals/e --run "<invocationId>"')],
     ['a sh block', fenced('tea-evaluate check --evaluation evals/e', 'sh')],
   ];
   for (const [name, text] of failing) assert.notDeepEqual(pageProblems('fixture.md', text), [], `the gate passes ${name}`);
@@ -144,6 +145,8 @@ function checkRules() {
     ],
     ['a text block', fenced('tea-evaluate run --evaluation <path> [--before-state]', 'text')],
     ['a runner path', fenced('ls evals/node_modules/.bin/tea-skill-runner')],
+    ['a bash test with alternatives', fenced('[[ -n "$RUN_ID" || -n "$SCORE_ID" ]] && echo set')],
+    ['a continued line', fenced('npm exec --prefix evals -- \\\n  tea-evaluate check --evaluation evals/e')],
     ['a stdin redirect', fenced('npm exec --prefix evals -- tea-skill-runner --skill-root skills/s --agent claude < prompt.txt')],
   ];
   for (const [name, text] of passing) assert.deepEqual(pageProblems('fixture.md', text), [], `the gate refuses ${name}`);

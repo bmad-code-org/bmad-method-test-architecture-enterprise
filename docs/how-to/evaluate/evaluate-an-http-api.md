@@ -161,7 +161,7 @@ tea-evaluate score: eval-quality score ran for 2 probe(s) of run 20261007T092333
 Read the verdict and outcome states from the run's newest score:
 
 ```bash
-(cd evals/grader-http-service/runs && cd "$(ls | tail -n 1)/scores" && cd "$(ls | tail -n 1)" &&
+(cd evals/grader-http-service/runs && cd "$(command ls | tail -n 1)/scores" && cd "$(command ls | tail -n 1)" &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
   grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)

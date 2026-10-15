@@ -18917,6 +18917,18 @@ function checkSocketConnectionReference() {
   );
 }
 
+/**
+ * The confinement text of the reference pages: the confinement reference's `## File-system confinement` section and the CLI
+ * reference's `### File-system confinement` summary, so a stale sentence in either fails the checks that read it.
+ *
+ * @param {string} referenceText the reference pages' text
+ * @returns {string}
+ */
+function referenceConfinementText(referenceText) {
+  const sectionAfter = (heading) => (referenceText.split(heading)[1] ?? '').split(/\n#{2,3} /)[0];
+  return `${sectionAfter('\n## File-system confinement\n')}\n${sectionAfter('\n### File-system confinement\n')}`;
+}
+
 /** The sections of the confinement page that hold what the confinement reference's `## File-system confinement` section held before the page took the mechanism over. */
 const MOVED_CONFINEMENT_SECTIONS = [
   "## The target's view of your repository",
@@ -19008,6 +19020,9 @@ function checkBridgeReference() {
       "A target that calls a model provider or another outside service lists its host in its registry entry's `egress`, since a confined Linux target has a loopback and nothing else.",
       ['the egress field', 'the egress route', 'the network namespace units'],
     ],
+    // The CLI reference's confinement summary states each platform's network.
+    ["A macOS target keeps the host's network.", ['the Seatbelt network and Mach services']],
+    ['The network is closed apart from a loopback and the hosts `egress` lists.', ['the network namespace units', 'the egress route']],
     [
       "Under Bubblewrap a started service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
       ['the bridged server', 'the bridged server, stood in'],
@@ -19403,7 +19418,7 @@ function checkBridgeReference() {
     "the documentation still says a Bubblewrap target shares the host's network namespace",
   );
   // Story 1.82: the sentence that listed the host's sockets as connectable is gone, and the one that replaces it names what is hidden.
-  const confinementSection = `${(reference.split('\n## File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanism}`;
+  const confinementSection = `${referenceConfinementText(reference)}\n${mechanism}`;
   check(
     !/Path-based Unix sockets that the read-only `\/` still shows/.test(confinementSection) &&
       !/Story 1\.82 closes that route/.test(confinementSection) &&
@@ -19458,7 +19473,7 @@ function checkBridgeReference() {
   // Story 1.88: the sentence that said the evaluation layer's processes keep every socket of the host is gone.
   // The sentences that replace it name the sockets the layer's processes cannot connect to and the ones they reach.
   const staleLayerSockets = (referenceText, mechanismText) => {
-    const section = `${(referenceText.split('\n## File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanismText}`;
+    const section = `${referenceConfinementText(referenceText)}\n${mechanismText}`;
     return (
       section.includes("The evaluation layer's processes keep every socket of the host") ||
       ![
@@ -19496,7 +19511,7 @@ function checkBridgeReference() {
   // Story 1.89: the sentence that stated the shell launcher's limit (a name no shell can hold, an exported function, the variables bash initializes) is gone.
   // The sentences that replace it say no shell stands in the path and the target's environment is exact.
   const staleLauncherEnvironment = (referenceText, mechanismText) => {
-    const section = `${(referenceText.split('\n## File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0]}\n${mechanismText}`;
+    const section = `${referenceConfinementText(referenceText)}\n${mechanismText}`;
     return (
       section.includes('The limit: a call that hides sockets can change or drop a variable') ||
       section.includes('and it restores `PWD`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` to the call') ||
@@ -19528,7 +19543,7 @@ function checkBridgeReference() {
   // Story 1.87: the macOS sentence that said a Seatbelt target reaches a path-based socket outside the private root is gone.
   // The sentences that replace it name what the profile closes and what it reaches.
   const staleMacOsSockets = (text) => {
-    const section = (text.split('\n## File-system confinement\n')[1] ?? '').split(/\n#{2,3} /)[0];
+    const section = referenceConfinementText(text);
     return (
       section.includes('macOS Seatbelt hides no host socket') ||
       section.includes('a macOS target can connect to a path-based socket') ||

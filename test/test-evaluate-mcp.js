@@ -1351,12 +1351,21 @@ function checkReferenceRecordsEndedSession() {
       crash.includes('exit 12'),
     `the run section's crash sentence does not cover a tool server beside a command: ${JSON.stringify(crash)}`,
   );
+  const everyPage = [
+    'tea-evaluate-cli.md',
+    'tea-evaluate-manifest.md',
+    'tea-evaluate-confinement.md',
+    'tea-evaluate-evaluators.md',
+    'tea-evaluate-evidence.md',
+  ]
+    .map((page) => fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', page), 'utf8'))
+    .join('\n');
   for (const limit of [
     'never caught on an `mcp` interface',
     'has no field for a session that ended mid-call',
     'a tool server that crashes during a call is a target that could not run',
   ]) {
-    check(!reference.includes(limit), `the reference still holds Story 1.10's limit: ${JSON.stringify(limit)}`);
+    check(!everyPage.includes(limit), `the reference still holds Story 1.10's limit: ${JSON.stringify(limit)}`);
   }
 }
 

@@ -126,7 +126,7 @@ npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-tool-serve
 After it completes, copy the printed run ID. Run the next commands separately and inspect their output:
 
 ```bash
-RUN_ID=$(ls evals/grader-tool-server/runs | tail -n 1) # the newest run
+RUN_ID=$(command ls evals/grader-tool-server/runs | tail -n 1) # the newest run
 npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server --run "$RUN_ID"
 npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --run "$RUN_ID"
 ```
