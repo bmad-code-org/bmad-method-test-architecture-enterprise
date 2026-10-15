@@ -18,6 +18,7 @@
     },
     "changedFactor": {
       "kind": "model",
+      "setting": "model",
       "detail": "incumbent model to cheaper model; nothing else differs"
     },
     "memberships": {
@@ -95,7 +96,7 @@
       "B": {
         "model": {
           "requested": "cheaper-model-id",
-          "resolved": "record the model id the provider reports"
+          "resolved": "record the model id the provider reports for the cheaper model"
         },
         "effort": {
           "requested": "high",
@@ -177,6 +178,6 @@
     "overhead": []
   },
   "frozen": {
-    "digest": "sha256:f3cf2e5f5692ad7fc93ff500d890ccaede793c9bdefd5570e0479281eb699082"
+    "digest": "sha256:3b5d6173637dc1c24cf7123dea4fbe97b7c0ed30c1205d00f43c480da2fc90ec"
   }
 }

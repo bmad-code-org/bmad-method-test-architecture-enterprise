@@ -112,7 +112,7 @@ const FIXED = {
   scorerDigest: 'sha256:scorer',
   thresholdsDigest: 'sha256:thresholds',
   rubricDigest: 'not-applicable',
-  environment: { node: '24' },
+  environment: { node: '24', cacheRegime: 'cold cache on every attempt' },
 };
 const ARM_A = {
   model: { requested: 'incumbent', resolved: 'incumbent-2026-10' },
@@ -124,6 +124,7 @@ const ARM_B = { ...ARM_A, model: { requested: 'cheaper', resolved: 'cheaper-2026
 const SELECTION_CASES = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
 const CONFIRMATION_CASES = ['k1', 'k2', 'k3', 'k4', 'k5', 'k6'];
 const CANDIDATE = 'cheaper-v1';
+const ARMS_AB = ['A', 'B'];
 
 const FREEZE_CASES = ['d1', 'd2', 'v1'];
 const freezePin = () => {
@@ -147,8 +148,8 @@ function declaration({ stage = 'selection', cases = SELECTION_CASES, objective =
       candidate: { id: CANDIDATE, description: 'one cheaper model' },
       changedFactor: { kind: 'model', detail: 'incumbent to cheaper' },
       memberships: {
-        development: stage === 'confirmation' ? ['d1', 'd2'] : cases.slice(0, 3),
-        validation: stage === 'confirmation' ? ['v1'] : cases.slice(3),
+        development: stage === 'confirmation' ? ['d1', 'd2'] : cases.slice(0, Math.ceil(cases.length / 2)),
+        validation: stage === 'confirmation' ? ['v1'] : cases.slice(Math.ceil(cases.length / 2)),
         confirmation: stage === 'confirmation' ? cases : CONFIRMATION_CASES,
       },
       clusters: cases.map((caseId) => ({ caseId, clusterId: caseId, weight })),
@@ -177,8 +178,33 @@ function declaration({ stage = 'selection', cases = SELECTION_CASES, objective =
   };
   if (stage === 'confirmation') body.exposure = { ledgerHeadAtFreeze: freezePin() };
   if (mutate) mutate(body);
+  if (stage === 'confirmation' && body.selection === undefined) body.selection = pinSelection(body);
   return freeze(body);
 }
+
+/**
+ * The selection a confirmation follows: the confirmation's own declaration as a
+ * selection stage over its development and validation cases, read on evidence that
+ * clears every gate. Its declaration and report digests are what a confirmation pins.
+ */
+const SELECTIONS = new Map();
+function pinSelection(confirmationBody, { diffs } = {}) {
+  const body = clone(confirmationBody);
+  body.stage = 'selection';
+  delete body.exposure;
+  delete body.selection;
+  const cases = [...(body.scope?.memberships?.development ?? []), ...(body.scope?.memberships?.validation ?? [])];
+  if (body.scope) body.scope.clusters = cases.map((caseId) => ({ caseId, clusterId: caseId, weight: 1 / cases.length }));
+  const frozen = freeze(body);
+  const selectionDiffs = diffs ?? cases.map((_, i) => 0.04 + 0.01 * i);
+  const report = read(frozen, world({ cases, diffs: selectionDiffs }), { ledger: selectionLedger(cases) }).report;
+  const pin = { declarationDigest: experiment.declarationDigest(frozen), reportDigest: experiment.digestOf(report) };
+  SELECTIONS.set(pin.reportDigest, { declaration: frozen, report });
+  return pin;
+}
+
+/** The pinned selection of a confirmation declaration, as `readExperiment` takes it. */
+const selectionOf = (value) => SELECTIONS.get(value?.selection?.reportDigest) ?? null;
 
 /** Freeze a declaration the way an operator does: record the digest of the bytes. */
 function freeze(body) {
@@ -187,11 +213,46 @@ function freeze(body) {
   return { ...copy, frozen: { digest: experiment.declarationDigest(copy) } };
 }
 
+/**
+ * The synthetic deterministic scorer. A synthetic document is the JSON of what its
+ * scorer finds in it, so the scorer re-derives a row's metrics and counts from the
+ * saved bytes the way the Test Design scorer does for a real document.
+ */
+function syntheticScorer(text) {
+  try {
+    const document = JSON.parse(text);
+    return { metrics: document.metrics, counts: document.counts };
+  } catch {
+    return { unmeasurable: 'not-a-synthetic-document' };
+  }
+}
+const documentOf = (row) => JSON.stringify({ attemptId: row.attemptId, metrics: row.metrics ?? {}, counts: row.counts ?? {} });
+
+/**
+ * Re-export a row the way a native exporter would after a test edits its numbers: the
+ * saved document, its hash and the receipt's artifact hash follow the row. A row whose
+ * text and hashes a test already set apart stays as the test left it.
+ */
+function seal(row) {
+  if (row === null || typeof row !== 'object' || typeof row.outputText !== 'string') return row;
+  const consistent = row.outputSha256 === sha(row.outputText) && (!row.receipt || row.receipt.artifactSha256 === row.outputSha256);
+  if (!consistent || syntheticScorer(row.outputText).unmeasurable) return row;
+  const copy = clone(row);
+  copy.outputText = documentOf(copy);
+  copy.outputSha256 = sha(copy.outputText);
+  if (copy.receipt && typeof copy.receipt === 'object') copy.receipt.artifactSha256 = copy.outputSha256;
+  return copy;
+}
+const sealAll = (attempts) => (Array.isArray(attempts) ? attempts.map((row) => seal(row)) : attempts);
+
 let signatureCounter = 0;
+const DISPATCH_START = Date.parse('2026-10-14T00:00:00.000Z');
 function attempt({ arm, caseId, repetition, stage = 'selection', metrics, cost, mutate }) {
   signatureCounter += 1;
   const attemptId = `${arm}-${caseId}-${repetition}-1`;
-  const text = `document ${attemptId}`;
+  const text = JSON.stringify({ attemptId, metrics: metrics ?? {}, counts: { topSeverityMissed: 0 } });
+  const startedAt = new Date(DISPATCH_START + signatureCounter * 60_000).toISOString();
+  const endedAt = new Date(DISPATCH_START + signatureCounter * 60_000 + 30_000).toISOString();
   const row = {
     attemptId,
     runId: 'run-1',
@@ -206,8 +267,8 @@ function attempt({ arm, caseId, repetition, stage = 'selection', metrics, cost, 
     receipt: {
       kind: 'fresh-workspace',
       workspaceId: `workspace-${attemptId}`,
-      startedAt: '2026-10-14T00:00:00.000Z',
-      endedAt: '2026-10-14T00:01:00.000Z',
+      startedAt,
+      endedAt,
       artifactSha256: sha(text),
     },
     inputSha256: sha('prompt'),
@@ -260,18 +321,24 @@ function confirmationLedger(cases = CONFIRMATION_CASES, candidate = CANDIDATE) {
   return ledger;
 }
 
-function read(declarationValue, attempts, extra = {}) {
-  return experiment.readExperiment({ declaration: declarationValue, attempts, ledger: selectionLedger(), ...extra });
+/**
+ * Read the way an operator does: the deterministic scorer supplied, the rows exported
+ * after any edit a test made to their numbers. `{ seal: false }` reads the rows as given.
+ */
+function read(declarationValue, attempts, { seal: sealRows = true, ...extra } = {}) {
+  return experiment.readExperiment({
+    declaration: declarationValue,
+    attempts: sealRows ? sealAll(attempts) : attempts,
+    ledger: selectionLedger(),
+    replay: syntheticScorer,
+    selection: selectionOf(declarationValue),
+    ...extra,
+  });
 }
 
 const CONFIRMATION = () => ({ stage: 'confirmation', cases: CONFIRMATION_CASES });
 function readConfirmation(attempts, extra = {}) {
-  return experiment.readExperiment({
-    declaration: declaration(CONFIRMATION()),
-    attempts,
-    ledger: confirmationLedger(),
-    ...extra,
-  });
+  return read(declaration(CONFIRMATION()), attempts, { ledger: confirmationLedger(), ...extra });
 }
 const confirmationWorld = (options = {}) => world({ cases: CONFIRMATION_CASES, stage: 'confirmation', ...options });
 
@@ -654,9 +721,7 @@ function checkAcceptance4() {
     attempt: 2,
     retryOf: target.attemptId,
     counts: { topSeverityMissed: 1 },
-    receipt: { ...target.receipt, workspaceId: 'workspace-retry', artifactSha256: sha('retry') },
-    outputSha256: sha('retry'),
-    outputText: 'retry',
+    receipt: { ...target.receipt, workspaceId: 'workspace-retry' },
   });
   check(outcomeOf(read(declaration(), withRetry)) === 'rejected', 'a critical miss in a retried attempt still rejects');
 
@@ -671,7 +736,7 @@ function checkAcceptance4() {
   });
   const blocked = read(declaration(), unverified);
   check(
-    outcomeOf(blocked) === 'blocked' && hasReason(blocked, /critical miss has no fresh generation receipt/),
+    outcomeOf(blocked) === 'blocked' && hasReason(blocked, /critical miss is not verified/),
     'an unreceipted candidate critical miss blocks',
   );
 
@@ -868,7 +933,7 @@ function checkAcceptance6() {
   }
   const promptFactor = declaration({
     mutate: (body) => {
-      body.scope.changedFactor.kind = 'prompt';
+      body.scope.changedFactor = { kind: 'prompt', setting: 'promptRegions.examples' };
     },
   });
   check(outcomeOf(read(promptFactor, world())) === 'revised-design-required', 'a declared factor that does not differ fails');
@@ -876,17 +941,16 @@ function checkAcceptance6() {
   // A declared prompt change alone is fine.
   const promptOnly = declaration({
     mutate: (body) => {
-      body.scope.changedFactor.kind = 'prompt';
+      body.scope.changedFactor = { kind: 'prompt', setting: 'promptRegions.examples' };
+      body.identity.arms.A.promptRegions = { examples: 'sha256:examples-1', rules: 'sha256:rules-1' };
       body.identity.arms.B.model = clone(body.identity.arms.A.model);
       body.identity.arms.B.promptDigest = 'sha256:prompt-2';
+      body.identity.arms.B.promptRegions = { examples: 'sha256:examples-2', rules: 'sha256:rules-1' };
     },
   });
   const promptRows = world({
     mutateRow: (row) => {
-      if (row.arm === 'B') {
-        row.observed.arm.model = clone(ARM_A.model);
-        row.observed.arm.promptDigest = 'sha256:prompt-2';
-      }
+      row.observed.arm = clone(promptOnly.identity.arms[row.arm]);
     },
   });
   check(outcomeOf(read(promptOnly, promptRows)) === 'selection-cleared', 'a one-factor prompt change passes the identity check');
@@ -1025,7 +1089,7 @@ function checkAcceptance7() {
     outcomeOf(conflict) === 'blocked' && hasReason(conflict, /disagree with the first/),
     'two rows that share an attempt id and disagree block',
   );
-  check(hasReason(conflict, /critical miss has no fresh generation receipt/), 'a critical miss on a dropped copy is not lost');
+  check(hasReason(conflict, /critical miss is not verified/), 'a critical miss on a dropped copy is not lost');
   const sameWorkspace = world();
   const twin = clone(sameWorkspace.find((row) => row.arm === 'B' && row.caseId === 'c2' && row.repetition === 2));
   sameWorkspace.push({ ...twin, attemptId: 'twin', metrics: { recall: 0.1, precision: 0.1 } });
@@ -2260,8 +2324,20 @@ function checkRuleByRule() {
   );
   const unknownLatency = read(latency, withLatency(null));
   check(
-    outcomeOf(unknownLatency) === 'inconclusive' && hasReason(unknownLatency, /latency/),
-    'unknown latency does not pass a latency gate',
+    outcomeOf(unknownLatency) === 'blocked' && hasReason(unknownLatency, /task latency is unknown/),
+    'unknown latency under a latency gate blocks',
+  );
+  const negativeLatency = read(
+    latency,
+    world({
+      mutateRow: (row, i) => {
+        row.latency = { taskMs: row.arm === 'A' ? baseMs(i) : -baseMs(i) };
+      },
+    }),
+  );
+  check(
+    outcomeOf(negativeLatency) === 'blocked' && hasReason(negativeLatency, /task latency is unknown/),
+    'a negative task latency is unknown, never a speed-up',
   );
   const totalA = SELECTION_CASES.reduce((sum, _, i) => sum + 2 * baseMs(i), 0);
   check(
@@ -2340,7 +2416,7 @@ function checkRuleByRule() {
   // A one-factor effort change is a valid contrast.
   const effort = declaration({
     mutate: (body) => {
-      body.scope.changedFactor.kind = 'effort';
+      body.scope.changedFactor = { kind: 'effort', setting: 'effort' };
       body.identity.arms.B.model = clone(body.identity.arms.A.model);
       body.identity.arms.B.effort = { requested: 'low', applied: 'low' };
     },
@@ -2354,7 +2430,7 @@ function checkRuleByRule() {
     },
   });
   check(outcomeOf(read(effort, effortRows)) === 'selection-cleared', 'a one-factor effort change passes the identity check');
-  const effortMismatch = declaration({ mutate: (body) => (body.scope.changedFactor.kind = 'effort') });
+  const effortMismatch = declaration({ mutate: (body) => (body.scope.changedFactor = { kind: 'effort', setting: 'effort' }) });
   check(
     outcomeOf(read(effortMismatch, world())) === 'revised-design-required',
     'a model difference under a declared effort factor is a second change',
@@ -2478,8 +2554,7 @@ function checkAdversarialInputs() {
     attempt: 2,
     status: 'failed',
     counts: { topSeverityMissed: 3 },
-    receipt: { ...failedTemplate.receipt, workspaceId: 'ws-failed-retry', artifactSha256: sha('failed-retry') },
-    outputSha256: sha('failed-retry'),
+    receipt: { ...failedTemplate.receipt, workspaceId: 'ws-failed-retry' },
   });
   check(outcomeOf(read(declaration(), failedMiss)) === 'rejected', 'a failed candidate attempt with a recorded critical miss rejects');
 
@@ -2746,7 +2821,7 @@ function checkDeclarations() {
 }
 
 function checkOutputsAndCommandLine() {
-  const result = read(declaration(), world(), { replay: (text) => ({ signature: text }) });
+  const result = read(declaration(), world(), { replay: (text) => ({ ...syntheticScorer(text), signature: text }) });
   const markdown = experiment.renderReport(result.report);
   for (const heading of [
     '# Experiment report',
@@ -2811,6 +2886,52 @@ function checkOutputsAndCommandLine() {
       cwd: PROJECT_ROOT,
     });
     check(digest.stdout.trim() === experiment.declarationDigest(exampleBaseline()), 'the freeze command prints the declaration digest');
+
+    // A confirmation through the command line: the selection files load, and a Test
+    // Design declaration gets the Test Design scorer even without recorded runs.
+    const confirmationDeclaration = declaration(CONFIRMATION());
+    const pinned = selectionOf(confirmationDeclaration);
+    const write = (name, value) => {
+      fs.writeFileSync(path.join(directory, name), JSON.stringify(value));
+      return name;
+    };
+    const reportFile = write('selection-report.json', pinned.report);
+    const digestRun = spawnSync(process.execPath, [READER, 'digest', path.join(directory, reportFile)], {
+      encoding: 'utf8',
+      cwd: PROJECT_ROOT,
+    });
+    check(
+      digestRun.status === 0 && digestRun.stdout.trim() === confirmationDeclaration.selection.reportDigest,
+      'the digest command prints the digest a confirmation pins for a saved report',
+    );
+    const confirmationEvidence = path.join(directory, 'confirmation-evidence.json');
+    fs.writeFileSync(
+      confirmationEvidence,
+      JSON.stringify({
+        declaration: write('confirmation.json', confirmationDeclaration),
+        attempts: sealAll(confirmationWorld()),
+        ledger: confirmationLedger(),
+        selection: { declaration: write('selection.json', pinned.declaration), report: reportFile },
+      }),
+    );
+    const confirmationRun = spawnSync(
+      process.execPath,
+      [READER, 'analyze', confirmationEvidence, '--out', path.join(directory, 'confirmation-out')],
+      {
+        encoding: 'utf8',
+        cwd: PROJECT_ROOT,
+      },
+    );
+    const confirmationReport = JSON.parse(fs.readFileSync(path.join(directory, 'confirmation-out', 'experiment-report.json'), 'utf8'));
+    const confirmationReasons = confirmationReport.contrast.decision.reasons;
+    check(
+      confirmationRun.status === 0 && confirmationReport.contrast.selection.problems.length === 0,
+      'the command line reads the pinned selection declaration and report',
+    );
+    check(
+      confirmationReasons.some((reason) => /the scorer could not score the artifact \(unknown-case\)/.test(reason)),
+      'the command line scores a Test Design declaration with the Test Design scorer',
+    );
     const usage = spawnSync(process.execPath, [READER], { encoding: 'utf8', cwd: PROJECT_ROOT });
     check(usage.status === 2 && /usage/.test(usage.stderr), 'the command line prints its usage');
 
@@ -2852,6 +2973,525 @@ function checkOutputsAndCommandLine() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Decision gates that cannot be bypassed by accepted input                     */
+/* -------------------------------------------------------------------------- */
+
+const candidateRow = (rows, caseId, repetition) =>
+  rows.find((row) => row.arm === 'B' && row.caseId === caseId && row.repetition === repetition);
+const verificationOf = (result) => result.evidenceIndex.rows.map((row) => row.verification);
+
+function checkClaimedEvidence() {
+  // Rows that only claim a receipt, bytes and numbers decide nothing.
+  const cases = SELECTION_CASES;
+  const claimed = cases.flatMap((caseId, i) =>
+    ARMS_AB.map((arm) => ({
+      attemptId: `${arm}-${caseId}`,
+      arm,
+      caseId,
+      stage: 'selection',
+      blockId: caseId,
+      repetition: 1,
+      status: 'completed',
+      receipt: {
+        kind: 'fresh-workspace',
+        workspaceId: `ws-${arm}-${caseId}`,
+        startedAt: 'any',
+        endedAt: 'any',
+        artifactSha256: 'arbitrary',
+      },
+      outputSha256: 'arbitrary',
+      metrics: { recall: arm === 'A' ? 0.8 : 0.81 + i * 0.01, precision: arm === 'A' ? 0.8 : 0.81 + i * 0.01 },
+      counts: { topSeverityMissed: 0 },
+      cost: { currency: 'USD', components: { target: arm === 'A' ? 1 + 0.1 * i : 0.5 + 0.03 * i, tools: 0 } },
+      observed: { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) },
+    })),
+  );
+  const oneRepeat = declaration({ mutate: (body) => (body.design.repeats = 1) });
+  const freeForm = read(oneRepeat, claimed, { seal: false });
+  check(
+    outcomeOf(freeForm) === 'blocked' && hasReason(freeForm, /receipt start and end are not ISO 8601 timestamps/),
+    `rows with no saved bytes, no native record and an arbitrary hash do not clear, got ${outcomeOf(freeForm)}`,
+  );
+
+  const clean = read(declaration(), world());
+  check(
+    outcomeOf(clean) === 'selection-cleared' && verificationOf(clean).every((value) => value === 'verified'),
+    'rows the scorer re-derives from their saved bytes are verified and clear',
+  );
+
+  const tamper = (label, mutateRow, pattern, extra = {}) => {
+    const rows = world();
+    mutateRow(candidateRow(rows, 'c2', 1), rows);
+    const result = read(declaration(), rows, { seal: false, ...extra });
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, pattern),
+      `${label} leaves the evidence claimed and blocks, got ${outcomeOf(result)}: ${reasonsOf(result).join(' | ')}`,
+    );
+    const indexed = result.evidenceIndex.rows.find((row) => row.attemptId === 'B-c2-1-1');
+    check(
+      indexed.verification === 'claimed' && indexed.verificationProblems.some((problem) => pattern.test(problem)),
+      `${label}: the index marks the attempt claimed`,
+    );
+  };
+  tamper('absent artifact bytes', (row) => delete row.outputText, /artifact bytes are not part of the evidence/);
+  tamper('an absent native record', (row) => delete row.native.ref, /no native record reference/);
+  tamper('an absent input hash', (row) => delete row.inputSha256, /no input hash/);
+  tamper('an absent stage', (row) => delete row.stage, /does not record its stage/);
+  tamper(
+    'an arbitrary hash on both the row and its receipt',
+    (row) => {
+      row.outputSha256 = 'arbitrary';
+      row.receipt.artifactSha256 = 'arbitrary';
+    },
+    /do not hash to outputSha256/,
+  );
+  tamper('an altered metric', (row) => (row.metrics.recall += 0.1), /metric recall is .* the scorer gives/);
+  tamper('a receipt that ends before it starts', (row) => (row.receipt.endedAt = '2026-10-13T00:00:00.000Z'), /ends before it starts/);
+  tamper('a receipt with an unparseable time', (row) => (row.receipt.startedAt = '2026-10-14 noon'), /not ISO 8601/);
+  const noScorer = read(declaration(), world(), { replay: null });
+  check(
+    outcomeOf(noScorer) === 'blocked' && hasReason(noScorer, /no deterministic scorer was supplied/),
+    'without a scorer to re-derive the numbers, no row is verified',
+  );
+  const throwing = read(declaration(), world(), {
+    replay: () => {
+      throw new Error('scorer fault');
+    },
+  });
+  check(
+    outcomeOf(throwing) === 'blocked' && hasReason(throwing, /the scorer threw: scorer fault/),
+    'a scorer that throws verifies nothing',
+  );
+
+  // A hidden critical miss: the saved document shows one, the row reports zero.
+  const laundered = world();
+  const hidden = seal({ ...candidateRow(laundered, 'c3', 2), counts: { topSeverityMissed: 1 } });
+  hidden.counts.topSeverityMissed = 0;
+  laundered.splice(laundered.indexOf(candidateRow(laundered, 'c3', 2)), 1, hidden);
+  const launderedResult = read(declaration(), laundered, { seal: false });
+  check(
+    outcomeOf(launderedResult) === 'blocked' && hasReason(launderedResult, /count topSeverityMissed is 0, the scorer gives 1/),
+    'a count altered away from what the saved document shows blocks',
+  );
+}
+
+async function checkRecordedEvidenceVerification() {
+  // The scorer the command line supplies reproduces the recorded native numbers.
+  const replay = experiment.testDesignReplay({ groundTruth: await loadGroundTruth() });
+  const before = experiment.loadRecordedTestDesignRun({ dir: path.join(RAW, 'two-run-before-numeric') });
+  for (const row of before.rows) {
+    const scored = replay(row.outputText, row);
+    check(
+      canonicalJsonOf(scored.metrics) === canonicalJsonOf(row.metrics) && canonicalJsonOf(scored.counts) === canonicalJsonOf(row.counts),
+      `the Test Design scorer re-derives the recorded metrics and counts of ${row.attemptId}`,
+    );
+  }
+
+  const caseIds = [...new Set(before.rows.map((row) => row.caseId))];
+  const recordedDeclaration = declaration({
+    cases: caseIds,
+    mutate: (body) => {
+      body.gates.success.metrics = { riskPrecision: 0.5 };
+      body.gates.quality = { riskPrecision: { maxLoss: 0.1 }, scaleComplianceAccuracy: { maxLoss: 0.1 } };
+      body.gates.floors = {};
+      body.gates.critical.rules = [
+        { id: 'top-severity-missed', count: 'topSeverityMissed' },
+        { id: 'ungrounded-risk-reported', count: 'ungroundedRisks' },
+      ];
+    },
+  });
+  let clock = Date.parse('2026-10-15T00:00:00.000Z');
+  const receipted = (dir, arm, runId) =>
+    experiment.loadRecordedTestDesignRun({ dir: path.join(RAW, dir), arm, stage: 'selection', runId }).rows.map((row) => ({
+      ...row,
+      blockId: `${row.caseId}-${row.repetition}`,
+      inputSha256: sha(`prompt ${row.caseId}`),
+      cost: { currency: 'USD', components: { target: arm === 'A' ? 1 : 0.5, tools: 0 } },
+      observed: { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) },
+    }));
+  const interleave = (rowsA, rowsB) =>
+    rowsA.flatMap((row, index) =>
+      [row, rowsB[index]].map((entry) => {
+        clock += 60_000;
+        const startedAt = new Date(clock).toISOString();
+        return {
+          ...entry,
+          receipt: {
+            kind: 'fresh-workspace',
+            workspaceId: `ws-${entry.attemptId}`,
+            startedAt,
+            endedAt: new Date(clock + 30_000).toISOString(),
+            artifactSha256: entry.outputSha256,
+          },
+        };
+      }),
+    );
+  const sameDocuments = interleave(
+    receipted('two-run-before-numeric', 'A', 'before-a'),
+    receipted('two-run-before-numeric', 'B', 'before-b'),
+  );
+  const verified = experiment.readExperiment({
+    declaration: recordedDeclaration,
+    attempts: sameDocuments,
+    ledger: selectionLedger(caseIds),
+    replay,
+  });
+  check(
+    verificationOf(verified).every((value) => value === 'verified') && outcomeOf(verified) !== 'blocked',
+    `recorded documents with receipts and a reproducing scorer are verified, got ${outcomeOf(verified)}: ${reasonsOf(verified).join(' | ')}`,
+  );
+  const rescored = interleave(receipted('two-run-before-numeric', 'A', 'before-a'), receipted('two-run-after-numeric', 'B', 'after-b'));
+  const recallDeclaration = freeze({
+    ...clone(recordedDeclaration),
+    gates: {
+      ...clone(recordedDeclaration.gates),
+      quality: { ...clone(recordedDeclaration.gates.quality), groundedRiskRecall: { maxLoss: 0.1 } },
+    },
+  });
+  const stale = experiment.readExperiment({ declaration: recallDeclaration, attempts: rescored, ledger: selectionLedger(caseIds), replay });
+  check(
+    outcomeOf(stale) === 'blocked' && hasReason(stale, /metric groundedRiskRecall is .* the scorer gives/),
+    'a recorded number the current scorer does not reproduce stays claimed and blocks',
+  );
+}
+
+function checkCriticalCountsCannotBeExcused() {
+  const excused = world({
+    mutateRow: (row) => {
+      if (row.arm === 'B') {
+        delete row.counts.topSeverityMissed;
+        row.notApplicable = ['topSeverityMissed'];
+      }
+    },
+  });
+  const excusedResult = read(declaration(), excused);
+  check(
+    outcomeOf(excusedResult) === 'blocked' && hasReason(excusedResult, /critical counts are not recorded as nonnegative integers/),
+    `a notApplicable tag does not excuse a missing critical count, got ${outcomeOf(excusedResult)}`,
+  );
+  for (const [label, value] of [
+    ['a negative', -1],
+    ['a fractional', 0.5],
+  ]) {
+    const rows = world({ mutateRow: (row, i) => row.arm === 'B' && i === 0 && (row.counts.topSeverityMissed = value) });
+    const result = read(declaration(), rows);
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /critical counts are not recorded as nonnegative integers .*B-c1-1-1/),
+      `${label} critical count is unknown and blocks, got ${outcomeOf(result)}`,
+    );
+  }
+  const negativeRetry = world();
+  negativeRetry.push({
+    ...clone(candidateRow(negativeRetry, 'c5', 1)),
+    attemptId: 'B-c5-1-retry',
+    attempt: 2,
+    status: 'failed',
+    counts: { topSeverityMissed: -2 },
+    receipt: { ...candidateRow(negativeRetry, 'c5', 1).receipt, workspaceId: 'ws-negative-retry' },
+  });
+  const negativeRetryResult = read(declaration(), negativeRetry);
+  check(
+    outcomeOf(negativeRetryResult) === 'blocked' && hasReason(negativeRetryResult, /B-c5-1-retry \(top-severity-missed\)/),
+    'a negative count on a failed retry blocks',
+  );
+  const positiveRetry = world();
+  positiveRetry.push({
+    ...clone(candidateRow(positiveRetry, 'c5', 1)),
+    attemptId: 'B-c5-1-retry',
+    attempt: 2,
+    status: 'failed',
+    counts: { topSeverityMissed: 1 },
+    receipt: { ...candidateRow(positiveRetry, 'c5', 1).receipt, workspaceId: 'ws-positive-retry' },
+  });
+  check(outcomeOf(read(declaration(), positiveRetry)) === 'rejected', 'a verified positive count on a failed retry rejects');
+  const zeroOnly = read(declaration(), world());
+  check(outcomeOf(zeroOnly) === 'selection-cleared', 'only a verified zero on every candidate attempt satisfies the critical gate');
+}
+
+function checkAllInCostScope() {
+  const targetOnly = declaration({ mutate: (body) => (body.resources.costScope = { taskExecution: ['target'] }) });
+  check(
+    experiment
+      .validateDeclaration(targetOnly)
+      .pairedProblems.some((problem) => problem.where === 'resources.costScope.taskExecution' && /target and tools/.test(problem.message)),
+    'a task execution scope that leaves out tools is refused',
+  );
+  const toolCharges = world({ mutateRow: (row) => row.arm === 'B' && (row.cost.components.tools = 10) });
+  const narrowed = read(targetOnly, toolCharges);
+  check(outcomeOf(narrowed) === 'blocked', `a narrowed cost scope cannot hide candidate tool charges, got ${outcomeOf(narrowed)}`);
+  const allIn = read(declaration(), toolCharges);
+  check(
+    outcomeOf(allIn) === 'inconclusive' && allIn.report.contrast.gates.some((gate) => gate.gate === 'saving' && !gate.passes),
+    `candidate tool charges reverse the saving gate, got ${outcomeOf(allIn)}`,
+  );
+  const extended = declaration({ mutate: (body) => (body.resources.costScope = { taskExecution: ['target', 'tools', 'retrieval'] }) });
+  check(experiment.validateDeclaration(extended).pairedProblems.length === 0, 'a task execution scope may add components');
+
+  const unclassified = world({ mutateRow: (row) => (row.cost.components.retrieval = row.arm === 'B' ? 5 : 0) });
+  const unclassifiedResult = read(declaration(), unclassified);
+  check(
+    outcomeOf(unclassifiedResult) === 'blocked' &&
+      hasReason(unclassifiedResult, /neither the task execution nor the judge scope: .*retrieval/),
+    'a charged component the scopes do not classify blocks',
+  );
+  const classifiedResult = read(extended, unclassified);
+  check(
+    outcomeOf(classifiedResult) === 'inconclusive' &&
+      classifiedResult.report.contrast.gates.some((gate) => gate.gate === 'saving' && !gate.passes),
+    'a declared extra component enters the saving gate',
+  );
+
+  // The arm subtotals reconcile with the report's task execution and experiment totals.
+  const overhead = declaration({ mutate: (body) => (body.resources.overhead = [{ name: 'preflight', amount: 2, currency: 'USD' }]) });
+  const reconciled = read(overhead, world());
+  const { A, B } = reconciled.report.contrast.arms;
+  const close = (left, right) => Math.abs(left - right) < 1e-9;
+  check(
+    close(A.taskExecutionCost.total + B.taskExecutionCost.total, reconciled.report.cost.taskExecution.total),
+    'the arm subtotals add up to the task execution total',
+  );
+  check(
+    close(reconciled.report.cost.taskExecution.total + 2, reconciled.report.cost.experimentTotal.total),
+    'the experiment total is task execution plus declared overhead',
+  );
+  const indexed = reconciled.evidenceIndex.rows.reduce((sum, row) => sum + row.cost.components.target + row.cost.components.tools, 0);
+  check(close(indexed, reconciled.report.cost.taskExecution.total), 'the task execution total reconciles with the evidence index');
+}
+
+function checkConfirmationFollowsSelection() {
+  const confirmationDeclaration = declaration(CONFIRMATION());
+  const withoutSelection = experiment.readExperiment({
+    declaration: confirmationDeclaration,
+    attempts: sealAll(confirmationWorld()),
+    ledger: confirmationLedger(),
+    replay: syntheticScorer,
+  });
+  check(
+    outcomeOf(withoutSelection) === 'blocked' &&
+      hasReason(withoutSelection, /selection: the frozen selection declaration and its report are not supplied/),
+    'a confirmation with an exposure-only history and no selection result does not recommend',
+  );
+  const unpinned = declaration({ ...CONFIRMATION(), mutate: (body) => (body.selection = null) });
+  check(
+    experiment.validateDeclaration(unpinned).pairedProblems.some((problem) => problem.where === 'selection'),
+    'a confirmation declaration that pins no selection is refused',
+  );
+
+  const failedSelection = declaration({
+    ...CONFIRMATION(),
+    mutate: (body) => (body.selection = pinSelection(body, { diffs: [-0.3, -0.3, -0.3] })),
+  });
+  const failed = readConfirmation(confirmationWorld(), { declaration: failedSelection, selection: selectionOf(failedSelection) });
+  check(
+    outcomeOf(failed) === 'blocked' && hasReason(failed, /selection outcome is inconclusive; a confirmation needs selection-cleared/),
+    `a confirmation after an inconclusive selection is blocked, got ${outcomeOf(failed)}`,
+  );
+
+  for (const [label, change, pattern] of [
+    [
+      'a changed margin',
+      (body) => (body.gates.quality.recall.maxLoss = 0.2),
+      /changes what selection froze: gates\.quality\.recall\.maxLoss/,
+    ],
+    [
+      'a changed candidate',
+      (body) => (body.scope.candidate.id = 'another-candidate'),
+      /changes what selection froze: .*scope\.candidate\.id/,
+    ],
+    ['a changed analysis', (body) => (body.design.analysis.seed = 7), /changes what selection froze: design\.analysis\.seed/],
+    ['a changed cost rule', (body) => (body.gates.saving.minFraction = 0.1), /changes what selection froze: gates\.saving\.minFraction/],
+    [
+      'a changed candidate identity',
+      (body) => (body.identity.arms.B.model.resolved = 'cheaper-2026-11'),
+      /identity\.arms\.B\.model\.resolved/,
+    ],
+  ]) {
+    const changed = declaration({
+      ...CONFIRMATION(),
+      mutate: (body) => {
+        body.selection = pinSelection(body);
+        change(body);
+      },
+    });
+    const result = readConfirmation(confirmationWorld(), { declaration: changed, selection: selectionOf(changed) });
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, pattern),
+      `${label} after selection blocks the confirmation, got ${outcomeOf(result)}`,
+    );
+  }
+
+  const pinned = selectionOf(confirmationDeclaration);
+  const forged = clone(pinned.report);
+  forged.contrast.decision.outcome = 'selection-cleared';
+  forged.contrast.decision.reasons = ['forged'];
+  const forgedResult = readConfirmation(confirmationWorld(), { selection: { declaration: pinned.declaration, report: forged } });
+  check(
+    outcomeOf(forgedResult) === 'blocked' && hasReason(forgedResult, /does not match selection\.reportDigest/),
+    'a selection report other than the pinned one is refused',
+  );
+  const otherDeclaration = freeze({ ...clone(pinned.declaration), experimentId: 'another-experiment' });
+  const otherResult = readConfirmation(confirmationWorld(), { selection: { declaration: otherDeclaration, report: pinned.report } });
+  check(
+    outcomeOf(otherResult) === 'blocked' && hasReason(otherResult, /does not match selection\.declarationDigest/),
+    'a selection declaration other than the pinned one is refused',
+  );
+  const intact = readConfirmation(confirmationWorld());
+  check(outcomeOf(intact) === 'recommend', `an intact selection-to-confirmation chain recommends, got ${outcomeOf(intact)}`);
+  const savedReport = JSON.parse(`${JSON.stringify(pinned.report, null, 2)}\n`);
+  check(
+    experiment.digestOf(savedReport) === confirmationDeclaration.selection.reportDigest,
+    'the pinned digest survives writing the report to disk and reading it back',
+  );
+}
+
+function checkOneNamedSetting() {
+  const effortAndTemperature = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'effort', setting: 'effort' };
+      body.identity.arms.B = clone(ARM_A);
+      body.identity.arms.B.effort = { requested: 'low', applied: 'low' };
+      body.identity.arms.B.decode = { temperature: 1 };
+    },
+  });
+  const observedAs = (value) => world({ mutateRow: (row) => (row.observed.arm = clone(value.identity.arms[row.arm])) });
+  const bundled = read(effortAndTemperature, observedAs(effortAndTemperature));
+  check(
+    outcomeOf(bundled) === 'revised-design-required' &&
+      hasReason(bundled, /more than the declared effort setting differs: decode\.temperature/),
+    `an effort change plus a temperature change is two settings, got ${outcomeOf(bundled)}`,
+  );
+  const temperatureOnly = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'effort', setting: 'decode.temperature' };
+      body.identity.arms.B = clone(ARM_A);
+      body.identity.arms.B.decode = { temperature: 1 };
+    },
+  });
+  check(
+    outcomeOf(read(temperatureOnly, observedAs(temperatureOnly))) === 'selection-cleared',
+    'one decode setting alone is a valid contrast',
+  );
+  const effortOnly = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'effort', setting: 'effort' };
+      body.identity.arms.B = clone(ARM_A);
+      body.identity.arms.B.effort = { requested: 'low', applied: 'low' };
+    },
+  });
+  check(
+    outcomeOf(read(effortOnly, observedAs(effortOnly))) === 'selection-cleared',
+    'one effort setting with consistent requested and applied evidence passes',
+  );
+  const notApplied = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'effort', setting: 'effort' };
+      body.identity.arms.B = clone(ARM_A);
+      body.identity.arms.B.effort = { requested: 'low', applied: 'high' };
+    },
+  });
+  const notAppliedResult = read(notApplied, observedAs(notApplied));
+  check(
+    outcomeOf(notAppliedResult) === 'revised-design-required' && hasReason(notAppliedResult, /effort\.applied stays the same/),
+    'a requested effort the provider did not apply is no effort change',
+  );
+  const notResolved = declaration({ mutate: (body) => (body.identity.arms.B.model.resolved = ARM_A.model.resolved) });
+  const notResolvedResult = read(notResolved, observedAs(notResolved));
+  check(
+    outcomeOf(notResolvedResult) === 'revised-design-required' && hasReason(notResolvedResult, /model\.resolved stays the same/),
+    'a requested model the provider resolved to the incumbent is no model change',
+  );
+  const twoRegions = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'prompt', setting: 'promptRegions.examples' };
+      body.identity.arms.A.promptRegions = { examples: 'sha256:examples-1', rules: 'sha256:rules-1' };
+      body.identity.arms.B = clone(body.identity.arms.A);
+      body.identity.arms.B.promptDigest = 'sha256:prompt-2';
+      body.identity.arms.B.promptRegions = { examples: 'sha256:examples-2', rules: 'sha256:rules-2' };
+    },
+  });
+  const twoRegionsResult = read(twoRegions, observedAs(twoRegions));
+  check(
+    outcomeOf(twoRegionsResult) === 'revised-design-required' && hasReason(twoRegionsResult, /promptRegions\.rules/),
+    'two changed prompt regions are two settings',
+  );
+  for (const changedFactor of [
+    { kind: 'effort' },
+    { kind: 'prompt' },
+    { kind: 'effort', setting: 'decode' },
+    { kind: 'model', setting: 'effort' },
+  ]) {
+    const unnamed = declaration({ mutate: (body) => (body.scope.changedFactor = changedFactor) });
+    check(
+      experiment.validateDeclaration(unnamed).pairedProblems.some((problem) => problem.where === 'scope.changedFactor.setting'),
+      `a changed factor of ${JSON.stringify(changedFactor)} names no setting its kind allows`,
+    );
+  }
+}
+
+function checkObservedPairingAndOrder() {
+  const missingOne = world({ mutateRow: (row, i, repetition) => row.arm === 'B' && i === 1 && repetition === 2 && delete row.blockId });
+  const missingOneResult = read(declaration(), missingOne);
+  check(
+    outcomeOf(missingOneResult) === 'blocked' && hasReason(missingOneResult, /pairing block not recorded on both arms: c2\/2/),
+    'a pair with no block on one arm blocks',
+  );
+  const missingAll = read(declaration(), world({ mutateRow: (row) => delete row.blockId }));
+  check(outcomeOf(missingAll) === 'blocked' && hasReason(missingAll, /pairing block not recorded/), 'pairs with no blocks at all block');
+
+  // A declared interleaved schedule whose receipts show every A before any B.
+  const retime = (rows, order) => {
+    for (const [index, row] of order(rows).entries()) {
+      const start = DISPATCH_START + (index + 1) * 60_000;
+      row.receipt.startedAt = new Date(start).toISOString();
+      row.receipt.endedAt = new Date(start + 30_000).toISOString();
+    }
+    return rows;
+  };
+  const allAFirst = retime(world(), (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  const allAFirstResult = read(declaration(), allAFirst);
+  check(
+    outcomeOf(allAFirstResult) === 'blocked' &&
+      hasReason(allAFirstResult, /does not follow the declared interleaved schedule: block c1-1 still starts attempts/),
+    `all A before all B is no interleaved schedule, got ${outcomeOf(allAFirstResult)}`,
+  );
+  const oneBlock = world({ mutateRow: (row) => (row.blockId = 'everything') });
+  retime(oneBlock, (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  const oneBlockResult = read(declaration(), oneBlock);
+  check(
+    outcomeOf(oneBlockResult) === 'blocked' && hasReason(oneBlockResult, /block everything starts one arm twice in a row/),
+    'one block holding every A before every B is no interleaved schedule',
+  );
+  const bFirst = retime(world(), (rows) => rows.map((_, index) => rows[index % 2 === 0 ? index + 1 : index - 1]));
+  check(outcomeOf(read(declaration(), bFirst)) === 'selection-cleared', 'an interleaved schedule may start a block with either arm');
+  const randomized = declaration({ mutate: (body) => (body.design.order = 'randomized') });
+  const randomOrder = world({ mutateRow: (row) => (row.blockId = 'everything') });
+  retime(randomOrder, (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  check(
+    outcomeOf(read(randomized, randomOrder)) === 'selection-cleared',
+    'a randomized schedule inside one block is not held to alternation',
+  );
+  const overlapping = retime(world(), (rows) => [...rows.filter((row) => row.arm === 'A'), ...rows.filter((row) => row.arm === 'B')]);
+  check(outcomeOf(read(randomized, overlapping)) === 'blocked', 'a randomized schedule still runs its blocks one after another');
+
+  // Both arms run under one recorded cache policy.
+  const noCachePolicy = declaration({ mutate: (body) => delete body.identity.fixed.environment.cacheRegime });
+  check(
+    experiment
+      .validateDeclaration(noCachePolicy)
+      .pairedProblems.some((problem) => problem.where === 'identity.fixed' && /cacheRegime/.test(problem.message)),
+    'a contrast that records no cache regime is refused',
+  );
+  const cacheDrift = read(
+    declaration(),
+    world({ mutateRow: (row) => row.arm === 'B' && (row.observed.fixed.environment.cacheRegime = 'warm') }),
+  );
+  check(
+    outcomeOf(cacheDrift) === 'new-baseline-required' && hasReason(cacheDrift, /fixed\.environment\.cacheRegime/),
+    'an arm that ran under another cache regime is no comparable pair',
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 
 async function main() {
   checkBootstrapAgainstReference();
@@ -2866,6 +3506,13 @@ async function main() {
   checkAcceptance8();
   await checkAcceptance9();
   checkAcceptance10();
+  checkClaimedEvidence();
+  await checkRecordedEvidenceVerification();
+  checkCriticalCountsCannotBeExcused();
+  checkAllInCostScope();
+  checkConfirmationFollowsSelection();
+  checkOneNamedSetting();
+  checkObservedPairingAndOrder();
   checkAdversarialInputs();
   checkRuleByRule();
   checkOutputsAndCommandLine();

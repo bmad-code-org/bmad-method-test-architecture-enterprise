@@ -179,6 +179,7 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
     },
     "changedFactor": {
       "kind": "model",
+      "setting": "model",
       "detail": "incumbent model to cheaper model; nothing else differs"
     },
     "memberships": {
@@ -245,7 +246,7 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
       "B": {
         "model": {
           "requested": "cheaper-model-id",
-          "resolved": "record the model id the provider reports"
+          "resolved": "record the model id the provider reports for the cheaper model"
         },
         "effort": {
           "requested": "high",
@@ -327,7 +328,7 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
     "overhead": []
   },
   "frozen": {
-    "digest": "sha256:f3cf2e5f5692ad7fc93ff500d890ccaede793c9bdefd5570e0479281eb699082"
+    "digest": "sha256:3b5d6173637dc1c24cf7123dea4fbe97b7c0ed30c1205d00f43c480da2fc90ec"
   }
 }
 ```
@@ -337,12 +338,34 @@ Run the contrast only when you have chosen a baseline, one candidate, the cases,
 The contrast needs all of the following, and names whatever is missing:
 
 - A frozen declaration whose digest matches.
-- Identity for both arms and for everything that stays fixed. Exactly one of `model`, `effort` or `prompt` differs between the arms. A second difference stops the contrast with `revised-design-required`. An unknown applied setting blocks it.
+- Identity for both arms and for everything that stays fixed, including a `cacheRegime` leaf in `identity.fixed` for the cache policy both arms run under. An unknown applied setting blocks the contrast.
+- Exactly one changed setting, named in `scope.changedFactor.setting`:
+
+  | Factor   | Setting                | What has to change together                              |
+  | -------- | ---------------------- | -------------------------------------------------------- |
+  | `model`  | `model`                | The requested model and the model the provider resolved  |
+  | `effort` | `effort`               | The requested effort and the effort the provider applied |
+  | `effort` | `decode.<name>`        | That one decode leaf                                     |
+  | `prompt` | `promptRegions.<name>` | That one prompt region and the whole `promptDigest`      |
+
+  Any other difference, a second decode leaf or a second prompt region included, stops the contrast with `revised-design-required`. So does a requested change the resolved or applied identity does not show.
+
 - Evidence rows that record the identity they ran under. A changed task, ground truth, rubric, scorer or threshold, or an arm that differs from its declaration, ends in `new-baseline-required`.
-- A fresh-workspace receipt on every attempt, and a complete pair for each planned case and repetition. An attempt for a repetition the schedule does not plan blocks the contrast, and its charge stays in the cost totals.
-- The critical counts and the required metrics recorded on every attempt. A count that is not recorded is unknown and blocks. A required metric has to apply to every case, so gate on metrics that are defined for all of them.
-- Cost recorded for both arms when the objective is cost.
+- Verified evidence on every attempt. A receipt and a row's numbers are claims until the reader checks them. The row names its stage, its input hash and its native record in `native.ref`, and carries the saved artifact bytes in `outputText`. Those bytes hash to `outputSha256` and to the receipt's `artifactSha256`. The receipt's `startedAt` and `endedAt` are ISO 8601 timestamps in order. The deterministic scorer, run again over the bytes, reproduces every required metric and every critical count on the row. The evidence index marks each attempt `verified` or `claimed` and lists what failed; a claimed attempt blocks the contrast. For a Test Design declaration the command line supplies the scorer. A caller of `readExperiment` passes it as `replay`.
+- A complete pair for each planned case and repetition, with both arms in one pairing block named by `blockId`. The receipts' start times are the recorded dispatch order: blocks run one after another, and inside a block an `interleaved` schedule never starts one arm twice in a row. A missing block, a pair split across blocks or an order off the declared schedule blocks the contrast. An attempt for a repetition the schedule does not plan blocks it too, and its charge stays in the cost totals.
+- Every critical count recorded as a nonnegative integer on every candidate attempt, retries included. A missing, negative or fractional count is unknown and blocks, and a row's `notApplicable` list cannot excuse it. Required metrics are recorded on every attempt. A required metric has to apply to every case, so gate on metrics that are defined for all of them.
+- All-in task cost for both arms when the objective is cost. `resources.costScope.taskExecution` has to include `target` and `tools` and may add components. A charged component in neither the task execution nor the judge scope blocks the contrast, so no charge drops out of the saving gate.
 - An exposure ledger that records which cases the candidate has seen. A confirmation declaration pins the ledger head it was frozen against in `exposure.ledgerHeadAtFreeze`, and a ledger that no longer extends that head is refused. A confirmation case that was exposed during selection, or used to confirm another candidate, is refused. A selection case that already served as confirmation is refused too.
+
+### Confirmation
+
+A confirmation runs only for a candidate whose selection cleared. Its declaration pins the frozen selection declaration in `selection.declarationDigest` (the value `freeze` printed) and that declaration's `selection-cleared` report in `selection.reportDigest`:
+
+```bash
+node test/lib/configuration-experiment.js digest selection-output/experiment-report.json
+```
+
+The evidence file names both files, as `"selection": { "declaration": "selection-experiment.json", "report": "selection-output/experiment-report.json" }`. A confirmation may change its stage, its confirmation cases and their clusters, its ledger pin and these two pins. Every other field stays as selection froze it: the candidate, the baseline, the identities, the gates and margins, the design and analysis, and the cost rules. A missing or failed selection report, a report from another declaration, or any other change blocks the confirmation. The ledger head the selection report recorded has to still be in the ledger.
 
 ### The estimator
 
@@ -352,11 +375,11 @@ Each case is one cluster. The reader averages a cluster's repetitions within eac
 
 Gates are checked in this order, and the first that applies decides:
 
-1. An unusable or unfrozen declaration is `blocked`.
-2. A changed measurement identity is `new-baseline-required`. An undeclared second change is `revised-design-required`.
+1. An unusable or unfrozen declaration is `blocked`, and so is a confirmation without its pinned `selection-cleared` report.
+2. A changed measurement identity is `new-baseline-required`. An undeclared second change, or a declared setting that does not change on every identity it has to, is `revised-design-required`.
 3. A verified candidate critical miss is `rejected`, whatever the averages and costs say.
 4. A declared binding native gate that is red is `rejected`.
-5. Incomplete pairs, missing receipts, unknown required cost, non-finite data or an unusable ledger are `blocked`.
+5. Claimed evidence the reader cannot verify, an unverified critical miss, an unrecorded critical count, incomplete pairs, missing pairing blocks, a dispatch order off the declared schedule, unknown or unclassified required cost, unknown latency under a latency gate, non-finite data or an unusable ledger are `blocked`.
 6. An unsupported design is `descriptive-only`.
 7. Too few clusters, a degenerate interval or an uncalibrated bootstrap is `inconclusive`.
 8. Every required lower bound must strictly exceed its threshold: the quality bound above the negative of the allowed loss, the saving bound above zero for the contrast `(1 - minFraction) * baseline cost - candidate cost`, so a candidate has to cost less than the baseline by more than the declared `gates.saving.minFraction`, each absolute floor and any latency limit. Equality does not pass. A failed bound is `inconclusive`, because failing to show noninferiority is not proof of loss.
@@ -365,7 +388,7 @@ A passing selection run reports `selection-cleared`. Only a confirmation on unto
 
 ## Cost and Latency
 
-The report lists task-execution cost, judge cost and total experiment cost separately. Retries, canceled and failed attempts stay in the totals. A component that is not recorded is unknown, and one unknown component makes its total unknown. Tokens become money only through a complete price sheet in `resources.pricing` over complete usage. Overhead outside the attempts (preflight, calibration, diagnostics) is declared in `resources.overhead`. Recorded Test Design runs carry no usage, so they can show repeatability and no saving.
+The report lists task-execution cost, judge cost and total experiment cost separately. Retries, canceled and failed attempts stay in the totals. A component that is not recorded is unknown, and one unknown component makes its total unknown. Tokens become money only through a complete price sheet in `resources.pricing` over complete usage. Overhead outside the attempts (preflight, calibration, diagnostics) is declared in `resources.overhead`. Recorded Test Design runs carry no usage, so they can show repeatability and no saving. Under a declared latency gate, unknown or negative task latency blocks the contrast.
 
 ## How You Know It Worked
 

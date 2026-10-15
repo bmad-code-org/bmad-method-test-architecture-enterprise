@@ -18,20 +18,27 @@
  * native run recorded.
  *
  * The paired contrast compares one baseline with one candidate that differs in
- * exactly one declared factor. It needs a frozen declaration, fresh generation
- * receipts, complete pairs and cost evidence where the objective is cost. Anything
+ * exactly one declared setting. It needs a frozen declaration, verified attempts
+ * (receipt, saved bytes, native record and a scorer that reproduces the row's
+ * numbers), complete pairs in recorded pairing blocks, and all-in cost evidence where
+ * the objective is cost. A confirmation also needs the pinned selection-cleared
+ * report it follows. Anything
  * missing yields an explicit `blocked`, `new-baseline-required`, `descriptive-only` or
  * `inconclusive` outcome, never an invented value.
  *
  * DECISION ORDER (one place, `decide`)
  *
- *   1. an unusable declaration blocks
+ *   1. an unusable declaration, or a confirmation without its pinned selection-cleared
+ *      report, blocks
  *   2. changed task, ground truth, rubric, scorer, thresholds or arm identity
- *      requires a new baseline; a second configuration change requires a revised design
+ *      requires a new baseline; a second changed setting, or a setting whose requested
+ *      and resolved or applied identities do not change together, requires a revised design
  *   3. a verified candidate critical miss rejects, whatever the averages or costs say
  *   4. a binding native gate that is red rejects
- *   5. an unverified critical miss, incomplete pairs, unknown required cost,
- *      non-finite data or an unusable exposure ledger blocks
+ *   5. claimed evidence the reader cannot verify, an unverified critical miss, an
+ *      unrecorded critical count, incomplete pairs, missing pairing blocks, a dispatch
+ *      order off the declared schedule, unknown or unclassified required cost, unknown
+ *      latency under a latency gate, non-finite data or an unusable exposure ledger blocks
  *   6. an unsupported design stays descriptive-only
  *   7. too few clusters, a degenerate interval or a bootstrap that fails its
  *      reference fixtures is inconclusive
@@ -57,6 +64,7 @@
  *
  * Usage:
  *   node test/lib/configuration-experiment.js freeze <declaration.json>
+ *   node test/lib/configuration-experiment.js digest <experiment-report.json>
  *   node test/lib/configuration-experiment.js analyze <evidence.json> --out <directory>
  */
 
@@ -67,7 +75,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { projectTestDesignResult } = require('./test-design-result');
-const { readDesign, scoreRun, signatureOf, loadGroundTruth } = require('../eval-test-design');
+const { readDesign, scoreRun, signatureOf, loadGroundTruth, testDesignDiagnosticProjection } = require('../eval-test-design');
+const { numericContributions } = require('./eval-record');
 
 const SCHEMA_VERSION = '1.0.0';
 const MAX_REPEATS = 1000;
@@ -77,10 +86,11 @@ const ARMS = Object.freeze(['A', 'B']);
 const STAGES = Object.freeze(['baseline', 'selection', 'confirmation']);
 const STATUSES = Object.freeze(['completed', 'failed', 'canceled', 'invalid', 'timeout']);
 const FACTOR_KINDS = Object.freeze(['model', 'effort', 'prompt']);
-const FACTOR_PATHS = Object.freeze({ model: ['model.'], effort: ['effort.', 'decode.'], prompt: ['promptDigest', 'promptRegion'] });
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 const TOKEN_CATEGORIES = Object.freeze(['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']);
 const QUANTILES = Object.freeze(['linear', 'nearest-rank']);
-const DEFAULT_COST_SCOPE = Object.freeze({ taskExecution: ['target', 'tools'], judge: ['judge'] });
+const REQUIRED_TASK_COMPONENTS = Object.freeze(['target', 'tools']);
+const DEFAULT_COST_SCOPE = Object.freeze({ taskExecution: REQUIRED_TASK_COMPONENTS, judge: ['judge'] });
 const SIGNATURE_COMPONENTS = Object.freeze([
   'set',
   'mentions',
@@ -199,6 +209,28 @@ function stageCases(declaration) {
   return [...list('development')];
 }
 
+/**
+ * The one setting a contrast changes. `leaves` are the identity leaves it may change;
+ * `together` are the leaves that all have to change: a requested model or effort with
+ * the one the provider resolved or applied, a prompt region with the digest of the
+ * whole prompt. Null when the declaration names no setting its kind allows.
+ */
+function changedSetting(changedFactor) {
+  const kind = changedFactor?.kind;
+  const setting = changedFactor?.setting;
+  if (kind === 'model' && (setting === undefined || setting === 'model')) {
+    return { setting: 'model', leaves: ['model.requested', 'model.resolved'], together: ['model.requested', 'model.resolved'] };
+  }
+  if (kind === 'effort' && setting === 'effort') {
+    return { setting, leaves: ['effort.requested', 'effort.applied'], together: ['effort.requested', 'effort.applied'] };
+  }
+  if (kind === 'effort' && /^decode\.[^.]+$/.test(setting ?? '')) return { setting, leaves: [setting], together: [setting] };
+  if (kind === 'prompt' && /^promptRegions\.[^.]+$/.test(setting ?? '')) {
+    return { setting, leaves: [setting, 'promptDigest'], together: [setting, 'promptDigest'] };
+  }
+  return null;
+}
+
 function clusterPlan(declaration) {
   const cases = stageCases(declaration);
   const declared = Array.isArray(declaration?.scope?.clusters) ? declaration.scope.clusters : null;
@@ -280,6 +312,12 @@ function validateDeclaration(declaration) {
   need(pairs, ['selection', 'confirmation'].includes(decl.stage), 'stage', 'a paired contrast runs in the selection or confirmation stage');
   need(pairs, isNonEmptyString(scope.candidate?.id), 'scope.candidate.id', 'is required for a paired contrast');
   need(pairs, FACTOR_KINDS.includes(scope.changedFactor?.kind), 'scope.changedFactor.kind', `must be one of ${FACTOR_KINDS.join(', ')}`);
+  need(
+    pairs,
+    !FACTOR_KINDS.includes(scope.changedFactor?.kind) || changedSetting(scope.changedFactor) !== null,
+    'scope.changedFactor.setting',
+    'must name the one setting that changes: model for a model; effort or decode.<name> for effort; promptRegions.<name> for a prompt',
+  );
   need(pairs, ['cost', 'quality'].includes(scope.objective), 'scope.objective', 'must be cost or quality');
   need(pairs, isObject(decl.identity?.arms?.A) && isObject(decl.identity?.arms?.B), 'identity.arms', 'needs an A and a B arm');
   for (const key of ['suiteDigest', 'groundTruthDigest', 'scorerDigest', 'thresholdsDigest', 'rubricDigest']) {
@@ -290,6 +328,12 @@ function validateDeclaration(declaration) {
       'is required (use "not-applicable" where nothing applies)',
     );
   }
+  need(
+    pairs,
+    Object.keys(flatten(decl.identity?.fixed ?? {})).some((leaf) => leaf.split('.').at(-1) === 'cacheRegime'),
+    'identity.fixed',
+    'needs a cacheRegime: both arms run under one recorded cache policy',
+  );
   for (const arm of ARMS) {
     for (const key of ['model.requested', 'model.resolved', 'effort.requested', 'effort.applied']) {
       const [group, leaf] = key.split('.');
@@ -419,6 +463,28 @@ function validateDeclaration(declaration) {
     'resources.authorization',
     'is required (null means no live execution)',
   );
+  const costScope = decl.resources?.costScope;
+  if (costScope !== undefined) {
+    const names = (list) => Array.isArray(list) && list.every((name) => isNonEmptyString(name));
+    need(
+      pairs,
+      isObject(costScope) && (costScope.taskExecution === undefined || names(costScope.taskExecution)),
+      'resources.costScope.taskExecution',
+      'must be a list of component names',
+    );
+    need(
+      pairs,
+      REQUIRED_TASK_COMPONENTS.every((name) => (costScope?.taskExecution ?? REQUIRED_TASK_COMPONENTS).includes(name)),
+      'resources.costScope.taskExecution',
+      `must include ${REQUIRED_TASK_COMPONENTS.join(' and ')}: task execution cost is all-in, retries included`,
+    );
+    need(
+      pairs,
+      isObject(costScope) && (costScope.judge === undefined || names(costScope.judge)),
+      'resources.costScope.judge',
+      'must be a list of component names',
+    );
+  }
   need(pairs, isNonEmptyString(decl.frozen?.digest), 'frozen.digest', 'a paired contrast needs a frozen declaration');
   if (decl.stage === 'confirmation') {
     const pin = decl.exposure?.ledgerHeadAtFreeze;
@@ -427,6 +493,12 @@ function validateDeclaration(declaration) {
       isNonEmptyString(pin?.head) && isPositiveInteger(pin?.length),
       'exposure.ledgerHeadAtFreeze',
       'a confirmation pins the selection ledger it was frozen against',
+    );
+    need(
+      pairs,
+      isNonEmptyString(decl.selection?.declarationDigest) && isNonEmptyString(decl.selection?.reportDigest),
+      'selection',
+      'a confirmation pins the digests of the selection declaration and of its selection-cleared report',
     );
   }
 
@@ -439,6 +511,13 @@ function validateDeclaration(declaration) {
 // evidence rows
 // ---------------------------------------------------------------------------
 
+/** Milliseconds of an ISO 8601 timestamp with a zone, or null. */
+function timestampMs(value) {
+  if (typeof value !== 'string' || !TIMESTAMP.test(value)) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function validReceipt(raw) {
   const receipt = raw.receipt;
   if (!isObject(receipt)) return { receipt: null, problem: null };
@@ -446,6 +525,10 @@ function validReceipt(raw) {
   if (!isNonEmptyString(receipt.workspaceId)) return { receipt: null, problem: 'receipt has no workspaceId' };
   if (!isNonEmptyString(receipt.startedAt) || !isNonEmptyString(receipt.endedAt))
     return { receipt: null, problem: 'receipt has no start and end time' };
+  const started = timestampMs(receipt.startedAt);
+  const ended = timestampMs(receipt.endedAt);
+  if (started === null || ended === null) return { receipt: null, problem: 'receipt start and end are not ISO 8601 timestamps' };
+  if (ended < started) return { receipt: null, problem: 'receipt ends before it starts' };
   if (!isNonEmptyString(receipt.artifactSha256) || receipt.artifactSha256 !== raw.outputSha256) {
     return { receipt: null, problem: 'receipt artifactSha256 does not match outputSha256' };
   }
@@ -830,9 +913,9 @@ function verifyLedger(ledger, pins = []) {
   return { ok: problems.length === 0, problems, head: ledger.length === 0 ? null : ledger.at(-1).hash, length: ledger.length };
 }
 
-function exposureProblems(declaration, ledger, resume) {
+function exposureProblems(declaration, ledger, resume, extraPins = []) {
   if (!Array.isArray(ledger)) return { blockers: ['exposure ledger is missing'], burned: [], ledger: null };
-  const pins = [];
+  const pins = [...extraPins];
   if (isObject(declaration?.exposure?.ledgerHeadAtFreeze)) pins.push(declaration.exposure.ledgerHeadAtFreeze);
   if (isObject(resume?.ledger)) pins.push(resume.ledger);
   const verified = verifyLedger(ledger, pins);
@@ -865,6 +948,55 @@ function exposureProblems(declaration, ledger, resume) {
   return { blockers, burned, ledger: verified };
 }
 
+/** What a confirmation keeps from its selection declaration, as leaf paths. */
+function frozenAcrossStages(declaration) {
+  const copy = clone(declaration);
+  for (const key of ['stage', 'frozen', 'exposure', 'selection']) delete copy[key];
+  if (isObject(copy.scope)) {
+    delete copy.scope.clusters;
+    if (isObject(copy.scope.memberships)) delete copy.scope.memberships.confirmation;
+  }
+  return flatten(copy);
+}
+
+/**
+ * A confirmation runs only for a candidate that cleared selection. The confirmation
+ * declaration pins the selection declaration and its report by digest; the report has
+ * to come from that declaration with a selection-cleared outcome, and the confirmation
+ * may change only its stage, its confirmation cases and their clusters, its ledger pin
+ * and these pins. Candidate, baseline, identities, gates, design, analysis and cost
+ * rules stay as selection froze them. The selection report's ledger head is pinned too.
+ */
+function selectionChainProblems(declaration, selection) {
+  if (declaration.stage !== 'confirmation') return { problems: [], pin: null };
+  const selected = isObject(selection?.declaration) ? selection.declaration : null;
+  const report = isObject(selection?.report) ? selection.report : null;
+  if (!selected || !report) return { problems: ['the frozen selection declaration and its report are not supplied'], pin: null };
+  const problems = [];
+  const selectedDigest = declarationDigest(selected);
+  if (selectedDigest !== declaration.selection.declarationDigest)
+    problems.push('the selection declaration does not match selection.declarationDigest');
+  if (selected.frozen?.digest !== selectedDigest) problems.push('the selection declaration is not frozen at its own digest');
+  if (selected.stage !== 'selection')
+    problems.push(`the pinned declaration is a ${selected.stage} stage; a confirmation follows a selection`);
+  if (digestOf(report) !== declaration.selection.reportDigest) problems.push('the selection report does not match selection.reportDigest');
+  if (report.kind !== 'configuration-experiment-report' || report.declaration?.digest !== selectedDigest) {
+    problems.push('the selection report was not produced from the pinned selection declaration');
+  }
+  const outcome = report.contrast?.decision?.outcome ?? 'missing';
+  if (outcome !== OUTCOMES.selectionCleared) problems.push(`the selection outcome is ${outcome}; a confirmation needs selection-cleared`);
+  const before = frozenAcrossStages(selected);
+  const after = frozenAcrossStages(declaration);
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => canonicalJson(before[key]) !== canonicalJson(after[key]))
+    .sort();
+  if (changed.length > 0) problems.push(`the confirmation changes what selection froze: ${changed.join(', ')}`);
+  const head = report.contrast?.exposure;
+  const pin = isNonEmptyString(head?.head) && isPositiveInteger(head?.length) ? { head: head.head, length: head.length } : null;
+  if (!pin) problems.push('the selection report records no exposure ledger head');
+  return { problems, pin };
+}
+
 // ---------------------------------------------------------------------------
 // descriptive repeatability
 // ---------------------------------------------------------------------------
@@ -883,10 +1015,24 @@ function criticalRules(declaration) {
   return Array.isArray(rules) ? rules.filter((rule) => isObject(rule) && isNonEmptyString(rule.count)) : [];
 }
 
-/** Critical rules whose count the row does not record. An unrecorded count is unknown, never zero. */
+const isCount = (value) => Number.isInteger(value) && value >= 0;
+
+/**
+ * Critical rules whose count the row does not record as a nonnegative integer. An
+ * unrecorded count is unknown, never zero, and a row's `notApplicable` tag cannot
+ * excuse a zero-tolerance rule.
+ */
 function unknownCriticalCounts(row, declaration) {
   return criticalRules(declaration)
-    .filter((rule) => !row.notApplicable.includes(rule.count) && !isFiniteNumber(row.counts[rule.count]))
+    .filter((rule) => !isCount(row.counts[rule.count]))
+    .map((rule) => rule.id)
+    .sort();
+}
+
+/** Critical rules a row's counts show as recorded but not as a nonnegative integer. */
+function invalidCriticalCounts(row, declaration) {
+  return criticalRules(declaration)
+    .filter((rule) => row.counts[rule.count] !== null && row.counts[rule.count] !== undefined && !isCount(row.counts[rule.count]))
     .map((rule) => rule.id)
     .sort();
 }
@@ -894,7 +1040,7 @@ function unknownCriticalCounts(row, declaration) {
 function criticalMisses(row, declaration) {
   const hits = new Set(row.critical);
   for (const rule of criticalRules(declaration)) {
-    if (isFiniteNumber(row.counts[rule.count]) && row.counts[rule.count] > 0) hits.add(rule.id);
+    if (isCount(row.counts[rule.count]) && row.counts[rule.count] > 0) hits.add(rule.id);
   }
   return [...hits].sort();
 }
@@ -997,8 +1143,15 @@ function replayControl(rows, replay) {
       results.push({ attemptId: row.attemptId, status: 'refused', reason: 'saved bytes do not match outputSha256' });
       continue;
     }
-    const first = replay(row.outputText, row);
-    const second = replay(row.outputText, row);
+    let first;
+    let second;
+    try {
+      first = replay(row.outputText, row);
+      second = replay(row.outputText, row);
+    } catch (error) {
+      results.push({ attemptId: row.attemptId, status: 'refused', reason: `the scorer threw: ${error.message}` });
+      continue;
+    }
     const deterministic = canonicalJson(first) === canonicalJson(second);
     const nativeSignature = row.native?.signature ?? null;
     let nativeAgreement = 'not-comparable';
@@ -1146,6 +1299,62 @@ function describeRepeatability({ declaration, rows, excluded, replay, judgeCalls
 // paired contrast
 // ---------------------------------------------------------------------------
 
+const sameNumber = (left, right) =>
+  (left ?? null) === (right ?? null) ||
+  (isFiniteNumber(left) && isFiniteNumber(right) && Math.abs(left - right) <= 1e-12 * Math.max(1, Math.abs(left), Math.abs(right)));
+
+function replayRow(replay, row) {
+  if (typeof replay !== 'function' || row.outputText === null || row.hashMismatch) return null;
+  try {
+    return replay(row.outputText, row) ?? null;
+  } catch (error) {
+    return { unmeasurable: `the scorer threw: ${error.message}` };
+  }
+}
+
+/**
+ * Why a completed attempt's evidence is only claimed. A receipt and a row's numbers
+ * are claims; the reader checks what it can recompute offline. The attempt has to
+ * name its stage, its input and its native record; its saved artifact bytes have to
+ * hash to the output and receipt hashes; and the deterministic scorer, run again over
+ * those bytes, has to reproduce every required metric and every critical count the
+ * row reports. An empty list means verified.
+ */
+function verificationProblems(row, declaration, replayed) {
+  const problems = [];
+  if (!row.receipt) problems.push(row.receiptProblem ?? 'no fresh generation receipt');
+  if (row.stage !== declaration.stage) problems.push('the row does not record its stage');
+  if (!isNonEmptyString(row.inputSha256)) problems.push('no input hash');
+  if (!isNonEmptyString(row.native?.ref)) problems.push('no native record reference');
+  if (row.outputText === null) {
+    problems.push('the artifact bytes are not part of the evidence');
+    return problems;
+  }
+  if (row.hashMismatch || `sha256:${sha256Hex(row.outputText)}` !== row.outputSha256) {
+    problems.push('the artifact bytes do not hash to outputSha256');
+    return problems;
+  }
+  if (replayed === null) {
+    problems.push('no deterministic scorer was supplied to re-derive the metrics and counts');
+    return problems;
+  }
+  if (!isObject(replayed.metrics) || !isObject(replayed.counts)) {
+    problems.push(`the scorer could not score the artifact${replayed.unmeasurable ? ` (${replayed.unmeasurable})` : ''}`);
+    return problems;
+  }
+  for (const metric of Object.keys(declaration.gates.quality)) {
+    if (!sameNumber(row.metrics[metric], replayed.metrics[metric])) {
+      problems.push(`metric ${metric} is ${row.metrics[metric]}, the scorer gives ${replayed.metrics[metric]}`);
+    }
+  }
+  for (const rule of criticalRules(declaration)) {
+    if (!sameNumber(row.counts[rule.count], replayed.counts[rule.count])) {
+      problems.push(`count ${rule.count} is ${row.counts[rule.count]}, the scorer gives ${replayed.counts[rule.count]}`);
+    }
+  }
+  return problems;
+}
+
 function checkIdentity(declaration) {
   const arms = declaration.identity?.arms ?? {};
   const flatA = flatten(arms.A ?? {});
@@ -1164,17 +1373,19 @@ function checkIdentity(declaration) {
   const paths = [...new Set([...Object.keys(flatA), ...Object.keys(flatB)])].sort();
   const differing = paths.filter((leaf) => canonicalJson(flatA[leaf]) !== canonicalJson(flatB[leaf]));
   const kind = declaration.scope?.changedFactor?.kind;
-  const allowed = FACTOR_PATHS[kind] ?? [];
-  const inFactor = (leaf) => allowed.some((prefix) => (prefix.endsWith('.') ? leaf.startsWith(prefix) : leaf === prefix));
-  const outside = differing.filter((leaf) => !inFactor(leaf));
+  const changed = changedSetting(declaration.scope?.changedFactor);
+  const outside = differing.filter((leaf) => !(changed?.leaves ?? []).includes(leaf));
+  const unchanged = (changed?.together ?? []).filter((leaf) => !differing.includes(leaf));
   return {
     unknown,
     differing,
     outside,
     kind,
+    setting: changed?.setting ?? null,
+    unchanged,
     aa: differing.length === 0,
     bundled: outside.length > 0,
-    factorUnchanged: differing.length > 0 && !differing.some((leaf) => inFactor(leaf)),
+    factorUnchanged: differing.length > 0 && unchanged.length > 0,
   };
 }
 
@@ -1214,7 +1425,16 @@ function resolveSlots(declaration, rows, plan) {
   const failureValue = declaration.design.failureRules.failureMetricValue;
   const slots = [];
   const stageRows = rows;
-  const problems = { missing: [], duplicate: [], overBudget: [], blockMismatch: [], nonFinite: [], missingMetric: [], unplanned: [] };
+  const problems = {
+    missing: [],
+    duplicate: [],
+    overBudget: [],
+    missingBlock: [],
+    blockMismatch: [],
+    nonFinite: [],
+    missingMetric: [],
+    unplanned: [],
+  };
   for (const row of stageRows) {
     if (plan.some((entry) => entry.caseId === row.caseId) && row.repetition > repeats) {
       problems.unplanned.push(`${row.arm}/${row.caseId}/${row.repetition}`);
@@ -1254,12 +1474,56 @@ function resolveSlots(declaration, rows, plan) {
         }
         slot.arms[arm] = { attempts, scoring, failureScored, values };
       }
-      const blocks = ARMS.map((arm) => slot.arms[arm].scoring?.blockId ?? null);
-      if (blocks[0] !== null && blocks[1] !== null && blocks[0] !== blocks[1]) problems.blockMismatch.push(`${entry.caseId}/${repetition}`);
+      if (ARMS.every((arm) => slot.arms[arm].scoring !== null)) {
+        const blocks = ARMS.map((arm) => slot.arms[arm].scoring.blockId);
+        if (!blocks.every((block) => isNonEmptyString(block))) problems.missingBlock.push(`${entry.caseId}/${repetition}`);
+        else if (blocks[0] !== blocks[1]) problems.blockMismatch.push(`${entry.caseId}/${repetition}`);
+      }
       slots.push(slot);
     }
   }
   return { slots, problems };
+}
+
+/**
+ * The recorded dispatch order against the declared schedule, from the receipts' start
+ * times of the scoring attempts. Pairing blocks run one after another: every attempt
+ * of a block starts before the first attempt of the next block. Inside a block an
+ * interleaved schedule never starts one arm twice in a row.
+ */
+function scheduleProblems(slots, order) {
+  const byBlock = new Map();
+  for (const slot of slots) {
+    for (const arm of ARMS) {
+      const row = slot.arms[arm].scoring;
+      if (!row || !isNonEmptyString(row.blockId)) continue;
+      const start = timestampMs(row.receipt?.startedAt);
+      if (start === null) return [`${row.attemptId} records no start time, so the dispatch order cannot be checked`];
+      if (!byBlock.has(row.blockId)) byBlock.set(row.blockId, []);
+      byBlock.get(row.blockId).push({ arm, start, inputIndex: row.inputIndex });
+    }
+  }
+  const blocks = [...byBlock.entries()]
+    .map(([blockId, runs]) => {
+      const sorted = runs.sort((left, right) => left.start - right.start || left.inputIndex - right.inputIndex);
+      return { blockId, runs: sorted, first: sorted[0].start, last: sorted.at(-1).start };
+    })
+    .sort((left, right) => left.first - right.first || left.last - right.last);
+  const problems = [];
+  let latest = null;
+  for (const block of blocks) {
+    if (latest !== null && latest.last > block.first)
+      problems.push(`block ${latest.blockId} still starts attempts after block ${block.blockId} began`);
+    if (latest === null || block.last > latest.last) latest = block;
+  }
+  if (order === 'interleaved') {
+    for (const block of blocks) {
+      if (block.runs.some((run, index) => index > 0 && run.arm === block.runs[index - 1].arm)) {
+        problems.push(`block ${block.blockId} starts one arm twice in a row`);
+      }
+    }
+  }
+  return problems;
 }
 
 function sharedBuilds(rows) {
@@ -1368,7 +1632,7 @@ function describeArms(declaration, slots, plan, pricing) {
   return out;
 }
 
-function analyzeContrast({ declaration, validation, rows, excluded, ledger, resume, bootstrap }) {
+function analyzeContrast({ declaration, validation, rows, excluded, ledger, resume, bootstrap, replay, selection }) {
   const facts = { rows: rows.length };
   const pricing = declaration.resources?.pricing ?? null;
   const plan = clusterPlan(declaration);
@@ -1379,7 +1643,9 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const observed = observedIdentityProblems(declaration, contrastRows);
   facts.observedIdentity = observed;
 
-  const exposure = exposureProblems(declaration, ledger, resume);
+  const chain = selectionChainProblems(declaration, selection);
+  facts.selectionChain = chain.problems;
+  const exposure = exposureProblems(declaration, ledger, resume, chain.pin ? [chain.pin] : []);
   facts.exposure = exposure;
 
   const sharedAcrossArms = excluded.filter((entry) => entry.sharedAcrossArms).map((entry) => entry.row.attemptId);
@@ -1388,6 +1654,15 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   const resolved = resolveSlots(declaration, contrastRows, plan);
   facts.slots = resolved.problems;
   const { slots } = resolved;
+  facts.schedule = scheduleProblems(slots, declaration.design.order);
+
+  // -- verification: a completed attempt's receipt, bytes and numbers -------------
+  const verification = new Map();
+  for (const row of contrastRows) verification.set(row.attemptId, verificationProblems(row, declaration, replayRow(replay, row)));
+  const unverified = contrastRows
+    .filter((row) => row.status === 'completed' && verification.get(row.attemptId).length > 0)
+    .map((row) => ({ attemptId: row.attemptId, problems: verification.get(row.attemptId) }));
+  facts.unverified = unverified;
 
   // -- critical misses: every candidate attempt counts, retries included ----------
   const candidateRows = contrastRows.filter((row) => row.arm === 'B');
@@ -1395,7 +1670,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   for (const row of candidateRows) {
     const rules = criticalMisses(row, declaration);
     if (rules.length === 0) continue;
-    (row.receipt ? critical.verified : critical.unverified).push({
+    (verification.get(row.attemptId)?.length === 0 ? critical.verified : critical.unverified).push({
       attemptId: row.attemptId,
       caseId: row.caseId,
       repetition: row.repetition,
@@ -1411,8 +1686,10 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     }
   }
   critical.unrecorded = candidateRows
-    .filter((row) => row.status === 'completed')
-    .map((row) => ({ attemptId: row.attemptId, rules: unknownCriticalCounts(row, declaration) }))
+    .map((row) => ({
+      attemptId: row.attemptId,
+      rules: row.status === 'completed' ? unknownCriticalCounts(row, declaration) : invalidCriticalCounts(row, declaration),
+    }))
     .filter((entry) => entry.rules.length > 0);
   facts.critical = critical;
   facts.malformedRows = excluded.filter((entry) => entry.reason === 'malformed-row').length;
@@ -1438,10 +1715,6 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   }
   facts.nativeRed = nativeRed;
 
-  // -- evidence completeness --------------------------------------------------------
-  const unreceipted = contrastRows.filter((row) => row.status === 'completed' && !row.receipt).map((row) => row.attemptId);
-  facts.unreceipted = unreceipted;
-
   // -- design support ---------------------------------------------------------------
   const unsupported = [];
   const clusterCount = new Set(plan.map((entry) => entry.clusterId)).size;
@@ -1465,8 +1738,20 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     const cost = scopedCost(side.attempts, taskNames, pricing);
     return cost.total;
   };
-  const slotLatency = (side) => (side.attempts.length === 0 ? null : knownSum(side.attempts.map((row) => row.latency?.taskMs ?? null)));
+  const slotLatency = (side) =>
+    side.attempts.length === 0
+      ? null
+      : knownSum(side.attempts.map((row) => (isFiniteNumber(row.latency?.taskMs) && row.latency.taskMs >= 0 ? row.latency.taskMs : null)));
   const needsCost = declaration.scope.objective === 'cost' || isObject(declaration.gates.saving);
+  const classified = new Set([...taskNames, ...(costScope.judge ?? DEFAULT_COST_SCOPE.judge)]);
+  const unclassified = needsCost
+    ? contrastRows.flatMap((row) =>
+        Object.keys(row.cost?.components ?? {})
+          .filter((name) => !classified.has(name))
+          .map((name) => `${row.attemptId}/${name}`),
+      )
+    : [];
+  facts.unclassifiedCost = unclassified;
   const costClusters = clusterValues(declaration, slots, plan, (side) => slotCost(side));
   const costUnknown = needsCost && costClusters.some((cluster) => cluster.A === null || cluster.B === null);
   facts.costUnknown = costUnknown;
@@ -1507,7 +1792,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     if (isObject(gates.latency)) {
       const clusters = clusterValues(declaration, slots, plan, (side) => slotLatency(side));
       if (clusters.some((cluster) => cluster.A === null || cluster.B === null)) {
-        diagnostics.push('latency is unknown for at least one cluster');
+        facts.latencyUnknown = true;
         contrasts.latency = null;
       } else {
         contrasts.latency = clusters.map((cluster) => (1 + gates.latency.maxIncreaseFraction) * cluster.A - cluster.B);
@@ -1554,20 +1839,36 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
     exposure,
     critical,
     nativeRed,
-    unreceipted,
+    unverified,
     resolved,
   });
   return {
     plannedClusters: clusterCount,
     arms,
     identity: {
-      oneFactor: { kind: identity.kind, differing: identity.differing, outsideFactor: identity.outside, unknown: identity.unknown },
+      oneFactor: {
+        kind: identity.kind,
+        setting: identity.setting,
+        differing: identity.differing,
+        outsideFactor: identity.outside,
+        unchanged: identity.unchanged,
+        unknown: identity.unknown,
+      },
       observed,
     },
-    pairs: { slots: slots.length * 2, problems: resolved.problems, unreceipted },
+    pairs: { slots: slots.length * 2, problems: resolved.problems, unverified, schedule: facts.schedule },
+    selection: { problems: facts.selectionChain },
+    verification: Object.fromEntries(verification),
     critical,
     nativeRed,
-    cost: { needed: needsCost, unknown: costUnknown, mixedCurrency, baselineMeanCost: facts.baselineMeanCost ?? null },
+    cost: {
+      needed: needsCost,
+      unknown: costUnknown,
+      unclassified,
+      mixedCurrency,
+      taskExecutionScope: taskNames,
+      baselineMeanCost: facts.baselineMeanCost ?? null,
+    },
     exposure: {
       blockers: exposure.blockers,
       burned: exposure.burned,
@@ -1605,7 +1906,7 @@ function decide({
   exposure,
   critical,
   nativeRed,
-  unreceipted,
+  unverified,
   resolved,
 }) {
   const stage = declaration.stage;
@@ -1625,6 +1926,7 @@ function decide({
     blocked.push(`declaration: ${problem.where} ${problem.message}`);
   if (validation.frozen.declared && validation.frozen.matches === false)
     blocked.push('declaration: frozen.digest does not match the declaration bytes');
+  for (const problem of facts.selectionChain) blocked.push(`selection: ${problem}`);
   if (blocked.length > 0) return result(OUTCOMES.blocked, blocked);
 
   // 2. identity
@@ -1645,10 +1947,12 @@ function decide({
     );
   }
   if (identity.bundled) {
-    return result(OUTCOMES.revisedDesign, [`more than the declared ${identity.kind} factor differs: ${identity.outside.join(', ')}`]);
+    return result(OUTCOMES.revisedDesign, [`more than the declared ${identity.setting} setting differs: ${identity.outside.join(', ')}`]);
   }
-  if (identity.differing.length > 0 && identity.factorUnchanged) {
-    return result(OUTCOMES.revisedDesign, ['the declared factor does not differ between the arms']);
+  if (identity.factorUnchanged) {
+    return result(OUTCOMES.revisedDesign, [
+      `the declared ${identity.setting} setting does not change on every identity it has to: ${identity.unchanged.join(', ')} stays the same`,
+    ]);
   }
 
   // 3. critical miss, whatever else is true
@@ -1669,17 +1973,25 @@ function decide({
   // 5. blocks
   const blocks = [];
   if (critical.unverified.length > 0)
-    blocks.push('a candidate critical miss has no fresh generation receipt, so it can be neither dismissed nor verified');
+    blocks.push(
+      'a candidate critical miss is not verified against its receipt, bytes and scorer, so it can be neither dismissed nor confirmed',
+    );
   if (facts.sharedAcrossArms.length > 0) blocks.push(`rows are shared between the arms: ${facts.sharedAcrossArms.join(', ')}`);
   if (critical.unrecorded.length > 0) {
     blocks.push(
-      `critical counts are not recorded on ${critical.unrecorded.length} candidate attempt(s): ${critical.unrecorded[0].rules.join(', ')}`,
+      `critical counts are not recorded as nonnegative integers on ${critical.unrecorded.length} candidate attempt(s): ${critical.unrecorded.map((entry) => `${entry.attemptId} (${entry.rules.join(', ')})`).join(', ')}`,
     );
   }
   if (facts.conflictingCopies.length > 0) {
     blocks.push(`rows that share an attempt id or a workspace disagree with the first: ${facts.conflictingCopies.join(', ')}`);
   }
-  if (unreceipted.length > 0) blocks.push(`${unreceipted.length} completed attempt(s) have no fresh generation receipt`);
+  if (unverified.length > 0) {
+    blocks.push(
+      `${unverified.length} completed attempt(s) carry claimed evidence the reader could not verify: ${unverified
+        .map((entry) => `${entry.attemptId} (${entry.problems.join('; ')})`)
+        .join(', ')}`,
+    );
+  }
   const { problems } = resolved;
   if (problems.missing.length > 0) blocks.push(`missing pairs: ${problems.missing.join(', ')}`);
   if (problems.duplicate.length > 0) blocks.push(`duplicate scoring attempts: ${problems.duplicate.join(', ')}`);
@@ -1687,10 +1999,20 @@ function decide({
     blocks.push(`${facts.malformedRows} evidence row(s) could not be read, so their charges and results are unknown`);
   if (problems.unplanned.length > 0) blocks.push(`attempts for repetitions the schedule does not plan: ${problems.unplanned.join(', ')}`);
   if (problems.overBudget.length > 0) blocks.push(`attempts exceed design.maxAttempts: ${problems.overBudget.join(', ')}`);
+  if (problems.missingBlock.length > 0) blocks.push(`pairing block not recorded on both arms: ${problems.missingBlock.join(', ')}`);
   if (problems.blockMismatch.length > 0) blocks.push(`pairing blocks differ: ${problems.blockMismatch.join(', ')}`);
+  if (facts.schedule.length > 0) {
+    blocks.push(
+      `the recorded dispatch order does not follow the declared ${declaration.design.order} schedule: ${facts.schedule.join('; ')}`,
+    );
+  }
   if (problems.missingMetric.length > 0) blocks.push(`required metric unmeasured: ${problems.missingMetric.join(', ')}`);
   if (problems.nonFinite.length > 0 || facts.diagnostics.includes('a contrast was not finite')) blocks.push('non-finite data');
   if (facts.costUnknown) blocks.push('required cost is unknown for at least one cluster');
+  if (facts.unclassifiedCost.length > 0) {
+    blocks.push(`charged cost components are in neither the task execution nor the judge scope: ${facts.unclassifiedCost.join(', ')}`);
+  }
+  if (facts.latencyUnknown) blocks.push('the latency gate is declared and task latency is unknown for at least one cluster');
   if (facts.mixedCurrency) blocks.push('attempts carry more than one currency');
   blocks.push(...exposure.blockers, ...exposure.burned.map((entry) => `case ${entry.caseId} ${entry.reason}`));
   if (identity.aa) blocks.push('the arms have identical configuration: this is an A/A control');
@@ -1740,7 +2062,7 @@ function decide({
 // the reader
 // ---------------------------------------------------------------------------
 
-function evidenceIndexRow(row, status, detail) {
+function evidenceIndexRow(row, status, detail, verification) {
   return {
     stage: row.stage,
     arm: row.arm,
@@ -1755,6 +2077,8 @@ function evidenceIndexRow(row, status, detail) {
     origin: row.receipt ? 'fresh' : 'imported-historical',
     receipt: row.receipt,
     receiptProblem: row.receiptProblem,
+    verification: verification === undefined ? 'not-checked' : verification.length === 0 ? 'verified' : 'claimed',
+    verificationProblems: verification ?? [],
     inputSha256: row.inputSha256,
     outputSha256: row.outputSha256,
     native: row.native,
@@ -1781,8 +2105,11 @@ function evidenceIndexRow(row, status, detail) {
  * @param {Array<object>} input.attempts Evidence rows.
  * @param {Array<object>} [input.ledger] The exposure ledger.
  * @param {object} [input.resume] Heads recorded by an earlier report: `{ ledger: {head, length} }`.
+ * @param {{declaration: object, report: object}} [input.selection] For a confirmation: the
+ *   frozen selection declaration and its selection-cleared report, both pinned by digest.
  * @param {Array<object>} [input.judgeCalls] Repeated judgments of identical output.
  * @param {(text: string, row: object) => object} [input.replay] Deterministic scorer over saved bytes.
+ *   It returns `{ metrics, counts }` for a document; attempts are verified against it.
  * @param {Function} [input.bootstrap] The bootstrap implementation (calibrated before use).
  * @returns {{report: object, evidenceIndex: object}}
  */
@@ -1791,6 +2118,7 @@ function readExperimentChecked({
   attempts = [],
   ledger = null,
   resume = null,
+  selection = null,
   judgeCalls = null,
   replay = null,
   bootstrap = pairedClusterBootstrap,
@@ -1874,7 +2202,17 @@ function readExperimentChecked({
     if (validation.pairedProblems.length > 0) {
       report.contrast = { status: 'blocked', decision: blockedDecision(validation) };
     } else {
-      analyzedContrast = analyzeContrast({ declaration: declarationCopy, validation, rows: kept, excluded, ledger, resume, bootstrap });
+      analyzedContrast = analyzeContrast({
+        declaration: declarationCopy,
+        validation,
+        rows: kept,
+        excluded,
+        ledger,
+        resume,
+        bootstrap,
+        replay,
+        selection,
+      });
       report.contrast = { status: 'analyzed', ...analyzedContrast };
     }
   } else {
@@ -2016,7 +2354,14 @@ function finish({ report, kept, excluded, inputCount, declaration = null, analyz
     }
   }
   const evidenceRows = [
-    ...kept.map((row) => evidenceIndexRow(row, countedAs.get(row.attemptId) ?? (row.status === 'completed' ? 'described' : 'unscored'))),
+    ...kept.map((row) =>
+      evidenceIndexRow(
+        row,
+        countedAs.get(row.attemptId) ?? (row.status === 'completed' ? 'described' : 'unscored'),
+        null,
+        analyzedContrast?.verification[row.attemptId],
+      ),
+    ),
     ...excluded.map((entry) => evidenceIndexRow(entry.row, `excluded:${entry.reason}`, entry.detail)),
   ].sort(
     (left, right) => String(left.attemptId ?? '').localeCompare(String(right.attemptId ?? '')) || left.counted.localeCompare(right.counted),
@@ -2192,7 +2537,9 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
 /**
  * The deterministic Test Design scorer as a replay function. Scores saved bytes
  * against the case's fixture set; the result is the signature `eval-test-design.js`
- * would have signed and the projection `test/lib/test-design-result.js` reduces it to.
+ * would have signed, the projection `test/lib/test-design-result.js` reduces it to,
+ * and the metrics and counts the native diagnostics record. Fixture mutations happen
+ * in the workspace, so the bytes alone score them as zero.
  *
  * @param {{groundTruth: object}} options
  * @returns {(text: string, row: object) => object}
@@ -2205,7 +2552,14 @@ function testDesignReplay({ groundTruth }) {
     const read = readDesign({ kind: 'text', value: text });
     if (!read.ok) return { unmeasurable: read.failureClass };
     const scored = scoreRun(set, read.design, categories);
-    return { signature: signatureOf(scored, 0), projection: projectTestDesignResult(text, set, categories) };
+    const { metrics, counts, notApplicable } = metricsFromContributions(numericContributions(testDesignDiagnosticProjection(scored, 0)));
+    return {
+      signature: signatureOf(scored, 0),
+      projection: projectTestDesignResult(text, set, categories),
+      metrics,
+      counts,
+      notApplicable,
+    };
   };
 }
 
@@ -2417,14 +2771,20 @@ function writeOutputs(result, directory) {
 
 /**
  * `analyze` reads an evidence file that points at saved material:
- * `{ declaration, recordedRuns: [{kind: "test-design", dir, arm, stage}], attempts, ledger, resume, judgeCalls }`.
- * Relative paths resolve against the evidence file.
+ * `{ declaration, recordedRuns: [{kind: "test-design", dir, arm, stage}], attempts, ledger, resume, selection, judgeCalls }`,
+ * where a confirmation's `selection` is `{ declaration, report }`, two file paths.
+ * Relative paths resolve against the evidence file. `digest` prints the digest a
+ * confirmation pins for a selection report.
  */
 async function main(argv) {
   const [command, file, ...rest] = argv;
   if (command === 'freeze' && file) {
     const declaration = readJson(file);
     console.log(declarationDigest(declaration));
+    return 0;
+  }
+  if (command === 'digest' && file) {
+    console.log(digestOf(readJson(file)));
     return 0;
   }
   if (command === 'analyze' && file) {
@@ -2450,18 +2810,28 @@ async function main(argv) {
       console.error(`recorded evidence does not match its manifest:\n${integrity.join('\n')}`);
       return 1;
     }
+    if (declaration?.scope?.workflow === 'bmad-tea-test-design') replay ??= testDesignReplay({ groundTruth: await loadGroundTruth() });
+    const selection = isObject(evidence.selection)
+      ? {
+          declaration: readJson(path.resolve(base, evidence.selection.declaration)),
+          report: readJson(path.resolve(base, evidence.selection.report)),
+        }
+      : null;
     const result = readExperiment({
       declaration,
       attempts,
       ledger: evidence.ledger ?? null,
       resume: evidence.resume ?? null,
+      selection,
       judgeCalls: evidence.judgeCalls ?? null,
       replay,
     });
     for (const file of writeOutputs(result, path.resolve(out))) console.log(file);
     return 0;
   }
-  console.error('usage: configuration-experiment.js freeze <declaration.json> | analyze <evidence.json> --out <directory>');
+  console.error(
+    'usage: configuration-experiment.js freeze <declaration.json> | digest <experiment-report.json> | analyze <evidence.json> --out <directory>',
+  );
   return 2;
 }
 
