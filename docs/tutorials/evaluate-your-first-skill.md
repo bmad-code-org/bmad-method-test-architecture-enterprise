@@ -73,34 +73,8 @@ This step needs no coding agent.
 To hold the conversation yourself, see [Optional: Run the Intake Yourself](#optional-run-the-intake-yourself) at the end of this page.
 
 In the conversation behind the fixture, the skill inspected `refund-check` first and recorded what it found: `skill/SKILL.md` activates it, one request enters on standard input, so the target kind is `skill`, reached through the command line with TEA's `tea-skill-runner`.
-Then it asked six questions, one for each family of facts that inspection cannot settle.
-The answers that went into the fixture follow.
-
-**Q: Which decisions matter most?**
-A: "Approving a refund that is exactly at the limit.
-That one is critical.
-Refusing a malformed request matters less."
-
-**Q: Which outputs can we trust as proof?**
-A: "The JSON object the skill prints.
-Read its `status` and `decision`."
-
-**Q: Which commands and resources may run?**
-A: "The skill runner over `skill/`.
-The agent behind it reads only the skill and the request."
-
-**Q: Where does the behavior change?**
-A: "At the limit.
-A refund of 100 against a limit of 100 is eligible.
-A request with no amount and limit is refused."
-
-**Q: What are the time, secret and environment limits?**
-A: "A 30 second ceiling per command, a disposable copy of the project, no secret, no network."
-
-**Q: Which failures have happened or would hurt most?**
-A: "Someone rewords the approval rule and the limit turns exclusive."
-
-The skill recorded the answers in `requirements.md` after the adopter confirmed them:
+Then it asked six questions that inspection cannot settle: which decisions matter most, which outputs count as evidence, which commands and resources may run, where the behavior changes, which time, secret and environment limits apply, and which failures would hurt most.
+It recorded the answers in `requirements.md` after the adopter confirmed them:
 
 ```markdown
 # Requirements statement: refund check
@@ -161,6 +135,9 @@ The registry names the runner by its path inside that project:
   "infrastructureExitCodes": [3, 4, 5, 6]
 }
 ```
+
+The requirements' 30 second ceiling is the agent's turn: the contract's interactions pass `--timeout-ms 30000` to the runner.
+`maxElapsedMs` is the outer budget for the whole command, which adds the runner's [startup and shutdown reserves](/docs/reference/tea-evaluate-cli.md#tea-skill-runner) to that turn.
 
 A runner outside the project, such as a bare `tea-skill-runner` that your install resolves from elsewhere, is read outside what the trial was granted, and `preflight` refuses it with exit 3 and `isolation manifest violation: mount outside allowlist` before any trial.
 Use a `target` path inside `launch.root`, as this fixture does, or declare the external install and bin directories in `systemPaths`.
@@ -338,11 +315,31 @@ You should see:
 The evaluation exercised and caught `P-002`, the one defect-class probe.
 Its catch rate of 1 meets the declared floor of 1.
 The boundary oracle passed on every clean trial and failed on every mutated trial.
+
+Read each probe's verdict and the outcome of the seeded defect before you accept anything:
+
+```bash
+(cd "$PROJECT"/evaluation/runs/*/scores/* &&
+  grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
+  grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)
+```
+
+You should see:
+
+```text
+P-001/evidence-artifact.json:"contractVerdict":"PASS"
+P-002/evidence-artifact.json:"contractVerdict":"PASS"
+P-003/evidence-artifact.json:"contractVerdict":"PASS"
+"state":"caught"
+```
+
+PASS means the score found no evidence fault or coverage gap in this contract.
+It shows that this evaluation catches one boundary defect in one small skill; it does not show the skill is correct for inputs no probe covers.
 See [`score`](/docs/reference/tea-evaluate-cli.md#score).
 
 ## Step 8: Compare and Accept a Baseline
 
-A baseline is the accepted record of a good run.
+A baseline preserves a measurement you reviewed; accepting it does not certify the skill or the evaluation.
 Later runs are compared with it, so a regression in how well the evaluation catches defects shows up as a difference.
 Compare the run with the baseline:
 
@@ -369,7 +366,7 @@ You should see:
 tea-evaluate compare: accepted: run … is the baseline, … file(s) under baseline/
 ```
 
-`--accept` replaces `baseline/` with a byte-identical snapshot of the run.
+`--accept` replaces `baseline/` with the files a later replay needs: the run's replay inputs, its qualification evidence and its latest score, with a manifest of their digests.
 In a real project the `baseline/` folder is committed, and a reviewer reads the pull request that changes it.
 See [`compare`](/docs/reference/tea-evaluate-cli.md#compare).
 
@@ -401,13 +398,14 @@ Each line is one check:
 - `replay` replays the baseline through eval-quality's `preflight` and `score` and compares the result with the baseline byte for byte, so a baseline that fails to reproduce is rejected here.
 
 Exit 0 means no check blocks the pull request.
+This rechecks the saved evidence; it does not run a fresh evaluation of changed skill code.
 In a pipeline, `bmad-tea-framework`'s CI setup renders one `tea-evaluate ci` step per tier from this plan.
 See [`ci`](/docs/reference/tea-evaluate-cli.md#ci).
 
 ## What You Learned
 
 The seeded edit turned the inclusive refund limit into an exclusive one.
-The evaluation caught it, preserved an accepted run, and replayed that evidence through the PR tier.
+The evaluation caught it, you read the verdicts before accepting the run as the baseline, and the PR tier replayed that saved evidence.
 
 ## Optional: Run the Intake Yourself
 

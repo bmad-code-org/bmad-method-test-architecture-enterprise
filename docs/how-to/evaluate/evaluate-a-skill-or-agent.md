@@ -1,6 +1,6 @@
 ---
 title: 'How to Evaluate a Skill or Agent with TEA'
-description: Prove that a skill or an agent behaves as you require, from the Evaluate conversation to a scored run
+description: Check a skill or an agent against requirements you confirm, from the Evaluate conversation to a scored run
 ---
 
 # How to Evaluate a Skill or Agent with TEA
@@ -16,8 +16,8 @@ This guide applies that process to your own target.
 
 ## When to Use This
 
-- You wrote a skill and want proof that it follows its own instructions
-- You run an agent from a command line and want proof that it makes the right decisions
+- You wrote a skill and want evidence that it follows its own instructions
+- You run an agent from a command line and want checks on the decisions it makes
 - You changed a prompt or a rule file and want to know whether the behavior moved
 
 ## Prerequisites
@@ -88,7 +88,9 @@ app/
       corpus-index.json
 ```
 
-Evaluations with seeded defects add `mutations/`.
+The example is a minimal runner smoke check: one clean control and no seeded defect.
+A passed control shows the runner works; it does not show the evaluation catches a defect.
+Evaluations with seeded defects add `mutations/`, and the [tutorial](/docs/tutorials/evaluate-your-first-skill.md) shows a complete clean and mutated run.
 
 ### 2. Read the Target Entry the Skill Wrote
 
@@ -143,7 +145,8 @@ An agent target registers the agent's own command, which must print what the ora
 The registry is a default-deny list.
 A request for an executable, interface or tool that no entry carries is denied before anything starts.
 
-The examples above come from repository fixtures that call no model.
+The examples above come from repository fixtures whose stand-in agents call no model.
+The skill entry's `egress` shows real-model wiring, which the run records.
 For a real agent, three entries change:
 
 - `environmentKeys` lists the credential variable names the agent needs.
@@ -236,14 +239,14 @@ Read the verdict and outcome states from the run's newest score:
 ```
 
 The clean control reads `passed-clean-control`.
-A folder with a seeded defect also shows that defect as `caught`.
+In a folder with a seeded defect, check that the defect reads `caught`: seeding one does not guarantee the checks catch it, and a defect they miss reads `missed`.
 The CONCERNS verdict lists coverage gaps that still need probes.
 [How to Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md) shows how to close them.
 
 Then read what the run executed under:
 
 ```bash
-grep -A8 '"confinement"' evals/stub-skill-preflight/runs/<runId>/run.json
+(cd evals/stub-skill-preflight/runs && grep -A8 '"confinement"' "$(command ls | tail -n 1)/run.json")
 ```
 
 ```text
