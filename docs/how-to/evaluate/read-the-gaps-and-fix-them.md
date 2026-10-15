@@ -119,7 +119,7 @@ Floor decisions do not change `score`'s exit code. If the aggregate pointer is `
 
 After repairing or explicitly declining development gaps with reasons, review the evidence and floors. Confirm readiness before held-out execution.
 
-During the repair loop, read held-out results only through `runs/<runId>/gap-view.json`:
+During the repair loop, each held-out row of `gap-view.json` reads as follows:
 
 - `caught: true` records a detection for that probe under the engine's reduction rules.
 - `caught: false` calls for a new development probe of the same class, then diagnosis there.

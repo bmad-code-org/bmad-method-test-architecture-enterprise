@@ -12519,6 +12519,23 @@ function checkConfinementReference() {
       section.includes('Every Linux trial is `complete`.'),
     "the reference's confinement section does not say that `observedMountsChannel` marks each audited trial complete or lossy, that the summary names each lossy trial and that a Linux trial is complete",
   );
+  // The confinement page's opening carries the limits its later sections state, so a reader who stops there gets no
+  // stronger guarantee than the runtime gives: the opt-out and records scope, the writable private directories, Linux's
+  // audited reads, the lossy macOS log and the host channels left open.
+  const opening = `${sectionOf(mechanism, '## What confinement keeps apart') ?? ''}\n${sectionOf(mechanism, '## What confinement does not guarantee') ?? ''}`;
+  check(
+    opening.includes('`"confinement": false`') &&
+      opening.includes("A `records` evaluator's trials run in your harness") &&
+      opening.includes('private temp, port and home directories') &&
+      opening.includes('On Linux, the read-only view of `/` lets such a read through') &&
+      opening.includes('an empty list of observed mounts means no report arrived') &&
+      opening.includes('Mach services') &&
+      opening.includes('a socket bound later stays reachable') &&
+      !/every other place it opens is recorded|can write nothing outside it|Four things stay apart in every run|evaluator launches no target/.test(
+        mechanism,
+      ),
+    "the confinement page's opening does not bound its guarantees: the opt-out and records scope, the writable private directories, Linux's audited reads, the lossy macOS log and the host channels left open",
+  );
 }
 
 /** Free kilobytes on the volume that holds `directory`, as `df -Pk` reports them after a `sync`. */
@@ -19312,6 +19329,19 @@ function checkBridgeReference() {
     [
       'macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.',
       ['the Seatbelt network and Mach services', 'the egress field'],
+    ],
+    // The confinement page's opening states the host-service limits its later sections detail.
+    [
+      'The services your machine serves on path-based Unix sockets, such as the container engine or a key agent, are closed to a confined target.',
+      ['the path socket route', 'the path socket units', 'the Seatbelt path socket units', 'the Seatbelt path socket route'],
+    ],
+    [
+      "Seatbelt refuses the host's path-based Unix sockets, but the Mach services of macOS stay open, and macOS does not enforce `egress`.",
+      ['the Seatbelt path socket units', 'the Seatbelt network and Mach services', 'the egress field'],
+    ],
+    [
+      'Bubblewrap masks the sockets it finds when a call starts, so a socket bound later stays reachable, and the audit lists a connection to it.',
+      ['the path socket route', 'the path socket units', 'the socket connection route', 'the socket connection run'],
     ],
     [
       "The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and the hosts its entry lists through the proxy (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)), and a macOS target keeps the host's network.",

@@ -16,11 +16,12 @@
  *    `compare --accept`, `ci --tier pr`) or runs a bare `tea-evaluate` that no checkout provides,
  *  * the page quotes `SKILL.md`, `requirements.md` or the registry entry of `evaluation.json` in a form the fixture no longer holds,
  *  * a command that runs the evaluation shows no key lines,
+ *  * the page accepts the baseline before a step reads the probes' `contractVerdict`,
  *  * the page drops the sentence that no coding agent is needed, invokes the Evaluate skill outside its one marked `## Optional:` section,
  *    or leaves that section without its prerequisites or its link to the how-to.
  *
  * Revert cases run in this file: a flag changed in a command, a subcommand misspelled, a key line changed, a key line the
- * output lacks, a key block relabelled or emptied, a page that drops the `ci` command, a page with no command, a quoted
+ * output lacks, a key block relabelled or emptied, the verdicts never read before acceptance, a page that drops the `ci` command, a page with no command, a quoted
  * file or registry entry edited, and the framing of intake (the skill invoked in a required step, the no-agent sentence dropped, the optional route unmarked or unlinked). Each must make the check fail.
  *
  * The run shares `/tmp/tea-evaluate-p<uid>` with every other Evaluate suite, so it must not run beside one.
@@ -130,6 +131,10 @@ function main() {
         name: 'a page that drops the ci command',
         run: () =>
           pageProblems(tutorialSteps(edited(page, 'node cli/evaluate.js ci --evaluation "$PROJECT/evaluation" --tier pr', 'echo skipped'))),
+      },
+      {
+        name: 'the verdicts read only after the baseline is accepted',
+        run: () => pageProblems(tutorialSteps(edited(page, 'grep -o \'"contractVerdict"', 'grep -o \'"verdictBasis"'))),
       },
       {
         name: 'a key block relabelled so the parser no longer reads it',

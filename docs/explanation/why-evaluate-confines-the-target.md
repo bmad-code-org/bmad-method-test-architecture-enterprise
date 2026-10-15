@@ -5,25 +5,50 @@ description: Why Evaluate runs the target of an evaluation under file-system con
 
 # Why Evaluate Confines the Target
 
-Evaluate runs target code in a confined disposable workspace and audits access outside its grants.
-This keeps the target from reading the evaluation or rewriting its evidence.
-A disposable directory alone leaves the rest of the host accessible.
+Evaluate runs each target it launches in a disposable workspace under the host's sandbox and audits what the target opens outside its grants.
+This keeps the target from reading the evaluation or rewriting its evidence, which a disposable directory alone cannot do.
 
 What you configure (the host requirements, the opt-out, the `egress` and `systemPaths` fields of a registry entry, the private home and the login of an agent) is in the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-confinement.md#file-system-confinement).
 How the parts of Evaluate fit together is in [How Evaluate Works](/docs/explanation/how-evaluate-works.md).
 
 ## What confinement keeps apart
 
-Four things stay apart in every run.
+`preflight` and `run` confine every target process they start, one the target leaves running included, unless `evaluation.json` sets `"confinement": false`.
+Seatbelt supplies the confinement on macOS and Bubblewrap on Linux.
+A host that cannot confine or cannot observe, Windows among them, stops the command with exit 12 and names the reason; opting out runs there and removes every limit on the target, while the run-directory and score checks below still apply.
+A `records` evaluator's trials run in your harness, outside these limits; its `preflight` and qualification still launch the target confined.
 
-- The target and your repository: the target works in a disposable checkout and can write nothing outside it, so an evaluation leaves your working tree, your branches and your hooks as they were.
+In a confined run, four things stay apart.
+
+- The target and your repository: the target writes its disposable checkout and the private temp, port and home directories the runtime hands each call, and nothing else, so your working tree, branches and hooks stay as they were.
 - The target and the evaluation folder: the contract, the probes, the mutations and the evaluator are closed to it, so it cannot read the test it is taking or learn which defect a mutation plants.
-- The target and the evidence: the run directory, the scores and the baseline are written by the runtime and checked before anything reads them.
-- The target and your machine: the places it may use beyond its workspace are a short list you configure, and every other place it opens is recorded.
+- The target and the evidence: the runtime writes the run directory, the scores and the baseline, and checks them before anything reads them.
+- The target and your machine: it reads its workspace, its private directories, the system runtime roots and the `systemPaths` you declare.
+  On macOS, Seatbelt refuses every other file read.
+  On Linux, the read-only view of `/` lets such a read through, and the audit lists it, so `score` exits 3.
 
-Seatbelt on macOS and Bubblewrap on Linux supply the confinement.
-The audit reads through the same mechanism, because a confinement that cannot be observed would turn an empty list of observed mounts into false evidence.
-A host that cannot confine or cannot observe stops the command with exit 12 and names the reason.
+## What confinement does not guarantee
+
+- A complete record on macOS.
+  The kernel's log drops reports, most of all under load, so an empty list of observed mounts means no report arrived.
+  The kernel still refused the read.
+  `run.json` marks a trial `lossy` when the audit detects a loss, and a trial marked `complete` can still have lost a report; Linux's trace holds every traced syscall.
+- Every host service closed.
+  Seatbelt refuses the host's path-based Unix sockets, but the Mach services of macOS stay open, and macOS does not enforce `egress`.
+  Bubblewrap masks the sockets it finds when a call starts, so a socket bound later stays reachable, and the audit lists a connection to it.
+- Limits on the evaluation layer.
+  A `command` evaluator, a sealed-brief agent and the rubric judge are not confined as a target is; [Host services](#host-services) lists the limits they get.
+
+## When isolation fails
+
+- Exit 12 from `preflight` or `run` that names the sandbox or its observer: the host cannot confine or observe.
+- Exit 12 that names a file of the run directory or a score input: the runtime could not write its evidence, or a process changed what it wrote.
+- Exit 3 with `mount outside allowlist`: the audit saw the target reach a path outside its grants.
+  Review the path before you grant it through `systemPaths`.
+- A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list leaves the trial unproven.
+
+The sections below show how the runtime enforces each part, for readers who audit or maintain it: [the target's git](#the-targets-view-of-your-repository), [call directories](#call-directories), [the audit](#what-the-audit-watches), [host services](#host-services), [the bridge's admission token](#the-bridges-admission-token), [the run directory](#the-run-directory) and [score integrity](#score-integrity).
+[How the skill runner supervises its agent](#how-the-skill-runner-supervises-its-agent) covers the runner's process lifecycle.
 
 ## The target's view of your repository
 
@@ -122,7 +147,7 @@ A run whose observer fails (the log stream ended, or a read the runtime made did
 
 ## Host services
 
-The services your machine runs for you, such as the container engine or a key agent, are closed to a confined target.
+The services your machine serves on path-based Unix sockets, such as the container engine or a key agent, are closed to a confined target.
 A call to one is refused: under Bubblewrap the runtime masks each of them when a call starts and the call answers `ECONNREFUSED`, and under Seatbelt the profile answers `EPERM`.
 The audit lists only a connection the kernel did not refuse, so a refused call leaves no entry.
 macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.

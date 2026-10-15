@@ -61,10 +61,16 @@ Confirm that the selected program, model or records folder is the one you intend
 A `command` evaluator that wraps a framework follows [How to Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md).
 [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer) lists the fields for each kind.
 
-Rerun `preflight` after the change, then run and score one clean control and one seeded defect.
-Rely on the layer once eval-quality reads the control as `passed-clean-control` and the defect as `caught`.
+### 3. Route the Rubric by Evaluator Kind
 
-### 3. Review the Rubric Judge
+Who scores a rubric depends on the kind, and `check` refuses a `judge` block that would never run:
+
+- **No rubric in the contract:** add no `judge` block and skip to step 7.
+- **`deterministic` with a rubric:** TeA's separate judge scores it. Continue with step 4.
+- **`command` or `sealed-brief-agent` with a rubric:** your evaluator scores the rubric itself. Omit `judge` from `evaluation.json` and from `policy/evaluator-conditions.json`, skip the judge settings in step 4 and label examples as in step 5. A sealed-brief agent must also pass its own [qualification](/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent) before trials, a gate separate from calibration.
+- **`records` with a rubric:** your harness runs its scorer over the labeled examples and writes `calibration-judgments.json` beside its records. TeA checks the bindings and computes agreement from the harness's answers; the scorer runs only in your harness. Omit `judge` as for `command`, skip the judge settings in step 4 and label examples as in step 5. A `partitionPlan` beside a `records` rubric is refused. [Calibrate any rubric](/docs/how-to/evaluate/bring-an-existing-suite.md#5-calibrate-any-rubric) covers the harness side.
+
+### 4. Review the Rubric Judge
 
 A contract scores a judgment with a rubric.
 Each criterion names the evidence it reads, and each scale level carries an anchor that says what earns it:
@@ -95,7 +101,7 @@ Use an immutable model ID when the provider offers one, so later runs use the sa
 The skill records that ID with the evaluation and checks that the recorded value matches the model it runs.
 [The rubric judge](/docs/reference/tea-evaluate-evaluators.md#the-rubric-judge) explains the configuration.
 
-### 4. Label the Calibration Examples
+### 5. Label the Calibration Examples
 
 You label responses with the level each deserves in `policy/judge-calibration.json`.
 Write at least one example for every anchored level of every criterion, including the failing ones:
@@ -111,15 +117,15 @@ Write at least one example for every anchored level of every criterion, includin
 }
 ```
 
-The judge receives each response without its `expectedLevel`.
+The scorer receives each response without its `expectedLevel`.
 
-### 5. Run and Read the Calibration
+### 6. Run and Read the Calibration
 
 ```bash
 npm exec --prefix evals -- tea-evaluate run --evaluation evals/verdict-mutation
 ```
 
-`run` sends every example through the judge before it records a single trial.
+`run` scores every example before it records a single trial: through TeA's judge for `deterministic`, through your evaluator for `command` and `sealed-brief-agent`, and from your harness's judgments for `records`.
 When agreement falls below your minimum, `run` stops with exit 11:
 
 ```text
@@ -137,20 +143,26 @@ Each one has a cause you can repair:
   Ask the skill to sharpen them, then rerun.
 - A label is wrong.
   Correct the label with the skill and rerun.
-- The judge model is too weak for the scale.
-  Choose a stronger model and ask the skill to update the recorded ID before rerunning.
+- The scorer is too weak for the scale.
+  Choose a stronger model or scorer and ask the skill to update the recorded ID before rerunning.
 
+`minimumAgreement` is the share of labels the scorer must match, so it sets how much disagreement you accept, a separate decision from the labels.
+Do not lower it to pass calibration; if you change it, record why that much disagreement is acceptable for this use.
 The calibration file's digest and the minimum agreement join the evaluator configuration, so changing either changes the scoring version.
-A lower `minimumAgreement` accepts a judge that disagrees more often, so lower it only after you decide the labels were too strict.
 
-When the judge meets the minimum, `run` continues into the trials.
+When the scorer meets the minimum, `run` continues into the trials.
+
+### 7. Verify the Layer
+
+Rerun `preflight` after the change, then run and score one clean control and one seeded defect.
+Rely on the layer once eval-quality reads the control as `passed-clean-control` and the defect as `caught`.
 
 ## How You Know It Worked
 
 - `check` prints `has no authoring defects` for the chosen kind
-- `run` passes calibration and exits 0
-- `judge-calibration.json` in the run folder shows an agreement at or above your minimum for every criterion
 - The known pass reads `passed-clean-control` and the known defect reads `caught` after `score`
+- With a rubric: `run` passes calibration, and `judge-calibration.json` in the run folder shows an agreement at or above your minimum for every criterion
+- With a sealed-brief agent: `run` qualifies the evaluator before its trials
 
 ## Related Guides
 

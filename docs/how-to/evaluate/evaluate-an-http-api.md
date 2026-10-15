@@ -18,7 +18,7 @@ A stdio tool server follows [How to Evaluate an MCP Tool Server with TEA](/docs/
 
 ## When to Use This
 
-- You ship an HTTP service and want proof that its endpoints answer correctly
+- You ship an HTTP service and want checks that its endpoints answer as your requirements say
 - An AI feature sits behind an endpoint and you want its answers checked
 - You changed a rule file or setting and want to know whether the responses moved
 
@@ -113,11 +113,12 @@ It exits 0 when all 19 assertions pass.
 The host must hold the variable that `auth` names.
 Confirm that `GRADER_TOKEN` is available to the run; the agent should check its presence without printing its value.
 
-Export `GRADER_TOKEN` from wherever you keep the credential, then confirm it is set and check the folder:
+Make `GRADER_TOKEN` available through your secret manager or existing shell environment, so the value never appears in a typed command or your shell history.
+Then confirm it is set without printing it, and check the folder:
 
 ```bash
-[ -n "$GRADER_TOKEN" ] || echo 'GRADER_TOKEN is not set' >&2
-npm exec --prefix evals -- tea-evaluate check --evaluation evals/grader-http-service
+[ -n "$GRADER_TOKEN" ] || { echo 'GRADER_TOKEN is not set' >&2; false; } &&
+  npm exec --prefix evals -- tea-evaluate check --evaluation evals/grader-http-service
 ```
 
 ```text
@@ -128,6 +129,8 @@ The port has passed its conformance check, the credential is available, and `che
 Next, preflight the service and score its trials.
 
 ### 5. Preflight, Run and Score
+
+Run these one at a time and stop on a nonzero exit:
 
 ```bash
 npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/grader-http-service

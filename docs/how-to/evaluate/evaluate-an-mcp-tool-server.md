@@ -19,7 +19,7 @@ The skill writes the probes and contract.
 
 ## When to Use This
 
-- You built an MCP server and want proof that each tool returns the right result
+- You built an MCP server and want checks that each tool returns the result your requirements name
 - You changed a tool's rules and want to know whether its answers moved
 - An agent depends on the server and you want its tool results checked before you evaluate the agent
 

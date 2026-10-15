@@ -99,8 +99,9 @@ function invocationsOf(command) {
 
 /**
  * The problems of a page's shape: it runs commands, each step's expected lines are non-empty where given, every
- * `tea-evaluate` invocation of the walkthrough appears in order, and each command runs through `node cli/evaluate.js`, the
- * real command line over the installed eval-quality.
+ * `tea-evaluate` invocation of the walkthrough appears in order, a step reads the probes' `contractVerdict` before
+ * `compare --accept`, so the reader sees the verdicts before preserving the run, and each command runs through
+ * `node cli/evaluate.js`, the real command line over the installed eval-quality.
  *
  * @param {{command: string, expected: string[] | null, line: number}[]} steps
  */
@@ -114,6 +115,10 @@ function pageProblems(steps) {
     if (at === -1) problems.push(`the page runs no "node cli/evaluate.js ${name}" after the invocations before it`);
     else from = at + 1;
   }
+  const verdicts = steps.findIndex((step) => step.command.includes('contractVerdict'));
+  const accept = steps.findIndex((step) => invocationsOf(step.command).includes('compare --accept'));
+  if (accept !== -1 && (verdicts === -1 || verdicts > accept))
+    problems.push('the page reads no probe `contractVerdict` before `compare --accept`, so the reader accepts a run unread');
   for (const step of steps) {
     if (step.expected !== null && step.expected.length === 0)
       problems.push(`line ${step.line}: the \`text\` block under the command holds no key line`);
