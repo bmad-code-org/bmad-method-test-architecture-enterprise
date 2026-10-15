@@ -23,7 +23,7 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 
 :::caution[Exit 0 does not always mean the target passed]
 
-- `score` exits 0 for PASS, WAIVED and CONCERNS alike, and its summary names only the exit; each probe's evidence artifact under `scores/` says which, in `contractVerdict`.
+- `score` exits 0 for PASS, WAIVED and CONCERNS alike, and its summary names only the exit; each probe's evidence artifact under `scores/` says which, in `contractVerdict`, or in `productionVerdict` for the production-mode records a `records` evaluator imports.
 - `compare` exits 0 for every comparison outcome: `compared` (whatever the relation, a run weaker than the baseline included), `first-run` and `refused`. Read its lines for the outcome.
 - `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL), and after an exit 3 (Invalid) whenever every probe still has its evidence artifact. Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
 - Exits 2 to 5 carry eval-quality's verdicts and faults, apart from `ci`'s 2 for a breached strength floor on `release`; `ci` adds 1 for a gate's policy violation, and 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.

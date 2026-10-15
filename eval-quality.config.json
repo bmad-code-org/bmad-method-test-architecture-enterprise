@@ -1225,6 +1225,10 @@
           "reason": "a field of an eval-quality evidence artifact that holds its CONCERNS or PASS rung"
         },
         {
+          "token": "productionVerdict",
+          "reason": "the field of an eval-quality evidence artifact that holds the verdict of production-mode records"
+        },
+        {
           "token": "structuredContent",
           "reason": "a field of the MCP protocol's tool result, not a TEA declaration"
         },
