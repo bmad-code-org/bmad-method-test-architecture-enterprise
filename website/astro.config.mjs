@@ -216,6 +216,8 @@ export default defineConfig({
             { label: 'tea-test-review CLI', slug: 'reference/tea-test-review-cli' },
             { label: 'tea-framework CLI', slug: 'reference/tea-framework-cli' },
             { label: 'tea-trace CLI', slug: 'reference/tea-trace-cli' },
+            { label: 'tea-nfr CLI', slug: 'reference/tea-nfr-cli' },
+            { label: 'tea-test-design CLI', slug: 'reference/tea-test-design-cli' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
           ],
         },

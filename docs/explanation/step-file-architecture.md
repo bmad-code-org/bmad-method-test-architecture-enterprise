@@ -122,7 +122,8 @@ See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how 
 ## How Skills Split Into Workers
 
 Three skills ship dedicated worker step files.
-The setup, design, and trace skills resolve execution mode inside a step and run their work in order.
+The design and trace skills resolve execution mode inside a step and run their work in order.
+Setup does the same until the stack, framework, and test commands are agreed.
 `teach-me-testing` is a sequential, session-based learning flow.
 `evaluate` uses its own authoring stages and the `tea-evaluate` runtime.
 
@@ -133,11 +134,12 @@ The setup, design, and trace skills resolve execution mode inside a step and run
 | `test-review`        | Parallel validation            | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
 | `nfr-assess`         | Parallel validation            | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
 | `framework`          | Sequential or parallel with CI | Scaffold work units; framework and CI generation for both scope           | Validates outputs against the agreed setup contract         |
-| `framework` CI phase | Sequential + probe             | Pipeline generation                                                       | One deterministic pipeline artifact                         |
-| `test-design`        | Sequential + probe             | Output generation                                                         | One deterministic design artifact                           |
+| `framework` CI phase | Sequential + probe             | Pipeline generation                                                       | A validated pipeline artifact                               |
+| `test-design`        | Sequential + probe             | Sequential output generation (system level: two documents plus a handoff) | Validated design artifacts                                  |
 | `trace`              | Two-phase, ordered             | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
 
-For both setup scopes, framework and CI workers can run in parallel after the stack, framework, and test commands are agreed.
+For both setup scopes, framework and CI workers can run in parallel after that agreement.
+The contracts and validation are stable; the generated content is model-authored and varies between runs.
 
 Workers are isolated.
 They exchange nothing directly and communicate only through the structured outputs that the aggregation step validates.

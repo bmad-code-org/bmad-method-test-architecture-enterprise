@@ -169,18 +169,21 @@ Setup: [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwri
 `interceptNetworkCall` narrows by any combination of method, URL glob, and observed status.
 
 ```typescript
+import { expect } from '@playwright/test';
 import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
 
-// Any response
-const anyCall = interceptNetworkCall({ url: '**' });
+// `url: '**'` matches any response; `url: '**/api/users/123'` matches one endpoint.
+// Both use the call shape below: register first, act, then await.
+test('method plus endpoint, asserting the status', async ({ page, interceptNetworkCall }) => {
+  const createCall = interceptNetworkCall({ method: 'POST', url: '**/api/users' });
 
-// Specific endpoint
-const userCall = interceptNetworkCall({ url: '**/api/users/123' });
+  await page.goto('/users/new');
+  await page.getByRole('button', { name: 'Create user' }).click();
 
-// Method plus endpoint; assert the expected status
-const createCall = interceptNetworkCall({ method: 'POST', url: '**/api/users' });
-const { status, responseJson } = await createCall;
-expect(status).toBe(201);
+  const { status, responseJson } = await createCall;
+  expect(status).toBe(201);
+  expect(responseJson).toHaveProperty('id');
+});
 
 // Multiple calls from one navigation: intercept both, then navigate
 test('multiple responses', async ({ page, interceptNetworkCall }) => {
@@ -196,7 +199,7 @@ test('multiple responses', async ({ page, interceptNetworkCall }) => {
 });
 ```
 
-The vanilla equivalents, for projects not using the utilities:
+The vanilla equivalents, for projects not using the utilities, are separate alternatives; register each promise before the action that triggers the request:
 
 ```typescript
 // Any successful response

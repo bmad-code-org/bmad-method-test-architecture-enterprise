@@ -51,6 +51,10 @@ const registeredSkills = TOML.parse(fs.readFileSync(path.join(skillsRoot, 'bmod-
 if (!Array.isArray(registeredSkills) || registeredSkills.length === 0) refuse('the TEA module registers no skills');
 if (new Set(registeredSkills).size !== registeredSkills.length) refuse('the TEA module registers duplicate skills');
 const workflows = registeredSkills.filter((skill) => skill !== 'bmad-tea');
+// The module settings `bmad setup tea` asks, which the migration keeps.
+const setupQuestions = TOML.parse(fs.readFileSync(path.join(skillsRoot, 'bmod-tea', 'bmod.toml'), 'utf8')).bmod.config_questions;
+if (!Array.isArray(setupQuestions) || setupQuestions.length === 0) refuse('the TEA module asks no setup questions');
+exports.SETUP_KEY_COUNT = setupQuestions.length;
 exports.CANONICAL_WORKFLOW_COUNT = workflows.length;
 exports.WORKFLOW_COMMAND_COUNT = workflows.length;
 

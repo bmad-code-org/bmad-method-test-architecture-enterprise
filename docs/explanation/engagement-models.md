@@ -16,6 +16,9 @@ There are five engagement models; pick one intentionally and change it later if 
 | 4   | TEA Integrated (Greenfield) | Yes                  | 6           | New projects                     |
 | 5   | TEA Integrated (Brownfield) | Yes                  | 6           | Existing codebases               |
 
+"BMad Method required: No" means no BMad planning lifecycle is required.
+Setup still uses BMad core's `bmad` and `bmod-core-tools` skills.
+
 The Enterprise track adds compliance, security, and audit steps to either Integrated model.
 See [Enterprise track deltas](#enterprise-track-deltas).
 
@@ -47,6 +50,8 @@ Run TEA skills standalone, without BMad Method planning.
 
 Run `framework` if you want TEA to scaffold the harness, the CI pipeline, or both. The agent's `CI` menu code selects CI scope.
 Both work best after the stack and architecture are decided.
+Browser scaffolds apply to browser projects; other stacks use their own runner, listed in [Execution Targets](/docs/reference/execution-targets.md).
+`evaluate` fits any existing skill, agent, or API and needs no earlier `automate` run.
 
 **You bring:** coverage oracle inputs (requirements, specs, external system-of-record pointers, or an analyzable source tree), a development environment, and project context.
 

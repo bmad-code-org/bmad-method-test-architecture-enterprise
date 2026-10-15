@@ -30,7 +30,8 @@ The agent and every skill find it as a sibling skill folder: step frontmatter de
 If `bmod-tea` is not installed, the skill says so and offers to install it.
 
 A skill reads the manifest, selects the fragments its task needs, and loads only those.
-Running automation in red mode through `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and can skip unrelated fragments such as `contract-testing.md`, `feature-flags.md`, and `file-utils.md`.
+Running Automate red mode on an authentication feature might pull `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and can skip unrelated fragments such as `contract-testing.md`, `feature-flags.md`, and `file-utils.md`.
+The set is an illustration; each run selects from the index by its task, tags, and tier.
 The selected fragments supply a shared reference across runs.
 Model outputs still need review and execution.
 
@@ -40,7 +41,7 @@ flowchart TD
     User([User: automate red]) --> Workflow[TEA Skill<br/>Triggered]
     Workflow --> Read[Read Manifest<br/>tea-index.csv]
 
-    Read --> Identify{Identify Relevant<br/>Fragments for ATDD}
+    Read --> Identify{Identify Relevant<br/>Fragments for Automate red}
 
     Identify -->|Needed| L1[✓ test-quality.md]
     Identify -->|Needed| L2[✓ network-first.md]
@@ -99,7 +100,9 @@ Every fragment follows the same shape:
 `test-quality.md`, `network-first.md`, and `api-request.md` give Automate red mode a common API testing pattern:
 
 ```typescript
+import { expect } from '@playwright/test';
 import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { UsersSchema } from './schemas'; // your own schema (JSON Schema, Zod, YAML, or OpenAPI)
 
 test('should fetch users', async ({ apiRequest }) => {
   const { status, body } = await apiRequest({
@@ -113,12 +116,12 @@ test('should fetch users', async ({ apiRequest }) => {
 ```
 
 When Playwright Utils is enabled and installed, TEA uses `apiRequest` with the `{ status, body }` result shape.
-This example adds schema validation.
+The schema import is yours to supply.
 
 The `recurse.md` fragment supplies a bounded polling pattern for background jobs:
 
 ```typescript
-import { mergeTests } from '@playwright/test';
+import { expect, mergeTests } from '@playwright/test';
 import { test as apiRequestTest } from '@seontechnologies/playwright-utils/api-request/fixtures';
 import { test as recurseTest } from '@seontechnologies/playwright-utils/recurse/fixtures';
 

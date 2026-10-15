@@ -37,6 +37,7 @@
   "test:docs-build-names": 0.2,
   "test:docs-evaluate-sidebar": 0.2,
   "test:docs-gap-reader": 0.3,
+  "test:docs-general-claims": 0.3,
   "test:docs-mermaid": 65.5,
   "test:docs-tutorial": 38.5,
   "test:enforce-hook": 0.2,

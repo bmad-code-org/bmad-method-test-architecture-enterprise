@@ -32,6 +32,7 @@ See [Configuration](/reference/configuration) for the settings and output folder
 Run `/bmad-tea-test-design` in Claude Code, Cursor, or Windsurf, or `$bmad-tea-test-design` in Codex.
 For the agent menu, load `/bmad-tea` or `$bmad-tea` and type `TD`.
 Each skill also works directly in a fresh session.
+Test Design asks whether to plan the system or one epic, then writes its plan to `test-design/` under your `test_artifacts` folder.
 
 ## Choose a starting point
 
@@ -59,16 +60,11 @@ See [Commands](/reference/commands) for every invocation and menu code.
 - [NFR](/how-to/workflows/run-nfr-assess): Audit implemented NFR evidence.
 - [Trace](/how-to/workflows/run-trace): Map requirements to tests and decide a release gate.
 - [Teach Me Testing](/how-to/workflows/teach-me-testing): Learn testing through seven sessions.
+- [Evaluate](/tutorials/evaluate-your-first-skill): Build and run a behavioral evaluation.
 
 <a id="additional-skills"></a>
 
-### Evaluate
-
-[Trace](/how-to/workflows/run-trace) appears in the Skills list above.
-
-- [Evaluate](/tutorials/evaluate-your-first-skill) builds and runs a behavioral evaluation.
-
-[Automate red mode](/how-to/workflows/run-automate#red-mode) handles acceptance tests before implementation; the agent's `AT` code selects it. [Framework CI setup](/how-to/workflows/setup-test-framework#ci-setup) handles pipeline setup; the agent's `CI` code selects it. Existing customizations and progress remain usable.
+The agent's `AT` code selects [Automate red mode](/how-to/workflows/run-automate#red-mode) for acceptance tests before implementation, and `CI` selects [Framework CI setup](/how-to/workflows/setup-test-framework#ci-setup) for pipelines.
 
 The agent menu's `GATE` intent routes you through test review, NFR evidence audit, and trace Phase 2.
 It produces no artifact of its own.

@@ -54,7 +54,7 @@ Eight skills cover learning, planning, test generation, evaluation, and release 
 | `nfr-assess`       | NFR Evidence Audit                                                                 |
 | `trace`            | Coverage traceability and gate decisions                                           |
 
-All ten command entries remain available across these eight skills, including `ci` for CI setup and `atdd` for automation red mode. See the [Command Reference](/docs/reference/commands.md) for commands and menu codes.
+Eight direct skills cover these workflows. In the TEA agent, `AT` selects Automate red mode and `CI` selects Framework CI scope. See the [Command Reference](/docs/reference/commands.md) for commands and menu codes.
 
 ### 3. Automation Interfaces: Playwright CLI + MCPs
 

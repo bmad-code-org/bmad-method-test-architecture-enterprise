@@ -228,7 +228,7 @@ The local monorepo flow needs no broker: the consumer generates pacts and the pr
 
 - [Integrate Pact.js Utils Guide](/docs/how-to/customization/integrate-pactjs-utils.md)
 - [Pact.js Utils docs](https://seontechnologies.github.io/pactjs-utils/)
-- [TEA Overview: Library Integrations](/docs/explanation/tea-overview.md#library-integrations)
+- [TEA Overview: Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
 
 ---
 
@@ -322,7 +322,7 @@ tea_browser_automation = "auto" # "cli" | "mcp" | "none"
 **Related:**
 
 - [Configure Browser Automation Guide](/docs/how-to/customization/configure-browser-automation.md)
-- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp)
+- [TEA Overview: Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
 
 ---
 
@@ -676,7 +676,7 @@ To upgrade, run `bmad migrate` in the assistant chat.
 The v6 installer in bmad-method 6.12 already writes `[modules.tea]` into `_bmad/config.toml`.
 A project with that table can still carry v6 keys.
 If `[modules.tea]` is missing from every config layer, run `bmad setup tea` first, then run the migration.
-The migration keeps the nine current module settings, converts their values to strings, and moves non-default `ci_platform` and `tea_evaluations_folder` values into their skill customization files.
+The migration keeps the thirteen current module settings, converts their values to strings, and moves non-default `ci_platform` and `tea_evaluations_folder` values into their skill customization files.
 It removes both moved keys and all unread keys from every `[modules.tea]` layer, and offers to delete the classic installer's config, help file, and TEA agent or skill copies under `_bmad/tea/`.
 If answers survive only in the classic YAML while the TOML holds defaults, the migration proposes restoring them for your approval.
 A `_bmad/tea/config.yaml` that is left is not read by any skill.
@@ -877,13 +877,35 @@ TEST_USER_PASSWORD=password123
 **Cypress:**
 
 ```bash
-# cypress.env.json or .env
+# .env (exported as shell variables; Cypress reads variables prefixed with CYPRESS_)
 CYPRESS_BASE_URL=https://example.com
 CYPRESS_API_URL=https://api.example.com
 ```
 
+Or keep Cypress values in `cypress.env.json`, which Cypress loads itself:
+
+```json
+{
+  "API_URL": "https://api.example.com",
+  "TEST_USER_EMAIL": "test@example.com",
+  "TEST_USER_PASSWORD": "replace-me"
+}
+```
+
+Framework setup writes `.env.example`; copy it to `.env` and fill in real values.
+A `.env` file only helps when something loads it into the environment: your shell (`set -a; source .env; set +a`), your test runner's config, or CI.
+Creating the file does not export the variables.
+
 Split them per environment (`.env.development`, `.env.staging`, `.env.production`) and keep the production file pointed at read-only tests only.
-Add `.env` and `.env.local` to `.gitignore`.
+Ignore every file that holds real credentials, and commit only a sanitized example:
+
+```gitignore
+.env*
+!.env.example
+cypress.env.json
+```
+
+Use placeholders in `.env.example` and in any sample you share.
 
 **CI/CD:** set the same names as secrets in your CI platform.
 

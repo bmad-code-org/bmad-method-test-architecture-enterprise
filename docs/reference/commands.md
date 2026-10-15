@@ -227,7 +227,7 @@ See [Execution Targets](/docs/reference/execution-targets.md) for supported fram
 
 - `tests/README.md` (declared `default_output_file`: setup, running tests, architecture, CI integration)
 - `tests/` directory with `support/fixtures/` and `support/helpers/`
-- `playwright.config.ts` or `cypress.config.ts`
+- A runner config for the detected stack, such as `playwright.config.ts` or `cypress.config.ts` for browser projects (see [Execution Targets](/docs/reference/execution-targets.md) for other runners)
 - `.env.example`, `.nvmrc`
 - Sample tests with best practices
 - When CI is included: platform-specific pipeline (`.github/workflows/test.yml` by default), parallel execution, burn-in loops, and quality gates
@@ -364,7 +364,7 @@ Learn testing through seven sessions with quizzes and saved progress.
 Build and score an evaluation of a skill, agent, workflow, tool-use system, AI feature, or test-review mechanism.
 Identify gaps and produce a CI plan.
 
-**Phase:** Phase 4 (Implementation), after `automate` and before framework CI setup
+**Phase:** Phase 4 (Implementation). Run it whenever the target exists; it needs no earlier `automate` run. Handing its CI plan to `framework` with CI scope is an optional downstream step.
 
 **Frequency:** Once per evaluated target, then again when the target's behavior changes
 

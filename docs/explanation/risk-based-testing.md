@@ -41,15 +41,17 @@ b      Low  Med  High
 ```
 
 TEA applies this in `test-design`.
+The bands below form the risk-governance release policy: a team rule about which risks must be resolved before release.
+The computed `trace` gate decision is separate and rests on requirement coverage.
 
 ### What each band buys
 
-| Score   | Level    | Mitigation                | Gate impact            | Actions                                                                                                                                                                                                                                                                              |
-| ------- | -------- | ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **9**   | Critical | Mandatory, blocks release | FAIL until resolved    | Comprehensive suite (E2E, API, security); multiple environments including a prod mirror; load and performance validation; security audit and penetration testing; monitoring and alerting; documented rollback; on-call rotation assigned. Resolve the critical risk before release. |
-| **6-8** | High     | Required, documented plan | CONCERNS if incomplete | Targeted suite covering happy path plus critical errors; test environment set up; monitoring plan; mitigation and owners documented. Deploys with an approved plan.                                                                                                                  |
-| **4-5** | Medium   | Recommended               | Advisory only          | Basic coverage; standard monitoring; known limitations documented.                                                                                                                                                                                                                   |
-| **1-3** | Low      | Optional                  | None                   | Smoke test if desired; feature flag for easy disable.                                                                                                                                                                                                                                |
+| Score   | Level    | Mitigation                | Release policy       | Actions                                                                                                                                                                                                                                                                              |
+| ------- | -------- | ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **9**   | Critical | Mandatory, blocks release | Blocks release       | Comprehensive suite (E2E, API, security); multiple environments including a prod mirror; load and performance validation; security audit and penetration testing; monitoring and alerting; documented rollback; on-call rotation assigned. Resolve the critical risk before release. |
+| **6-8** | High     | Required, documented plan | Needs a written plan | Targeted suite covering happy path plus critical errors; test environment set up; monitoring plan; mitigation and owners documented. Deploys with an approved plan.                                                                                                                  |
+| **4-5** | Medium   | Recommended               | Advisory             | Basic coverage; standard monitoring; known limitations documented.                                                                                                                                                                                                                   |
+| **1-3** | Low      | Optional                  | None                 | Smoke test if desired; feature flag for easy disable.                                                                                                                                                                                                                                |
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
@@ -61,13 +63,13 @@ flowchart TD
     Score -->|Score 4-5| Medium[MEDIUM RISK<br/>Score: 4-5]
     Score -->|Score 1-3| Low[LOW RISK<br/>Score: 1-3]
 
-    Critical --> Fail[FAIL<br/>Resolve critical risk before release]
+    Critical --> Fail[RELEASE BLOCKED<br/>Resolve critical risk before release]
 
     High --> HasMit6{Mitigation<br/>Plan?}
-    HasMit6 -->|Yes| Pass6[PASS ✅<br/>or CONCERNS ⚠️]
-    HasMit6 -->|No| Concerns6[CONCERNS ⚠️<br/>Document plan needed]
+    HasMit6 -->|Yes| Pass6[Release with<br/>approved plan]
+    HasMit6 -->|No| Concerns6[Plan required<br/>before release]
 
-    Medium --> Advisory[Advisory Only<br/>No gate impact]
+    Medium --> Advisory[Advisory Only<br/>No release impact]
     Low --> NoAction[No Action<br/>Proceed]
 
     style Critical fill:#f44336,stroke:#b71c1c,stroke-width:3px,color:#fff
@@ -81,9 +83,14 @@ flowchart TD
     style NoAction fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#000
 ```
 
-An open score-9 risk blocks release.
-A mitigation plan records the work needed to resolve it; writing the plan alone leaves the gate at FAIL.
-The trace skill reports human waivers separately and keeps its derived gate decision.
+An open score-9 risk blocks release under this policy.
+A mitigation plan records the work needed to resolve it; writing the plan alone does not clear the block.
+
+The policy and the `trace` gate decision answer different questions.
+`trace` computes PASS, CONCERNS, or FAIL from P0, P1, and overall requirement coverage, oracle confidence, and live evidence, and does not read the risk register; its critical-gap counts are coverage gaps, not risks.
+A run with full requirement coverage can PASS while a score-9 risk is still open, so review open risks and NFR evidence separately before release.
+See the [gate rules](/docs/reference/commands.md#trace) for the exact thresholds.
+The trace skill reports human waivers separately and keeps its derived decision.
 
 Every score at 6 or above needs a written mitigation with an owner and a date:
 
@@ -126,13 +133,14 @@ Profile editing at 2 × 3 = 6 sits between: E2E for the happy path, API tests fo
 
 Risk scores, usage frequency, revenue exposure, and regulatory obligations inform priority.
 
-| Priority | Typical score | Other factors                                                            | Coverage target  | Test levels         | Example                            |
-| -------- | ------------- | ------------------------------------------------------------------------ | ---------------- | ------------------- | ---------------------------------- |
-| **P0**   | 6-9           | Revenue impact, security-critical, regulatory compliance, frequent usage | 100%             | E2E + API           | Login, checkout, payment           |
-| **P1**   | 4-6           | Core user journeys, complex logic, integration points                    | 90%              | API + selective E2E | Profile editing, search, filters   |
-| **P2**   | 2-4           | Secondary features, admin functionality, reporting                       | 50%              | API happy path only | Export features, advanced settings |
-| **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                      | 20% (smoke test) | E2E smoke test only | Theme customization, experiments   |
+| Priority | Typical score | Other factors                                                            | Coverage target  | Starting test levels | Example                            |
+| -------- | ------------- | ------------------------------------------------------------------------ | ---------------- | -------------------- | ---------------------------------- |
+| **P0**   | 6-9           | Revenue impact, security-critical, regulatory compliance, frequent usage | 100%             | E2E + API            | Login, checkout, payment           |
+| **P1**   | 4-6           | Core user journeys, complex logic, integration points                    | 90%              | API + selective E2E  | Profile editing, search, filters   |
+| **P2**   | 2-4           | Secondary features, admin functionality, reporting                       | 50%              | API happy path only  | Export features, advanced settings |
+| **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                      | 20% (smoke test) | E2E smoke test only  | Theme customization, experiments   |
 
+The test levels are a starting point; `test-design` picks the cheapest level that can carry each risk.
 See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality--standards) for the complete criteria.
 
 ## What It Changes

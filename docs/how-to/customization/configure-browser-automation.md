@@ -141,8 +141,6 @@ An explicit request in your prompt wins ("use the CLI to explore this page").
 Otherwise TEA takes the CLI for stateless work (snapshots, locator verification, evidence capture) and MCP for stateful flows (multi-tab, file uploads, repeated edits, self-healing).
 If only one tool is installed it uses that one; with neither it behaves as `none`.
 
-Full selection rules: [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp).
-
 <a id="which-workflows-benefit"></a>
 
 ## Which Skills Benefit
@@ -225,6 +223,6 @@ playwright-cli close-all
 
 ## Related
 
-- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli--mcp)
+- [TEA Overview: Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md)
 - [TEA Configuration Reference](/docs/reference/configuration.md)

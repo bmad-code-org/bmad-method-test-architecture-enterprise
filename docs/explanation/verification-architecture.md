@@ -52,20 +52,22 @@ flowchart TB
 
 TEA Core supplies:
 
-- **Risk model.** Probability × impact on a 1-9 scale, with scores ≥6 requiring documented mitigation and 9 mandating gate failure.
+- **Risk model.** Probability × impact on a 1-9 scale, with scores ≥6 requiring documented mitigation and an open 9 blocking release under the risk-governance policy.
+  The computed `trace` decision rests on coverage, so review open risks separately.
   See [Risk-Based Testing](/docs/explanation/risk-based-testing.md).
 - **Priority assignment.** P0-P3 with coverage targets and execution ordering per band.
 - **Test level selection.** Unit, integration, and end-to-end chosen by what the risk actually demands, with a duplicate-coverage guard that pushes verification to the cheapest level that can carry it.
 - **NFR criteria and gate matrix.** Security, performance, reliability, and maintainability scored PASS / CONCERNS / FAIL / N/A, declared one per domain in the audit's gate artifact, defaulting to CONCERNS when targets or evidence are undefined.
 - **Requirements-to-evidence traceability.** Every acceptance criterion maps to evidence; gaps require an explicit waiver with an owner and an expiry date.
-- **Release gate decision.** PASS / CONCERNS / FAIL, derived from the traceability matrix.
+- **Release gate decision.** PASS / CONCERNS / FAIL, derived from requirement coverage in the traceability matrix.
   Human waivers are validated and reported separately.
 - **Architecture testability review.** An 8-category, 29-criteria audit applied at design time, before any test exists.
 - **Confidence gate.** A stop rule for the agent itself: below its threshold it stops and requests the missing evidence.
 
-Two of TEA's eight skills, `nfr-assess` and `trace`, contain no stack-conditional logic at any step.
-They run identically whether the system under test is a React app, a Go service, or a payment terminal.
-The risk and priority knowledge fragments reference no test framework at all.
+Two of TEA's eight skills, `nfr-assess` and `trace`, apply stack-neutral rules.
+The NFR verdict criteria and the Trace coverage and gate rules are the same for a React app, a Go service, or a payment terminal.
+Evidence discovery and optional collection can use stack-specific tools, such as browser evidence when browser automation is enabled.
+A Go service needs no browser tooling.
 
 ## What an execution target supplies
 
@@ -86,16 +88,16 @@ It lists a format with no applicable criteria as unscorable and excludes it from
 
 [Execution Targets](/docs/reference/execution-targets.md) lists support and gaps per stack:
 
-| Tier           | What it means                                                                                         | Targets                                                                                                                      |
-| -------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Full**       | Skill branching, scaffolding, knowledge fragments, and review criteria                                | Web browser (Playwright, Cypress), mobile native (Maestro), HTTP and service tests, contract testing (Pact), component tests |
-| **Generation** | Detection, scaffolding, and test generation, with no dedicated knowledge fragments or review criteria | pytest, JUnit 5 / TestNG, Go test, xUnit / NUnit / MSTest, RSpec / Minitest                                                  |
-| **Evidence**   | TEA plans, requires, and audits the evidence; execution is your tooling                               | Performance (k6, JMeter, Gatling), security scanning (ZAP, Burp, Snyk), message contracts                                    |
-| **Core only**  | Risk, design, NFR, and traceability apply; execution is unassisted                                    | Desktop, embedded, data pipelines, mainframe                                                                                 |
+| Tier           | What it means                                                                                                                                      | Targets                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Full**       | Skill branching, scaffolding, knowledge fragments, and review criteria                                                                             | Web browser (Playwright, Cypress), mobile native (Maestro), HTTP and service tests, contract testing (Pact), component tests |
+| **Generation** | Detection, scaffolding, and test generation, with no dedicated knowledge fragments or backend review criteria; generic applicable rows still score | pytest, JUnit 5 / TestNG, Go test, xUnit / NUnit / MSTest, RSpec / Minitest                                                  |
+| **Evidence**   | TEA plans, requires, and audits the evidence; execution is your tooling                                                                            | Performance (k6, JMeter, Gatling), security scanning (ZAP, Burp, Snyk)                                                       |
+| **Core only**  | Risk, design, NFR, and traceability apply; execution is unassisted                                                                                 | Desktop, embedded, data pipelines, mainframe                                                                                 |
 
 ### The self-audit
 
-Of TEA's 59 knowledge fragments, 40 name Playwright or Cypress.
+Most of TEA's 59 knowledge fragments name Playwright or Cypress.
 Three cover mobile.
 None covers a backend test framework, and the knowledge index has no row tagged for pytest, JUnit, Go test, xUnit, or RSpec.
 
