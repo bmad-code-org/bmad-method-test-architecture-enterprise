@@ -2955,11 +2955,16 @@ function checkOutputsAndCommandLine() {
     );
     const confirmationReport = JSON.parse(fs.readFileSync(path.join(directory, 'confirmation-out', 'experiment-report.json'), 'utf8'));
     const selectionProblems = confirmationReport.contrast.selection.problems;
+    // The ground truth holds two Test Design cases, too few for a selection that clears
+    // and a confirmation on untouched cases, so the command line's own selection stays
+    // blocked under the Test Design scorer. The library path to recommend is checked in
+    // checkConfirmationFollowsSelection.
     check(
       confirmationRun.status === 0 &&
-        selectionProblems.length > 0 &&
-        !selectionProblems.some((problem) => /not supplied|does not reproduce|does not match/.test(problem)),
-      `the command line reads the selection evidence again and reproduces its pinned report: ${selectionProblems.join(' | ')}`,
+        canonicalJsonOf(selectionProblems) ===
+          canonicalJsonOf(['the selection outcome is blocked; a confirmation needs selection-cleared']) &&
+        outcomeOf({ report: confirmationReport }) === 'blocked',
+      `the command line reads the selection evidence again, reproduces its pinned report and holds the confirmation to its outcome: ${selectionProblems.join(' | ')}`,
     );
     check(
       Object.values(confirmationReport.contrast.verification).some((problems) =>
