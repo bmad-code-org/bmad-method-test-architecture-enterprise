@@ -365,7 +365,7 @@ Capturing these inputs is manual today. No TEA runner writes `receipt`, `blockId
 
 ### The exposure ledger
 
-Each entry is `{ seq, kind, caseId, candidateId, hash }`, where `kind` is `selection-exposure` or `confirmation-exposure`, `seq` runs 1, 2 and so on, and `hash` is the SHA-256 of the previous entry's hash (`sha256:genesis` for the first), a newline and the canonical JSON of the entry without its hash. `appendExposure(ledger, entry)` in the reader module returns the whole ledger extended by one entry. Removing, reordering or editing an entry breaks the chain.
+Each entry is `{ seq, kind, caseId, candidateId, hash }`, where `kind` is `selection-exposure` or `confirmation-exposure`, `seq` runs 1, 2 and so on, and `hash` is the SHA-256 of the previous entry's hash (`sha256:genesis` for the first), a newline and the canonical JSON of the entry without its hash. `appendExposure(ledger, entry)` in the reader module returns the whole ledger extended by one entry. Removing, reordering or editing an entry that a later entry follows breaks the chain. Dropping entries from the end leaves a valid chain, so only a pinned head protects the history up to it: a confirmation's `exposure.ledgerHeadAtFreeze` and the head its selection report recorded.
 
 This command, run from the repository root, builds the paired example's ledger and prints it. For your own experiment, change the case list and the candidate id:
 

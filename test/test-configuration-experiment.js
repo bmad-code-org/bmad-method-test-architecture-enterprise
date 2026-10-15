@@ -2083,6 +2083,10 @@ function checkAcceptance10() {
   const reordered = [ledger[1], ledger[0], ...ledger.slice(2)];
   check(!experiment.verifyLedger(reordered).ok, 'reordering entries breaks the chain');
   check(
+    experiment.verifyLedger(ledger.slice(0, 3)).ok,
+    'dropping entries from the end leaves a valid chain, as the reference says; only a pinned head protects them',
+  );
+  check(
     !experiment.verifyLedger(ledger.slice(0, 3), [{ head: ledger[5].hash, length: 6 }]).ok,
     'a ledger shorter than a pinned head is refused',
   );
@@ -2970,7 +2974,7 @@ function checkDeclarations() {
     ['how-to guide', docText],
     ['reference page', referenceText],
   ]) {
-    check(!/story|_bmad-output|pull request|PR #/i.test(text), `the ${name} names no story, planning path or review process`);
+    check(!/\bstor(?:y|ies)\b|_bmad-output|pull request|PR #/i.test(text), `the ${name} names no story, planning path or review process`);
   }
 }
 
