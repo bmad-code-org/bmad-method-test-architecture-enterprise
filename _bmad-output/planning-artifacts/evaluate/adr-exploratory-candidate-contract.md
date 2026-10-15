@@ -3,7 +3,7 @@ name: Exploratory candidate contract
 type: adr
 status: accepted
 created: 2026-10-14
-scope: Evaluate discovery lane, feature F01 of the MutEval adoption plan, first slice
+scope: Evaluate discovery lane, feature F01 of the Evaluate discovery plan, first slice
 binds: [AD-6, AD-8, AD-9, AD-22, AD-23]
 sources: [ARCHITECTURE-SPINE.md]
 ---
@@ -14,7 +14,7 @@ sources: [ARCHITECTURE-SPINE.md]
 
 Evaluate qualifies a mutation only when the clean arm passes, the mutated arm violates an oracle the contract already declares, the restored bytes match, and a recovered clean run passes (AD-8 in `ARCHITECTURE-SPINE.md`). A proposed edit that no declared oracle can demonstrate cannot meet that bar, however undesirable the behavior it changes. Discovery needs a place to hold such an edit, the observations made when it ran, the independent evidence that its behavior is wrong and the review decision, with none of it reaching a score.
 
-This record covers the first slice of the MutEval adoption plan (the handoff "muteval and TeA Evaluate capability gaps and implementation plan", 14 October 2026): the contract, its reader, the boundary guards and their tests. It adds no generator, no `tea-*` command and no live call.
+This record covers the first slice of the Evaluate discovery plan (14 October 2026): the contract, its reader, the boundary guards and their tests. It adds no generator, no `tea-*` command and no live call.
 
 Inspecting the current code corrected the plan in these places:
 
