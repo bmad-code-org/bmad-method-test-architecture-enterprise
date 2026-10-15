@@ -8,14 +8,14 @@ Proposal source: the Jev System One support spec handed off against TeA 3.0.0; w
 
 ## What is deterministic today
 
-Every fragment-selection rule in the eight corpora under `test/evals/` is a function of the config flag, the stack, the runner, `package.json` dependencies, and named repository facts.
+Every fragment-selection rule in the eight corpora under `test/evals/`, except the NFR relevance rule below, is a function of the config flag, the stack, the runner, `package.json` dependencies, named repository facts, and one explicit-request branch: contract testing is also relevant when the task explicitly requests it (`step-02-load-context.md` line 132 and four sibling step files).
 The `automate-playwright-ui-utils-on` and `automate-backend-pytest` cases are pure code decisions (flag AND package evidence). A model call there buys nothing.
-Contract-testing relevance is also decided by repository facts (Pact artifacts, dependencies, configuration, broker variables).
+Contract-testing relevance is decided by repository facts (Pact artifacts, dependencies, configuration, broker variables) or by a phrase match on an explicit request, which no case exercises.
 
 ## What is a semantic decision
 
 Exactly one condition needs reading natural language: `skills/bmad-tea-test-design/steps-c/step-02-load-context.md` line 155 loads `nfr-criteria.md` when the epic or story "includes security, performance, reliability, scalability, compliance, maintainability, or operational requirements".
-The other candidate, "the task explicitly requests contract testing", appears in five step files. No case exercises it without Pact repository facts also being present.
+The other candidate, "the task explicitly requests contract testing", appears in five step files. It is deterministic as a phrase match with negation handling, such as "no contract tests". No case exercises it without Pact repository facts also being present, so no case measures it and it does not qualify as a second semantic decision.
 
 ## Is there an adequate independent truth set
 
@@ -36,7 +36,7 @@ That supports no precision, no threshold, and no exact-set agreement. Adding lab
 ## Reopen condition
 
 Independently reviewed positive, negative, and ambiguous NFR scenarios exist as a held-out partition, with the NFR decision labelled on each.
-Until then an inference pilot has nothing to be measured against.
+Until then an inference pilot has no adequate truth set to qualify against. The one judged positive can catch an omission and supports nothing more.
 
 ## Policy to apply if a System One model is ever added
 
@@ -49,6 +49,6 @@ Until then an inference pilot has nothing to be measured against.
 
 ## Encoding and seam, recorded for the reopen
 
-- Use one Choice question per candidate fragment with `include`, `exclude`, and `uncertain`. Noul has no uncertainty channel and no confidence field. Fix the encoding before any live run and tune it on development data only.
+- Use one Choice question per candidate fragment with `include`, `exclude`, and `uncertain`. Jev's Noul primitive returns one yes probability with no separate confidence field, so abstention there would come from a task-calibrated threshold; Choice carries `uncertain` directly. The encoding is a proposal and no model call has compared Noul with Choice. Fix the encoding before any live run and tune it on development data only.
 - The harness already accepts an external command: `--agent custom --agent-cmd <path>` on `test/eval-fragment-selection.js` reaches `cli/fragment-selection-runner.js`, which pipes the prompt to that command's stdin. A comparison wrapper fits there without touching `AGENT_ADAPTERS` or the default runner. Its stdout stays exactly `{ "fragments": [...] }`.
 - Keep raw answers and uncertainty in a protected record outside stdout, apply the deterministic required-fragment rules after inference, and abstain to the parent when the answers conflict with a bundle rule.
