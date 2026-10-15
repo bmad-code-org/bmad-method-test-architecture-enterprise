@@ -693,6 +693,7 @@ module.exports = {
   parseCandidate,
   readCandidate,
   readHeldFile,
+  repeatedKeys,
   serializeCandidate,
   validateCandidate,
 };

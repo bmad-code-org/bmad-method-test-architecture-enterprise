@@ -12,7 +12,7 @@
  * - `observationally-unchanged`: every sampled input produced the same output on both arms. That says nothing about an
  *   input nobody sampled, so it is never read as equivalence.
  * - `confirmed-undesirable-caught` and `confirmed-undesirable-missed`: the candidate arm departs from an independent
- *   reference where the baseline matches it; the evaluator failed the departing trial (caught) or passed it (missed).
+ *   reference where the baseline matches it; the evaluator passed at least one departing trial (missed) or failed every one (caught).
  *
  * The classification is a suggestion that decides nothing. A review records a person's decision, bound to the
  * candidate's identity, its determination and the observations it rested on, and a confirmed or unchanged conclusion is
@@ -37,6 +37,7 @@ const {
   draftMutation,
   readCandidate,
   readHeldFile,
+  repeatedKeys,
   validateCandidate,
 } = require('./candidate');
 
@@ -58,6 +59,25 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/** The JSON of strict UTF-8 `bytes`, or the reason it cannot be read: not UTF-8, not JSON, or a key stated twice in one object. */
+function parseStrict(bytes) {
+  let text;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return { problem: 'is not UTF-8 text' };
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { problem: 'is not JSON' };
+  }
+  const repeated = repeatedKeys(text);
+  if (repeated.length > 0) return { problem: `states the key ${JSON.stringify(repeated[0])} twice in one object` };
+  return { value };
+}
+
 /**
  * The trials one observation's evidence file holds, or the reasons it cannot be used. The evidence is the JSON object
  * `{arm, trials: [{trial, input, status, output?, evaluator?, error?}]}`; a completed trial of the candidate arm also
@@ -70,12 +90,9 @@ function readEvidence(observation, bytes) {
   if (actual !== observation.evidence) {
     return { problems: [`${label} evidence digests to ${actual}; the record retained ${observation.evidence}`] };
   }
-  let value;
-  try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-  } catch {
-    return { problems: [`${label} evidence is not JSON text`] };
-  }
+  const parsed = parseStrict(bytes);
+  if (parsed.problem) return { problems: [`${label} evidence ${parsed.problem}`] };
+  const { value } = parsed;
   if (!isObject(value) || value.arm !== observation.arm || !Array.isArray(value.trials)) {
     return { problems: [`${label} evidence is not {arm: ${observation.arm}, trials: [...]}`] };
   }
@@ -111,12 +128,9 @@ function readEvidence(observation, bytes) {
 
 /** The reference file's labels, or the reason it cannot be used. It is `{kind, reference, cases: {input: expected output}}`. */
 function readReference(bytes) {
-  let value;
-  try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-  } catch {
-    return { problem: 'the independent reference is not JSON text' };
-  }
+  const parsed = parseStrict(bytes);
+  if (parsed.problem) return { problem: `the independent reference ${parsed.problem}` };
+  const { value } = parsed;
   const valid =
     isObject(value) &&
     typeof value.kind === 'string' &&
@@ -239,9 +253,9 @@ function classifyCandidate(record, { evidence = {}, reference } = {}) {
   if (reasons.length > 0 || deviations.length === 0) {
     return result('undetermined', { compared: inputs.size, deviations });
   }
-  const missed = deviations.some((deviation) => deviation.evaluators.every((verdict) => verdict === 'pass'));
+  const missed = deviations.some((deviation) => deviation.evaluators.includes('pass'));
   reasons.push(
-    `${deviations.length} of ${inputs.size} inputs depart from the independent reference only on the candidate arm; the evaluator ${missed ? 'passed' : 'failed'} ${missed ? 'a departing input' : 'every departing input'}`,
+    `${deviations.length} of ${inputs.size} inputs depart from the independent reference only on the candidate arm; the evaluator ${missed ? 'passed at least one departing trial' : 'failed every departing trial'}`,
   );
   return result(missed ? 'confirmed-undesirable-missed' : 'confirmed-undesirable-caught', {
     compared: inputs.size,
@@ -330,13 +344,17 @@ function nextMutationId(folder) {
  * and the files to write; {@link applyPromotion} writes them. The draft is the native `replace-exact` mutation and the
  * record's promotion holds no qualification receipt: only a native qualification produces one.
  *
+ * The retained evidence and the reference are read again, so evidence lost or altered since the review ends the
+ * promotion: the stored conclusion has to be the one the evidence classifies as now.
+ *
  * @param {string} folder the evaluation folder
  * @param {string} relative the candidate's path under `discovery/`
- * @returns {{record: object, draft: object, files: Array<{path: string, content: string}>}}
+ * @param {string} referencePath the independent reference the review rested on, relative to the folder
+ * @returns {{record: object, draft: object, previous: string, files: Array<{path: string, content: string}>}}
  * @throws {import('./candidate').CandidateError} when the stored candidate or the files it names are invalid or stale
- * @throws {ReviewError} when the candidate is not reviewed with a confirmed conclusion
+ * @throws {ReviewError} when the candidate is not reviewed with a confirmed conclusion the evidence still supports
  */
-function promoteCandidate(folder, relative) {
+function promoteCandidate(folder, relative, referencePath) {
   const record = readCandidate(folder, relative);
   if (record.state !== 'reviewed') {
     throw new ReviewError([`candidate ${record.candidateId} is ${record.state}; only a reviewed candidate is promoted`]);
@@ -344,6 +362,15 @@ function promoteCandidate(folder, relative) {
   if (!record.disposition.startsWith('confirmed-undesirable')) {
     throw new ReviewError([
       `candidate ${record.candidateId} concluded ${record.disposition}; only a confirmed undesirable candidate is promoted`,
+    ]);
+  }
+  const classification = classifyCandidate(record, loadReviewInputs(folder, record, referencePath));
+  if (
+    classification.disposition !== record.disposition ||
+    classification.independentEvidence?.digest !== record.independentEvidence[0]?.digest
+  ) {
+    throw new ReviewError([
+      `the evidence now classifies as ${classification.disposition}, which does not support the stored ${record.disposition}: ${classification.reasons.join('; ')}`,
     ]);
   }
   const next = structuredClone(record);
@@ -354,6 +381,7 @@ function promoteCandidate(folder, relative) {
   return {
     record: next,
     draft,
+    previous: readHeldFile(folder, relative, 'candidate').toString('utf8'),
     files: [
       { path: `mutations/${draft.mutationId}.mutation.json`, content: `${JSON.stringify(draft, null, 2)}\n` },
       { path: relative, content: canonicalJson(next) },
@@ -378,27 +406,46 @@ function writableDirectory(folder, segments) {
 }
 
 /**
- * Writes a promotion: the draft mutation first, refusing a name the folder already holds, then the promoted record.
+ * Writes a promotion: the record is staged, the draft mutation is created (refusing a name the folder already holds),
+ * and the staged record replaces the stored one. A failure at any step leaves the folder as it was. The stored record has
+ * to be the one the promotion was computed from, so a decision made in between is never overwritten.
  *
  * @param {string} folder
  * @param {ReturnType<typeof promoteCandidate>} promotion
- * @throws {ReviewError} when a path on the way is a link or the draft's name is taken
+ * @throws {ReviewError} when a path on the way is a link, the stored record changed, or a file the promotion creates exists
  */
 function applyPromotion(folder, promotion) {
   const [mutation, candidate] = promotion.files;
   for (const file of promotion.files) writableDirectory(folder, path.posix.dirname(file.path).split('/'));
-  const mutationFile = path.join(folder, ...mutation.path.split('/'));
-  fs.mkdirSync(path.dirname(mutationFile), { recursive: true });
-  try {
-    fs.writeFileSync(mutationFile, mutation.content, { flag: 'wx' });
-  } catch (error) {
-    if (error.code === 'EEXIST') throw new ReviewError([`${mutation.path} already exists; a promotion never replaces a mutation`]);
-    throw error;
+  if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
+    throw new ReviewError([`${candidate.path} changed after the promotion was computed; promote again`]);
   }
+  const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;
-  fs.writeFileSync(staging, candidate.content, { flag: 'wx' });
-  fs.renameSync(staging, candidateFile);
+  const create = (file, content, label) => {
+    try {
+      fs.writeFileSync(file, content, { flag: 'wx' });
+    } catch (error) {
+      if (error.code === 'EEXIST') throw new ReviewError([`${label} already exists; a promotion never replaces a file`]);
+      throw error;
+    }
+  };
+  create(staging, candidate.content, path.posix.basename(staging));
+  try {
+    fs.mkdirSync(path.dirname(mutationFile), { recursive: true });
+    create(mutationFile, mutation.content, mutation.path);
+  } catch (error) {
+    fs.rmSync(staging, { force: true });
+    throw error;
+  }
+  try {
+    fs.renameSync(staging, candidateFile);
+  } catch (error) {
+    fs.rmSync(staging, { force: true });
+    fs.rmSync(mutationFile, { force: true });
+    throw error;
+  }
 }
 
 /**

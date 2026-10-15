@@ -61,6 +61,10 @@ function readCampaign(folder, campaignId) {
 
 /** What a reviewer does next with a candidate in this state. */
 function nextAction(record) {
+  const stops = new Set(['generation-error', 'inapplicable', 'binding-not-consumed', 'unexercised', 'judge-failure', 'budget-exhausted']);
+  if (['generated', 'applicable', 'observed'].includes(record.state) && stops.has(record.disposition)) {
+    return `stopped at ${record.disposition}; fix its cause and run the candidate again`;
+  }
   switch (record.state) {
     case 'generated':
     case 'applicable': {

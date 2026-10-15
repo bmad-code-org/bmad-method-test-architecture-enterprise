@@ -1,6 +1,6 @@
 {
   "kind": "reference-computation",
-  "reference": "Hand count of the scaffold each story's acceptance criteria call for, taken from the story files and not from the step prompt or any run: one skipped test per criterion, no placeholder assertion.",
+  "reference": "The scaffold each story's acceptance criteria call for, stated by the maintainer from those criteria and never from the step prompt or from any run: one skipped test per criterion and no placeholder assertion. The outputs it labels are a projection of the scaffold (skipped test count and placeholder assertion count), so equal means the same counts.",
   "cases": {
     "story-cancel-reservation": "skipped:3 placeholders:0",
     "story-list-reservations": "skipped:2 placeholders:0",

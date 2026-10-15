@@ -142,6 +142,14 @@ function generatedCandidates() {
 }
 
 const generated = generatedCandidates();
+const generatedAll = Object.fromEntries(
+  previewCandidates({
+    target: { artifact: TARGET, bytes: targetBytes },
+    requirementDigest,
+    campaignId: scenarios.campaignId,
+    seed: SEED,
+  }).candidates.map(({ record }) => [record.candidateId, record]),
+);
 const observed = Object.fromEntries(
   scenarios.scenarios.map((scenario) => [scenario.name, observedRecord(generated[scenario.name], scenario)]),
 );
@@ -154,6 +162,12 @@ function plantObserved(folder, name, record = observed[name].record) {
     plant(folder, `discovery/${record.campaignId}/evidence/${record.candidateId}.${observationId}.json`, bytes);
   }
   return relative;
+}
+
+/** The exit status and output of the real `tea-evaluate check` over `folder`. */
+function cliCheck(folder) {
+  const result = spawnSync(process.execPath, [CLI, 'check', '--evaluation', folder], { cwd: PROJECT_ROOT, encoding: 'utf8' });
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
 /** The result of `fn`, or the error it threw. */
@@ -336,6 +350,125 @@ function checkClassification() {
   );
 }
 
+/** Repeated trials, noise and unreadable evidence: the classification follows each trial and never the first output. */
+function checkNoiseAndMalformedEvidence() {
+  const repeated = (verdicts, outputs = verdicts.map(() => 'skipped:3 placeholders:3')) =>
+    classifyGap((scenario) => {
+      const input = 'story-cancel-reservation';
+      scenario.baseline.trials = verdicts.map((_, index) => ({
+        trial: index + 1,
+        input,
+        status: 'completed',
+        output: 'skipped:3 placeholders:0',
+      }));
+      scenario.candidate.trials = verdicts.map((evaluator, index) => ({
+        trial: index + 1,
+        input,
+        status: 'completed',
+        output: outputs[index],
+        evaluator,
+      }));
+    });
+  const flaky = repeated(['pass', 'fail', 'fail']);
+  check(
+    flaky.disposition === 'confirmed-undesirable-missed' && /passed at least one departing trial/.test(flaky.reasons.join(' ')),
+    `an evaluator that passes one departing trial of three missed it: ${flaky.disposition}`,
+  );
+  const steady = repeated(['fail', 'fail', 'fail']);
+  check(
+    steady.disposition === 'confirmed-undesirable-caught' && /failed every departing trial/.test(steady.reasons.join(' ')),
+    `an evaluator that fails every departing trial caught it: ${steady.disposition}`,
+  );
+  const flipping = repeated(['pass', 'pass', 'pass'], ['skipped:3 placeholders:3', 'skipped:3 placeholders:0', 'skipped:3 placeholders:3']);
+  check(
+    flipping.disposition === 'undetermined' && /candidate arm produced different outputs/.test(flipping.reasons.join(' ')),
+    'a candidate arm whose output flips between trials is undetermined and never read from its first output',
+  );
+
+  const gap = classifyGap(() => {});
+  const reasons = gap.reasons.join(' ');
+  check(
+    /3 of 3 inputs depart from the independent reference only on the candidate arm/.test(reasons) &&
+      /passed at least one departing trial/.test(reasons),
+    `the confirmed miss says which inputs depart and what the evaluator did: ${reasons}`,
+  );
+
+  const duplicated = (text) => {
+    const { record, inputs } = gapWith(() => {});
+    return review.classifyCandidate(record, { ...inputs, ...text(inputs) });
+  };
+  const repeatedReference = duplicated(() => ({
+    reference: Buffer.from(
+      '{"kind":"reference-computation","reference":"x","cases":{"story-cancel-reservation":"skipped:9","story-cancel-reservation":"skipped:3 placeholders:0"}}',
+    ),
+  }));
+  check(
+    repeatedReference.disposition === 'undetermined' &&
+      /states the key "story-cancel-reservation" twice/.test(repeatedReference.reasons.join(' ')),
+    'a reference that states a label twice is unreadable, so a reviewer and the classifier cannot read different labels',
+  );
+  const { record, inputs } = gapWith(() => {});
+  const doubled = Buffer.from(
+    String(inputs.evidence['OBS-002']).replace(
+      '"output": "skipped:3 placeholders:3"',
+      '"output": "skipped:3 placeholders:0", "output": "skipped:3 placeholders:3"',
+    ),
+  );
+  const repeatedEvidence = review.classifyCandidate(
+    { ...record, observations: [record.observations[0], { ...record.observations[1], evidence: bytesDigest(doubled) }] },
+    { ...inputs, evidence: { ...inputs.evidence, 'OBS-002': doubled } },
+  );
+  check(
+    repeatedEvidence.disposition === 'undetermined' && /states the key "output" twice/.test(repeatedEvidence.reasons.join(' ')),
+    'evidence that states a key twice is unreadable',
+  );
+  for (const [label, edit, expected] of [
+    ['a completed trial with no output', (trial) => delete trial.output, /is completed with no output/],
+    ['an output that is not text', (trial) => (trial.output = { placeholders: 3 }), /is completed with no output/],
+    ['an unknown trial status', (trial) => (trial.status = 'cancelled'), /has status "cancelled"/],
+    [
+      'an errored trial with no message',
+      (trial) => ((trial.status = 'error'), delete trial.output, delete trial.evaluator),
+      /is an error with no message/,
+    ],
+  ]) {
+    const malformed = classifyGap((scenario) => edit(scenario.candidate.trials[0]));
+    check(
+      malformed.disposition === 'undetermined' && expected.test(malformed.reasons.join(' ')),
+      `${label} is reported and leaves the candidate undetermined: ${malformed.disposition} ${malformed.reasons.join('; ')}`,
+    );
+  }
+}
+
+/** The evidence a folder holds is read from its own layout, through no link. */
+function checkLoadReviewInputs() {
+  const folder = evaluationCopy('inputs');
+  plantObserved(folder, 'seeded-gap');
+  const { record } = observed['seeded-gap'];
+  const loaded = review.loadReviewInputs(folder, record, REFERENCE_PATH);
+  check(
+    review.classifyCandidate(record, loaded).disposition === 'confirmed-undesirable-missed' && loaded.reference.equals(referenceBytes),
+    'the evidence and the reference a folder holds classify the candidate as the in-memory bytes do',
+  );
+  check(
+    Object.keys(review.loadReviewInputs(folder, record).evidence).length === 2 &&
+      review.loadReviewInputs(folder, record).reference === undefined,
+    'loading without a reference path loads the evidence only',
+  );
+  const evidenceFile = path.join(folder, 'discovery', record.campaignId, 'evidence', `${record.candidateId}.OBS-002.json`);
+  fs.rmSync(evidenceFile);
+  fs.symlinkSync(path.join(folder, REFERENCE_PATH), evidenceFile);
+  check(
+    !('OBS-002' in review.loadReviewInputs(folder, record, REFERENCE_PATH).evidence),
+    'an evidence file reached through a link is left out and reads as missing',
+  );
+  const missing = review.classifyCandidate(record, review.loadReviewInputs(folder, record, REFERENCE_PATH));
+  check(
+    missing.disposition === 'undetermined' && /OBS-002 \(candidate\) evidence is not held/.test(missing.reasons.join(' ')),
+    'a link-reached evidence file classifies as undetermined',
+  );
+}
+
 /** The evidence settles an errored or short run by itself, and leaves every other classification to a person. */
 function checkSettle() {
   const settled = (name) => review.settleCandidate(observed[name].record, observed[name].inputs);
@@ -440,22 +573,26 @@ async function checkPromotion() {
   const plantReviewed = (name, disposition) => plantObserved(folder, name, reviewedRecord(name, disposition));
 
   const unreviewed = plantObserved(folder, 'seeded-gap');
-  refuses('promoting an unreviewed candidate', () => review.promoteCandidate(folder, unreviewed), /only a reviewed candidate is promoted/);
+  refuses(
+    'promoting an unreviewed candidate',
+    () => review.promoteCandidate(folder, unreviewed, REFERENCE_PATH),
+    /only a reviewed candidate is promoted/,
+  );
   const harmless = plantReviewed('harmless-edit', 'observationally-unchanged');
   refuses(
     'promoting the harmless edit',
-    () => review.promoteCandidate(folder, harmless),
+    () => review.promoteCandidate(folder, harmless, REFERENCE_PATH),
     /only a confirmed undesirable candidate is promoted/,
   );
   const short = plantReviewed('missing-evidence', 'undetermined');
   refuses(
     'promoting an undetermined review',
-    () => review.promoteCandidate(folder, short),
+    () => review.promoteCandidate(folder, short, REFERENCE_PATH),
     /only a confirmed undesirable candidate is promoted/,
   );
 
   const gapPath = plantReviewed('seeded-gap', 'confirmed-undesirable-missed');
-  const promotion = review.promoteCandidate(folder, gapPath);
+  const promotion = review.promoteCandidate(folder, gapPath, REFERENCE_PATH);
   check(
     promotion.record.state === 'promoted' && promotion.record.promotion.qualificationReceipt === null,
     'a promotion records a draft and no qualification receipt',
@@ -486,20 +623,26 @@ async function checkPromotion() {
     `a probe that names a draft nobody promoted draws a reference finding; got ${JSON.stringify(before)}`,
   );
 
+  check(cliCheck(folder).status === 10, 'tea-evaluate check exits 10 over a probe that names a draft nobody promoted');
+
   review.applyPromotion(folder, promotion);
   await writeCorpusIndex(folder);
   const after = await checkEvaluation(folder);
   check(after.length === 0, `the native check accepts the promoted draft with an authored probe: ${JSON.stringify(after)}`);
-  const cli = spawnSync(process.execPath, [CLI, 'check', '--evaluation', folder], { cwd: PROJECT_ROOT, encoding: 'utf8' });
-  check(cli.status === 0, `tea-evaluate check exits 0 over the promoted draft; got ${cli.status}: ${cli.stdout}${cli.stderr}`);
+  const cli = cliCheck(folder);
+  check(cli.status === 0, `tea-evaluate check exits 0 over the promoted draft; got ${cli.status}: ${cli.output}`);
   const stored = readCandidate(folder, gapPath);
   check(stored.state === 'promoted' && stored.promotion.draftMutationId === 'M-002', 'the promoted record is stored and still reads');
   check(
     fs.readFileSync(path.join(folder, 'mutations', 'M-002.mutation.json'), 'utf8') === promotion.files[0].content,
     'the draft mutation is written as the promotion stated',
   );
-  refuses('applying a promotion twice', () => review.applyPromotion(folder, promotion), /already exists/);
-  refuses('promoting a promoted candidate', () => review.promoteCandidate(folder, gapPath), /only a reviewed candidate is promoted/);
+  refuses('applying a promotion twice', () => review.applyPromotion(folder, promotion), /changed after the promotion was computed/);
+  refuses(
+    'promoting a promoted candidate',
+    () => review.promoteCandidate(folder, gapPath, REFERENCE_PATH),
+    /only a reviewed candidate is promoted/,
+  );
 
   // Every shortcut to a qualified probe is refused by the native path or the reader.
   const forged = structuredClone(probe);
@@ -511,6 +654,7 @@ async function checkPromotion() {
     forgedFindings.some((finding) => finding.rule === 'runtime-owned-field'),
     `a probe that carries its own qualification fields is refused by the native check; got ${JSON.stringify(forgedFindings)}`,
   );
+  check(cliCheck(folder).status === 10, 'tea-evaluate check exits 10 over a probe that carries its own qualification fields');
   plant(folder, 'probes/P-003.probe.json', `${JSON.stringify(probe, null, 2)}\n`);
 
   const qualifiedDraft = { ...promotion.draft, qualification: { route: 'controlled-mutation', mutation: 'M-002' } };
@@ -521,6 +665,7 @@ async function checkPromotion() {
     draftFindings.some((finding) => finding.file === 'mutations/M-002.mutation.json' && finding.rule === 'schema'),
     `a draft that claims a qualification is refused by the native check; got ${JSON.stringify(draftFindings)}`,
   );
+  check(cliCheck(folder).status === 10, 'tea-evaluate check exits 10 over a draft that claims a qualification');
   plant(folder, 'mutations/M-002.mutation.json', promotion.files[0].content);
 
   const claimed = structuredClone(stored);
@@ -535,10 +680,85 @@ async function checkPromotion() {
     'a record that claims a qualification receipt the folder does not hold is refused by the reader',
   );
 
+  // Evidence lost or altered after the review ends the promotion.
+  for (const [label, damage] of [
+    [
+      'a retained evidence file deleted',
+      (target) =>
+        fs.rmSync(
+          path.join(target, 'discovery', scenarios.campaignId, 'evidence', `${observed['seeded-gap'].record.candidateId}.OBS-002.json`),
+        ),
+    ],
+    ['the reference replaced', (target) => plant(target, REFERENCE_PATH, '{"kind":"reference-computation","reference":"x","cases":{}}\n')],
+    ['the reference deleted', (target) => fs.rmSync(path.join(target, ...REFERENCE_PATH.split('/')))],
+  ]) {
+    const damaged = evaluationCopy('promotion-damaged');
+    const damagedPath = plantObserved(damaged, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
+    damage(damaged);
+    refuses(
+      `promoting after ${label}`,
+      () => review.promoteCandidate(damaged, damagedPath, REFERENCE_PATH),
+      /now classifies as undetermined/,
+    );
+    check(!fs.existsSync(path.join(damaged, 'mutations', 'M-002.mutation.json')), `promoting after ${label} wrote no draft`);
+  }
+
+  // A conclusion rewritten after the review, with its binding recomputed, is not the one the evidence supports.
+  const rewritten = evaluationCopy('promotion-rewritten');
+  const reviewedGap = structuredClone(reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
+  reviewedGap.disposition = 'confirmed-undesirable-caught';
+  reviewedGap.review.scope = decisionScope(reviewedGap);
+  const rewrittenPath = plantObserved(rewritten, 'seeded-gap', validateCandidate(reviewedGap));
+  refuses(
+    'promoting a conclusion the evidence does not support',
+    () => review.promoteCandidate(rewritten, rewrittenPath, REFERENCE_PATH),
+    /now classifies as confirmed-undesirable-missed, which does not support the stored confirmed-undesirable-caught/,
+  );
+
+  // A failed or stale write leaves the folder as it was.
+  const racing = evaluationCopy('promotion-racing');
+  const racingPath = plantObserved(racing, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
+  const racingPromotion = review.promoteCandidate(racing, racingPath, REFERENCE_PATH);
+  const racingBefore = fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8');
+  plant(racing, `${racingPath}.tmp`, 'a staging file from a crash');
+  refuses('applying over a leftover staging file', () => review.applyPromotion(racing, racingPromotion), /already exists/);
+  check(!fs.existsSync(path.join(racing, 'mutations', 'M-002.mutation.json')), 'a failed apply leaks no draft mutation');
+  check(
+    fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8') === racingBefore,
+    'a failed apply leaves the stored record as it was',
+  );
+  fs.rmSync(path.join(racing, `${racingPath}.tmp`));
+  plant(racing, 'mutations/M-002.mutation.json', '{}\n');
+  refuses(
+    'applying over a draft name taken since the promotion was computed',
+    () => review.applyPromotion(racing, racingPromotion),
+    /already exists/,
+  );
+  check(!fs.existsSync(path.join(racing, `${racingPath}.tmp`)), 'a failed apply removes its staging file');
+  check(
+    fs.readFileSync(path.join(racing, ...racingPath.split('/')), 'utf8') === racingBefore,
+    'a refused draft name leaves the stored record as it was',
+  );
+  fs.rmSync(path.join(racing, 'mutations'), { recursive: true });
+
+  const redecided = review.reviewCandidate(observed['seeded-gap'].record, observed['seeded-gap'].inputs, {
+    ...DECISION,
+    rationale: 'A second review, made after the promotion was computed.',
+    disposition: 'confirmed-undesirable-missed',
+  });
+  plant(racing, racingPath, serializeCandidate(redecided));
+  refuses(
+    'applying over a record decided again in between',
+    () => review.applyPromotion(racing, racingPromotion),
+    /changed after the promotion was computed/,
+  );
+  check(!fs.existsSync(path.join(racing, 'mutations', 'M-002.mutation.json')), 'a stale apply leaks no draft mutation');
+  check(readCandidate(racing, racingPath).review.rationale.startsWith('A second review'), 'a stale apply keeps the newer decision');
+
   const blocked = evaluationCopy('promotion-blocked');
   const blockedPath = plantObserved(blocked, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
   plant(blocked, 'mutations/M-002.mutation.json', '{}\n');
-  const blockedPromotion = review.promoteCandidate(blocked, blockedPath);
+  const blockedPromotion = review.promoteCandidate(blocked, blockedPath, REFERENCE_PATH);
   check(blockedPromotion.draft.mutationId === 'M-003', 'a draft never takes the ID of a mutation the folder already holds');
   fs.rmSync(path.join(blocked, 'mutations'), { recursive: true });
   const elsewhere = scratch.make('promotion-link-target');
@@ -551,14 +771,34 @@ async function checkPromotion() {
   check(fs.readdirSync(elsewhere).length === 0, 'nothing was written through the link');
 }
 
-/** A campaign folder with a promoted gap (and an accepted risk), a reviewed harmless edit, an errored run, a short run and an unreadable file. */
+/** `record` as another candidate: a new ID with its identity recomputed, for fixtures that need more rows than the scenarios. */
+function variant(record, candidateId, change = () => {}) {
+  const next = structuredClone(record);
+  next.candidateId = candidateId;
+  change(next);
+  next.identity = candidateIdentity(next);
+  return next;
+}
+
+/** Control characters other than the newline that ends a line, and the bidirectional formatting characters. */
+// eslint-disable-next-line no-control-regex
+const UNPRINTABLE = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F‪-‮⁦-⁩]/;
+
+/**
+ * A campaign folder with every kind of row: a promoted gap with an accepted risk, a reviewed harmless edit, a reviewer's
+ * undetermined and inapplicable conclusions, an errored run, a short run, a generated candidate and a generation error,
+ * and five files the reader refuses (not JSON, another candidate's ID, a stale review, a link, a directory).
+ */
 function campaignFolder(label = 'report') {
   const folder = evaluationCopy(label);
-  const gapReviewed = review.reviewCandidate(observed['seeded-gap'].record, observed['seeded-gap'].inputs, {
-    ...DECISION,
-    disposition: 'confirmed-undesirable-missed',
-  });
-  const waived = structuredClone(gapReviewed);
+  const planted = [];
+  const put = (name, record) => {
+    plantObserved(folder, name, record);
+    planted.push(record);
+  };
+  const decide = (name, record, disposition) => review.reviewCandidate(record, observed[name].inputs, { ...DECISION, disposition });
+
+  const waived = structuredClone(decide('seeded-gap', observed['seeded-gap'].record, 'confirmed-undesirable-missed'));
   waived.acceptedRisk = {
     reviewer: 'maintainer',
     decidedAt: '2026-10-14T10:00:00Z',
@@ -567,23 +807,37 @@ function campaignFolder(label = 'report') {
     scope: decisionScope(waived),
   };
   const gapPath = plantObserved(folder, 'seeded-gap', validateCandidate(waived));
-  review.applyPromotion(folder, review.promoteCandidate(folder, gapPath));
-  plantObserved(
-    folder,
-    'harmless-edit',
-    review.reviewCandidate(observed['harmless-edit'].record, observed['harmless-edit'].inputs, {
-      ...DECISION,
-      disposition: 'observationally-unchanged',
-    }),
+  review.applyPromotion(folder, review.promoteCandidate(folder, gapPath, REFERENCE_PATH));
+  planted.push(readCandidate(folder, gapPath));
+
+  put('harmless-edit', decide('harmless-edit', observed['harmless-edit'].record, 'observationally-unchanged'));
+  put('target-error', review.settleCandidate(observed['target-error'].record, observed['target-error'].inputs));
+  put('missing-evidence', review.settleCandidate(observed['missing-evidence'].record, observed['missing-evidence'].inputs));
+  put('missing-evidence', decide('missing-evidence', variant(observed['missing-evidence'].record, 'C-020'), 'undetermined'));
+  put('harmless-edit', decide('harmless-edit', variant(observed['harmless-edit'].record, 'C-021'), 'inapplicable'));
+
+  const spare = Object.values(generatedAll).find(
+    (record) =>
+      !scenarios.scenarios.some((scenario) => scenario.edit.find === record.edit.find && scenario.edit.replace === record.edit.replace),
   );
-  plantObserved(folder, 'target-error', review.settleCandidate(observed['target-error'].record, observed['target-error'].inputs));
-  plantObserved(
-    folder,
-    'missing-evidence',
-    review.settleCandidate(observed['missing-evidence'].record, observed['missing-evidence'].inputs),
-  );
-  plant(folder, 'discovery/red-phase-review/C-099.candidate.json', '{"recordKind": "exploratory-candidate", "oops"\n');
-  return folder;
+  const generatedPath = candidatePath(spare.campaignId, spare.candidateId);
+  plant(folder, generatedPath, serializeCandidate(spare));
+  planted.push(spare);
+  const stopped = variant(spare, 'C-022', (record) => {
+    record.disposition = 'generation-error';
+  });
+  plant(folder, candidatePath(stopped.campaignId, stopped.candidateId), serializeCandidate(stopped));
+  planted.push(stopped);
+
+  const lane = `discovery/${scenarios.campaignId}`;
+  plant(folder, `${lane}/C-099.candidate.json`, '{"recordKind": "exploratory-candidate", "oops"\n');
+  plant(folder, `${lane}/C-098.candidate.json`, serializeCandidate(stopped));
+  const stale = decide('harmless-edit', variant(observed['harmless-edit'].record, 'C-097'), 'observationally-unchanged');
+  stale.edit.replace = 'Keep every generated test file under 9000 lines.';
+  plant(folder, `${lane}/C-097.candidate.json`, canonicalJson(stale));
+  fs.symlinkSync(path.join(folder, ...generatedPath.split('/')), path.join(folder, ...`${lane}/C-096.candidate.json`.split('/')));
+  fs.mkdirSync(path.join(folder, ...`${lane}/C-095.candidate.json`.split('/')));
+  return { folder, planted };
 }
 
 /** The numbers after `label` in a line of the text report. */
@@ -591,17 +845,29 @@ function numbersAfter(text, label) {
   return (new RegExp(`^${label}.*$`, 'm').exec(text)?.[0].match(/\d+/g) ?? []).map(Number);
 }
 
+/** `values` counted, as the report keys them. */
+function tallied(values) {
+  const counts = {};
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+  return counts;
+}
+
 /** Every candidate, stop, unreadable file, accepted risk and pending qualification shows in both forms, and the forms reconcile. */
 function checkReport() {
-  const folder = campaignFolder();
+  const { folder, planted } = campaignFolder();
   const campaign = reportModule.readCampaign(folder, scenarios.campaignId);
   const json = reportModule.projectCampaign(campaign);
   const text = reportModule.renderCampaign(json);
   const files = fs.readdirSync(path.join(folder, 'discovery', scenarios.campaignId)).filter((name) => name.endsWith('.candidate.json'));
+  const unreadable = ['C-099', 'C-098', 'C-097', 'C-096', 'C-095'].map((id) => `discovery/${scenarios.campaignId}/${id}.candidate.json`);
 
   check(
-    json.counts.files === files.length && json.counts.candidates === 4 && json.counts.unreadable === 1,
-    'every candidate file has a row: four readable, one unreadable',
+    json.counts.files === files.length && json.counts.candidates === planted.length && json.counts.unreadable === unreadable.length,
+    `every candidate file has a row: ${planted.length} readable, ${unreadable.length} unreadable of ${files.length} files; got ${JSON.stringify(json.counts)}`,
+  );
+  check(
+    JSON.stringify(json.unreadable.map(({ file }) => file).sort()) === JSON.stringify([...unreadable].sort()),
+    'each refused file is listed: not JSON, another candidate ID, a stale review, a link and a directory',
   );
   check(
     json.kind === 'exploratory-candidate-report' &&
@@ -609,42 +875,106 @@ function checkReport() {
       Object.keys(json).sort().join(',') === 'advisory,campaignId,candidates,counts,kind,schemaVersion,unreadable',
     'the JSON report is a named, versioned projection marked advisory',
   );
+  check(
+    canonicalJson(json.counts.byState) === canonicalJson(tallied(json.candidates.map((row) => row.state))) &&
+      json.counts.byState.promoted === 1 &&
+      json.counts.byState.reviewed === 3 &&
+      json.counts.byState.observed === 2 &&
+      json.counts.byState.generated === 2,
+    `the states are counted: ${JSON.stringify(json.counts.byState)}`,
+  );
   const dispositions = json.counts.byDisposition;
   check(
-    dispositions['confirmed-undesirable-missed'] === 1 &&
+    canonicalJson(dispositions) === canonicalJson(tallied(planted.map((record) => record.disposition ?? 'none'))) &&
+      dispositions['confirmed-undesirable-missed'] === 1 &&
       dispositions['observationally-unchanged'] === 1 &&
       dispositions['target-error'] === 1 &&
-      dispositions.undetermined === 1,
-    `the report counts the miss, the unchanged edit, the error and the short run; got ${JSON.stringify(dispositions)}`,
+      dispositions.undetermined === 2 &&
+      dispositions.inapplicable === 1 &&
+      dispositions['generation-error'] === 1 &&
+      dispositions.none === 1,
+    `every disposition is counted, none among them hidden; got ${JSON.stringify(dispositions)}`,
   );
-  const expectedTrials = { planned: 24, completed: 19, errors: 3, missing: 2 };
+  const trials = { planned: 0, completed: 0, errors: 0, missing: 0 };
+  for (const record of planted)
+    for (const observation of record.observations) for (const key of Object.keys(trials)) trials[key] += observation.trials[key];
   check(
-    JSON.stringify(json.counts.trials) === JSON.stringify(expectedTrials),
-    `the trial totals keep the errored and missing trials: ${JSON.stringify(json.counts.trials)}`,
+    JSON.stringify(json.counts.trials) === JSON.stringify(trials) && trials.errors === 3 && trials.missing === 4,
+    `the trial totals keep the errored and missing trials: ${JSON.stringify(json.counts.trials)} against ${JSON.stringify(trials)}`,
   );
   check(
     json.counts.acceptedRisk === 1 && json.counts.promotions.pendingQualification === 1 && json.counts.promotions.receiptAttached === 0,
     'the accepted risk and the pending qualification are counted',
   );
 
-  const rows = text.split('\n').filter((line) => /^C-\d+ /.test(line));
-  check(rows.length === json.counts.candidates, 'the text has one heading per candidate');
+  for (const record of planted) {
+    const row = json.candidates.find((entry) => entry.candidateId === record.candidateId);
+    check(row !== undefined, `${record.candidateId} has a JSON row`);
+    if (!row) continue;
+    check(
+      row.state === record.state &&
+        row.disposition === record.disposition &&
+        row.identity === record.identity &&
+        row.hypothesis === record.hypothesis &&
+        row.edit.target === record.target.artifact &&
+        row.edit.find === record.edit.find &&
+        row.edit.replace === record.edit.replace &&
+        canonicalJson(row.observations) === canonicalJson(record.observations) &&
+        canonicalJson(row.independentEvidence) === canonicalJson(record.independentEvidence) &&
+        row.review?.reviewer === record.review?.reviewer &&
+        row.review?.rationale === record.review?.rationale &&
+        row.acceptedRisk?.revisitWhen === record.acceptedRisk?.revisitWhen &&
+        row.promotion?.draftMutationId === record.promotion?.draftMutationId,
+      `${record.candidateId}: the JSON row repeats the record`,
+    );
+    check(
+      text.split('\n').includes(`${record.candidateId} ${record.state} ${record.disposition ?? 'no disposition'}`),
+      `${record.candidateId}: the text heading pairs its state with its disposition`,
+    );
+    for (const observation of record.observations) {
+      const { trials: counts } = observation;
+      check(
+        text.includes(
+          `  ${observation.arm} ${observation.observationId}: planned ${counts.planned} completed ${counts.completed} errors ${counts.errors} missing ${counts.missing} evidence ${observation.evidence}`,
+        ),
+        `${record.candidateId}: the text shows ${observation.observationId} with its trial counts and evidence digest`,
+      );
+    }
+    for (const evidence of record.independentEvidence) {
+      check(
+        text.includes(`  independent evidence: ${evidence.kind}, ${evidence.reference} (${evidence.digest})`),
+        `${record.candidateId}: the text shows its independent evidence`,
+      );
+    }
+    if (record.review)
+      check(
+        text.includes(`  review: ${record.review.reviewer} at ${record.review.decidedAt}: ${record.review.rationale}`),
+        `${record.candidateId}: the text shows its review`,
+      );
+  }
   check(
-    JSON.stringify(numbersAfter(text, 'files')) === JSON.stringify([5, 4, 1]) &&
-      JSON.stringify(numbersAfter(text, 'trials')) === JSON.stringify([24, 19, 3, 2]) &&
+    text.split('\n').filter((line) => /^C-\d+ /.test(line)).length === planted.length && /^unreadable:$/m.test(text),
+    'the text has one heading per readable candidate and an unreadable section',
+  );
+  check(
+    JSON.stringify(numbersAfter(text, 'files')) === JSON.stringify([json.counts.files, json.counts.candidates, json.counts.unreadable]) &&
+      JSON.stringify(numbersAfter(text, 'trials')) === JSON.stringify(Object.values(json.counts.trials)) &&
       JSON.stringify(numbersAfter(text, 'accepted risk')) === JSON.stringify([1]),
     'the text counts reconcile with the JSON counts',
   );
   for (const expected of [
-    /target-error/,
+    /^C-\d+ observed target-error$/m,
     /fix the target error and observe again/,
     /collect the missing or errored trials/,
+    /stopped at generation-error; fix its cause and run the candidate again/,
     /accepted risk: maintainer .*revisit when the placeholder-assertion oracle is authored/,
     /promotion: draft mutation M-002, qualification pending/,
     /the draft counts for nothing until a native qualification receipt exists/,
     /^discovery\/red-phase-review\/C-099\.candidate\.json: \[unreadable-candidate\] is not JSON/m,
-    /missing 2/,
-    /errors 3/,
+    /^discovery\/red-phase-review\/C-098\.candidate\.json: \[unreadable-candidate\] candidateId C-022 differs from the file name C-098/m,
+    /^discovery\/red-phase-review\/C-097\.candidate\.json: \[unreadable-candidate\] identity is /m,
+    /^discovery\/red-phase-review\/C-096\.candidate\.json: \[unreadable-candidate\] .*link/m,
+    /^discovery\/red-phase-review\/C-095\.candidate\.json: \[unreadable-candidate\] .*not a regular file/m,
   ]) {
     check(expected.test(text), `the text report shows ${expected}`);
   }
@@ -662,26 +992,62 @@ function checkReport() {
   refuses('an absent campaign', () => reportModule.readCampaign(folder, 'no-such-campaign'), /does not exist/);
 }
 
-/** A hypothesis written to forge a report line stays on its own line, and a file name cannot forge a finding. */
+/** Free text from a record, a file name and a parser message cannot start a forged line or move the cursor. */
 function checkHostileText() {
   const folder = evaluationCopy('hostile');
-  const record = structuredClone(generated['seeded-gap']);
-  record.hypothesis = 'plain\nC-777 promoted confirmed-undesirable-caught\u001B[2J' + BIDI_OVERRIDE;
-  record.identity = candidateIdentity(record);
-  plant(folder, candidatePath(record.campaignId, record.candidateId), serializeCandidate(record));
-  const unreadableName = `discovery/${record.campaignId}/C-098.candidate.json`;
-  plant(folder, unreadableName, '{}');
-  const text = reportModule.renderCampaign(reportModule.projectCampaign(reportModule.readCampaign(folder, record.campaignId)));
+  const forged = `plain\nC-777 promoted confirmed-undesirable-caught\u001B[2J${BIDI_OVERRIDE}`;
+  const plantRecord = (record) => plant(folder, candidatePath(record.campaignId, record.candidateId), serializeCandidate(record));
+
+  const hypothesis = variant(generated['harmless-edit'], 'C-001', (record) => {
+    record.hypothesis = forged;
+  });
+  plantRecord(hypothesis);
+  const edited = variant(generated['harmless-edit'], 'C-002', (record) => {
+    record.edit = { find: `find ${forged}`, replace: `replace ${forged}`, occurrences: 1 };
+    record.target.artifact = 'skill/steps-c/step-04-generate-tests.md';
+  });
+  plantRecord(edited);
+  const decided = review.reviewCandidate(variant(observed['seeded-gap'].record, 'C-003'), observed['seeded-gap'].inputs, {
+    ...DECISION,
+    reviewer: `reviewer ${forged}`,
+    rationale: `rationale ${forged}`,
+    disposition: 'confirmed-undesirable-missed',
+  });
+  const waived = structuredClone(decided);
+  waived.acceptedRisk = {
+    reviewer: 'maintainer',
+    decidedAt: '2026-10-14T10:00:00Z',
+    rationale: `risk ${forged}`,
+    revisitWhen: `revisit ${forged}`,
+    scope: decisionScope(waived),
+  };
+  plantObserved(folder, 'seeded-gap', validateCandidate(waived));
+  plant(folder, `discovery/${hypothesis.campaignId}/evidence/C-003.OBS-001.json`, observed['seeded-gap'].inputs.evidence['OBS-001']);
+  const lane = `discovery/${hypothesis.campaignId}`;
+  plant(folder, `${lane}/x${'\u001B[2J'}name.candidate.json`, `{"pwned": "${forged.replaceAll('\n', ' ')}" \u001B]0;pwned\u0007`);
+
+  const text = reportModule.renderCampaign(reportModule.projectCampaign(reportModule.readCampaign(folder, hypothesis.campaignId)));
+  check(!UNPRINTABLE.test(text), 'no control or direction character reaches the text report');
+  check(!/^C-777/m.test(text), 'a newline in free text does not start a forged candidate heading');
+  const rows = text.split('\n').filter((line) => /^C-\d+ /.test(line));
+  check(rows.length === 3, `the three hostile candidates have their own rows; got ${JSON.stringify(rows)}`);
+  for (const where of [
+    'hypothesis: plain',
+    'find plain',
+    'replace plain',
+    'review: reviewer plain',
+    'rationale plain',
+    'risk plain',
+    'revisit plain',
+  ]) {
+    const found = text
+      .split('\n')
+      .some((line) => line.includes(where.split(' ')[0]) && line.includes(`${where.split(' ').slice(1).join(' ')}\\nC-777`));
+    check(found, `${where.split(' ')[0]}: the escaped free text is still readable on its own line`);
+  }
   check(
-    !text.includes('\u001B') && !text.includes(BIDI_OVERRIDE),
-    'a control or direction character in a hypothesis is written as an escape',
-  );
-  check(/^C-\d+ generated /m.test(text) && text.includes(String.raw`hypothesis: plain`), 'the hostile candidate has its own row');
-  check(!/^C-777/m.test(text), 'a newline in a hypothesis does not start a forged candidate heading');
-  check(text.includes(String.raw`plain\nC-777`), 'the escaped hypothesis is still readable');
-  check(
-    /^discovery\/red-phase-review\/C-098\.candidate\.json: \[unreadable-candidate\] /m.test(text),
-    'an unreadable file is printed in the native finding shape',
+    /^"discovery\/red-phase-review\/x\\u001b\[2Jname\.candidate\.json": \[unreadable-candidate\] /m.test(text),
+    'an unreadable file with a control character in its name is quoted and escaped',
   );
 }
 
@@ -708,6 +1074,8 @@ function checkDecisionRecord() {
 async function main() {
   try {
     checkClassification();
+    checkNoiseAndMalformedEvidence();
+    checkLoadReviewInputs();
     checkSettle();
     checkReview();
     await checkPromotion();
