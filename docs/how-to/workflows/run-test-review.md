@@ -67,7 +67,7 @@ The recommendation is derived from the same findings:
 | Medium or Low findings only, score 70+ | Approve with Comments |
 | No findings                            | Approve               |
 
-Severity comes from the registry row the finding cites: a hard wait is row H1 (High); a test that cannot fail, such as a committed `.skip` or `expect(true).toBe(true)`, is Critical. The skill also scores four dimensions (determinism, isolation, maintainability, performance) and shows them in its summary. Those per-dimension scores are diagnostic; they carry no weight in the overall score.
+Severity comes from the registry row the finding cites: a hard wait is row H1 (High); a test that cannot fail, such as a committed `.skip` or `expect(true).toBe(true)`, is Critical. The skill also scores four dimensions (determinism, isolation, maintainability, performance) and shows them in its summary. The overall score ignores those per-dimension scores; they are diagnostic.
 
 #### Sample report excerpt
 
@@ -115,7 +115,7 @@ await checkoutResponse;
 await expect(page.locator('.success')).toBeVisible();
 ```
 
-With Playwright Utils enabled, the same order applies with `interceptNetworkCall`, as in the sample finding.
+With Playwright Utils enabled, the same order applies: create the `interceptNetworkCall` before the action and await it after.
 
 #### Conditional assertion (H3, High)
 
@@ -153,7 +153,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
 });
 ```
 
-With Playwright Utils enabled, compose the auth-session fixture into the project's single fixture module, `tests/support/merged-fixtures.ts` (under your configured `test_dir`), and import `test` and `expect` from it in every spec. The `authToken` fixture supplies a Bearer token for API calls. A browser test is signed in only after the session's storage state is applied to its context, and the auth provider still performs a real login or token exchange. [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) shows the setup.
+With Playwright Utils enabled, compose the auth-session fixture into the project's single fixture module, `tests/support/merged-fixtures.ts` (under your configured `test_dir`), and import `test` and `expect` from it in every spec. The auth provider performs a real login or token exchange and saves the session; the fixtures open `page` with that storage state and expose `authToken` as the Bearer token for API calls. [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) shows the setup.
 
 #### Missing network assertion
 
@@ -194,7 +194,7 @@ tea-test-review --min-score 80 --output test-review.md --json test-review.json
 
 Run it from a checkout with full history. The [CLI reference](/docs/reference/tea-test-review-cli.md) has the GitHub Actions job, the agent login, waivers and every gate flag.
 
-Coverage gate checks are handled by `trace`, not `test-review`.
+`trace` owns coverage gate checks.
 
 ## Tips
 

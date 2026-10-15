@@ -351,11 +351,11 @@ The samples run these jobs per trigger:
 
 | Trigger                           | Jobs                       |
 | --------------------------------- | -------------------------- |
-| `pull_request` to main or develop | `test` (4 shards)          |
+| `pull_request` to main or develop | `test` (4 shards), burn-in |
 | `push` to main or develop         | `test` (4 shards)          |
 | `schedule` (nightly)              | `test` (4 shards), burn-in |
 
-Answering "PR burn-in" in [step 3](#ci-burn-in-loops) adds `pull_request` to the burn-in job's condition.
+Burn-in follows the generated template's default, pull requests and the nightly schedule. Answering "Nightly burn-in" in [step 3](#ci-burn-in-loops) limits it to `schedule`; "No burn-in" drops the job.
 
 <a id="ci-github-actions-githubworkflowstestyml"></a>
 
@@ -404,7 +404,7 @@ jobs:
   burn-in:
     name: Burn-In (Flakiness Detection)
     needs: test
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -478,6 +478,7 @@ burn-in:
     paths:
       - test-results/
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "schedule"
 ```
 
@@ -495,7 +496,7 @@ Selective testing runs only the tests a change affects. It needs a `test:changed
 }
 ```
 
-The CI phase can write a `git diff` based selection script instead when your project needs one.
+The CI phase can also write a `git diff` based selection script when your project needs one.
 On a branch that edits one spec, run `npm run test:changed` and confirm it selects that spec before you wire it in.
 Then add a PR job and change the `test` job's condition to `if: github.event_name != 'pull_request'`, so pushes and the schedule keep the full suite:
 
@@ -674,7 +675,7 @@ git push
 - Circle CI: Go to Pipelines
 
 **Expected result:** the push runs the four `test` shards, and each must pass.
-Burn-in first runs on the nightly schedule; the [trigger table](#ci-4-review-generated-ci-configuration) lists the jobs per trigger.
+Burn-in runs on pull requests and the nightly schedule; the [trigger table](#ci-4-review-generated-ci-configuration) lists the jobs per trigger.
 
 <a id="ci-test-on-pull-request"></a>
 
@@ -695,7 +696,7 @@ git push -u origin test-ci-setup
 **Open PR and verify:**
 
 - The four `test` shards run and pass, or the `selective` job does if you added it
-- Burn-in runs only if you chose PR burn-in
+- Burn-in runs after the shards pass, unless you chose nightly or no burn-in
 - Close the PR without merging the change
 
 <a id="ci-what-you-get"></a>

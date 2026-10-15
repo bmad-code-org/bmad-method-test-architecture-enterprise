@@ -149,7 +149,7 @@ The artifacts, approvals, and checklists below are example project policy for yo
 
 ### Evidence Collection
 
-**Artifacts auditors typically ask for:**
+**Artifacts auditors ask for:**
 
 - Requirements traceability matrix
 - Test execution results (with timestamps)
@@ -327,7 +327,7 @@ test.describe('as admin', () => {
 
 The spec imports the project's one fixture module, `tests/support/merged-fixtures.ts`, which merges `apiRequest` with the auth fixtures ([Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) sets it up; use your configured `test_dir` in place of `tests/`).
 `authToken` needs an auth provider registered with `setAuthProvider` that performs a real login or token exchange for each user identifier; see [auth-session configuration](https://seontechnologies.github.io/playwright-utils/auth-session.html).
-These tests send the token as a Bearer header; a browser `page` is signed in only after you also load the provider's saved storage state into its context.
+These tests send the token as a Bearer header. A browser test using the same fixtures gets a `page` opened with the provider's saved storage state.
 
 ### Set Higher Quality Thresholds
 

@@ -15,7 +15,9 @@
  *
  * - import `test` from a `support/merged-fixtures` path;
  * - leave composition to the module: no `mergeTests(` and no `.extend(` in the spec;
- * - not import `test` from `@playwright/test` or from a playwright-utils `/fixtures` subpath.
+ * - not import `test` from `@playwright/test` or from a playwright-utils `/fixtures` subpath;
+ * - carry the `skipNetworkMonitoring` annotation when it stubs a 4xx or 5xx status, since the module merges
+ *   `network-error-monitor` and an expected error response would otherwise fail the test in teardown.
  *
  * A block whose first line names a file under `support/` (`// tests/support/merged-fixtures.ts`, `// tests/support/auth-fixture.ts`)
  * is the module or a fixture it merges, so composition belongs there and the gate leaves it alone.
@@ -97,6 +99,8 @@ function problemsOf(block) {
     )
   )
     problems.push('the spec imports `test` from a second entry point');
+  if (/\bstatus:\s*[45]\d\d\b/.test(block.body) && !/skipNetworkMonitoring/.test(block.body))
+    problems.push("the spec stubs an error status without the 'skipNetworkMonitoring' annotation the merged network-error-monitor needs");
   return problems;
 }
 
@@ -143,7 +147,7 @@ function checkListeners() {
 
 function checkPages() {
   const problems = PAGES.flatMap((page) => pageProblems(page, fs.readFileSync(path.join(DOCS_ROOT, page), 'utf8')));
-  assert.deepEqual(problems, [], `Playwright Utils specs with a second fixture entry point:\n${problems.join('\n')}`);
+  assert.deepEqual(problems, [], `Playwright Utils specs that break the shared-module rules:\n${problems.join('\n')}`);
   const specs = PAGES.flatMap((page) => fencedBlocks(fs.readFileSync(path.join(DOCS_ROOT, page), 'utf8'))).filter(
     (block) => TS_LANGUAGES.has(block.language) && /support\/merged-fixtures['"]/.test(block.body),
   );
@@ -186,6 +190,12 @@ function checkRules() {
         "import { expect } from '../support/merged-fixtures';\nimport { test } from '@playwright/test';\n\ntest('x', async ({ apiRequest }) => {});",
       ),
     ],
+    [
+      'a spec stubbing a 500 under the merged network-error-monitor',
+      fenced(
+        "import { test, expect } from '../support/merged-fixtures';\n\ntest('x', async ({ page, interceptNetworkCall }) => {\n  interceptNetworkCall({ url: '**/api/profile', fulfillResponse: { status: 500 } });\n});",
+      ),
+    ],
   ];
   for (const [name, text] of failing) assert.notDeepEqual(pageProblems('fixture.md', text), [], `the gate passes ${name}`);
   const passing = [
@@ -213,6 +223,12 @@ function checkRules() {
       'a utility function import beside the module',
       fenced(
         "import { test, expect } from '../support/merged-fixtures';\nimport { readCSV } from '@seontechnologies/playwright-utils/file-utils';\n\ntest('x', async ({ page }) => {});",
+      ),
+    ],
+    [
+      'an error stub that opts out of network monitoring',
+      fenced(
+        "import { test, expect } from '../support/merged-fixtures';\n\ntest('x', { annotation: [{ type: 'skipNetworkMonitoring' }] }, async ({ page, interceptNetworkCall }) => {\n  interceptNetworkCall({ url: '**/api/profile', fulfillResponse: { status: 500 } });\n});",
       ),
     ],
   ];

@@ -379,8 +379,7 @@ test('should update profile', async ({ apiRequest, authToken, testProfile }) => 
 });
 ```
 
-`authToken` authenticates API requests only.
-A test that drives a signed-in `page` also needs the browser session wired from the auth provider; see [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
+`authToken` is the Bearer token for API requests. The merged auth-session fixtures also open `page` with the storage state the auth provider saved, so a browser test starts signed in once the provider performs a real sign-in; see [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session).
 Add cleanup if the test creates persistent records.
 
 #### 5. Review Additional Artifacts

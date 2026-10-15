@@ -27,6 +27,10 @@ const PAGE = path.join(__dirname, '..', 'docs', 'how-to', 'workflows', 'setup-te
 const CONFIG = '--config tests/playwright.config.ts';
 const FRAMEWORK_SCRIPTS = new Set(['test:e2e']);
 const GITLAB_SOURCE = { pull_request: 'merge_request_event', push: 'push', schedule: 'schedule' };
+/** The GitHub Actions template the CI phase generates from; the sample's burn-in triggers follow its default. */
+const TEMPLATE = yaml.load(
+  fs.readFileSync(path.join(__dirname, '..', 'skills', 'bmad-tea-framework', 'ci', 'github-actions-template.yaml'), 'utf8'),
+);
 
 /** Every fenced block of a page: its language, its body and the nearest heading above it. */
 function fencedBlocks(text) {
@@ -118,6 +122,10 @@ function pageProblems(text) {
       problems.push(`on ${event} the GitHub sample runs ${actual} but the table lists ${table[event]}`);
   }
 
+  for (const event of events)
+    if (conditionHolds(workflow.jobs['burn-in'].if, event) !== conditionHolds(TEMPLATE.jobs['burn-in'].if, event))
+      problems.push(`on ${event} the sample's burn-in condition disagrees with the generated template's`);
+
   const gitlab = yaml.load(blocks.find((block) => block.language === 'yaml' && block.heading.startsWith('GitLab CI')).body);
   for (const [id, job] of Object.entries(gitlab).filter(([, value]) => value?.script)) {
     const sources = (job.rules ?? []).flatMap((rule) => [...rule.if.matchAll(/\$CI_PIPELINE_SOURCE == "(\w+)"/g)].map((m) => m[1]));
@@ -149,18 +157,18 @@ function checkReverts(text) {
     ['a script without the config', `"test:burn-in": "playwright test ${CONFIG} `, '"test:burn-in": "playwright test '],
     [
       'burn-in on push the table does not list',
-      "if: github.event_name == 'schedule'",
+      "if: github.event_name == 'pull_request' || github.event_name == 'schedule'",
       "if: github.event_name == 'push' || github.event_name == 'schedule'",
     ],
     [
       'a PR job left out of the table',
+      '| `pull_request` to main or develop | `test` (4 shards), burn-in |',
       '| `pull_request` to main or develop | `test` (4 shards)          |',
-      '| `pull_request` to main or develop | burn-in |',
     ],
     [
-      'GitLab burn-in on merge requests',
+      'GitLab burn-in off merge requests',
+      '  rules:\n    - if: $CI_PIPELINE_SOURCE == "merge_request_event"\n    - if: $CI_PIPELINE_SOURCE == "schedule"\n```',
       '  rules:\n    - if: $CI_PIPELINE_SOURCE == "schedule"\n```',
-      '  rules:\n    - if: $CI_PIPELINE_SOURCE == "schedule"\n    - if: $CI_PIPELINE_SOURCE == "merge_request_event"\n```',
     ],
     ['a docs-only pull request check', 'git add tests/e2e/example.spec.ts', 'git add test.md'],
   ];

@@ -223,7 +223,7 @@ test('should update bio via API', async ({ apiRequest, authToken }) => {
 ```
 
 Both specs import the project's shared fixture module, which merges the API and auth fixtures.
-`authToken` authenticates API requests; the E2E test reaches `/profile` signed in only once the browser session is wired.
+`authToken` authenticates API requests; the E2E test reaches `/profile` signed in because the merged auth-session fixtures open `page` with the storage state the auth provider saved.
 See [auth-session](/docs/how-to/customization/integrate-playwright-utils.md#auth-session) for both.
 
 Add avatar upload tests the same way:

@@ -213,7 +213,10 @@ test('should fetch profile', async ({ page, request }) => {
 **With Playwright Utils:**
 
 ```typescript
+import { z } from 'zod';
 import { test, expect } from '../support/merged-fixtures';
+
+const ProfileSchema = z.object({ id: z.string(), name: z.string(), email: z.string().email() });
 
 test('should fetch profile', async ({ apiRequest }) => {
   const { status, body } = await apiRequest({
@@ -341,10 +344,10 @@ test('reads a protected endpoint', async ({ apiRequest, authToken }) => {
 });
 ```
 
-`authToken` authenticates API requests only.
-A signed-in `page` also needs the browser session: the provider's `extractCookies` turns the token into cookies, and the browser context must load them, through a `storageState` pointing at the saved session or by adding the cookies to `context`.
-The official auth-session docs show both, including per-worker accounts.
-Your provider still performs a real sign-in or token exchange against your system.
+The auth-session fixtures also replace `context` and `page`.
+With `authSessionEnabled` on (the default), the context opens with the storage state your provider saved, so `page` starts signed in when that state carries your app's session cookies.
+Your provider performs the real sign-in or token exchange and returns that state; `authToken` is the token extracted from it for API calls.
+The official auth-session docs cover provider setup and per-worker accounts.
 
 ### network-recorder
 
@@ -384,7 +387,8 @@ Spy or stub network requests with automatic JSON parsing.
 ```typescript
 import { test, expect } from '../support/merged-fixtures';
 
-test('should handle API errors', async ({ page, interceptNetworkCall }) => {
+// The stubbed 500 is expected, so opt out of the module's network-error-monitor
+test('should handle API errors', { annotation: [{ type: 'skipNetworkMonitoring' }] }, async ({ page, interceptNetworkCall }) => {
   // Stub API to return error (set up BEFORE navigation)
   const profileCall = interceptNetworkCall({
     method: 'GET',

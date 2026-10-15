@@ -1561,8 +1561,8 @@
           "reason": "a Playwright config option that starts the app before tests, not a TEA declaration"
         },
         {
-          "token": "extractCookies",
-          "reason": "a method of the @seontechnologies/playwright-utils auth provider contract, not a TEA declaration"
+          "token": "authSessionEnabled",
+          "reason": "an option fixture of the @seontechnologies/playwright-utils auth-session fixtures, not a TEA declaration"
         },
         {
           "token": "waitForSelector",
