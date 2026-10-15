@@ -3232,9 +3232,11 @@ async function checkRecordedEvidenceVerification() {
   }
 
   const caseIds = [...new Set(before.rows.map((row) => row.caseId))];
+  const captureSuite = JSON.parse(fs.readFileSync(path.join(RAW, 'two-run-before-numeric', 'result.json'), 'utf8')).suite.fixtureDigest;
   const recordedDeclaration = declaration({
     cases: caseIds,
     mutate: (body) => {
+      body.identity.fixed.suiteDigest = captureSuite;
       body.gates.success.metrics = { riskPrecision: 0.5 };
       body.gates.quality = { riskPrecision: { maxLoss: 0.1 }, scaleComplianceAccuracy: { maxLoss: 0.1 } };
       body.gates.floors = {};
@@ -3267,7 +3269,8 @@ async function checkRecordedEvidenceVerification() {
         artifactSha256: sha(observation.artifacts.design.value),
       };
       provenance.blockId = `${provenance.caseId}-${provenance.repetition}`;
-      provenance.observed = { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) };
+      provenance.requestedModel = (arm === 'A' ? ARM_A : ARM_B).model.requested;
+      provenance.observed = { fixed: { ...clone(FIXED), suiteDigest: captureSuite }, arm: clone(arm === 'A' ? ARM_A : ARM_B) };
       provenance.cost = { currency: 'USD', components: { target: arm === 'A' ? 1 : 0.5, tools: 0 } };
       const bytes = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`);
       fs.writeFileSync(file, bytes);
@@ -3432,6 +3435,59 @@ async function checkRecordedEvidenceVerification() {
         .filter((row) => row.attemptId.startsWith('tampered-'))
         .every((row) => row.verification === 'claimed' && row.nativeSource === null),
     `records of a run that failed its manifest are no native records, got ${outcomeOf(tamperedRead)}`,
+  );
+  const rewriteProvenance = (name, change) => {
+    const dir = nativeRun('two-run-before-numeric', name, 'A');
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    for (const entry of manifest.files.filter((file) => file.path.endsWith('provenance.json'))) {
+      const provenance = JSON.parse(fs.readFileSync(path.join(dir, entry.path), 'utf8'));
+      change(provenance);
+      const bytes = Buffer.from(JSON.stringify(provenance));
+      fs.writeFileSync(path.join(dir, entry.path), bytes);
+      entry.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+      entry.bytes = bytes.length;
+    }
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
+    return experiment.loadRecordedTestDesignRun({ dir });
+  };
+  for (const [label, change, leaf] of [
+    ['another suite', (provenance) => (provenance.observed.fixed.suiteDigest = sha('another suite')), 'fixed.suiteDigest'],
+    ['another requested model', (provenance) => (provenance.observed.arm.model.requested = 'another-model'), 'arm.model.requested'],
+    ['another source commit', (provenance) => (provenance.observed.fixed.sourceCommit = 'another-commit'), 'fixed.sourceCommit'],
+  ]) {
+    const loaded = rewriteProvenance(`observed-${leaf}`, change);
+    check(
+      loaded.integrity.problems.some((problem) => problem.includes(`observed ${leaf} differs from what the run recorded`)) &&
+        Object.values(loaded.records).every((record) => Object.isFrozen(record)) &&
+        experiment
+          .readExperiment({ declaration: recordedDeclaration, attempts: loaded.rows, nativeRecords: loaded.records })
+          .evidenceIndex.rows.every((row) => row.nativeSource !== 'manifest-checked'),
+      `a recorded identity naming ${label} than the run shows is refused`,
+    );
+  }
+
+  // A record filed under another reference is not that reference's record.
+  const [someRef, someRecord] = Object.entries(records)[0];
+  const misfiled = readRecorded(recordedDeclaration, sameDocuments, {
+    ...records,
+    [someRef]: records[Object.keys(records).find((ref) => ref !== someRef)],
+  });
+  check(
+    someRecord.ref === someRef &&
+      misfiled.evidenceIndex.rows.some(
+        (row) => row.verification === 'claimed' && row.verificationProblems.some((problem) => /not among the records/.test(problem)),
+      ),
+    'a record filed under another reference is not found under it',
+  );
+
+  // The replay compares with the signature the native run signed.
+  const replayAgreement = (rows) =>
+    readRecorded(recordedDeclaration, rows).report.descriptive.replay.results.map((entry) => entry.nativeAgreement);
+  check(
+    canonicalJsonOf(
+      replayAgreement(sameDocuments.map((row) => ({ ...row, native: { ...row.native, signature: 'claimed-by-the-row' } }))),
+    ) === canonicalJsonOf(replayAgreement(sameDocuments)),
+    'the replay agreement reads the native record, whatever the row claims',
   );
   const unlistedDir = nativeRun('two-run-before-numeric', 'unlisted', 'A');
   const unlistedManifest = JSON.parse(fs.readFileSync(path.join(unlistedDir, 'manifest.json'), 'utf8'));

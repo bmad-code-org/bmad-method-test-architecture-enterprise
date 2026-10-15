@@ -2696,16 +2696,23 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
     const text = observation.artifacts?.design?.value ?? null;
     const { metrics, counts, notApplicable } = metricsFromContributions(diagnostic.metricContributions ?? {});
     const ref = `${path.basename(dir)}/result.json#/runners/0/diagnostics/${index}`;
-    const observed = isObject(provenance.observed)
-      ? clone(provenance.observed)
-      : {
-          fixed: {
-            suiteDigest: result.suite.fixtureDigest,
-            promptDigest: result.suite.promptDigest,
-            sourceCommit: result.repository.commit,
-          },
-          arm: { model: { requested: provenance.requestedModel, resolved: null }, runner: runner.version },
-        };
+    const recorded = {
+      fixed: { suiteDigest: result.suite.fixtureDigest, promptDigest: result.suite.promptDigest, sourceCommit: result.repository.commit },
+      arm: { model: { requested: provenance.requestedModel, resolved: null }, runner: runner.version },
+    };
+    // An identity the runner recorded has to agree with what the run itself shows: the
+    // suite and the requested model always, the prompt, source and runner where it names them.
+    if (isObject(provenance.observed)) {
+      const stated = flatten(provenance.observed);
+      const shown = flatten(recorded);
+      for (const leaf of ['fixed.suiteDigest', 'arm.model.requested', 'fixed.promptDigest', 'fixed.sourceCommit', 'arm.runner']) {
+        const required = leaf === 'fixed.suiteDigest' || leaf === 'arm.model.requested';
+        if ((required || leaf in stated) && canonicalJson(stated[leaf] ?? null) !== canonicalJson(shown[leaf] ?? null)) {
+          problems.push(`${caseDirectory}/provenance.json: observed ${leaf} differs from what the run recorded`);
+        }
+      }
+    }
+    const observed = isObject(provenance.observed) ? clone(provenance.observed) : recorded;
     const record = {
       ref,
       manifestSha256,
