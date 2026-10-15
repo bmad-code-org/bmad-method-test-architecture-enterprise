@@ -168,9 +168,24 @@ function endsSentence(line, at) {
  *
  * @param {string} line
  * @param {Array<string|undefined>} reasons the reason each character of the line is protected, or `undefined`
+ * @param {{linkText?: boolean}} [options] `linkText: false` keeps the text of links, for a reader of the words and not the sentence ends
  * @returns {string} a string of the same length
  */
-function maskProtected(line, reasons) {
+/** The `[open, close]` positions of each link text of the line: the nearest `[` to a `]` that a `(` follows. */
+function linkSpans(line) {
+  const spans = [];
+  let open = -1;
+  for (let at = 0; at < line.length; at += 1) {
+    if (line[at] === '[') open = at;
+    else if (line[at] === ']') {
+      if (open !== -1 && line[at + 1] === '(') spans.push([open, at]);
+      open = -1;
+    }
+  }
+  return spans;
+}
+
+function maskProtected(line, reasons, { linkText = true } = {}) {
   const masked = Array.from({ length: line.length }, (_, at) => line[at]);
   for (let from = 0; from < masked.length; ) {
     const reason = reasons[from];
@@ -199,15 +214,8 @@ function maskProtected(line, reasons) {
     }
     from = to;
   }
-  // The text of a link is not the sentence around it: from the nearest `[` to a `]` that a `(` follows.
-  let open = -1;
-  for (let at = 0; at < line.length; at += 1) {
-    if (line[at] === '[') open = at;
-    else if (line[at] === ']') {
-      if (open !== -1 && line[at + 1] === '(') masked.fill(' ', open, at + 1);
-      open = -1;
-    }
-  }
+  const spans = linkSpans(line);
+  if (linkText) for (const [open, close] of spans) masked.fill(' ', open, close + 1);
   return masked.join('');
 }
 
@@ -218,11 +226,11 @@ function maskProtected(line, reasons) {
  * found once per line, so each test is a search over them and a line of many sites costs time in proportion to its length.
  */
 function questionTest(line, reasons) {
-  const ends = [...maskProtected(line, reasons).matchAll(/[!?]|\.(?!\d)/g)].map((match) => ({
-    at: match.index,
-    question: match[0] === '?',
-  }));
-  return (index) => {
+  const endsOf = (text) => [...text.matchAll(/[!?]|\.(?!\d)/g)].map((match) => ({ at: match.index, question: match[0] === '?' }));
+  const outside = endsOf(maskProtected(line, reasons));
+  const inside = endsOf(maskProtected(line, reasons, { linkText: false }));
+  const spans = linkSpans(line);
+  const firstAfter = (ends, index) => {
     let low = 0;
     let high = ends.length;
     while (low < high) {
@@ -230,7 +238,23 @@ function questionTest(line, reasons) {
       if (ends[middle].at < index) low = middle + 1;
       else high = middle;
     }
-    return ends[low]?.question ?? false;
+    return ends[low];
+  };
+  return (index) => {
+    // A site in the text of a link reads that text's own sentence ends first.
+    let low = 0;
+    let high = spans.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (spans[middle][1] < index) low = middle + 1;
+      else high = middle;
+    }
+    const span = spans[low] !== undefined && index > spans[low][0] ? spans[low] : undefined;
+    if (span !== undefined) {
+      const own = firstAfter(inside, index);
+      if (own !== undefined && own.at < span[1]) return own.question;
+    }
+    return firstAfter(outside, index)?.question ?? false;
   };
 }
 
@@ -406,7 +430,7 @@ function negationSites(line, reasons) {
 function numericSites(line, reasons) {
   const sites = [];
   const asks = questionTest(line, reasons);
-  const masked = maskProtected(line, reasons);
+  const masked = maskProtected(line, reasons, { linkText: false });
   for (const match of line.matchAll(BOUND_SITE)) {
     const { groups } = match;
     const lower = groups.lower !== undefined;

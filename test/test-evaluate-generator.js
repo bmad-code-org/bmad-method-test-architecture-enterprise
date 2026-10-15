@@ -676,6 +676,14 @@ const EDGE_RULES = [
   { line: 'Do not say "sorry." Keep at most 5 words.', family: 'numeric-threshold', edited: 'Do not say "sorry." Keep at most 10 words.' },
   { line: 'Can you answer in at most 5 words to "why?"', family: 'numeric-threshold', code: 'question' },
   { line: 'Can you answer in at most 5 words to “why?”', family: 'numeric-threshold', code: 'question' },
+  // A site in the text of a link reads that text's own sentence; a site beside the link ignores the marks in it.
+  { line: '[Can you answer in at most 5 words?](https://x.test)', family: 'numeric-threshold', code: 'question' },
+  {
+    line: '[Answer in at most 5 words.](https://x.test)',
+    family: 'numeric-threshold',
+    edited: '[Answer in at most 10 words.](https://x.test)',
+  },
+  { line: 'Do [not](https://x.test) keep it at most 5 words.', family: 'numeric-threshold', code: 'negated-bound' },
   { line: 'Can you keep responses at most 5 words?', family: 'numeric-threshold', code: 'question' },
   { line: 'Keep responses at most 5 words.', family: 'numeric-threshold', edited: 'Keep responses at most 10 words.' },
   {
@@ -977,6 +985,7 @@ function checkCostStaysLinear() {
     ['a long word before a digit', `${'a'.repeat(200_000)}1b must go\n`],
     ['fifty thousand sites on one line', `${'must '.repeat(50_000)}\n`],
     ['fifty thousand questions on one line', `${'Why? must '.repeat(25_000)}\n`],
+    ['a line of links each holding a site', `${'[must](b)'.repeat(25_000)}\n`],
     ['a line of unmatched brackets', `${'['.repeat(120_000)} must ${']'.repeat(120_000)}\n`],
     ['a line of link texts', `${'[a](b)'.repeat(40_000)} must\n`],
     ['twenty thousand sites on one line', `${'must '.repeat(20_000)}\n`],
