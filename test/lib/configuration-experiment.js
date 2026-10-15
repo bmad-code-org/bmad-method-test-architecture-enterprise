@@ -548,6 +548,7 @@ function timestampMs(value) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+/** A row's receipt when its shape holds: kind, workspace, ordered ISO times and the artifact hash it claims. */
 function validReceipt(raw) {
   const receipt = raw.receipt;
   if (!isObject(receipt)) return { receipt: null, problem: null };
@@ -570,6 +571,7 @@ function validReceipt(raw) {
   return { receipt: clone(receipt), problem: null };
 }
 
+/** A copy of a row's metrics or counts with missing values as null. */
 function numberMap(value) {
   const out = Object.create(null);
   for (const [key, entry] of Object.entries(isObject(value) ? value : {})) out[key] = entry === null || entry === undefined ? null : entry;
@@ -695,6 +697,7 @@ function rowContent(row) {
   return canonicalJson(content);
 }
 
+/** Kept rows and excluded copies, malformed rows and shared workspaces, each exclusion with its reason. */
 function classifyRows(rows) {
   const byAttempt = new Map();
   const byWorkspace = new Map();
@@ -939,6 +942,7 @@ function verifyLedger(ledger, pins = []) {
   return { ok: problems.length === 0, problems, head: ledger.length === 0 ? null : ledger.at(-1).hash, length: ledger.length };
 }
 
+/** The exposure ledger checked against its pins and against what this stage's cases may have seen. */
 function exposureProblems(declaration, ledger, resume, extraPins = []) {
   if (!Array.isArray(ledger)) return { blockers: ['exposure ledger is missing'], burned: [], ledger: null };
   const pins = [...extraPins];
@@ -1028,6 +1032,7 @@ function selectionChainProblems(declaration, selection, { replay, bootstrap }) {
 // descriptive repeatability
 // ---------------------------------------------------------------------------
 
+/** Whether a completed row meets every success minimum with no critical miss and no unknown count. */
 function rowSuccess(row, declaration) {
   if (row.status !== 'completed') return false;
   if (criticalMisses(row, declaration).length > 0 || unknownCriticalCounts(row, declaration).length > 0) return false;
@@ -1037,6 +1042,7 @@ function rowSuccess(row, declaration) {
   );
 }
 
+/** The declared zero-tolerance rules that name a count. */
 function criticalRules(declaration) {
   const rules = declaration?.gates?.critical?.rules;
   return Array.isArray(rules) ? rules.filter((rule) => isObject(rule) && isNonEmptyString(rule.count)) : [];
@@ -1064,6 +1070,7 @@ function invalidCriticalCounts(row, declaration) {
     .sort();
 }
 
+/** The critical rules a row reports as missed, from its own list and its positive counts. */
 function criticalMisses(row, declaration) {
   const hits = new Set(row.critical);
   for (const rule of criticalRules(declaration)) {
@@ -1330,6 +1337,7 @@ const sameNumber = (left, right) =>
   (left ?? null) === (right ?? null) ||
   (isFiniteNumber(left) && isFiniteNumber(right) && Math.abs(left - right) <= 1e-12 * Math.max(1, Math.abs(left), Math.abs(right)));
 
+/** The scorer's reading of a row's saved bytes, or null when there are no checkable bytes or no scorer. */
 function replayRow(replay, row) {
   if (typeof replay !== 'function' || row.outputText === null || row.hashMismatch) return null;
   try {
@@ -1385,6 +1393,7 @@ function verificationProblems(row, declaration, replayed) {
   return problems;
 }
 
+/** The declared arms against the one changed setting: unknown leaves, differing leaves, and what differs outside it. */
 function checkIdentity(declaration) {
   const arms = declaration.identity?.arms ?? {};
   const flatA = flatten(arms.A ?? {});
@@ -1583,6 +1592,7 @@ function scheduleProblems(slots, order) {
   return problems;
 }
 
+/** Build ids that more than one cluster used. */
 function sharedBuilds(rows) {
   const owners = new Map();
   const shared = new Set();
@@ -1689,6 +1699,7 @@ function describeArms(declaration, slots, plan, pricing) {
   return out;
 }
 
+/** The paired contrast: verification, identity, pairs, schedule, cost, the bootstrap bounds and the decision. */
 function analyzeContrast({ declaration, validation, rows, excluded, ledger, resume, bootstrap, replay, selection }) {
   const facts = { rows: rows.length };
   const pricing = declaration.resources?.pricing ?? null;
@@ -1971,6 +1982,7 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
   };
 }
 
+/** The decision, in the order the module header lists; the first rule that applies decides. */
 function decide({
   declaration,
   validation,
@@ -2360,6 +2372,7 @@ function readExperiment(input) {
   }
 }
 
+/** Task, judge and experiment cost over every kept attempt, retries and failures included. */
 function costSection(declaration, rows) {
   const pricing = declaration.resources?.pricing ?? null;
   const scope = declaration.resources?.costScope ?? DEFAULT_COST_SCOPE;
@@ -2412,6 +2425,7 @@ function summarizeCost(cost) {
   };
 }
 
+/** The blocked decision for a declaration that cannot run the contrast. */
 function blockedDecision(validation) {
   const reasons = [...validation.problems, ...validation.pairedProblems].map(
     (problem) => `declaration: ${problem.where} ${problem.message}`,
@@ -2429,6 +2443,7 @@ function blockedDecision(validation) {
   };
 }
 
+/** The evidence index, the denominators and their reconciliation, added to the report. */
 function finish({ report, kept, excluded, inputCount, declaration = null, analyzedContrast = null }) {
   const countedAs = new Map();
   if (declaration && analyzedContrast) {
