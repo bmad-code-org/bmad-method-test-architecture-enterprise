@@ -359,7 +359,7 @@ Gates are checked in this order, and the first that applies decides:
 5. Incomplete pairs, missing receipts, unknown required cost, non-finite data or an unusable ledger are `blocked`.
 6. An unsupported design is `descriptive-only`.
 7. Too few clusters, a degenerate interval or an uncalibrated bootstrap is `inconclusive`.
-8. Every required lower bound must strictly exceed its threshold: the quality bound above the negative of the allowed loss, the saving bound above zero, each absolute floor and any latency limit. Equality does not pass. A failed bound is `inconclusive`, because failing to show noninferiority is not proof of loss.
+8. Every required lower bound must strictly exceed its threshold: the quality bound above the negative of the allowed loss, the saving bound above zero for the contrast `(1 - minFraction) * baseline cost - candidate cost`, so a candidate has to cost less than the baseline by more than the declared `gates.saving.minFraction`, each absolute floor and any latency limit. Equality does not pass. A failed bound is `inconclusive`, because failing to show noninferiority is not proof of loss.
 
 A passing selection run reports `selection-cleared`. Only a confirmation on untouched cases reports `recommend`. A recommendation names a configuration and carries no authority. It applies no patch, accepts no baseline and carries no native verdict.
 

@@ -338,28 +338,45 @@ function checkExperimentReaderSurfaces() {
   const baseline = JSON.parse(
     fs.readFileSync(path.join(__dirname, 'fixtures', 'configuration-experiment', 'example-baseline-experiment.json'), 'utf8'),
   );
+  // One distinct value per scored field, so a swap of two components anywhere in the signature is visible.
   const scored = {
-    set: 'set',
-    mentions: {},
-    shape: {},
-    shapeFailures: [],
-    links: {},
-    grounding: {},
-    ungrounded: [],
-    ceiling: {},
-    coverageChecks: [],
-    orderingChecks: [],
-    flattenedPriorities: false,
-    unscoredRiskTables: [],
+    set: 'value-set',
+    mentions: 'value-mentions',
+    shape: 'value-shape',
+    shapeFailures: 'value-shapeFailures',
+    links: 'value-links',
+    grounding: 'value-grounding',
+    ungrounded: 'value-ungrounded',
+    ceiling: 'value-ceiling',
+    coverageChecks: 'value-coverageChecks',
+    orderingChecks: 'value-orderingChecks',
+    flattenedPriorities: 'value-flattenedPriorities',
+    unscoredRiskTables: 'value-unscoredRiskTables',
   };
-  const signature = JSON.parse(design.signatureOf(scored, 0));
+  const signature = JSON.parse(design.signatureOf(scored, 'value-mutations'));
+  // The order the reader names its components in, written out here and not taken from the reader or the harness.
+  const readerOrder = [
+    'set',
+    'mentions',
+    'shape',
+    'shapeFailures',
+    'links',
+    'grounding',
+    'ungrounded',
+    'ceiling',
+    'coverageChecks',
+    'orderingChecks',
+    'flattenedPriorities',
+    'unscoredRiskTables',
+    'mutations',
+  ];
   check(
-    signature.length === experiment.SIGNATURE_COMPONENTS.length,
-    `the test-design signature has ${signature.length} components, the experiment reader names ${experiment.SIGNATURE_COMPONENTS.length}`,
+    JSON.stringify(experiment.SIGNATURE_COMPONENTS) === JSON.stringify(readerOrder),
+    'the experiment reader names the test-design signature components in the documented order',
   );
   check(
-    signature[0] === 'set' && signature.at(-1) === 0,
-    'the test-design signature opens with the set and closes with the fixture mutation count',
+    JSON.stringify(signature) === JSON.stringify(readerOrder.map((name) => `value-${name}`)),
+    'the test-design signature carries its components in that order, position by position',
   );
 
   const contributions = numericContributions(
