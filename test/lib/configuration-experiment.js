@@ -166,6 +166,25 @@ function deepFreeze(value) {
 
 const clone = (value) => (value === undefined ? undefined : structuredClone(value));
 
+/** A key as one segment of a leaf path: a backslash or dot inside it is escaped. */
+const escapeKey = (key) => key.replaceAll('\\', '\\\\').replaceAll('.', String.raw`\.`);
+
+/** The last key of a leaf path, unescaped. */
+function lastKey(leaf) {
+  let key = '';
+  for (let index = 0; index < leaf.length; index += 1) {
+    if (leaf[index] === '\\') {
+      index += 1;
+      key += leaf[index] ?? '';
+    } else if (leaf[index] === '.') {
+      key = '';
+    } else {
+      key += leaf[index];
+    }
+  }
+  return key;
+}
+
 /**
  * Leaf paths of a nested object. Arrays are leaves. A dot or backslash inside a key is
  * escaped, so a key named `a.b` never collides with the path of `{ a: { b } }`.
@@ -173,7 +192,7 @@ const clone = (value) => (value === undefined ? undefined : structuredClone(valu
 function flatten(value, prefix = '', out = Object.create(null)) {
   if (isObject(value)) {
     for (const key of Object.keys(value).sort()) {
-      const name = key.replaceAll('\\', '\\\\').replaceAll('.', String.raw`\.`);
+      const name = escapeKey(key);
       flatten(value[key], prefix ? `${prefix}.${name}` : name, out);
     }
     if (Object.keys(value).length === 0 && prefix) out[prefix] = {};
@@ -230,9 +249,14 @@ function changedSetting(changedFactor) {
   if (kind === 'effort' && setting === 'effort') {
     return { setting, leaves: ['effort.requested', 'effort.applied'], together: ['effort.requested', 'effort.applied'] };
   }
-  if (kind === 'effort' && /^decode\.[^.]+$/.test(setting ?? '')) return { setting, leaves: [setting], together: [setting] };
-  if (kind === 'prompt' && /^promptRegions\.[^.]+$/.test(setting ?? '')) {
-    return { setting, leaves: [setting, 'promptDigest'], together: [setting, 'promptDigest'] };
+  // The name after `decode.` or `promptRegions.` is one key, escaped like any leaf path.
+  const named = (group) => {
+    const name = isNonEmptyString(setting) && setting.startsWith(`${group}.`) ? setting.slice(group.length + 1) : '';
+    return name.length > 0 && !name.includes('.') ? `${group}.${escapeKey(name)}` : null;
+  };
+  if (kind === 'effort' && named('decode')) return { setting, leaves: [named('decode')], together: [named('decode')] };
+  if (kind === 'prompt' && named('promptRegions')) {
+    return { setting, leaves: [named('promptRegions'), 'promptDigest'], together: [named('promptRegions'), 'promptDigest'] };
   }
   return null;
 }
@@ -336,7 +360,7 @@ function validateDeclaration(declaration) {
   }
   need(
     pairs,
-    Object.keys(flatten(decl.identity?.fixed ?? {})).some((leaf) => leaf.split('.').at(-1) === 'cacheRegime'),
+    Object.keys(flatten(decl.identity?.fixed ?? {})).some((leaf) => lastKey(leaf) === 'cacheRegime'),
     'identity.fixed',
     'needs a cacheRegime: both arms run under one recorded cache policy',
   );

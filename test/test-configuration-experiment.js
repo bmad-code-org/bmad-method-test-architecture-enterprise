@@ -3938,6 +3938,34 @@ function checkObservedPairingAndOrder() {
       .pairedProblems.some((problem) => problem.where === 'identity.fixed' && /cacheRegime/.test(problem.message)),
     'a contrast that records no cache regime is refused',
   );
+  const dottedCachePolicy = declaration({
+    mutate: (body) => {
+      body.identity.fixed.environment['environment.cacheRegime'] = body.identity.fixed.environment.cacheRegime;
+      delete body.identity.fixed.environment.cacheRegime;
+    },
+  });
+  check(
+    experiment
+      .validateDeclaration(dottedCachePolicy)
+      .pairedProblems.some((problem) => problem.where === 'identity.fixed' && /cacheRegime/.test(problem.message)),
+    'a key merely spelled with a cacheRegime suffix is no cache regime',
+  );
+  const backslashSetting = declaration({
+    mutate: (body) => {
+      body.scope.changedFactor = { kind: 'effort', setting: String.raw`decode.top\p` };
+      body.identity.arms.A.decode[String.raw`top\p`] = 0.9;
+      body.identity.arms.B = clone(body.identity.arms.A);
+      body.identity.arms.B.decode[String.raw`top\p`] = 0.5;
+    },
+  });
+  const backslashResult = read(
+    backslashSetting,
+    world({ mutateRow: (row) => (row.observed.arm = clone(backslashSetting.identity.arms[row.arm])) }),
+  );
+  check(
+    outcomeOf(backslashResult) === 'selection-cleared',
+    `a decode setting whose name holds a backslash is still one setting, got ${outcomeOf(backslashResult)}: ${reasonsOf(backslashResult).join(' | ')}`,
+  );
   const cacheDrift = read(
     declaration(),
     world({ mutateRow: (row) => row.arm === 'B' && (row.observed.fixed.environment.cacheRegime = 'warm') }),
