@@ -89,7 +89,7 @@ app/
 ```
 
 The example is a minimal runner smoke check: one clean control and no seeded defect.
-A passed control shows the runner works; it does not show the evaluation catches a defect.
+A passed control shows only that the runner works; catching a defect takes a seeded one.
 Evaluations with seeded defects add `mutations/`, and the [tutorial](/docs/tutorials/evaluate-your-first-skill.md) shows a complete clean and mutated run.
 
 ### 2. Read the Target Entry the Skill Wrote

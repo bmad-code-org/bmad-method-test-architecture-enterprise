@@ -38,10 +38,16 @@ try {
   }
   assert.match(routeOf('No rubric'), /add no `judge` block/, 'the judge guide does not tell a contract with no rubric to add no judge');
   assert.match(routeOf('`command`'), /Omit `judge`/, 'the judge guide does not tell a command or sealed-brief agent to omit the judge');
-  assert.match(routeOf('`records`'), /does not run or replay the scorer/, 'the judge guide implies TeA runs a records harness scorer');
+  assert.match(routeOf('`records`'), /Omit `judge`/, 'the judge guide does not tell a records evaluator to omit the judge');
+  assert.match(routeOf('`records`'), /the scorer runs only in your harness/, 'the judge guide implies TeA runs a records harness scorer');
   assert.match(routeOf('`records`'), /`partitionPlan`/, 'the judge guide omits the records rubric partition plan refusal');
   assert.doesNotMatch(guide, /lower it only after/, 'the judge guide treats a lower agreement minimum as a label repair');
   assert.match(guide, /Do not lower it to pass calibration/, 'the judge guide does not keep the agreement minimum apart from label repair');
+  assert.match(
+    guide,
+    /`minimumAgreement` is the share of labels the scorer must match/,
+    'the judge guide misstates what minimumAgreement measures',
+  );
 
   const nested = calibrationObservation({
     criterion: { evidence: '/interactions/judge-run/stdout/0' },

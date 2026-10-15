@@ -11,7 +11,9 @@
  *   resolve from the project root;
  * - on a how-to page, stop at the first failure when it runs more than one `tea-evaluate` command: chain them with `&&`,
  *   or say in the paragraph before or after the block to run them separately or stop on a nonzero exit, since a pasted
- *   block otherwise runs `run` after a failed `preflight`.
+ *   block otherwise runs `run` after a failed `preflight`;
+ * - stop when a presence check (`[ -n "$VAR" ] || ...`) fails: a check that only prints lets the next command run without
+ *   the credential.
  *
  * A synopsis belongs in a `text` block, which this gate leaves alone.
  * Each rule has revert cases below: a block that breaks it fails here.
@@ -100,6 +102,8 @@ function problemsOf(block, { howTo = false } = {}) {
     if (!preceding.endsWith(PRIVATE_INSTALL))
       problems.push(`\`${match[0]}\` runs without the private install prefix \`${PRIVATE_INSTALL.trim()}\``);
   }
+  for (const line of code.split('\n').filter((text) => /\[\s+-n\s+"\$\w+"\s+\]\s*\|\|/.test(text)))
+    if (!/\b(false|exit|return)\b/.test(line)) problems.push(`a presence check that only prints runs on: ${line.trim()}`);
   const commands = code.split('\n').filter((line) => /\btea-evaluate\s+[a-z]/.test(line));
   const chained = commands.slice(0, -1).every((line) => /&&\s*$/.test(line));
   if (howTo && commands.length > 1 && !chained && !STOP_ON_FAILURE.test(block.label) && !STOP_ON_FAILURE.test(block.next))
@@ -148,6 +152,10 @@ function checkRules() {
     ['quoted angle placeholder', fenced('npm exec --prefix evals -- tea-evaluate score --evaluation evals/e --run "<invocationId>"')],
     ['a sh block', fenced('tea-evaluate check --evaluation evals/e', 'sh')],
     ['a placeholder inside a path', fenced('grep -A8 \'"confinement"\' evals/e/runs/<runId>/run.json')],
+    [
+      'a presence check that only prints',
+      fenced('[ -n "$TOKEN" ] || echo \'TOKEN is not set\' >&2\nnpm exec --prefix evals -- tea-evaluate check --evaluation evals/e'),
+    ],
   ];
   for (const [name, text] of failing) assert.notDeepEqual(pageProblems('fixture.md', text), [], `the gate passes ${name}`);
   const sequence =
@@ -179,6 +187,12 @@ function checkRules() {
     ['a runner path', fenced('ls evals/node_modules/.bin/tea-skill-runner')],
     ['a bash test with alternatives', fenced('[[ -n "$RUN_ID" || -n "$SCORE_ID" ]] && echo set')],
     ['a continued line', fenced('npm exec --prefix evals -- \\\n  tea-evaluate check --evaluation evals/e')],
+    [
+      'a presence check that stops',
+      fenced(
+        '[ -n "$TOKEN" ] || { echo \'TOKEN is not set\' >&2; false; } &&\n  npm exec --prefix evals -- tea-evaluate check --evaluation evals/e',
+      ),
+    ],
     ['a stdin redirect', fenced('npm exec --prefix evals -- tea-skill-runner --skill-root skills/s --agent claude < prompt.txt')],
   ];
   for (const [name, text] of passing) assert.deepEqual(pageProblems('fixture.md', text), [], `the gate refuses ${name}`);

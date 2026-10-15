@@ -334,12 +334,12 @@ P-003/evidence-artifact.json:"contractVerdict":"PASS"
 ```
 
 PASS means the score found no evidence fault or coverage gap in this contract.
-It shows that this evaluation catches one boundary defect in one small skill; it does not show the skill is correct for inputs no probe covers.
+It shows that this evaluation catches one boundary defect in one small skill; inputs no probe covers stay unmeasured.
 See [`score`](/docs/reference/tea-evaluate-cli.md#score).
 
 ## Step 8: Compare and Accept a Baseline
 
-A baseline preserves a measurement you reviewed; accepting it does not certify the skill or the evaluation.
+A baseline preserves a measurement you reviewed for later comparison; judging the skill's quality stays with the reviewer.
 Later runs are compared with it, so a regression in how well the evaluation catches defects shows up as a difference.
 Compare the run with the baseline:
 
@@ -398,7 +398,7 @@ Each line is one check:
 - `replay` replays the baseline through eval-quality's `preflight` and `score` and compares the result with the baseline byte for byte, so a baseline that fails to reproduce is rejected here.
 
 Exit 0 means no check blocks the pull request.
-This rechecks the saved evidence; it does not run a fresh evaluation of changed skill code.
+This rechecks the saved evidence; a change to the skill needs a fresh `run` and `score` before it is measured.
 In a pipeline, `bmad-tea-framework`'s CI setup renders one `tea-evaluate ci` step per tier from this plan.
 See [`ci`](/docs/reference/tea-evaluate-cli.md#ci).
 

@@ -15,8 +15,8 @@ How the parts of Evaluate fit together is in [How Evaluate Works](/docs/explanat
 
 `preflight` and `run` confine every target process they start, one the target leaves running included, unless `evaluation.json` sets `"confinement": false`.
 Seatbelt supplies the confinement on macOS and Bubblewrap on Linux.
-A host that cannot confine or cannot observe, Windows among them, stops the command with exit 12 and names the reason; opting out runs there and removes every limit on this page.
-A `records` evaluator launches no target: your harness runs it outside these limits.
+A host that cannot confine or cannot observe, Windows among them, stops the command with exit 12 and names the reason; opting out runs there and removes every limit on the target, while the run-directory and score checks below still apply.
+A `records` evaluator's trials run in your harness, outside these limits; its `preflight` and qualification still launch the target confined.
 
 In a confined run, four things stay apart.
 
@@ -32,7 +32,7 @@ In a confined run, four things stay apart.
 - A complete record on macOS.
   The kernel's log drops reports, most of all under load, so an empty list of observed mounts means no report arrived.
   The kernel still refused the read.
-  `run.json` marks a trial whose audit may have lost a report `lossy`; Linux's trace holds every traced syscall.
+  `run.json` marks a trial `lossy` when the audit detects a loss, and a trial marked `complete` can still have lost a report; Linux's trace holds every traced syscall.
 - Every host service closed.
   Seatbelt refuses the host's path-based Unix sockets, but the Mach services of macOS stay open, and macOS does not enforce `egress`.
   Bubblewrap masks the sockets it finds when a call starts, so a socket bound later stays reachable, and the audit lists a connection to it.
@@ -41,11 +41,11 @@ In a confined run, four things stay apart.
 
 ## When isolation fails
 
-- Exit 12 from `preflight`, `run` or `score`: the host cannot confine or observe, or a check on the run directory or on a score's inputs failed.
-  The message names the cause.
+- Exit 12 from `preflight` or `run` that names the sandbox or its observer: the host cannot confine or observe.
+- Exit 12 that names a file of the run directory or a score input: a process changed the evidence the runtime wrote.
 - Exit 3 with `mount outside allowlist`: the audit saw the target reach a path outside its grants.
   Review the path before you grant it through `systemPaths`.
-- A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list is no evidence of a clean trial.
+- A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list leaves the trial unproven.
 
 The sections below show how the runtime enforces each part, for readers who audit or maintain it: [the target's git](#the-targets-view-of-your-repository), [call directories](#call-directories), [the audit](#what-the-audit-watches), [host services](#host-services), [the bridge's admission token](#the-bridges-admission-token), [the run directory](#the-run-directory) and [score integrity](#score-integrity).
 [How the skill runner supervises its agent](#how-the-skill-runner-supervises-its-agent) covers the runner's process lifecycle.

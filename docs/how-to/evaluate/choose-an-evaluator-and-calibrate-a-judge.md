@@ -67,8 +67,8 @@ Who scores a rubric depends on the kind, and `check` refuses a `judge` block tha
 
 - **No rubric in the contract:** add no `judge` block and skip to step 7.
 - **`deterministic` with a rubric:** TeA's separate judge scores it. Continue with step 4.
-- **`command` or `sealed-brief-agent` with a rubric:** your evaluator scores the rubric itself. Omit `judge` from `evaluation.json` and from `policy/evaluator-conditions.json`, skip the judge settings in step 4 and label examples as in step 5. A sealed-brief agent must also pass its own [qualification](/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent) before trials; calibration does not replace it.
-- **`records` with a rubric:** your harness runs its scorer over the labeled examples and writes `calibration-judgments.json` beside its records. TeA checks the bindings and computes agreement; it does not run or replay the scorer. A `partitionPlan` beside a `records` rubric is refused. [Calibrate any rubric](/docs/how-to/evaluate/bring-an-existing-suite.md#5-calibrate-any-rubric) covers the harness side.
+- **`command` or `sealed-brief-agent` with a rubric:** your evaluator scores the rubric itself. Omit `judge` from `evaluation.json` and from `policy/evaluator-conditions.json`, skip the judge settings in step 4 and label examples as in step 5. A sealed-brief agent must also pass its own [qualification](/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent) before trials, a gate separate from calibration.
+- **`records` with a rubric:** your harness runs its scorer over the labeled examples and writes `calibration-judgments.json` beside its records. TeA checks the bindings and computes agreement from the harness's answers; the scorer runs only in your harness. Omit `judge` as for `command`, skip the judge settings in step 4 and label examples as in step 5. A `partitionPlan` beside a `records` rubric is refused. [Calibrate any rubric](/docs/how-to/evaluate/bring-an-existing-suite.md#5-calibrate-any-rubric) covers the harness side.
 
 ### 4. Review the Rubric Judge
 
@@ -146,7 +146,7 @@ Each one has a cause you can repair:
 - The scorer is too weak for the scale.
   Choose a stronger model or scorer and ask the skill to update the recorded ID before rerunning.
 
-`minimumAgreement` is the disagreement you accept from the scorer, a separate decision from the labels.
+`minimumAgreement` is the share of labels the scorer must match, so it sets how much disagreement you accept, a separate decision from the labels.
 Do not lower it to pass calibration; if you change it, record why that much disagreement is acceptable for this use.
 The calibration file's digest and the minimum agreement join the evaluator configuration, so changing either changes the scoring version.
 

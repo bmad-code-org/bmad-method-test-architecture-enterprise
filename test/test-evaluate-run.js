@@ -12525,13 +12525,15 @@ function checkConfinementReference() {
   const opening = `${sectionOf(mechanism, '## What confinement keeps apart') ?? ''}\n${sectionOf(mechanism, '## What confinement does not guarantee') ?? ''}`;
   check(
     opening.includes('`"confinement": false`') &&
-      opening.includes('A `records` evaluator launches no target') &&
+      opening.includes("A `records` evaluator's trials run in your harness") &&
       opening.includes('private temp, port and home directories') &&
       opening.includes('On Linux, the read-only view of `/` lets such a read through') &&
       opening.includes('an empty list of observed mounts means no report arrived') &&
       opening.includes('Mach services') &&
       opening.includes('a socket bound later stays reachable') &&
-      !/every other place it opens is recorded|can write nothing outside it|Four things stay apart in every run/.test(mechanism),
+      !/every other place it opens is recorded|can write nothing outside it|Four things stay apart in every run|evaluator launches no target/.test(
+        mechanism,
+      ),
     "the confinement page's opening does not bound its guarantees: the opt-out and records scope, the writable private directories, Linux's audited reads, the lossy macOS log and the host channels left open",
   );
 }
