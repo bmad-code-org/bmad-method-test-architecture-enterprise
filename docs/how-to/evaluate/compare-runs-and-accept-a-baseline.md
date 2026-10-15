@@ -126,8 +126,9 @@ npm exec --prefix evals -- tea-evaluate run --evaluation evals/grader-tool-serve
 After it completes, copy the printed run ID. Run the next commands separately and inspect their output:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server --run <runId>
-npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --run <runId>
+RUN_ID=$(ls evals/grader-tool-server/runs | tail -n 1) # the newest run
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server --run "$RUN_ID"
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --run "$RUN_ID"
 ```
 
 The default run selects both partitions. When you need a development-only or held-out run, use `--partition development` or `--partition held-out`; review development before opening held-out results. Keep the selected partition consistent with the baseline you intend to compare.
@@ -135,7 +136,7 @@ The default run selects both partitions. When you need a development-only or hel
 Only after your acceptance decision:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --run <runId> --accept
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/grader-tool-server --run "$RUN_ID" --accept
 npm exec --prefix evals -- tea-evaluate check --evaluation evals/grader-tool-server
 ```
 

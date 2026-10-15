@@ -202,10 +202,10 @@ tea-evaluate run: clean: trial 1 of 1
 tea-evaluate run: 1 trial set(s) of 1 trial(s) sealed over clean; score them with tea-evaluate score --run 20261007T112821798Z-9c1c180d (exit 0, /work/app/evals/stub-skill-preflight/runs/20261007T112821798Z-9c1c180d)
 ```
 
-After a successful run, copy the printed run ID to score the run:
+After a successful run, score it; with no `--run`, `score` takes the most recent run:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight --run <runId>
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/stub-skill-preflight
 ```
 
 `score` hands each probe to eval-quality and prints its exit:
@@ -222,10 +222,10 @@ A folder with seeded defects adds a `mutated:<id>` set of trials for each one, a
 ### 6. Read the Run
 
 Only `score` produces a PASS, WAIVED, or CONCERNS verdict; a successful `run` means trials were recorded. Both exit 0 when successful.
-Read the verdict and the outcome states from the evidence artifacts in the score invocation folder, replacing `<runId>` and `<scoreId>` with the printed IDs:
+Read the verdict and outcome states from the run's newest score:
 
 ```bash
-(cd evals/stub-skill-preflight/runs/<runId>/scores/<scoreId> &&
+(cd evals/stub-skill-preflight/runs && cd "$(ls | tail -n 1)/scores" && cd "$(ls | tail -n 1)" &&
   grep -o '"contractVerdict":"[A-Z]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u)
 ```
@@ -298,6 +298,6 @@ After the target is fixed, ask Evaluate to run it again, then review and accept 
 
 - [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md): Every command, option and exit code
 - [Exit codes](/docs/reference/tea-evaluate-cli.md#exit-codes)
-- [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement)
+- [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)
 - [The evaluation folder](/docs/reference/tea-evaluate-cli.md#the-evaluation-folder)
 - [How Evaluate Works](/docs/explanation/how-evaluate-works.md): Why runs are confined and scored this way

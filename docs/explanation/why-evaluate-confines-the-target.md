@@ -9,7 +9,7 @@ Evaluate runs target code in a confined disposable workspace and audits access o
 This keeps the target from reading the evaluation or rewriting its evidence.
 A disposable directory alone leaves the rest of the host accessible.
 
-What you configure (the host requirements, the opt-out, the `egress` and `systemPaths` fields of a registry entry, the private home and the login of an agent) is in the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-cli.md#file-system-confinement).
+What you configure (the host requirements, the opt-out, the `egress` and `systemPaths` fields of a registry entry, the private home and the login of an agent) is in the [tea-evaluate CLI reference](/docs/reference/tea-evaluate-confinement.md#file-system-confinement).
 How the parts of Evaluate fit together is in [How Evaluate Works](/docs/explanation/how-evaluate-works.md).
 
 ## What confinement keeps apart
@@ -158,7 +158,7 @@ A run makes one private parent directory when it starts, before any target runs,
 Every run of your user makes its parent beneath one private root, `/tmp/tea-evaluate-p<uid>` (mode 700, a directory you own that is not a link), whatever the run's `TMPDIR` is; a root that is a link or belongs to another user stops the run with exit 12.
 On Windows, which has no confinement, the root is in the temp directory.
 A run removes its own parent when it ends, an interrupting signal included; the root stays, since another run may be using it.
-A later preflight reclaims a verified dead run's parent after `SIGKILL`, using the ownership record described in [The workspace](/docs/reference/tea-evaluate-cli.md#the-workspace).
+A later preflight reclaims a verified dead run's parent after `SIGKILL`, using the ownership record described in [The workspace](/docs/reference/tea-evaluate-manifest.md#the-workspace).
 
 The confinement withholds the run's private directories from every target and every process a target leaves running, those started before a directory was made included, so the token is unreadable to a confined target, which can neither take the bridge's one admission nor read an evaluator's or a judge's working files.
 It withholds the root, so a process left running by an earlier run, or a target of a run in progress elsewhere, cannot reach the parent of a run made after its sandbox was built, whatever temp directory either run uses.
@@ -210,7 +210,7 @@ Each probe's `score.json` records the argv as it ran, with the evaluation folder
 The inputs are the compiled contract, the preflight verdict, the evaluator configuration, the scoring policy, and each set's probe, records and isolation manifest.
 The checks above parse the held bytes, and `partitions.json`, `gap-view.json` and `interpretation.json` are built from them, so nothing a process writes to the run directory after the check reaches a view.
 A manifest the check found absent is passed to eval-quality as absent whatever appears there later.
-The protection starts when `score` reads the inputs: a file rewritten together with its digest in `run.json` before `score` starts verifies as the run's own, and only confinement keeps a target from writing the run directory at all (see [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement)).
+The protection starts when `score` reads the inputs: a file rewritten together with its digest in `run.json` before `score` starts verifies as the run's own, and only confinement keeps a target from writing the run directory at all (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)).
 
 Two checks follow every `eval-quality score` call, before anything is copied:
 
@@ -222,7 +222,7 @@ Two checks follow every `eval-quality score` call, before anything is copied:
   The `eval-quality:` lines on the call's stderr must be the ones the result would print (the qualification failures and, for an Invalid result, its basis, which is how an exit 3 gets its reason); when the library refuses the held bytes, only the exit is compared, since the CLI renders that error itself.
   A rewrite that eval-quality read and a process then restored, a well-formed artifact with altered outcomes or the same artifact in other bytes, an artifact removed or staged afresh, and an exit or reason that does not follow from the held bytes, exit 12 naming the mismatch.
 
-The aggregate call (see [Run-wide strength aggregate](/docs/reference/tea-evaluate-cli.md#run-wide-strength-aggregate)) is held to the same inputs.
+The aggregate call (see [Run-wide strength aggregate](/docs/reference/tea-evaluate-evidence.md#run-wide-strength-aggregate)) is held to the same inputs.
 After it, `score` reads every input again (the run's policy among them), reads the persisted evidence artifacts back through the held directory and compares them with the bytes it copied, and exits 12 naming the file that changed, without copying the aggregate.
 It then aggregates the held bytes in process with eval-quality's `aggregateStrength` (the evidence files, the floors copy and the held policy, each read through the engine's lexical scanner as the CLI reads them) and requires the staged aggregate to equal the serialized result byte for byte and the call's exit to be the one the held bytes give (0 for an aggregate, 4 for a refused set, 5 for a fault in an input).
 A policy rewritten for the aggregate's read and put back is caught here, because the engine refuses an evidence set whose recorded policy digest it does not name; an aggregate substituted for the staged one is caught by the byte comparison; a call that leaves no aggregate where the held bytes give one is caught by the exit.
@@ -233,7 +233,7 @@ The comparison covers the artifact, the exit and the `eval-quality:` stderr line
 A refused call copies no evidence; its reason is on the probe's entry in the invocation's `score.json`, the other probes still run, and `score` exits 12.
 The recorded argv names the run directory's own files, so rerunning `eval-quality score` by hand on it with a fresh `--out` reproduces the persisted evidence byte for byte on a run no process changed.
 
-`run` holds the call it makes for each attempt of a sealed-brief agent evaluator's qualification (see [Qualifying a sealed-brief agent](/docs/reference/tea-evaluate-cli.md#qualifying-a-sealed-brief-agent)) the same way, since the attempt's votes decide whether the evaluator qualifies.
+`run` holds the call it makes for each attempt of a sealed-brief agent evaluator's qualification (see [Qualifying a sealed-brief agent](/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent)) the same way, since the attempt's votes decide whether the evaluator qualifies.
 Before the call, `run` reads the attempt's inputs once through the run directory writer: the compiled contract, the preflight verdict, the evaluator configuration, the scoring policy, the probe, the attempt's record and its isolation manifest.
 The writer hands back only the bytes the runtime wrote, held to the digest it took when it wrote them, so a file that is not those bytes, is a link or is gone exits 12 naming the file before any call is made.
 After the call, `run` reads every input again through the writer and compares the call with the in-process score of the held bytes, with the comparison `score` makes: the first input that changed is named, the staged artifact must equal the serialized result byte for byte, the call's exit must be the one the held bytes give, and its `eval-quality:` lines must be the ones the result would print.

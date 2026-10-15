@@ -1315,7 +1315,10 @@ async function checkServerThatCannotStart() {
  * section and in the run section's sentence on a step that crashes, and it no longer holds Story 1.10's limit.
  */
 function checkReferenceRecordsEndedSession() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  // The tool-server passages sit on the reference's manifest page, the crash sentence in the CLI reference's `run` section.
+  const reference = ['tea-evaluate-manifest.md', 'tea-evaluate-cli.md']
+    .map((page) => fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', page), 'utf8'))
+    .join('\n');
   const lines = reference.split('\n');
   const passage = lines.find((line) => line.startsWith('A server whose process ends the session after the handshake')) ?? '';
   const outside = lines.find((line) => line.startsWith("The exit code follows a command's convention")) ?? '';

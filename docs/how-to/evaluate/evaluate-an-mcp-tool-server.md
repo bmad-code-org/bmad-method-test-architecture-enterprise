@@ -147,10 +147,10 @@ tea-evaluate run: mutated:M-001: trial 3 of 3
 tea-evaluate run: 2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T091047070Z-ef078a64 (exit 0, /work/app/evals/grader-tool-server/runs/20261007T091047070Z-ef078a64)
 ```
 
-After a successful run, copy the printed run ID to score the run:
+After a successful run, score it; with no `--run`, `score` takes the most recent run:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server --run <runId>
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/grader-tool-server
 ```
 
 ```text
@@ -163,10 +163,10 @@ tea-evaluate score: eval-quality score ran for 2 probe(s) of run 20261007T091047
 
 ### 6. Read the Result
 
-Replace `<runId>` and `<scoreId>` with the IDs printed by `run` and `score`:
+Read the verdict and outcome states from the run's newest score:
 
 ```bash
-(cd evals/grader-tool-server/runs/<runId>/scores/<scoreId> &&
+(cd evals/grader-tool-server/runs && cd "$(ls | tail -n 1)/scores" && cd "$(ls | tail -n 1)" &&
   grep -o '"contractVerdict":"[A-Z]*"\|"rule":"[a-z-]*"' P-*/evidence-artifact.json &&
   grep -o '"state":"[a-z-]*"' P-001/evidence-artifact.json | sort -u &&
   grep -o '"state":"[a-z-]*"' P-002/evidence-artifact.json | sort -u)

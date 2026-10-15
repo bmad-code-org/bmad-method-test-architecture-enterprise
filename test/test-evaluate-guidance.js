@@ -2824,6 +2824,7 @@ function checkEvaluatorGuidance(guide, failures) {
     requireText(adapterVersionGuide, marker, 'evaluator.md installed agent adapter version', failures);
   // Story 1.76: the public CLI reference states the same custom response, with its example and the update for existing commands.
   const cliReference = fs.readFileSync(path.join(__dirname, '..', 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const evaluatorsReference = fs.readFileSync(path.join(__dirname, '..', 'docs', 'reference', 'tea-evaluate-evaluators.md'), 'utf8');
   for (const marker of [
     '{"agentVersion":"1.2.3"}',
     'one line of JSON whose `agentVersion` is a three-part semantic version',
@@ -2831,9 +2832,9 @@ function checkEvaluatorGuidance(guide, failures) {
     'must change that output to the JSON line',
   ])
     requireText(
-      headingBody(cliReference, '### The evaluation layer'),
+      headingBody(evaluatorsReference, '## The evaluation layer'),
       marker,
-      'docs/reference/tea-evaluate-cli.md custom agent version response',
+      'docs/reference/tea-evaluate-evaluators.md custom agent version response',
       failures,
     );
   // Story 1.98: the CLI reference states the floor rule the corpus guide teaches, over the partition the twin run repeats and the held-out list.
@@ -3640,7 +3641,7 @@ function checkIsolationViolationGuidance(guide, failures) {
     "and `EPERM` from a macOS Seatbelt target, since its profile denies every connection to a socket path outside the call's own grants",
     'A target that needs one opts out with `"confinement": false` and the adopter\'s recorded reason',
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
-    "find each further cause (a failed step in building the target's private git repository, an observer that fails mid-run) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)",
+    "find each further cause (a failed step in building the target's private git repository, an observer that fails mid-run) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-confinement.md#file-system-confinement)",
   ])
     requireText(body, marker, `gaps.md ${heading}`, failures);
   for (const stale of ['too large to pack', 'a partial clone']) {

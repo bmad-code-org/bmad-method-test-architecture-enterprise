@@ -1089,6 +1089,8 @@ const API_FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
 const GRADER = path.join(API_FIXTURE, 'server', 'grader.js');
 const API_EVALUATION = path.join('evals', 'grader');
 const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
+/** The CLI reference's companion page that holds the historical probe routes. */
+const MANIFEST_REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md');
 const GRADER_TOKEN = 'deployment-token-value-8901';
 const PRE_RELEASE = 'grader-1.4.2';
 const FIX_RELEASE = 'grader-1.4.3';
@@ -2699,7 +2701,8 @@ function historicalSubsection(text, heading) {
 
 /** The reference's historical section names both kinds of historical probe, each under its exact heading. */
 function checkHistoricalReference() {
-  const text = fs.readFileSync(REFERENCE, 'utf8');
+  // The rules table sits in the CLI reference's `check` section, the routes on its manifest page.
+  const text = `${fs.readFileSync(REFERENCE, 'utf8')}\n${fs.readFileSync(MANIFEST_REFERENCE, 'utf8')}`;
   const worktrees = historicalSubsection(text, 'From worktrees');
   check(
     worktrees.includes('`fixCommit`') &&

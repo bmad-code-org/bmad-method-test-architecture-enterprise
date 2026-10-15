@@ -58,6 +58,12 @@ const LLM_EXCLUDE_PATTERNS = [
   // them 499,446.
   'reference/tea-evaluate-cli',
   'reference/tea-test-review-cli',
+  // The tea-evaluate CLI reference's companion pages: the manifest, the confinement, the evaluators and the
+  // evidence that page links, split out of it with the same lookup use, so llms.txt links each one beside it.
+  'reference/tea-evaluate-manifest',
+  'reference/tea-evaluate-confinement',
+  'reference/tea-evaluate-evaluators',
+  'reference/tea-evaluate-evidence',
   // Evaluate's tutorial and its two explanation pages: a fixture walkthrough and
   // the reasons behind the runtime's rules, about 72k characters together. An
   // agent that runs an evaluation follows the how-to guides, which stay in the
@@ -76,6 +82,11 @@ const LLM_EXCLUDE_PATTERNS = [
   'reference/configuration',
   'reference/knowledge-base',
   'reference/live-verification-results',
+  // The execution-target matrix: one row per test technology with the depth TEA supports it at (about 11k
+  // characters). An agent reads the row of the technology a task names, and llms.txt links the page under
+  // "Reference lookups". With it in, the bundle left less than the 50k characters the headroom check
+  // requires once the Evaluate how-to guides carried commands a reader can paste as they stand.
+  'reference/execution-targets',
   // The experiment-reader guide: a reference for the offline repeatability and configuration-comparison
   // reader, with two full example declarations (about 17k characters). An agent opens it when a task names
   // an experiment, and llms.txt links it under "Evaluate". With it in, the bundle left less than the 50k
@@ -232,12 +243,17 @@ function generateLlmsTxt(docsDir, outputDir) {
     '## Command-line references',
     '',
     `- **[tea-evaluate CLI](${SITE_URL}/reference/tea-evaluate-cli)**: Check, digest, preflight, run, score, compare and run the CI tiers of an evaluation folder: flags, rules and exit codes`,
+    `- **[tea-evaluate Manifest](${SITE_URL}/reference/tea-evaluate-manifest)**: The evaluation.json fields, partition plans, registry, workspace, interaction plan and probe routes`,
+    `- **[tea-evaluate Confinement](${SITE_URL}/reference/tea-evaluate-confinement)**: What a confined target can read, write and reach on macOS and Linux, the audit and egress`,
+    `- **[tea-evaluate Evaluators](${SITE_URL}/reference/tea-evaluate-evaluators)**: The evaluation layer, the rubric judge, calibration labels and sealed-brief agent qualification`,
+    `- **[tea-evaluate Evidence](${SITE_URL}/reference/tea-evaluate-evidence)**: The run directory, record path forms and the run-wide strength aggregate`,
     `- **[tea-test-review CLI](${SITE_URL}/reference/tea-test-review-cli)**: Headless test review in CI: flags, exit codes and the JSON verdict`,
     '',
     '## Reference lookups',
     '',
     `- **[Configuration](${SITE_URL}/reference/configuration)**: Every configuration key with its default and the skills it changes`,
     `- **[Knowledge Base](${SITE_URL}/reference/knowledge-base)**: The knowledge fragments by category and the tea-index.csv manifest that selects them`,
+    `- **[Execution Targets](${SITE_URL}/reference/execution-targets)**: Which test technologies TEA supports, at what depth, and what you supply for the rest`,
     `- **[Live Verification Results](${SITE_URL}/reference/live-verification-results)**: The JSON file trace reads when a requirement was verified by running the system: schema, coverage rules and limits`,
     '',
     '---',

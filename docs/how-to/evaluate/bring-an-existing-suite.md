@@ -123,7 +123,7 @@ Ask the skill to install the version you intend to use, then commit the evaluati
 - `LEARNED.md`: the installed versions, primary sources, executed examples and unresolved contradictions
 - The wrapper, mapping and reference or assertion files that determine judgments
 
-Declare judgment-producing plugins and dependencies too. When a top-level version does not capture local patches or dependency changes, use `installState` with a tree or lockfile source; see [The evaluation layer](/docs/reference/tea-evaluate-cli.md#the-evaluation-layer).
+Declare judgment-producing plugins and dependencies too. When a top-level version does not capture local patches or dependency changes, use `installState` with a tree or lockfile source; see [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer).
 
 For an unfamiliar framework, the skill should first inspect its documented inputs, outputs, runtime, license and model requirements, then execute three small cases against the installed version:
 
@@ -155,10 +155,10 @@ npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/calling-age
 npm exec --prefix evals -- tea-evaluate run --evaluation evals/calling-agent-tool-use --partition development
 ```
 
-Stop at the first nonzero exit. After a successful run, use its printed invocation ID:
+Stop at the first nonzero exit. After a successful run, score it; with no `--run`, `score` takes the most recent run:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/calling-agent-tool-use --run <invocationId>
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/calling-agent-tool-use
 ```
 
 A zero `run` exit means records were sealed. Review the score evidence for `passed-clean-control` on the known pass and `caught` on the qualified seeded defect. Adapter examples alone do not establish this end-to-end result. Run held-out probes after development review.

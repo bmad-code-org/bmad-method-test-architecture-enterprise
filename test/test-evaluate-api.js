@@ -133,7 +133,7 @@ const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-direct
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
-const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
+const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
 const ASSETS = path.join(PROJECT_ROOT, 'skills', 'bmad-tea-evaluate', 'assets');
 const PORT_TEMPLATE = path.join(ASSETS, 'http-probe-port.mjs');
@@ -2849,7 +2849,7 @@ async function checkUnevenEscapedCases() {
     check(observation.body.value === text, 'ordinary evidence with a backslash was refused or changed');
     check(performance.now() - startedAt < 5000, 'ordinary evidence with a backslash took over five seconds');
   }
-  const reference = fs.readFileSync(path.join(__dirname, '../docs/reference/tea-evaluate-cli.md'), 'utf8');
+  const reference = fs.readFileSync(REFERENCE, 'utf8');
   const httpSection = reference.split('## The registry')[1]?.split('\n## ')[0] ?? '';
   check(
     httpSection.includes('uneven capitalization') && httpSection.includes(String.raw`\u0130`),

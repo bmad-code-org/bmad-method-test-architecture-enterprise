@@ -38,6 +38,7 @@ export PATH="/tmp/tea-actionlint-bin:$PATH"
 The quality gate also checks:
 
 - `test:docs-build-names`: public docs contain no story IDs, PR numbers, or planning paths.
+- `test:doc-shell-blocks`: every shell block on the Evaluate pages parses, holds no synopsis notation, and runs `tea-evaluate` and `tea-skill-runner` through the private install.
 - `test:doc-counts` and `test:doc-claims`: documented counts, identifiers, and registered claims agree with their sources.
 - `test:enforce-hook`: the write-time hook blocks its declared test defects.
 - `test:criteria-fragments`: each review criterion resolves to its knowledge fragment.

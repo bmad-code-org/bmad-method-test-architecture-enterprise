@@ -1249,12 +1249,16 @@ function checkStaticRules() {
   for (const code of ['0', '1', '2', '3-5', '10', '11', '12', '64']) {
     assert.match(exitTable, new RegExp(`\\n\\|\\s*${code}\\s*\\|[^\\n]*\`ci\``), `the exit table's row ${code} does not name ci`);
   }
-  const between = (from, to) => reference.slice(reference.indexOf(from), reference.indexOf(to));
-  for (const [heading, until] of [
-    ['## Controlled mutations\n', '## Historical probes\n'],
-    ['## tea-skill-runner\n', '## Exit codes\n'],
+  // The controlled-mutation steps sit on the reference's manifest page.
+  const manifest = fs.readFileSync(path.join(ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md'), 'utf8');
+  for (const [text, heading, until] of [
+    [manifest, '## Controlled mutations\n', '## Historical probes\n'],
+    [reference, '## tea-skill-runner\n', '## Exit codes\n'],
   ]) {
-    assert.doesNotMatch(between(heading, until), /`ci`|evidence drift/, `${heading.trim()} carries ci's exit causes`);
+    const from = text.indexOf(heading);
+    const to = text.indexOf(until, from);
+    assert.ok(from !== -1 && to !== -1, `the reference has no ${heading.trim()} section before ${until.trim()}`);
+    assert.doesNotMatch(text.slice(from, to), /`ci`|evidence drift/, `${heading.trim()} carries ci's exit causes`);
   }
   assert.match(AD10, /\|\s*13\s*\|[^\n]*evaluation evidence drift/);
   assert.match(AD10, /Amended 2026-10-01 in Story 2\.2/);

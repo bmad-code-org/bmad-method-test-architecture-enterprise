@@ -46,7 +46,7 @@ Those requirements become a **Behavioral Evaluation Contract**: what must hold, 
 
 The default evaluator uses deterministic oracle resolution. Alternatives include your own command, an agent working from a sealed brief, or records supplied by an existing harness. An agent evaluator must qualify through repeated attempts. Judgment-heavy criteria use anchored rubrics; a model judge must agree sufficiently with your human-labeled examples before its trial scores count.
 
-The engine checks the contract's structure and discipline. You remain responsible for whether the requirements capture the right behavior. See [eval-quality's contract explanation](https://github.com/bmad-code-org/bmad-eval-quality/blob/main/docs/explanation/behavioral-evaluation-contracts.md) and [evaluator options](/docs/reference/tea-evaluate-cli.md#the-evaluation-layer).
+The engine checks the contract's structure and discipline. You remain responsible for whether the requirements capture the right behavior. See [eval-quality's contract explanation](https://github.com/bmad-code-org/bmad-eval-quality/blob/main/docs/explanation/behavioral-evaluation-contracts.md) and [evaluator options](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer).
 
 ## 2. What executes, and what can it access?
 

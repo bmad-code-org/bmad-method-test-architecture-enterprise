@@ -59,7 +59,7 @@ A `command` evaluator names the grading program, a sealed-brief agent names its 
 Confirm that the selected program, model or records folder is the one you intend to use.
 
 A `command` evaluator that wraps a framework follows [How to Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md).
-[The evaluation layer](/docs/reference/tea-evaluate-cli.md#the-evaluation-layer) lists the fields for each kind.
+[The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer) lists the fields for each kind.
 
 Rerun `preflight` after the change, then run and score one clean control and one seeded defect.
 Rely on the layer once eval-quality reads the control as `passed-clean-control` and the defect as `caught`.
@@ -93,7 +93,7 @@ With the `deterministic` evaluator, confirm the model and the minimum agreement 
 
 Use an immutable model ID when the provider offers one, so later runs use the same model.
 The skill records that ID with the evaluation and checks that the recorded value matches the model it runs.
-[The rubric judge](/docs/reference/tea-evaluate-cli.md#the-rubric-judge) explains the configuration.
+[The rubric judge](/docs/reference/tea-evaluate-evaluators.md#the-rubric-judge) explains the configuration.
 
 ### 4. Label the Calibration Examples
 

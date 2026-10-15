@@ -132,7 +132,7 @@ Read held-out results only from `gap-view.json` in the scored run folder. Set `R
   node -p "require('./gap-view.json')['held-out'].map((r) => r.probeId + ' ' + r.probeClass + (r.outcome ? ' caught=' + r.outcome.caught + ' ' + r.outcome.caughtCount + '/' + r.outcome.validCount : ' outcome withheld')).join('\\n')")
 ```
 
-Keep held-out inputs, records and answers closed while repairing. A [`partitionPlan`](/docs/reference/tea-evaluate-cli.md#held-out-probes-and-partition-plans) can separate held-out requests from development execution; selecting development probes alone does not.
+Keep held-out inputs, records and answers closed while repairing. A [`partitionPlan`](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans) can separate held-out requests from development execution; selecting development probes alone does not.
 
 Repeated held-out feedback can still influence later changes. A held-out pass is bounded evidence, not proof of exhaustive coverage.
 
@@ -147,10 +147,10 @@ npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/test-review
 npm exec --prefix evals -- tea-evaluate run --evaluation evals/test-review-json-stdin --partition development
 ```
 
-Run these one at a time and stop on a nonzero exit. Refresh the index after changes to `corpus/`, `probes/` or `mutations/`. `run` repeats preflight. Score only the completed run, using the ID printed by `run`:
+Run these one at a time and stop on a nonzero exit. Refresh the index after changes to `corpus/`, `probes/` or `mutations/`. `run` repeats preflight. Score the completed run, which `score` takes as the most recent run:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin --run <runId>
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/test-review-json-stdin
 ```
 
 After development approval, use `run --partition held-out` and score its new run ID. Preserve the old and new IDs with the gap, repair and observed result. Never edit sealed run evidence to change an outcome.

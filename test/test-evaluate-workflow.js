@@ -47,7 +47,7 @@
  *   with no such reason or another code, an HTTP step and a tool call rethrow the
  *   fault; the host-environment wrapper and the fault record carry the reason, and
  *   the real command-line adapter refuses a 2 MiB literal with it.
- * - The reference: `docs/reference/tea-evaluate-cli.md` names the binding
+ * - The reference: `docs/reference/tea-evaluate-manifest.md` names the binding
  *   kinds the runtime sends and the steps it does not issue, each passage read
  *   under its exact heading, the size limit among the values a request cannot
  *   carry.
@@ -72,7 +72,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-workflow');
 const EVALUATION = path.join('evals', 'records');
-const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
+const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md');
 const TRIALS = 3;
 const TITLE = 'Ship the workflow';
 const CAPTURE = '/interactions/create/stdout/id';

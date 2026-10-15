@@ -32,7 +32,7 @@ cd bmad-method-test-architecture-enterprise
 npm ci
 ```
 
-- macOS, or Linux with `bubblewrap` and `strace` installed, since Evaluate confines every target it runs (see [File-system confinement](/docs/reference/tea-evaluate-cli.md#file-system-confinement))
+- macOS, or Linux with `bubblewrap` and `strace` installed, since Evaluate confines every target it runs (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement))
 
 The evaluation itself needs no network access.
 

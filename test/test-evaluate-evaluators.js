@@ -4762,7 +4762,7 @@ async function checkImportedRubricCalibration() {
 
 /** The reference's worked scorer input is the observation the runtime derives, so the page cannot drift from the verification. */
 function checkImportedCalibrationReferenceExample() {
-  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-evaluators.md'), 'utf8');
   const [, example] = /the response `Response at level 1` is the observation `(\{.*?\})`\./s.exec(page) ?? [];
   check(example !== undefined, 'the reference has no worked scorer input for a stdout criterion');
   if (example === undefined) return;
@@ -5082,7 +5082,8 @@ async function checkImportedManifestMounts() {
 
 /** The reference, the CLI header and the command's own help all describe the option, so the page cannot drop it unseen. */
 function checkCalibrationInputsDocumented() {
-  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  // The command sits in the CLI reference's `digest` section, the binding on its evaluators page.
+  const page = `${fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8')}\n${fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-evaluators.md'), 'utf8')}`;
   for (const text of [
     'npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
     '`calibrationDigest`',
@@ -5909,15 +5910,23 @@ function checkDirectionGate() {
  * the exit and the decoding parameters the configuration really carries.
  */
 async function checkReferenceQualifiesSealedBriefAgent() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const prose = reference.replaceAll(/^```[^\n]*\n[\s\S]*?^```[^\n]*$/gm, (fence) => fence.replaceAll(/[^\n]/g, ' '));
-  const heading = '### Qualifying a sealed-brief agent';
-  const start = prose.indexOf(`\n${heading}\n`);
-  check(start !== -1 && !prose.includes(`\n${heading}\n`, start + 1), `the reference holds ${JSON.stringify(heading)} exactly once`);
+  const withoutFences = (text) => text.replaceAll(/^```[^\n]*\n[\s\S]*?^```[^\n]*$/gm, (fence) => fence.replaceAll(/[^\n]/g, ' '));
+  // The qualification has its section on the CLI reference's evaluators page, which the CLI reference's `run` links.
+  const evaluators = withoutFences(fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-evaluators.md'), 'utf8'));
+  const prose = withoutFences(fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8'));
+  const heading = '## Qualifying a sealed-brief agent';
+  const start = evaluators.indexOf(`\n${heading}\n`);
+  check(
+    start !== -1 && !evaluators.includes(`\n${heading}\n`, start + 1),
+    `the evaluators reference holds ${JSON.stringify(heading)} exactly once`,
+  );
   if (start === -1) return;
-  const parent = (prose.slice(0, start).match(/^## .*$/gm) ?? []).pop();
-  check(parent === '## run', `the reference's section ${JSON.stringify(heading)} sits under ${JSON.stringify(parent)}, not ## run`);
-  const section = prose.slice(start + heading.length + 2).split(/\n#{1,3} /)[0];
+  const run = (prose.split('\n## run\n')[1] ?? '').split('\n## ')[0];
+  check(
+    run.includes('(/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent)'),
+    `the CLI reference's run section does not link ${JSON.stringify(heading)}`,
+  );
+  const section = evaluators.slice(start + heading.length + 2).split(/\n#{1,2} /)[0];
   const schema = readJson(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-qualification.schema.json'));
   const attemptFields = Object.keys(schema.properties.arms.items.properties.probes.items.properties.attempts.items.properties);
   const decodingKeys = Object.keys(
@@ -5964,7 +5973,7 @@ async function checkReferenceQualifiesSealedBriefAgent() {
 
 /** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
 async function checkReferenceNamesDenialReasons() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md'), 'utf8');
   // The engine's own list, so a reason a later release decides fails the case until the reference names it.
   const denialReasons = (await loadEngine()).FORBIDDEN_TARGET_REASONS;
   check(Array.isArray(denialReasons) && denialReasons.length > 0, 'eval-quality exports no FORBIDDEN_TARGET_REASONS');
@@ -7112,7 +7121,7 @@ function checkFrameworkProbeTimeouts() {
     }).length === 0,
     'the version 1 framework artifact schema rejected a historical row without effectiveProbeTimeoutMs',
   );
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-evaluators.md'), 'utf8');
   for (const marker of ['`probe.probeTimeoutMs`', '10,000 ms', '60,000 ms', '`evaluator.timeoutMs`', '`effectiveProbeTimeoutMs`'])
     check(reference.includes(marker), `the public Evaluate CLI reference omits ${marker}`);
   const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length) ?? '';

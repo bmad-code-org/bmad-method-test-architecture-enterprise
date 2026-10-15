@@ -2172,7 +2172,7 @@ async function checkKilledCheckout() {
 }
 
 function checkRecoveryDocumentation() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-manifest.md'), 'utf8');
   const section = reference.split('## The workspace\n')[1]?.split('\n## ')[0] ?? '';
   check(
     /workspace marker/.test(section) && /killed run/.test(section) && /next preflight/.test(section),

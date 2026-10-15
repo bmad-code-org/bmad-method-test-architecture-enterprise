@@ -1,6 +1,6 @@
 ---
 title: 'tea-evaluate CLI'
-description: 'Commands, manifest fields, evaluator settings, confinement, and exit codes for tea-evaluate and tea-skill-runner'
+description: 'Commands, exit codes, a platform checklist and a command sequence for tea-evaluate and tea-skill-runner'
 ---
 
 # tea-evaluate CLI
@@ -21,12 +21,28 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 | [`compare`](#compare)     | Sets a scored run beside `baseline/`, and with `--accept` replaces the baseline   | 0, 10, 12, 64                        |
 | [`ci`](#ci)               | Runs the checks the CI plan places on one tier                                    | 0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 64 |
 
+:::caution[Exit 0 does not always mean the target passed]
+
+- `score` exits 0 for PASS, WAIVED and CONCERNS alike; its summary and each probe's evidence artifact say which.
+- `compare` exits 0 for every comparison outcome: `compared` (whatever the relation, a run weaker than the baseline included), `first-run` and `refused`. Read its lines for the outcome.
+- `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL) or 3 (Invalid). Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
+- Exits 2 to 5 carry eval-quality's verdicts and faults; 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.
+- `ci` is where enforcement lives: the CI plan places each check on a tier, and one fixed table of exits and actions decides what blocks, what warns and what passes. [Exits and the evidence](#exits-and-the-evidence) gives that table's order, and [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md) wires it into a pipeline.
+
+:::
+
 [How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains why these pieces exist, and [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md) explains the confinement.
+Four companion reference pages hold the detail behind the commands, and a link to a section that moved to one of them lands on its entry here:
+
+- <a id="the-evaluationjson-fields"></a><a id="held-out-probes-and-partition-plans"></a><a id="operation-phases"></a><a id="the-registry"></a><a id="denial-reasons"></a><a id="the-http-port"></a><a id="a-started-services-port"></a><a id="the-launch"></a><a id="the-workspace"></a><a id="the-interaction-plan"></a><a id="binding-kinds"></a><a id="step-order"></a><a id="steps-not-issued"></a><a id="controlled-mutations"></a><a id="historical-probes"></a><a id="from-worktrees"></a><a id="against-deployments"></a><a id="either-route"></a><a id="gameability-probes"></a>[tea-evaluate Manifest](/docs/reference/tea-evaluate-manifest.md): the `evaluation.json` fields, held-out probes and partition plans, operation phases, the registry, the HTTP port, the launch, the workspace, the interaction plan, controlled mutations, historical probes and gameability probes.
+- <a id="a-subscription-login-under-confinement"></a>[tea-evaluate Confinement](/docs/reference/tea-evaluate-confinement.md): what a confined target can read, write and reach on macOS and Linux, the audit, egress and subscription logins.
+- <a id="judge-calibration-labels"></a><a id="the-rubric-judge"></a><a id="the-evaluation-layer"></a><a id="qualifying-a-sealed-brief-agent"></a>[tea-evaluate Evaluators](/docs/reference/tea-evaluate-evaluators.md): the evaluation layer, the rubric judge, judge calibration labels and sealed-brief agent qualification.
+- <a id="the-run-directory"></a><a id="paths-in-the-records"></a><a id="run-wide-strength-aggregate"></a>[tea-evaluate Evidence](/docs/reference/tea-evaluate-evidence.md): the run directory, the path forms in the records and the run-wide strength aggregate.
 
 ## Prerequisites
 
-- Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-tea-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin.
-  The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
+- Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-tea-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` and `tea-skill-runner` bins.
+  The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...` and `npm exec --prefix evals -- tea-skill-runner ...`, run from the project root.
 - `eval-quality` 8.0.0 or later, a devDependency of the same private `package.json`.
   TEA declares it as an optional peer dependency, so a project that installs TEA only for its other skills never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
@@ -34,6 +50,71 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 `tea-evaluate` reads no BMAD configuration.
 Every subcommand takes `--evaluation <path>`, naming the evaluation folder or its `evaluation.json`, and exits 64 when that flag is missing or resolves to no `evaluation.json`.
 Nothing defaults to the working directory.
+
+### Platform checklist
+
+`preflight` and `run` confine every target before it starts, and stop with exit 12, naming what is missing, on a host that cannot confine or audit it.
+Check the host before the first live command:
+
+- macOS: `/usr/bin/sandbox-exec` (Seatbelt, part of macOS) and a session that may read the unified log through `/usr/bin/log stream`, which the audit reads.
+  Start `tea-evaluate` from an unsandboxed terminal: `sandbox-exec` cannot apply a profile inside another Seatbelt sandbox, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused.
+  A subscription login kept in the Keychain has no grant under confinement; export `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` instead.
+- Linux: Bubblewrap's `bwrap` on `PATH` (`apt-get install bubblewrap`), a kernel that allows unprivileged user namespaces and a network namespace, and `strace` 6.1 or later on `PATH` (`apt-get install strace`) with ptrace allowed, which the audit reads.
+  A target that calls a model provider or another outside service lists its host in its registry entry's `egress`, since a confined Linux target has a loopback and nothing else.
+- Windows: no confinement mechanism exists, so a confined `preflight` or `run` exits 12.
+
+`check`, `digest`, `status`, `score` and `compare` launch no target and need none of these.
+[File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement) gives the full requirements, including the observer versions and the paths a host may not hold.
+
+### File-system confinement
+
+Confinement limits what a target can do on your host, and the two platforms limit reads differently:
+
+- On both platforms a confined target writes only its workspace and the private directories the runtime hands it, cannot read or write the evaluation folder (the contract, the probes and which defect a mutation plants), cannot read or write your git directory and cannot reach the evaluation layer's private files.
+- macOS blocks reads: Seatbelt refuses file data outside the target's grants with `EPERM` before the read happens.
+  A macOS target keeps the host's network.
+- Linux detects reads afterwards: Bubblewrap gives the target a read-only view of `/`, so a file outside its grants that Bubblewrap does not hide can be read.
+  `strace` records each such read, and `run` and `score` refuse the trial that made it (exit 3, `mount outside allowlist`), after the read happened.
+  Keep files a target must not read off a Linux evaluation host, or run in a container that does not hold them.
+  The network is closed apart from a loopback and the hosts `egress` lists.
+
+:::danger[`"confinement": false` removes these limits]
+Setting `"confinement": false` in `evaluation.json` runs every target with your user's file system, network, home directory and credentials, with no audit.
+A target can read any file you can read and write outside its workspace; the run notices a change to your project or its git state afterwards and exits 12, and a write anywhere else goes unnoticed.
+No read outside the workspace is observed, so `score` cannot refuse a trial for one.
+`run.json` records `"confinement": "opt-out"` and `score` says so in its summary line.
+Opt out only for a target that cannot run confined (one that must commit, read the project's git directory or open a network route that is no HTTPS `CONNECT` tunnel), and state the reason in the change that sets the field.
+:::
+
+[tea-evaluate Confinement](/docs/reference/tea-evaluate-confinement.md) describes what a confined process can read, write and reach, the audit, egress and subscription logins in full.
+
+## A typical sequence
+
+This sequence runs an evaluation folder that already exists; the Evaluate skill writes the folder with you (see [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md)).
+Run it from the project root:
+
+```bash
+npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate check --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation
+```
+
+`run` starts with the whole preflight, so a separate `preflight` is an optional diagnostic step: it qualifies the probes and drives the preflight legs without running trials.
+Under a `partitionPlan`, add `--partition development` to `run` while you author and `--partition held-out` after the development review; omitted, `run` runs both partitions.
+`run` prints its invocation ID as it starts and again on its last line, and keeps its records under `runs/<invocationId>/`.
+Capture the ID right after the run, while that directory is the newest entry under `runs/`, and name the run explicitly in the commands that follow:
+
+```bash
+RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID"
+```
+
+Accepting the run as the baseline is a separate step, taken after someone has reviewed the scored evidence and in a reviewed pull request that commits `baseline/`:
+
+```bash
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID" --accept
+```
 
 ## The evaluation folder
 
@@ -62,222 +143,7 @@ Nothing defaults to the working directory.
 The runtime's schemas ship under `cli/lib/evaluate/schemas/` in the TEA package.
 They cover the manifest, probes, mutations, degenerate responses, held-out plan, evaluator files, judgment rows, framework versions, and evaluator qualification reports.
 `contract.json` and `policy/scoring-policy.json` meet the schemas eval-quality publishes.
-
-### The evaluation.json fields
-
-The Evaluate skill writes `evaluation.json` with you.
-Its fields are listed below.
-The top level is closed: a field that is not listed here fails `check` under the `schema` rule.
-
-| Field                    | Required                                   | What it holds                                                                                                                                                                              |
-| ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemaVersion`          | yes                                        | `2`. A version the installed TEA does not know exits 10 under `check`, before anything else is read.                                                                                       |
-| `evaluationId`           | yes                                        | The evaluation's kebab-case identifier.                                                                                                                                                    |
-| `requirements`           | yes, `check` refuses a folder without it   | `{ "path": "requirements.md", "digest": "sha256:..." }`. The digest is the one `tea-evaluate digest --file requirements.md` prints, and the contract's `sourceSpecDigest` has to equal it. |
-| `targetKind`             | yes                                        | What is evaluated: `agent`, `skill`, `workflow`, `tool-use`, `ai-feature` or `test-review-mechanism`.                                                                                      |
-| `interface`              | yes                                        | The interface kind the contract declares: `cli`, `api` or `mcp`. A web application is evaluated through `api`.                                                                             |
-| `operationPhases`        | when the contract declares operations      | The phase of every permitted operation, `process` or `outcome`, keyed by interface and then operation ID (see [Operation phases](#operation-phases)).                                      |
-| `registry`               | yes, at least one entry                    | Every command a run may spawn, every tool server it may start and every HTTP target it may reach (see [The registry](#the-registry)).                                                      |
-| `principalMappings`      | no                                         | Maps a contract principal name to a host credential: `{ "<name>": { "interfaceId", "environmentKey", "prefix"? } }`. The file names the variable that holds the credential.                |
-| `launch`                 | yes                                        | `root`, the evaluated project's root relative to the folder, and `skillRoot` for a skill target (see [The launch](#the-launch)).                                                           |
-| `workspace`              | yes                                        | `kind`, `git` or `copy`, and `provision`, the directories copied into every workspace read-only (see [The workspace](#the-workspace)).                                                     |
-| `confinement`            | no                                         | `false` runs the targets unconfined and records `opt-out`. Omitted or `true` confines (see [File-system confinement](#file-system-confinement)).                                           |
-| `arms`                   | yes                                        | The arms a run executes: `clean`, `mutated`, `historical` and `gameability`. Every probe needs its arm declared, and every declared arm needs a probe.                                     |
-| `heldOutProbes`          | no                                         | The committed probe IDs reserved from the development partition (see [Held-out probes and partition plans](#held-out-probes-and-partition-plans)).                                         |
-| `partitionPlan`          | no                                         | `developmentOnlySteps` and `heldOutPlan`, which keep a request meant for held-out probes out of the development partition.                                                                 |
-| `judgeCalibration`       | when the contract declares rubrics         | `{ "minimumAgreement": 0.9 }`, the exact agreement a rubric scorer needs against your labelled examples (see [Judge calibration labels](#judge-calibration-labels)).                       |
-| `judge`                  | a rubric under the deterministic evaluator | The rubric judge: `agent`, `timeoutMs`, and optionally `agentCommand`, `agentArgs` and `model` (see [The rubric judge](#the-rubric-judge)).                                                |
-| `evaluator`              | no                                         | The evaluation layer: `kind` is `deterministic` (the default), `command`, `sealed-brief-agent` or `records` (see [The evaluation layer](#the-evaluation-layer)).                           |
-| `evaluatorQualification` | with a `sealed-brief-agent` evaluator      | `attempts`, at least 2, and `minimumAgreement` (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)).                                                                  |
-| `trials`                 | yes                                        | Trials per probe per arm. It has to be at or above the scoring policy's `minimumTrialCount`.                                                                                               |
-| `tiers`                  | yes                                        | The CI tiers the evaluation takes part in: `pr`, `merge`, `scheduled` or `release`. They equal the tiers the CI plan places a check on.                                                    |
-| `strengthFloor`          | yes                                        | The minimum catch rate per probe class, from 0 to 1: `defect`, `gameability` and `zero-action`. `canary` is not a class and `check` refuses it.                                            |
-
-A complete `evaluation.json` for a one-skill evaluation, where the skill decides whether a refund is within the refund limit.
-The runner sits in the evaluations folder's install (`evals/node_modules`), inside `launch.root`, which is one of the two setups [Where the runner lives](#where-the-runner-lives) describes:
-
-```json
-{
-  "schemaVersion": 2,
-  "evaluationId": "refund-check",
-  "requirements": {
-    "path": "requirements.md",
-    "digest": "sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77"
-  },
-  "targetKind": "skill",
-  "interface": "cli",
-  "registry": [
-    {
-      "interfaceId": "refund-skill",
-      "executable": "tea-skill-runner",
-      "target": "evals/node_modules/.bin/tea-skill-runner",
-      "subcommandPaths": [[]],
-      "artifacts": {},
-      "environmentKeys": [],
-      "maxElapsedMs": 100000,
-      "infrastructureExitCodes": [3, 4, 5, 6]
-    }
-  ],
-  "launch": {
-    "root": "../..",
-    "skillRoot": "skill"
-  },
-  "workspace": {
-    "kind": "copy",
-    "provision": []
-  },
-  "arms": ["clean", "mutated"],
-  "trials": 3,
-  "tiers": ["pr"],
-  "strengthFloor": {
-    "defect": 1
-  },
-  "operationPhases": {
-    "refund-skill": {
-      "review-refund": "outcome"
-    }
-  }
-}
-```
-
-### Held-out probes and partition plans
-
-For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutProbes": ["P-002"]`.
-Each ID must name a committed probe, cannot name a clean control, and must leave a development probe for every affected behavior.
-Omit the field when every probe belongs to development.
-
-To keep a request meant only for held-out probes out of the development partition, declare a `partitionPlan` beside `heldOutProbes`:
-
-```json
-{
-  "partitionPlan": {
-    "developmentOnlySteps": ["development-run"],
-    "heldOutPlan": "corpus/held-out/plan.json"
-  }
-}
-```
-
-Without it, every partition runs the whole `contract.json` plan, and `run --partition` filters only the scored probes.
-With it, each step is shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) or held-out (only in the held-out plan, `held-out-plan.schema.json`: `schemaVersion` 1, `interactionPlan`, `oracles`, optional `rubrics`, `waivers` and `mappings`, and `behaviorOracles`, the oracle IDs each behavior gains in the held-out view).
-The file sits directly under `corpus/held-out/`, so `corpus-index.json` digests it.
-A plan step carries no `partition` field.
-
-One view over those files is the only contract a run compiles, seals, launches and records, so `contract.json` in the run directory, `eval-contract.json`, the sealed brief, the observations, the trial records and a baseline copied from the run carry only that partition's steps:
-
-| `--partition` | steps launched                    | oracles                                                                                            | rubric criteria                                                                                                         | evaluator mapping rows                                                         | gameability answers                                                                              |
-| ------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `development` | `contract.json`'s plan, untouched | `contract.json`'s oracles, untouched; the held-out plan is never opened                            | `contract.json`'s rubrics, untouched                                                                                    | `evaluator/mapping.json`, untouched                                            | `corpus/gameability/<probeId>.json`; the held-out answers are never opened                       |
-| `held-out`    | shared plus held-out              | the oracles that read a development-only step leave with it; the plan's oracles join each behavior | the criteria that read a development-only step leave with it, a rubric left with none goes, and the plan's rubrics join | the rows that bind what the view dropped leave, and the plan's `mappings` join | `corpus/gameability/` for the shared steps, `corpus/held-out/gameability/` for the held-out ones |
-| none (`both`) | every step                        | every oracle, and each behavior gains the oracles the plan lists for it                            | every criterion of `contract.json`, and the plan's rubrics                                                              | every row of `evaluator/mapping.json`, and the plan's `mappings`               | both files, every step                                                                           |
-
-A rubric criterion belongs to the partition whose steps its evidence pointer reads.
-A criterion in `contract.json` that reads a shared step is in every view, and one that reads a development-only step is in the development and both views.
-A criterion in the held-out plan's `rubrics` is in the held-out and both views, and its evidence names a shared or a held-out step.
-A plan rubric's ID differs from every rubric ID of `contract.json`, and a plan rubric carries its own scale, penalties and `maxLength`.
-Each partition's run compiles, calibrates and scores the criteria of its own view, and the judge is handed those criteria only.
-`policy/judge-calibration.json` is one file for every partition: a run judges the items of the criteria its view holds and leaves the rest to the partition that owns them.
-`evaluation.json` declares the judge once, so a contract whose only rubrics sit in the held-out plan still declares it, and a development run over it calls no judge.
-`check` names a criterion that no view can reach by its criterion ID, its rubric ID and the step it reads, and names a calibration item of a criterion no view declares.
-A criterion of the plan is named by `rubricId/criterionId` only when both IDs have the schema's shape, and by its position in the plan's `rubrics` otherwise; the plan's evidence pointers, channels and scale levels never reach a finding.
-
-A waiver names a discipline rule and no oracle, so its `condition`, the one field of a waiver that reads a step, places it.
-A `condition` is a sentence, and every `/interactions/<stepId>` pointer in it names a step wherever the pointer sits, with or without a path after the step, so a waiver that names a development-only step anywhere, beside a shared step or alone, is in the development and both views.
-A waiver in `contract.json` whose condition reads a shared step, or no step, is in every view, and one whose condition reads a development-only step is in the development and both views.
-A waiver in the held-out plan's `waivers` is in the held-out and both views, and a step its condition reads is a shared or a held-out one.
-A plan waiver's ID differs from every waiver ID of `contract.json`, and a waiver that reads a held-out step belongs in the plan, because the development view would name the step.
-The engine compiles each view with the waivers that view holds, so a waiver the engine finds incomplete fails the partitions that hold it and leaves the others compiling.
-`check` names a waiver that no view can reach by its waiver ID and the step it reads; a step that a plan waiver's condition reads is named only when it is a development-only step.
-A waiver is named by its ID only when the ID has the shape `W-nnn`, and by its position in `waivers` otherwise; a plan waiver's rule, rationale, condition and approval never reach a finding.
-
-An evaluator other than the deterministic one binds oracles and criteria to the keys it prints through `evaluator/mapping.json`, and the mapping follows the contract view.
-A row of `evaluator/mapping.json` that binds an oracle or criterion of `contract.json` is in the development and both views, and in the held-out view unless the held-out view drops what it binds (an oracle that reads a development-only step, a criterion that does).
-A row in the held-out plan's `mappings` is in the held-out and both views.
-It has the shape of a row of `evaluator/mapping.json` plus its `key` (`{ "key", "oracleId", "behaviorId" }` or `{ "key", "rubricId", "criterionId", "levels" }`), binds an oracle or criterion the held-out view declares and no other key binds, and has a key that differs from every key of `evaluator/mapping.json` and from the other plan rows' keys.
-A held-out oracle's or criterion's row belongs in the plan, because `evaluator/mapping.json` is read by the development partition, and `check` of every partition names a row of that file which binds an oracle, behavior or criterion `contract.json` lacks.
-
-Each partition's mapping is derived beside its contract view: the development view is the file's own bytes, the held-out view is always serialized so its bytes move only with the rows it holds, and the both view of a plan with no `mappings` is the file's bytes.
-
-A run's evaluator layer holds its view's mapping only: the rows the runtime validates a printed key against and converts, the keys a sealed-brief agent is shown, and the `tea.evaluatorTreeDigest` the run records, which digests the view's mapping in place of the file, so a development run's digest depends on no held-out row and a held-out run's on no development-only one.
-A `command` evaluator receives `{ "sealedBrief", "observations" }` and never the mapping, so what it receives follows the view through the brief and the observations, and a key its partition's mapping lacks fails the row schema (exit 12).
-The development partition reads, executes and digests the files under `evaluator/`, so a command evaluator derives a held-out key from its input and spells none.
-A `records` evaluator reads no mapping, and a record of its harness carries the oracles it disposes, the oracle and behavior a finding names, the criteria it scores, the plan steps its observations record and the observations its dispositions and findings cite.
-Under a `partitionPlan` a harness names an observation `<label>-<stepId>`, or `<label>-call-<n>` for a call the agent chose, with the label `trial-<n>`, `attempt-<n>`, `baseline`, `degenerate`, `mutated` or `re-pass-<n>` (as in `trial-2-shared-run`).
-The import admits an observation only when its ID is `<label>-<a step the run's view declares>` or `<label>-call-<n>`, because a development run never opens the plan and cannot know a held-out step ID.
-It refuses every other ID, and a record that names an oracle, behavior or criterion the run's view does not declare, or a disposition or finding that cites an observation its record does not hold (exit 10, nothing copied), by where it sits (`oracleDispositions[2]`, `findings[0].oracleId`, `findings[1].behaviorId`, `judgeResults[0]`, `observations[3]`, `findings[1].observationIds[0]`), never by the ID.
-`check` refuses a step whose ID has the form `call-<n>`, in `contract.json` or in the held-out plan, under a `partitionPlan`, because its observation would look like an agent's chosen call.
-A records evaluator beside a rubric and a `partitionPlan` is refused, because the harness's calibration judgments answer one labelled file for one contract; a development `check`, `preflight` and `run` refuse it whenever `contract.json` declares the rubric.
-`check` names a plan row by its place in `mappings` and never by its key, names the oracle, behavior and criterion IDs the plan's schema shaped, and never prints the levels of a plan rubric.
-
-A gameability probe's degenerate response splits where the plan does.
-`corpus/gameability/<probeId>.json` answers the steps of `contract.json`, the shared and the development-only ones, and `corpus/held-out/gameability/<probeId>.json`, beside the held-out plan, answers the steps of the held-out plan; it has the shape of the first file and is required when the plan declares a step.
-A probe's arm answers only the steps of the view it runs: the development view reads the first file and never opens the second, the held-out view takes the shared steps from the first and its own from the second, and the both view takes every step from both.
-Every gameability probe answers every step of the plan, because the both view runs each probe over the whole plan whichever partition the probe belongs to.
-A held-out probe's `naiveOracle` is an oracle of `contract.json` the held-out view keeps: one that reads a development-only step leaves that view, and `check` names it.
-`check` names an answer by the probe and the step ID: a development-only or shared answer left out, or a held-out step answered in `corpus/gameability/<probeId>.json`, a held-out answer left out, a missing `corpus/held-out/gameability/<probeId>.json`, or one that answers a step the held-out plan does not declare, that answers it with a response of the other kind, or exits an infrastructure code.
-It names a step of the held-out plan by its ID only when the ID has the schema's shape, and by its place in the file otherwise (`steps entry 1`); a held-out answers file's own text, a parser's message and a schema error's key never reach a finding.
-A development `preflight` and `run` read no byte of the held-out plan or of `corpus/held-out/gameability/`, and a corpus-index comparison for them leaves the whole `corpus/held-out/` directory out, so an answers file they cannot read stops only a held-out or both run and `check`.
-The comparison decides each entry by its path before any listing, so it neither lists nor opens what `corpus/held-out/` holds, and a link, a FIFO or a directory nobody may open there does not stop a development run.
-The adopter-tree reading that brackets a run lists that directory and takes only the size, modification time and mode of its files, with the error code of a path it cannot reach, and reads no byte.
-`check` and a held-out or both run refuse such an entry by path (exit 10), and refuse a directory spelled in another case, such as `corpus/held-out/Gameability/` or `corpus/Held-Out/` for the plan, since the directory's on-disk spelling decides; a development run seals both spellings.
-A held-out or both run records the held-out answers' path and digest in the response record of the probe's qualification and trial evidence, and a development run's record names `corpus/gameability/<probeId>.json` alone.
-
-With no `partitionPlan` every view is the folder's own bytes.
-A development run neither parses the held-out plan nor hashes anything under `corpus/held-out/` for the corpus-index comparison, so a plan the run cannot read stops only a held-out or both run, `check` and the `compile` and `seal` checks of `ci` (exit 10).
-`check` compiles nothing.
-The `compile` and `seal` checks of the `pr` tier of [`ci`](#ci) run the engine over the development, held-out and both views, so a held-out plan the engine refuses fails the pull request that wrote it, and the engine's `compile` over the held-out view also runs inside `preflight` and `run`.
-
-A held-out probe's behavior names exactly one oracle in the held-out view.
-A behavior with a development oracle and a held-out oracle lists both in the both view, and eval-quality designates an oracle for a probe only when its behavior lists exactly one.
-A run with no `--partition` therefore gives `eval-quality score` the oracle of each probe's own partition through `--designated-oracle` (eval-quality 7.2.0 or later), so the both view scores each probe as that partition's own run does.
-A probe is in the held-out partition when `heldOutProbes` lists it and in the development partition otherwise.
-Its oracle is the one oracle its partition's view lists for its behavior, derived by `contractView` as the partition's own run derives it.
-When that view lists no oracle or several, nothing is passed and the probe reads as it does in the partition's own run, and when the both view lists exactly one oracle eval-quality designates it itself.
-A development run, a held-out run and a folder with no `partitionPlan` pass nothing, so their scores, baselines and replays stay byte for byte as they were.
-`score` reads the folder's `contract.json` and, under a `partitionPlan`, held-out plan for a both run only, and `compare --accept` scores through the same call.
-A `ci` replay of a both baseline scores each probe under the oracle the baseline's own call record names (its `--designated-oracle` argument) and reads no view of the folder, so the designation is the same in the baseline and the replay, and a folder changed since the baseline is the stale-baseline rule's to report (a warning on `pr`, exit 11 on `release`).
-The in-process re-score that `score` compares with every call (see [Score output integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-output-integrity)) is given the same oracle as the call, so a call that dropped it is refused as a staged artifact that differs from the held inputs' (exit 12).
-An evaluator qualification attempt of a both run is scored under the same designation.
-A held-out plan, `evaluation.json` or `contract.json` that cannot be read or cannot yield the both view, and, under a `partitionPlan`, a probe whose behavior the folder's contract does not hold, are input-check findings of a live `score` or `compare --accept` (exit 10, no score call).
-So is a probe whose behavior the folder's both view lists with other oracles than the contract the run sealed, where that can change the designation: the sealed list names several oracles (the run may have designated one), or the folder designates an oracle.
-A plan that dropped, added or renamed an oracle, a `contract.json` that gained one and a removed `partitionPlan` are all refused for a behavior whose sealed list names several.
-A sealed list of exactly one oracle is designated by the engine from the sealed contract whatever the folder says, so a folder that changed such a behavior (or, with no `partitionPlan`, no longer holds it) is scored, and a baseline replay reports it as stale.
-A finding names paths and IDs of the schema's shape and quotes nothing the plan holds.
-The both view answers every step of the plan for a gameability probe, so an oracle its answers violate at a step, a held-out oracle beside a development one, files a finding that cites the probe.
-eval-quality reads a finding whose observation the probe's `defectSignature` does not admit or satisfy as an unwitnessed claim and scores the designated probe Invalid (exit 3), so give the signature's selector the `any` matcher on the channel that differs by step, and make the answer at every step an oracle reads satisfy its predicate.
-
-### Operation phases
-
-Classify each permitted contract operation in `evaluation.json` under `operationPhases`, keyed by its interface and then its operation ID, for example `"operationPhases": { "verdict": { "judge-request": "outcome" } }`.
-Use `process` for an intermediate step and `outcome` for a result the behavior is judged on.
-An operation ID is unique only within its interface, so two interfaces may declare the same one and each pair has its own phase, for example `"operationPhases": { "notes-cli": { "read-note": "process" }, "notes-api": { "read-note": "outcome" } }`.
-Each sealed observation and each interaction plan step names its `interfaceId` beside its `operationId`.
-`check` exits 10, and names the pair, when a declared pair has no phase, a phase names a pair the contract does not declare, or a phase is neither `process` nor `outcome`.
-`evaluation.json` `schemaVersion` is 2; a version 1 file, which carried a flat map, exits 10 on its schema version.
-
-### Judge calibration labels
-
-When the contract declares rubrics, set `"judgeCalibration": { "minimumAgreement": 0.9 }` in `evaluation.json` and create `policy/judge-calibration.json`:
-
-```json
-{
-  "items": [
-    { "rubricId": "R-101", "criterionId": "RC-101", "response": "Response at level 0", "expectedLevel": 0 },
-    { "rubricId": "R-101", "criterionId": "RC-101", "response": "Response at level 1", "expectedLevel": 1 }
-  ]
-}
-```
-
-Provide at least one item at every anchored level of every criterion.
-The file must be a regular file inside `policy/`; a link or named pipe is refused.
-`check` exits 10 for missing coverage or threshold.
-A `records` evaluator with rubrics also needs the judgments your harness's own scorer made over these same items, written beside its records (see [The evaluation layer](#the-evaluation-layer)).
-
-The calibration response follows the criterion's evidence channel.
-`stdout`, `stderr`, and artifact examples default to text when the pointer names the whole channel.
-Set `"responseKind": "json"` and write the whole JSON channel value in `response` for a JSON root.
-A pointer into JSON requires the whole channel value as JSON.
-Headers and call inputs require a JSON object.
-A response body that looks like JSON is parsed as JSON; set `"responseKind": "text"` when its literal text should be judged.
+[tea-evaluate Manifest](/docs/reference/tea-evaluate-manifest.md) describes each `evaluation.json` field and how the runtime reads it, and [tea-evaluate Evaluators](/docs/reference/tea-evaluate-evaluators.md) describes `evaluator/` and `policy/judge-calibration.json`.
 
 ## check
 
@@ -334,7 +200,7 @@ The rules:
 | `qualification-digest`     | a public reference under `baseline/qualification/` whose recorded digest does not match the file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `baseline-digest`          | Baseline files that differ from `baseline/baseline.json`, are missing or unlisted, or lack a readable manifest. Authored qualification evidence without a manifest may contain only `probes/`, `qualification/`, and a placeholder `README.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `clean-control`            | a clean control that is not `zero-action` with an expected-clean flag and no defects                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `infrastructure-exit-code` | a defect signature or manifestation witness an infrastructure exit code could satisfy (see [The registry](#the-registry))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `infrastructure-exit-code` | a defect signature or manifestation witness an infrastructure exit code could satisfy (see [The registry](/docs/reference/tea-evaluate-manifest.md#the-registry))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `unregistered-executable`  | a `cli` signature or a witness naming a target no registry entry declares                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `skill-root`               | a mutation whose `targetArtifact` is not inside `launch.skillRoot`, a `tea-skill-runner` leg or plan step whose `skill-root` is not `launch.skillRoot`, or a skill root inside a provisioned directory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `skill-runner`             | a `tea-skill-runner` registry entry that does not declare exit codes 3 to 6, or a leg or plan step for it with no literal `timeout-ms` below the entry's `maxElapsedMs` after reserving another 120 s on Windows for Job Object setup and supervisor completion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -342,15 +208,15 @@ The rules:
 | `arms`                     | a probe whose arm `arms` does not declare (a clean control needs `clean`, a probe on the `controlled-mutation` route `mutated`, one on the `historical` route `historical`, a gameability probe `gameability`), or an arm `arms` declares that no probe runs on                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `mutation-route`           | a probe on the `controlled-mutation` route that seeds no defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `evaluator-conditions`     | a registry entry that runs `tea-skill-runner`, which always runs an agent, with no `policy/evaluator-conditions.json` naming the model the run uses, or a `modelSnapshot` of `none` beside a `systemPromptDigest` other than `sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, the digest of the empty byte string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `gameability`              | A probe with the wrong class, expected-clean flag, defects, or naive oracle; degenerate responses that are missing, leave plan steps unanswered, name unknown steps, use the wrong response kind, or exit an infrastructure code. Under `partitionPlan`, held-out responses must cover the held-out plan, and its naive oracle must remain available in that view. See [Gameability probes](#gameability-probes).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `gameability`              | A probe with the wrong class, expected-clean flag, defects, or naive oracle; degenerate responses that are missing, leave plan steps unanswered, name unknown steps, use the wrong response kind, or exit an infrastructure code. Under `partitionPlan`, held-out responses must cover the held-out plan, and its naive oracle must remain available in that view. See [Gameability probes](/docs/reference/tea-evaluate-manifest.md#gameability-probes).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `historical`               | a probe on the `historical` route without `expectedClean: false`, that seeds no defect, or one whose `source` is not `natural`; one naming neither or both of `fixCommit` and `deployments`, one deployment without the other, one release for both, a deployment beside a registry entry that is not an HTTP entry, origins that are not an http or https origin for each HTTP interface of the registry and no other, or a deployment's `reports` leaving an HTTP interface of the registry without a report or naming an interface it does not serve over HTTP, or one report naming an operation the contract does not declare on the `api` interface its key names, one the contract marks as changing state, one that needs an input, or a pointer that is no JSON pointer, or, when a probe's deployments name a report operation, a duplicate operation signature between that report operation and another operation that eval-quality's compile refuses |
-| `judge`                    | A deterministic rubric without its judge or recorded model; judge settings on an evaluator that scores rubrics itself; an unsupported adapter, missing custom command, unsupported model, or model snapshot that differs from the selected model. See [The rubric judge](#the-rubric-judge).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `judge`                    | A deterministic rubric without its judge or recorded model; judge settings on an evaluator that scores rubrics itself; an unsupported adapter, missing custom command, unsupported model, or model snapshot that differs from the selected model. See [The rubric judge](/docs/reference/tea-evaluate-evaluators.md#the-rubric-judge).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `held-out`                 | a held-out ID that names no committed probe, names a clean control, or leaves an affected behavior without a development probe                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `partition-plan`           | A records evaluator with rubrics; invalid plan paths or schemas; duplicate step, oracle, rubric, waiver, or mapping IDs; references to steps or behaviors outside the selected view; behaviors with no oracle; held-out probe behaviors with several oracles; missing or conflicting evaluator mappings; or a view the engine refuses. Findings name paths and valid IDs while withholding plan content. See [Held-out probes and partition plans](#held-out-probes-and-partition-plans).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `partition-plan`           | A records evaluator with rubrics; invalid plan paths or schemas; duplicate step, oracle, rubric, waiver, or mapping IDs; references to steps or behaviors outside the selected view; behaviors with no oracle; held-out probe behaviors with several oracles; missing or conflicting evaluator mappings; or a view the engine refuses. Findings name paths and valid IDs while withholding plan content. See [Held-out probes and partition plans](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans).                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `operation-phases`         | an interface-operation pair the contract declares with no phase, a phase for a pair the contract does not declare, or a phase other than `process` or `outcome`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `interface-identifier`     | two interfaces of a contract that share a `logicalId`: `check` asks eval-quality's compile once for a contract of two or more interfaces and quotes its `duplicate-interface-identifier` line, which names the identifier and both positions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `judge-calibration`        | missing or malformed labelled calibration, uncovered rubric criteria or anchored levels, a missing minimum agreement threshold, and, for a `records` evaluator whose contract declares a rubric, `calibration-judgments.json` or `evaluator-configuration.json` that is absent, unreadable or does not verify (see [The evaluation layer](#the-evaluation-layer))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `evaluator`                | Missing or invalid mappings; unknown, repeated, or unbound oracles and rubric criteria; invalid scale levels; links or special files under `evaluator/`; missing command executables, framework declarations, tracked version probes, or matching `LEARNED.md` records; unsupported agent settings, a mismatched model snapshot, missing or inapplicable `evaluatorQualification` settings; or an absent or linked records directory. See [The evaluation layer](#the-evaluation-layer).                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `judge-calibration`        | missing or malformed labelled calibration, uncovered rubric criteria or anchored levels, a missing minimum agreement threshold, and, for a `records` evaluator whose contract declares a rubric, `calibration-judgments.json` or `evaluator-configuration.json` that is absent, unreadable or does not verify (see [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `evaluator`                | Missing or invalid mappings; unknown, repeated, or unbound oracles and rubric criteria; invalid scale levels; links or special files under `evaluator/`; missing command executables, framework declarations, tracked version probes, or matching `LEARNED.md` records; unsupported agent settings, a mismatched model snapshot, missing or inapplicable `evaluatorQualification` settings; or an absent or linked records directory. See [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer).                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `adapter`                  | a registry that declares an HTTP target while the folder holds no regular `adapter/http-probe-port.mjs` in a real `adapter/` directory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `requirements`             | `evaluation.json` records no requirements statement, `requirements.md` is absent, is not a regular file in the evaluation folder (a link, or a file swapped for a pipe, is refused) or its bytes differ from the digest `evaluation.json` records, or the contract's `sourceSpecDigest` is not the digest of those bytes: a requirements change the contract has not absorbed blocks the pull request (contract-source freshness)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `ci-plan` family           | A malformed plan; duplicate checks; commands, triggers, placements, defaults, or tier lists that disagree; `evaluation.json` `tiers` that differ from the tiers the plan places a check on; missing reasons; unresolved placeholders; invalid gate IDs; checks that do not apply to the evaluation; deterministic checks placed off `pr`; or live checks placed on `pr`. See [The plan](#the-plan).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -366,643 +232,6 @@ The `corpus-file` rule requires real directories for `corpus/`, `probes/`, and `
 
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 The `compare` command runs the `baseline-digest` rule too, before it reads a baseline's evidence (see [Comparing](#comparing)).
-
-## The registry
-
-`evaluation.json`'s `registry` is the execution-target registry: every command a run may spawn, every stdio MCP tool server it may start and every HTTP target it may reach, one registry entry each, in the shapes the runtime's `evaluation.json` schema defines.
-The runtime builds eval-quality's default-deny command target policy, MCP target policy and HTTP target policy from it for the workspace each call runs in, so a request naming an interface, executable, tool, address or method the registry does not carry is denied before a process starts or a request is sent.
-
-A command entry:
-
-```json
-{
-  "interfaceId": "tea-atdd-runner",
-  "executable": "tea-atdd-runner",
-  "target": "cli/atdd-runner.js",
-  "subcommandPaths": [[]],
-  "artifacts": { "scaffold": "tests/api/reservations.spec.ts" },
-  "environmentKeys": ["ANTHROPIC_API_KEY", "HOME", "USER"],
-  "maxElapsedMs": 1260000,
-  "infrastructureExitCodes": [1, 3, 4, 5, 6]
-}
-```
-
-- `interfaceId`, `executable`: the logical interface and executable a contract operation names; the pair is unique in the registry.
-- `target`: a POSIX path relative to the evaluated project's root, or a bare command name resolved through the adapter's own `PATH`; never absolute, with no `.`, `..` or empty segment, no trailing slash, and no control, line-separator or bidirectional formatting character.
-  The runtime's target check refuses a relative target that is missing, is not a regular file, or lacks its executable bit.
-  A runner whose files lie outside `launch.root` is read outside the trial's grants, and `preflight` refuses it with exit 3 before any trial (see [Where the runner lives](#where-the-runner-lives)).
-- `subcommandPaths`: the exact subcommand paths allowed; `[[]]` allows none.
-- `artifacts`: the default path of each contract artifact, relative to the run's working directory, under the same path rules as `target`.
-- `environmentKeys`: the keys a request may carry into the process; `PATH` is refused.
-- `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
-- `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
-  TEA's own per-skill runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
-- `egress`: the hosts a confined target's processes may reach, each `{ "host", "port", "addresses" }`, on a command, tool-server or HTTP entry that starts a process; see [File-system confinement](#file-system-confinement).
-  A Linux skill or agent target lists its model provider's host and port.
-- `login`: `"claude"` on a command entry whose target runs Claude Code on your subscription, so a confined target authenticates with the login you hold; see [A subscription login under confinement](#a-subscription-login-under-confinement).
-
-A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
-
-```json
-{
-  "kind": "mcp",
-  "interfaceId": "grader",
-  "target": "server/grader.js",
-  "targetArgs": [],
-  "tools": ["grade_answer", "describe_policy"],
-  "environmentKeys": ["GRADER_TOKEN"],
-  "maxElapsedMs": 30000
-}
-```
-
-- `interfaceId`: the logical interface the contract declares with kind `mcp`; eval-quality's policy admits one entry per interface, since for a tool server the interface is the server.
-- `target`, `targetArgs`: what starts the server, under the same path rules as a command's `target`, and its argument vector; the server works in the workspace the call runs in, so a relative path in `targetArgs` resolves there, and no argument may be an absolute path, carry one after `=`, name a `file:` URL, or hold a `..` segment, which would run or read your live tree in place of the workspace.
-- `tools`: the tools a call may name, in the server's own spelling; a tool absent from the list is denied (`tool-not-authorized`) before the server starts, even when the server publishes it.
-- `environmentKeys`: the keys whose host values the server starts with, over the host's `PATH`; a tool call carries only its arguments, so a credential reaches the server here.
-  Each value of eight characters or more is replaced by `[redacted]` wherever it appears in what the server answers, in any letter case, in a string, an object key or a number (one whose text holds the value, or one of eight characters or more that the value read as a number equals).
-  The forms replaced are the value as written and each form one or two levels of JSON escaping give it: `JSON.stringify`'s string body, with `/` written `\/` or not, and with every non-ASCII character, every `<`, `>` and `&`, or both written `\uXXXX` in lower- or upper-case hex, or none of them.
-  Each form matches in any letter case: the value lowercased, upper-cased, capitalized per word or mixed, a mapping that changes its length (`ß` upper-cases to `SS`, `İ` lower-cases to `i` and a combining dot; an echo that mixes `İ` and `i` with that dot matches) and the Turkish mappings of `i` and `I` included.
-  Escaped echoes match each letter's case at its own position, including uneven capitalization, Greek final sigma, Cyrillic letters, surrogate pairs and a Turkish-locale capitalizer's `Admin-İndex-Token` with `İ` written as `\u0130`.
-  This applies at one or two JSON escape levels and in lower- or upper-case hex.
-  A shorter value, one the server splits across fields, and any other encoding of it (base64, URL encoding, a third level of escaping) are not replaced.
-  `PATH` is refused.
-- `maxElapsedMs` and optional `maxOutputBytes`: the ceilings of one call, from the server's start through the handshake, the call and its teardown.
-
-Each tool-server entry becomes one of eval-quality's `McpTargetAuthorization`s, checked by its own `parseMcpTargetPolicy` (at `check`, and again before any server starts), and every call goes through eval-quality's `createMcpAdapter`: one session per call over stdio, protocol `2025-06-18`, the server's process group torn down after it.
-A leg of an `mcp` operation sends its literal `arguments`, and a plan step its bound ones (see [The interaction plan](#the-interaction-plan)), and the run records the call's arguments as `callInputs.arguments`, the tool's structured result as `responseBody` and its error flag as `responseStatus` (1 or 0), so an oracle reads `/interactions/<step>/response-body/...`.
-A tool that answers with its error flag set is an observation.
-A server whose process ends the session after the handshake and before it answers a call, by exiting or by a signal, is an observation too: eval-quality's `mcp` observation carries a signed `exitCode` beside `isError` true and an absent result, and the run records it with `responseStatus` 1, an absent `responseBody` and the `exitCode`, on the record's `exit-code` channel (`null` on every answered call), so an oracle reads `/interactions/<step>/exit-code` and a defect signature may name `exit-code` as its `observableChannel`.
-A mutation that crashes a tool server is caught through that observation as a command that crashes is.
-The exit code follows a command's convention: a signal is its number made negative, and the runtime applies a command's rule to it, so an end by a signal from outside (hang-up, interrupt, quit, kill or terminate) stops the run with exit 12 and any other code, a plain exit or a signal of the server's own such as an abort or a segmentation fault, is recorded.
-A server that cannot start, refuses its handshake, ends or errors before or during the handshake, crosses a ceiling, or writes a line that is no JSON-RPC message is a target that could not run (exit 12), and its fault keeps the adapter's cause, scrubbed, a value the cause cuts short included.
-The record reads the tool's `structuredContent`: a tool that answers with text `content` alone is recorded with an absent body, so an oracle has nothing to read (eval-quality's `mcp` kind describes a structured result).
-`evaluation.json`'s `interface` must be a kind the contract declares (`check` rule `reference`).
-
-An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through the evaluation's own HTTP port (see [The HTTP port](#the-http-port)):
-
-```json
-{
-  "kind": "api",
-  "interfaceId": "grader",
-  "scheme": "http",
-  "host": "127.0.0.1",
-  "addresses": ["127.0.0.1"],
-  "methods": ["GET"],
-  "safeMethods": ["GET"],
-  "maxRedirects": 0,
-  "maxElapsedMs": 30000,
-  "maxRequestBytes": 65536,
-  "maxResponseBytes": 1048576,
-  "server": {
-    "target": "server/grader.js",
-    "targetArgs": ["--policy=rules/policy.txt"],
-    "environmentKeys": ["GRADER_TOKEN"],
-    "portEnvironmentKey": "PORT",
-    "portFileEnvironmentKey": "PORT_FILE",
-    "readyTimeoutMs": 20000
-  },
-  "auth": { "header": "authorization", "environmentKey": "GRADER_TOKEN", "prefix": "Bearer " }
-}
-```
-
-- `scheme`, `host`, `addresses`, `methods`, `safeMethods`, `maxRedirects` and the three ceilings: the fields of one authorization of eval-quality's HTTP target policy, which its `evaluateTarget` reads for every request and every redirect.
-  The schema holds each at its JSON type alone, and eval-quality's own `parseProbeTargetPolicy` decides every rule over it (the schemes, the port range, the methods, the non-empty address and method lists, an address being an IP literal, the ceilings' minimums), so a rule eval-quality adds or changes reaches `check` with no copy in TEA.
-  A duplicate address, method, safe method or `deployments` origin passes: the parser accepts duplicates and `evaluateTarget` takes the first authorization that matches.
-  `check` hands the parser the policy each entry becomes, exactly as the runtime builds it: the entry's own authorization (a started server's at a placeholder port, since its real one is chosen at the call) and one authorization per `deployments` origin, each read alone.
-  An authorization the parser refuses is a `registry` finding that names the entry or the deployment and carries the parser's reason, with its pointers read from `/authorizations/0`.
-  The runtime builds each call's policy through the same parser before any service starts, so a registry built without `check` over a field the parser refuses stops the call with the parser's fault (exit 12).
-  `host` is written as a URL spells it, letter case aside (an IPv4 address in dotted decimal, an IPv6 address compressed and unbracketed, a name in punycode), since the port hands the policy the hostname of the URL it sends to, and the policy reads both hosts in lower case with one trailing dot dropped; `check` refuses another spelling (`registry`) and names the URL's.
-  `addresses` names the exact addresses the host may resolve to; a loopback, private, link-local or metadata address is allowed only when named, and any other is denied (`address-not-authorized`) before a request is sent.
-  One HTTP entry serves one interface.
-- `port`: a deployed target's port, reached as it is.
-- `deployments`: other origins the interface is deployed at, each `{ "scheme", "host", "port", "addresses" }`, which a historical probe on the deployment route reaches (see [Historical probes](#historical-probes)).
-  Each is an authorization of the interface with the entry's methods, redirects, ceilings and auth; `check` holds its `host` and, under `auth` over `http`, its addresses to the rules of the entry's own, and hands the parser each one as an authorization of its own.
-  An origin listed twice passes, as a duplicate address does.
-  A deployment joins the policy of its own deployment arm alone: every other call of the run, a redirect included, is decided over the entry's own authorization.
-- `server`, in place of `port`: a service the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included.
-  `target` and `targetArgs` follow a tool server's rules, `environmentKeys` names the keys whose host values it starts with, and `portEnvironmentKey` and the optional `portFileEnvironmentKey` the keys its port handoff uses (see [A started service's port](#a-started-services-port)).
-  It starts only once the port's policy has allowed the call and the runtime's own `evaluateTarget` call agrees, through eval-quality's command mechanism in a process group of its own, which ends with the call; the call is sent once the address eval-quality allowed accepts a connection on the service's port, within `readyTimeoutMs`, and `maxElapsedMs` counts from then.
-- `auth`: a header every request of the interface carries, holding `prefix` and the host's value for `environmentKey`; the port adds it, no request record carries it, and no redirect to another origin receives it.
-  `preflight` and `run` exit 10 when the host does not set that key, since a call with no credential would read its refusal as the target's behavior.
-  Over `scheme: "http"` every address must be one eval-quality's `staysOnHost` keeps on this host, since the header would otherwise cross the network in clear text; `check` refuses any other (`registry`), the NAT64 (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a loopback address included, since a connection to either goes through a translator and leaves the host.
-  A credentialed target at any other address, a private one such as a docker-compose service included, is served over `https` with `scheme: "https"`; when a private certificate authority signed its certificate, set `NODE_EXTRA_CA_CERTS` in the host's environment to that authority's PEM file, which the port's process inherits.
-
-Each value a started service's keys and an auth header carry, of eight characters or more, is scrubbed from every answer and cause as a tool server's are, and from a fault's message and cause with the same matching, in any letter case, since a URL lowercases the host a redirect names and a denial quotes it and a server may shout or capitalize what it echoes.
-A failure quotes the last 2000 characters of what the port's process or a started service printed, scrubbed whole before the cut, so the cut never leaves part of a secret.
-A request records its `path`, `query`, `header` and `body` inputs as `callInputs`, and the answer's status, headers and body as `responseStatus`, `responseHeaders` and `responseBody`, so an oracle reads `/interactions/<step>/response-body/...`; every answer is an observation, at any status.
-A service that exits before it accepts a connection, does not accept one within `readyTimeoutMs`, crosses a ceiling, or stops during a call is a target that could not run (exit 12), its cause kept scrubbed.
-A service not accepting within `readyTimeoutMs` is reported with the last connection attempt's error code: `ECONNREFUSED` while nothing listens on the port, and `EADDRNOTAVAIL` when the host has no local port left to connect from.
-A path value that reads as `.` or `..` is refused before anything is sent, since a URL would resolve it into another path than the one the call records.
-
-An infrastructure exit code says the target could not run, so it cannot be evidence of a behavior.
-`check` resolves each defect signature and each manifestation witness through eval-quality's own `resolveCheck` over an observation that carries one of those codes and no output, with the contract's reference sets in scope, and refuses the probe when the expression could hold (`true` or `insufficient-evidence`) or cannot be resolved at all.
-`exit-code != 0` against a runner that exits 3 when its agent is missing would read every broken installation as a caught defect.
-Address an exit code, stream or body only the defect produces.
-
-### Denial reasons
-
-A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave, for a command, a tool call and an HTTP request alike.
-The reason sits beside the fault's code and detail in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls, and `preflight` and `run` exit 10 and name it.
-A CI policy or a test keys on the `reason`.
-
-| Reason                           | The policy denied                                                     |
-| -------------------------------- | --------------------------------------------------------------------- |
-| `interface-not-authorized`       | a call to an interface the registry does not authorize for that kind  |
-| `executable-not-authorized`      | a command whose executable is not listed                              |
-| `subcommand-not-authorized`      | a command whose subcommand is not listed                              |
-| `environment-key-not-authorized` | a command request carrying an environment key its entry does not list |
-| `tool-not-authorized`            | a tool the server's entry does not list, even when the server has it  |
-| `scheme-not-authorized`          | an HTTP request whose scheme the entry does not admit                 |
-| `host-not-authorized`            | an HTTP request whose host the entry does not admit                   |
-| `port-not-authorized`            | an HTTP request whose port the entry does not admit                   |
-| `address-not-authorized`         | an HTTP request whose resolved address the entry does not list        |
-| `address-unparseable`            | an HTTP request whose resolved address cannot be parsed               |
-| `method-not-authorized`          | an HTTP request whose method the entry does not list                  |
-
-## The HTTP port
-
-An `api` evaluation carries its own HTTP port: `adapter/http-probe-port.mjs`, rendered unchanged from the Evaluate skill's template, beside `adapter/http-probe-port.conformance.mjs`.
-The port's default export builds eval-quality's environment-probe port from configuration alone (where each interface is, eval-quality's HTTP target policy, auth headers and a transport), and eval-quality's `evaluateTarget` decides every allow or deny, once per request and once per redirect hop, so the port classifies no address and a fix to the policy reaches it with eval-quality.
-It resolves a host once per hop, to its first address, and sends to the address eval-quality allowed with the host in the Host header.
-
-An API request body can be `json`, `absent`, or `{ "kind": "raw", "base64": "...", "contentType": "application/json" }`.
-Raw base64 must be canonical.
-The port decodes it into exact request bytes and sends the declared content type.
-Raw requests cannot declare Content-Type in `channels.header`; `body.contentType` is the sole request declaration.
-For raw calls, the port replaces configured auth Content-Type and framing headers with the declared type and computed framing.
-The port computes Content-Length for nonempty raw bytes and uses chunked transfer framing for an empty raw body; it refuses caller supplied framing headers.
-An absent body adds no inferred content type.
-The port checks the decoded byte count against `maxRequestBytes`.
-
-`tea-evaluate` never loads the port into its own process.
-For each call it starts the port file as a Node process of its own, whose last lines hand the port to TEA's host, which serves the call over file descriptor 3, a channel the runtime opens for its protocol alone; keep those lines when you edit the file.
-What the port prints on its standard output and error is its own: the runtime keeps both, up to 1 MiB together, and quotes their end when a call fails, so a `console.log` in the port breaks nothing, and printing past that ceiling ends the call.
-The port's process starts with the host's `PATH` and `NODE_EXTRA_CA_CERTS` alone (the latter lets it trust an https target a private authority signed), receives the call's configuration and the auth value of the call's own interface alone on that channel, and ends with the call.
-Each call holds the file to the bytes `preflight` or `run` asked for the protocol, and a changed file stops the run (exit 12).
-`preflight` and `run` start the port once before anything else and exit 10 when it does not answer as TEA's host, and 12 when its process cannot start or answer in time.
-A port that answered then and breaks the protocol during a call (a line on its channel that is no message, output past a ceiling, no answer within the call's ceiling, or an answer eval-quality's own `ProbeObservation` parser does not read or that answers another request) stops the run with exit 12 (`port-contract-violation` for the answer), as an evaluator emitting output outside its import contract does; such an answer is never judged as the target's behavior.
-The port file imports `eval-quality` and TEA's package as bare names, which Node resolves from the port file's own location: a `node_modules` in the evaluation folder or a folder above it must hold both, as the project's own install of TEA with its `eval-quality` peer does (see [Prerequisites](#prerequisites)).
-A `tea-evaluate` run from a global install or through `npx`, with neither installed above the evaluation folder, leaves the port unable to start (exit 10 at `preflight`).
-
-`node adapter/http-probe-port.conformance.mjs`, run from the evaluation folder, runs eval-quality's environment-probe conformance suite over the port against a loopback stub it starts and closes itself, so it needs no deployed target and no secret, and exits 0 only when every assertion passes.
-
-### A started service's port
-
-A registry `server` receives its port in one of two handoffs.
-
-With `portFileEnvironmentKey`, the service reports the port it bound.
-The runtime passes `0` in `portEnvironmentKey` and the path of a file in a private directory in `portFileEnvironmentKey`; the service binds a port the system chooses and writes that port's number to the file once it listens (in Node, `server.listen(0)`, then `server.address().port` written to the file).
-The runtime sends only once the file names a port, a whole number from 1 to 65535, that accepts a connection while the service runs, and the port probes the call again at that port, so eval-quality's policy decides there before anything is sent.
-No other process can answer on a port the service holds.
-A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
-The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
-The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
-Under Bubblewrap a started service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
-
-Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
-It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
-A port another process already listens on when the service is to start is refused, and an answer that arrives after the service ended other than with exit code 0 is refused, since no service of the run gave it; both stop the run with exit 12.
-This handoff leaves a window: another process can take the port between its release and the service binding it, and when that process answers before the service's failure to bind is reported, its answer is recorded as the service's.
-Name `portFileEnvironmentKey` whenever the service can report its port.
-
-In either handoff, an answer the port gives before the call's service is ready, as from a port that never asks the runtime to start the service, is refused (exit 12).
-`check` refuses (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey`, and either key named in `environmentKeys`, since the runtime sets both.
-
-## The launch
-
-`evaluation.json`'s `launch` says where the target lives.
-
-```json
-{
-  "root": "../..",
-  "skillRoot": "skills/my-skill"
-}
-```
-
-- `root`: the evaluated project's root, relative to the evaluation folder.
-  It is POSIX, may climb out of the folder with `..`, and is never absolute.
-  It resolves from the folder's real location: an `--evaluation` path through a symbolic link reaches the same root as the folder's own path.
-  Registry targets, the skill root and every mutation's `targetArtifact` resolve against it, and `preflight` runs its arms and legs in disposable workspaces made from it (see [The workspace](#the-workspace)).
-- `skillRoot`: the skill directory, holding `SKILL.md`, relative to `root`, with no `.` or `..` segment.
-  Required when the evaluation's target kind is `skill`; it is the `--skill-root` every skill-runner leg must pass, and `check` refuses a mutation outside it or a leg passing another (`skill-root`).
-
-## The workspace
-
-Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
-Every process a target starts runs confined to that workspace (see [File-system confinement](#file-system-confinement)), so a write outside it is refused.
-In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run compares your working tree and the checkout's `HEAD` the same way.
-`evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
-
-- `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
-  The evaluated commit is recorded, and uncommitted changes are left out of the run, which says so on stderr.
-  `launch.root` must be tracked at that commit, and must hold no git submodule, which a worktree checks out empty (exit 12; pass `--from-working-tree` to copy the checked-out tree instead).
-- `kind: copy`, or `kind: git` with `launch.root` outside any git repository: a temp copy of `launch.root`, without `.git`, identified by its tree digest; no commit is recorded, since no commit names those bytes.
-- `preflight --from-working-tree`: a temp copy of the working tree, uncommitted work included, whatever the kind.
-  It is the one workspace recorded as `dirty: true`, and a dirty run cannot become a baseline.
-  A run is recorded dirty as well when the evaluation folder, which it reads from your working tree, holds uncommitted work.
-
-Every other workspace of the run (one per seeded probe's qualification, one per mutation, and for `run` one for the clean controls' qualification and one per trial) reproduces the pristine one: a worktree of the same commit, or a copy of what the pristine copy held when it was made, whose tree digest must match.
-The pristine copy keeps that snapshot beside itself, without its provisioned directories, since the legs run in it and a target that writes (a workflow step that stores a record, say) changes it; a snapshot changed after it was made no longer matches, and the reproduction exits 12.
-A reproduction copies the provisioned directories the pristine copy held when it was made from its read-only copies, and no other; one planted in the snapshot, or a read-only copy moved out of the pristine copy, exits 12.
-The evaluation folder is left out of every workspace, so nothing the runtime hands a target holds the contract, the probes or which defect a mutation plants.
-Each `workspace.provision` directory (for example `node_modules`, which a worktree lacks) is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits are removed, so a write under it fails unless the writer restores the bits first (root ignores them).
-A mutation cannot target a file inside it (`provisioned-target`), and a provisioned directory that is itself a symbolic link is refused with exit 12.
-Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside `launch.root`, or inside the repository holding it unless the repository ignores that directory.
-Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
-A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
-Each workspace has a workspace marker and a sidecar ownership marker outside the target subtree, plus an ownership journal under the evaluation's ignored `runs/` directory.
-A killed run can leave a temporary copy or a detached worktree and its Git registration.
-The next preflight for the same evaluation checks the held journal, markers, project identity and owner process, then reports and reclaims verified scratch from a dead run before reading your project's state.
-The sidecar marker survives interrupted directory removal.
-A live or unverifiable owner's workspace remains in place.
-The journal records the original temporary directory, so recovery still works after `TMPDIR` changes.
-The private parent also has an auxiliary ownership record in that journal and a matching marker inside the parent.
-A killed preflight can leave engine staging beneath it; a killed `run` can leave command evaluator scratch and the call directories of a confined call there.
-The next preflight verifies the same evaluation, invocation, exact parent path, marker and dead owner before reporting and removing that parent with its auxiliary scratch.
-The record keeps the original private root, so recovery also works when Windows `TEMP` or `TMPDIR` changes.
-A marker write interrupted before completion is accepted only when its bytes match the start of the record and the parent contains nothing else.
-A live owner, another evaluation's parent, a linked root and any parent with uncertain ownership remain in place.
-
-In a run that opted out of confinement, a worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), and a target running git in the worktree can change it, which the run detects afterwards and exits 12.
-A confined run gives each worktree a private repository instead, and the target can neither read nor write your git directory, apart from the worktree's own entry in it, which it can read (see [File-system confinement](#file-system-confinement)).
-`preflight` reads your project before the workspaces are made and again after the qualification and after the legs.
-In a git repository, a confined run reads `git status` (tracked and untracked paths), the content of every path it names, the commit the checkout's own `HEAD` names, and where the checkout's git commands read their repository from: the git directory the checkout resolves to, the content of its `.git` file when that is a file (a linked worktree or a submodule) and whether the hooks directory `core.hooksPath` names exists.
-Every process of a confined run is denied a write to your git directory and to the checkout's `.git` file (the targets by their profile, the evaluation layer by its own denial), so the run digests no other part of the git directory.
-A `.git` file rewritten to point into another repository, or a hooks directory created during the run, ends the run with exit 12 whatever write path the confinement missed.
-A `core.hooksPath` directory that does not exist yet (husky's `.husky/_` before `npm install`) is denied to the evaluation layer under Seatbelt; Bubblewrap cannot bind a path that is absent and the run creates no directory in your tree, so under Bubblewrap the reading of whether it exists is what stops a run during which one appears.
-An opted-out run also reads every ref, the common git directory without its object store, reflogs, worktree records, index, submodule or LFS stores and lock files, and the hooks directory `core.hooksPath` names when it lies outside the git directory.
-Outside a repository, both read the tree digest of `launch.root` without the evaluation's `runs/`.
-A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree fails the run, and so does an opted-out target that commits, tags, branches, reconfigures the repository or writes a hook.
-A confined run compares your working tree and the checkout's `HEAD`, and does not compare refs, the git configuration, branch tracking or an in-progress operation.
-An edit you commit in the checkout the run reads ends it with exit 12, since the checkout's `HEAD` moves.
-A commit, fetch, push, branch, rebase or new worktree that another session makes in any other checkout of the same repository (the main checkout when the run reads a linked worktree) while a confined run is in flight does not stop it, and `run.json` records `adopterTree.unchanged: true`.
-An opted-out run compares the refs and the shared git state as well, so any such change ends it with exit 12.
-If you share a repository with other sessions and run an opted-out evaluation, run it from a standalone clone of the repository, which no other session commits to.
-The rollback cycle records the real directory that holds the `targetArtifact` when it plans the mutation, and writes and reads the target only from inside that directory, entered and confirmed to be the one it recorded, so a path swapped for a symbolic link, even by a process the target left running, cannot carry the runtime's own write out of the workspace; a swap or a hard-linked target it sees stops the cycle with exit 12, and the mutation and the restore each write a new file.
-Gitignored paths are not read.
-
-`runs/<invocationId>/run.json` records what was evaluated: the TEA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, every workspace that ran legs (each as `<workspace>`, see [Paths in the records](#paths-in-the-records)), the file-system confinement the targets ran under (`confinement`: `seatbelt`, `bubblewrap` or `opt-out`), and whether your project was unchanged.
-It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
-A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the matcher `seed`, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator (a command evaluator's observed `frameworks` or a sealed-brief agent's installed `version` included) and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, how complete each audited trial's reports were (`observedMountsChannel`, see [File-system confinement](#file-system-confinement); a `records` run has none), and `completed: true`.
-A completed `run` that ran trials also records `hostSocketTruncation`, the trials whose calls left sockets of other users reachable because the room for mounts ran out (`[]` when no call was cut; see [File-system confinement](#file-system-confinement)).
-A completed `run` also records `egress`, each entry that lists hosts with its `host:port` items, and, once it ran trials, `egressRefusals`, the trials whose egress proxy refused a request (`[]` when none did; see [File-system confinement](#file-system-confinement)).
-
-### File-system confinement
-
-`preflight` and `run` confine every process they start, before any of them starts, through the mechanism the host provides:
-
-- macOS: Seatbelt, through `/usr/bin/sandbox-exec` and a profile the runtime generates for each call.
-- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, an empty `/run/user`, and an empty device file over each path-based Unix socket the host serves.
-  What a target leaves running ends with it, and killing the `bwrap` the runtime started ends what that process forked.
-
-Each mechanism also needs the observer its audit reads (see below): on macOS the kernel's sandbox reports through `/usr/bin/log stream`, which needs a session that may read the unified log; on Linux `strace` (`apt-get install strace`, version 6.1, which the design was verified against, or a later one that supports `--seccomp-bpf` and `--decode-pids=pidns`), which needs ptrace.
-
-The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces, or a container that forbids creating a network namespace).
-It then confirms the observer the same way: on macOS a sandboxed read of a probe file must come back through the log within five seconds, and on Linux a traced Bubblewrap run of a trivial reader must report the file it read.
-A host with neither mechanism, one whose mechanism refuses, or one whose observer cannot confirm itself stops the command with exit 12 and names the reason, since an audit that cannot see would report an empty list of observed mounts as evidence.
-`sandbox-exec` cannot apply a profile inside a Seatbelt sandbox that restricts anything, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused on macOS; run it from an unsandboxed terminal.
-A temp directory (`TMPDIR`) inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a line break (or another control character), is refused the same way, since no profile can carry it.
-Set `"confinement": false` in `evaluation.json` to run the targets unconfined instead; `run.json` then records `"confinement": "opt-out"`, and a confined run records `"seatbelt"` or `"bubblewrap"`.
-
-Each target runs confined, and so does every process it starts, one still running after the target exits, one started with `setsid` and one left behind by a killed target included.
-A confined process:
-
-- writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends, and one private home directory for the trial, described below);
-- can neither read nor write anything under the evaluation folder: `contract.json`, `probes/`, `mutations/`, `corpus/`, `evaluator/`, `runs/` and the rest; Seatbelt answers `EPERM`, and Bubblewrap covers the folder with an empty read-only file system, so a read answers `ENOENT` and a write `EROFS`;
-- can neither read, write nor connect to a unix socket under the user's private root directory, apart from the call directories and the home it is handed (described below), beneath which every run's private parent holds the evaluation layer's private directories: the bridge's configuration, token file and socket, and the working directories of an evaluator and the judge (see [The bridge's admission token](/docs/explanation/why-evaluate-confines-the-target.md#the-bridges-admission-token)); Seatbelt answers `EPERM`, and Bubblewrap covers the directory with an empty read-only file system;
-- reads its workspace, private call directories, home, system runtime roots and declared `systemPaths`.
-  On macOS, Seatbelt refuses file data outside these grants with `EPERM`, including a link inside the workspace that leads to an ungranted host file.
-  The kernel enforces this boundary even when its audit log drops a diagnostic record.
-  Linux continues to trace host reads and judge them through the isolation manifest.
-  The project's git directory is withheld except for its own worktree entry: Seatbelt answers `EPERM`, and Bubblewrap covers the git directory with an empty file system, the entry bound back in read-only.
-  The target's git sees the evaluated commit's full history with the evaluation folder as an empty tree, and the project's git directory is withheld: the runtime builds a private repository for each worktree beside its checkout, outside what the target may write, with every commit, tree and blob your repository holds for the evaluated commit's history, every commit id as your repository has it, except the objects reachable only through the evaluation folder.
-
-  A project cloned with a promisor remote (`--filter=blob:none`, `--filter=tree:0` and the like) runs confined: the private repository holds the objects your clone holds on disk, and no process of a confined run fetches from the remote.
-  The runtime asks git not to fetch lazily, which git 2.44 and later honors; an older git makes a partial-clone project exit 12, with the way out named.
-  A historical probe's checkout of a revision whose objects your clone lacks on disk exits 12 and names the revision, since a confined run fetches nothing; check the revision out once in your clone, or set `"confinement": false`.
-  A command in the target that needs an object your clone lacks, such as `git log -p` across a commit whose blobs you never fetched, ends with git's own missing-object error.
-  The target's git lists the tags of your project that point into the evaluated commit's history, lightweight and annotated, with their annotations, so `git tag -l`, `git describe --tags` and a build that reads a tag work.
-  The target's worktree is on a detached `HEAD`, as it is in a run that opted out, and your branches are not carried.
-
-  Two limits apply.
-  The withheld path is the evaluation folder's current path, so a folder that moved stays readable in the history at its old path.
-  A directory outside the folder whose tree is identical to a tree of the folder reads as empty.
-  A target that must read the project's git directory opts out;
-
-- cannot change its worktree's git state: `git add`, `git commit`, `git stash` and `git checkout -b` write the index, objects and refs of the private repository and the worktree's entry in your git directory, outside the workspace, and fail; a target that must commit opts out;
-- cannot start a setuid program under Seatbelt (`ps` and `sudo` on macOS), which the system refuses to any sandboxed process; `pgrep` lists processes there;
-- cannot confine a process of its own through `sandbox-exec`, which applies no profile inside a restricting sandbox.
-
-The runtime builds the target's private repository, hands each call its own directories, audits what a target opens and closes the host's services to it as described in [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md).
-Each call's temporary directories are removed when the call ends, and the next run over the evaluation reclaims those a killed run left.
-
-An agent CLI keeps its session and settings state under `HOME`, so each confined sandbox gets one private home directory, which the runtime makes beneath the run's private parent (named `tea-evaluate-target-home-<random>`) and removes with the run; a `run` trial removes its own when the trial ends.
-The confinement withholds the user's private root as described above and re-grants the one home beneath it, so the target reads and writes its own home and nothing else under the root: no other trial's, stage's or run's home, and no listing of the parent or the root (Bubblewrap's empty file system over the root holds only the path to the home; Seatbelt answers metadata requests for the root and the parent, so a module load, `realpath`, `mkdir -p` and `cd` inside the home resolve, and still refuses to list them).
-`HOME` names the home for every confined call, and `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_DATA_HOME` name `.config`, `.cache` and `.local/share` inside it.
-These variables replace any host value, including one a registry entry's `environmentKeys` names, so a confined skill or agent target keeps its state without opting out of confinement.
-The home is the one directory the target may write beyond its workspace and the call's own directories: your real home and the project stay unwritable, the evaluation folder and the user's private root stay closed to reads and writes, and the runtime refuses a home inside the workspace or the evaluation folder.
-
-Its state lasts across the calls of one trial or arm, so an agent's session continues, and each independent arm or leg starts with an empty home (one that holds the link to the login file an entry's `login` grants and nothing else), a new directory that replaces and removes the old one: the next trial, the baseline, mutated and re-pass arms of a qualification, and each leg of a `preflight`.
-Credentials an agent needs reach it through `environmentKeys`, which passes environment values, and through the entry's `login`, which grants a subscription login (see [A subscription login under confinement](#a-subscription-login-under-confinement)); a login an agent stored under your real home is not found under the private home unless the entry declares it.
-A run that opts out of confinement keeps the host environment and makes no home.
-`tea-skill-runner` hands its agent `HOME` among a short list of variables, so a skill target sees the private home there and the XDG base directories only through `HOME`'s default locations.
-
-Every other process the run starts to run your code or an agent (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge, the evaluation's HTTP port) runs with the evaluation folder read-only, `evaluator/` and `runs/` included, and your project's common git directory (refs, configuration, hooks and `info/`) read-only, with the hooks directory `core.hooksPath` names read-only too when it lies outside the git directory (a repository that uses husky keeps its hooks in `.husky/_`) and the `.git` file of a checkout that is a linked worktree or a submodule, so none of them can plant a hook, change the repository's configuration, move a ref or point your checkout at another repository your next git command reads, and no process of the run can swap a file of the evaluation layer between the runtime's re-read of it and the evaluator's launch (see [The evaluation layer](#the-evaluation-layer)), or rewrite the run's evidence.
-An evaluator that writes a cache beside itself under `evaluator/`, or runs `git commit`, `git update-ref` or `git config` in your repository, or writes a file into your hooks directory, fails its write in a confined run; it may write its working directory, your home directory and the rest of the host.
-A project in no git repository has no git directory to protect.
-
-Each trial also audits what its targets open, through the mechanism itself and for every process the target starts, whatever its language or environment: a shell script, a Python program, a native binary and a Node process started with an empty environment are seen alike.
-
-The audit records reported paths once, by their real path.
-On macOS these include denied read attempts.
-On Linux they include successful opens, directory listings and link reads outside what the trial was granted: its workspace, its temp and home directories, the Node installation the runtime runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like, and on macOS the zone data, logging filter and system interpreters' library directories under `/private/var/db/timezone`, `/Library/Preferences/Logging`, `/Library/Perl`, `/Library/Python` and `/Library/Ruby`) and the `systemPaths` of the target's registry entry.
-A link in the workspace that leads outside it reports the path it leads to, while a file under the operating system's own directories (`/usr`, `/etc`, `/lib` and their like, not `/proc`) is judged by the path the process asked for, so a system file the operating system links elsewhere (a stub resolver's `/etc/resolv.conf`) is not listed.
-A write the mechanism refuses is listed, and so is every access to the evaluation folder, the project's git directory (its worktree's own entry excepted) or your private root directory, refused or not, even under a declared system path.
-A read of a path that does not exist and a metadata probe (`stat`, `access`) are not listed.
-
-The execution of a binary reads it, so an ungranted binary is listed like any ungranted file (macOS also lists the directory the shell looked in); declare the toolchain a target runs in `systemPaths`.
-
-`run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`, and the summary line of `run` names every `lossy` trial.
-On macOS the kernel's report log can drop a report when sandbox reports reach it faster than it keeps them, from the trial or from anything else on the host, so a `lossy` trial's observed mounts may be missing a read; a trial is `lossy` when the log delivered fewer of the audit's canary reads than were sent, reported lost events, or was handed reports at that rate (`logOverloaded`).
-A macOS `complete` entry describes delivered canaries and measured traffic.
-A single denial diagnostic can drop in transit.
-The kernel continues to refuse ungranted data regardless of dropped diagnostics.
-An empty observed list records that no diagnostic arrived.
-Every Linux trial is `complete`.
-A run whose observer fails exits 12 and leaves the trial with no record.
-
-The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
-`preflight` and `run` apply that check themselves: `run` reads the manifests it seals, and `preflight` audits the legs of its pristine workspace and exits 3 for a path every leg opened, which every trial will open too; each exits 3 and names the ungranted paths.
-A registry entry names what its target legitimately reads outside the workspace as absolute `systemPaths`:
-
-```json
-{
-  "interfaceId": "verdict",
-  "executable": "verdict",
-  "target": "bin/verdict.js",
-  "subcommandPaths": [[]],
-  "artifacts": {},
-  "environmentKeys": [],
-  "maxElapsedMs": 20000,
-  "infrastructureExitCodes": [3],
-  "systemPaths": ["/opt/verdict-rules"]
-}
-```
-
-A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
-The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
-A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
-A Bubblewrap target, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
-A host that cannot create the network namespace is refused at selection (exit 12), as one that cannot start Bubblewrap is.
-An HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns: the confined process serves a Unix socket in a private directory of the call, and the runtime listens on the address and port the call is configured for and forwards each connection through that socket, with no network path between the namespaces.
-A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.
-Under Bubblewrap an isolated started service must listen on `127.0.0.1` or `::1`, and an address the registry authorizes for it that is any other stops the call.
-A command target and a tool server have a loopback only and no bridge.
-A Bubblewrap target has no network beyond that loopback and the proxy its entry's `egress` gives it, so a target that calls a model provider or an outside HTTPS service lists the host in `egress` on its entry.
-Each command, tool-server and HTTP entry that starts a process takes `egress`, one `{ "host", "port", "addresses" }` item for each host and port its processes may reach, and `check` refuses an item eval-quality's `parseProbeTargetPolicy` refuses, a host spelled otherwise than a URL spells it, a host and port listed twice and an HTTP entry that names no server.
-`"network"` is no longer a field: `check` refuses an entry that declares it, naming the entry and pointing at `egress`.
-An entry that lists `egress` gives each of its calls one route out, a proxy the runtime owns: the runtime serves it on a Unix socket in a private directory of the call, the call's status shim listens on a loopback port of the namespace and connects each connection to that socket, and the target starts with the port in `HTTPS_PROXY` and `https_proxy` and with `NODE_USE_ENV_PROXY=1`, which Node reads.
-The proxy tunnels an HTTP `CONNECT` request for a host and port an item lists, decided by eval-quality's `evaluateTarget` as the evaluation's HTTP port's requests are, and answers a request for another host, port or address `403` naming the reason, the host and the entry (a request that is no `CONNECT` gets `405`, a malformed head `400`, a host that does not resolve or cannot be reached `502` and a call past 128 tunnels `503`).
-A host no item names is refused before its name is resolved, and the proxy connects to the resolved addresses an item names, the next when one cannot be reached.
-The shim announces the proxy in `HTTPS_PROXY` alone and the proxy reads `CONNECT` alone, so a client that opens no `CONNECT` tunnel (a plain `http://` request, a database driver) has no route; a target that needs one sets `"confinement": false` with a recorded reason.
-A tunnel to a listed host and port carries whatever bytes the client sends, TLS or not, so a client that tunnels (`curl -p -x "$HTTPS_PROXY"`) reaches a plain-HTTP gateway on the host's loopback that an item lists.
-A connection from a target to the host's loopback, to an abstract Unix socket or to any host without the proxy finds a loopback and nothing else.
-A host in a request or an item holds letters, digits, `.`, `-` and `_` and at most 253 bytes, or is an IPv6 address; the proxy answers a longer or otherwise spelled host `400`, and `check` refuses such an item and a wildcard such as `*.example.com`, which no request can match.
-An entry that lists no host has no proxy, no proxy variable and no route to any host.
-The proxy and its socket are private to the call: its directory lies beneath the run's private parent, the target sees it read-only, the authorization is held in the runtime's memory with no file, and the end of the call, its failure and a signal that ends the run remove it, while the next run over the evaluation reclaims one a run killed outright left.
-`run.json`'s `egress` lists each entry that lists hosts with its `host:port` items, its `egressRefusals` lists each trial whose proxy refused a request with the host, the port, the entry, the reason, the address when the host resolved and a count (at most 50 distinct requests, the rest counted in `omitted`, each detail cut to 500 characters), and the run's summary names those trials.
-The isolation manifest's forbidden-input notes name the entries that list hosts under Bubblewrap.
-The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.
-A Bubblewrap target cannot connect to a path-based Unix socket of the host: `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket`, an agent socket under `/tmp` and every other socket file the kernel lists as bound on the host or the runtime finds under `/run`, `/var/run`, `/tmp` and `/var/tmp` answer `ECONNREFUSED`, since the runtime mounts an empty device file over each one when a call starts.
-A socket inside the target's workspace or inside a private directory of the call (the bridge's directory included) stays connectable.
-
-The target receives exactly the environment the call gave it, whether or not the host holds sockets, for every name: `BASH_FUNC_f%%`, `my.setting`, a held `PS1`, `OLDPWD`, `SHLVL`, `_`, `IFS`, `OPTIND` and `PPID` included, apart from `PWD`, which Bubblewrap sets to the directory the call runs in for every call, with sockets hidden or none, `NODE_V8_COVERAGE`, which every confined target loses under either mechanism, the values that name a path inside a call directory (`TMPDIR`, `TMP`, `TEMP` and a started service's port file), which name the directory's mount under `/dev` under Bubblewrap, and the proxy variables a call with `egress` gains.
-A call is refused (exit 12, naming the count and the room) when the sockets only root, the system accounts and the user running the call can create exceed the room, which no other user can cause.
-`run.json`'s `hostSocketTruncation` lists each trial whose calls left sockets of other users reachable because the room ran out, with its `conditionArm`, `trialIndex`, `calls`, `truncatedCalls` and `socketsLeftReachable`, and the run's summary names those trials; the list is empty when no call was cut.
-A socket file the runtime cannot reach by its exact path (a directory it cannot search, a file that went away) is left out, since the target cannot reach it either.
-
-A macOS Seatbelt target cannot connect to a path-based Unix socket of the host outside its grants: `/var/run/docker.sock`, Docker Desktop's `~/.docker/run/docker.sock`, the socket `SSH_AUTH_SOCK` names, an agent socket under `/tmp` and every other socket file answer `EPERM`, since the profile denies every `connect()` to a socket path and then allows the grants back.
-A socket inside the target's workspace, a private directory of the call or its home stays connectable, and so do the two system services a toolchain needs: `/var/run/mDNSResponder`, which every name lookup of the C library asks, and `/var/run/syslog`, the BSD log socket.
-Every other socket of `/var/run` stays closed on macOS, the privileged helper of Docker Desktop among them.
-The rule names a path, so a socket a host process binds after the call started is refused too, and so is a link to a socket outside the grants, whether the link lies in the workspace or beside the socket, since Seatbelt matches the real path of the socket; a target cannot hard-link a socket outside its grants into its workspace.
-macOS Seatbelt has no abstract sockets, it accepts `egress` and ignores it, and its Mach services are a separate channel the profile does not close.
-
-A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
-`score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
-
-#### A subscription login under confinement
-
-A confined target runs with a private home, so an agent CLI that authenticates with your subscription finds no login there, and every call of `tea-skill-runner --agent claude` exits 4.
-A command entry that declares `"login": "claude"` gives its processes the logins Claude Code documents and nothing else of your home:
-
-- `CLAUDE_CODE_OAUTH_TOKEN` passes when the host sets it, for a token from `claude setup-token`.
-  No other credential variable passes, `ANTHROPIC_API_KEY` included, unless the entry's `environmentKeys` names it.
-- `.credentials.json` in `CLAUDE_CONFIG_DIR`, or in `.claude` under your home when `CLAUDE_CONFIG_DIR` is unset, is where Claude Code on Linux and Windows keeps the login.
-  When the host has the file, each private home holds a link at `.claude/.credentials.json` that names the real file, so the CLI finds it where it looks.
-  The target reads the file and cannot write it, and the audit lists neither the read nor a refused write.
-  The home is shared by every target of the run, so every target the run starts can read the linked file.
-  The link is read-only, so a CLI that refreshes an expired access token during a call cannot save the new one; a run that outlasts the access token uses the token route, whose long-lived token needs no refresh.
-  A second file under your home that a target reads, in `.claude` or beside it, is an observed mount, `run` exits 3 once its trials are sealed, and `score` exits 3.
-
-`run.json` records the grant of each entry under `logins`: the interface, the executable, the adapter, the variable's name and the file as `<credentials-file>`.
-The isolation manifest names the file read-only in `allowedMounts` as `read-only login <credentials-file>`, and the note of each forbidden input names the variable and the file as `<credentials-file>`.
-The run replaces the variable's value and each string of eight characters or more that the credentials file holds with `[redacted]` wherever any target prints it, a command, a tool server or an HTTP server, so no record holds them.
-The run keeps every string the file has held since it began and reads the file again when each call settles, so a token that Claude Code on your host rotates out of the file during a call is replaced along with the one that took its place.
-A read of the file that a rewrite tore, which is not valid JSON, contributes its whole text, each whitespace-separated token and each quoted string, so a token in it is replaced too.
-The values of the fields Claude Code's file documents as no secret (`scopes`, `subscriptionType` and `rateLimitTier`) stay as written, so a word such as `enterprise` in an answer is not rewritten, and every other field of the file is replaced.
-A confined run on a host that has neither source exits 12 before any target starts, naming the entry, the file it looked for, the token route and the opt-out.
-
-A login held in the macOS Keychain has no grant.
-The keychain answers over a Mach service, which a Seatbelt rule allows or denies as a whole, and no Seatbelt rule scopes the keychain to one item.
-Claude Code also finds the keychain through `HOME`, which a confined target holds privately, and a confined target's read of your keychain files is an observed mount, with the sidecar write a keychain database needs beside it refused.
-A confined target on macOS authenticates through the token route or runs with the opt-out.
-Run `claude setup-token` once and export the token it prints as `CLAUDE_CODE_OAUTH_TOKEN` where `tea-evaluate` runs, or set `"confinement": false` in `evaluation.json`, which keeps your home and your keychain for the target and records `opt-out`.
-An opted-out run passes the variable as well, makes no home and records the variable under `logins`, with no file.
-It replaces the strings of your credentials file in every record all the same, since a target that keeps your `HOME` reads the file there.
-
-## The interaction plan
-
-Every arm runs the contract's `interactionPlan` once, one request for each step it issues: a qualification arm, a trial, and a gameability trial, which answers each step from its degenerate response.
-
-### Binding kinds
-
-Each key of a step's `inputBinding` channels is sent as its binding says:
-
-For an API step, `inputBinding.body` can also hold the raw body object above.
-The runtime sends those bytes and records the complete raw object in `callInputs.body`, with `bodyEncoding: "raw"`; the defect signature can select that exact request.
-JSON and absent calls record `bodyEncoding: null`.
-
-- `literal`: the value as written.
-- `captured`: the value its pointer (`/interactions/<stepId>/<channel>/<key>`) resolves to on the observation the named earlier step recorded in the same arm, read by eval-quality's own `makeResolveOperand`, the reading `eval-quality score` gives the pointer; a workflow binds a later step to an identifier an earlier step minted this way.
-- `matcher: any`: a deterministic value of the declared JSON type.
-  The value is derived from the run seed, step, channel and key.
-  Pass `--seed <value>` to repeat the same bytes, and read the seed from `run.json`.
-- `matcher: type-violating`: a value whose JSON type differs from the declared type.
-  String transports refuse this matcher because they cannot carry the differing type.
-- `principal`: the runtime reads the host credential named by `evaluation.json`'s `principalMappings.<name>.environmentKey`, applies its optional prefix, and sends it through the mapped registry interface.
-  The contract carries the principal name only.
-  Persisted requests and `callInputs` replace the credential with `{ "principal": "<name>" }`, and the observation records the same opaque label in `principal`.
-
-A step's observation records the values it was sent as its `callInputs`, so a captured value is the one the earlier observation carried, a JSON `null` and a number included.
-`eval-quality compile` holds a captured pointer to one key of the channel the named step's operation describes, whose declared type is a scalar equal to the bound parameter's, and refuses a pointer naming a step the plan does not declare (`unreachable-check-evidence`).
-
-### Step order
-
-A step runs after the step its `after` clause names and after every step its captured bindings read, and otherwise in plan order, so a step may come before the step it reads in the plan.
-Each observation's `sequence` counts the steps in the order they were issued, which is the order `eval-quality score` holds a captured value and an `after` clause to.
-`eval-quality compile` refuses a plan whose capture and `after` edges form a cycle (`binding-cycle`) and an `after` clause naming a step with one of its own (`nested-temporal-clause`), and `preflight` and `run` pass its exit 4 and its message through before any arm runs.
-
-### Steps not issued
-
-A step is not issued when its `after` step was not issued, or when one of its captured bindings resolves to nothing: the step it reads was not issued, or that step's observation lacks the value (a field its output does not hold, or output that is not JSON).
-A step is not issued either when a captured value is one the request cannot carry as the target printed it: a value holding a `__proto__` key, which eval-quality's request parser drops, a header or environment value that is no string, a header value holding a control character or one past U+00FF, or a path value that is `.` or `..`, which the evaluation's HTTP port refuses, or a command argument, option or environment value holding a NUL character, which no process argument or variable can.
-A command step with a captured binding is not issued either when the value makes its launch too large for the system's argument and environment limit.
-The limit is the system's: eval-quality's launch decides it and reports the refusal as a `port-failure` whose `portFailureReason` is `launch-too-large`, the runtime computes no size, and the step is recorded as `captured-value-unsendable` naming each of its captured bindings in the `argument`, `option` and `environment` channels, since a refused launch cannot say which value was too large; a captured `stdin` value is written after the launch and is never named.
-Such a step sends no request and records no observation, and the arm's evidence lists it in `steps` in its place as `{ "stepId", "operationId", "skipped" }`, whose `reason` is `after-step-not-issued` (naming the `after` step), `captured-value-absent` (naming each binding and its pointer) or `captured-value-unsendable` (naming each binding, its pointer and why).
-A command step with no captured binding in those channels that the system refuses for its size still stops the run with exit 12, since the contract itself cannot be sent, and the fault it records carries the `portFailureReason`.
-The runtime computes no outcome from it: eval-quality reads the missing observation as it reads any evidence that does not exist, so an oracle over the step resolves over absent evidence, and a seeded probe whose defect signature names the step's operation is `not-applicable` in a trial that never issued it, which never counts toward `caught`.
-A qualification arm is judged over the same absent evidence, so a clean arm whose step was not issued does not pass when an oracle needs that step, and the run exits 11 as for any clean arm that does not pass.
-A trial's records and isolation manifest count only the calls it made.
-
-## Controlled mutations
-
-A mutation is `mutations/M-NNN.mutation.json`: a `targetArtifact` relative to `launch.root` (not to the repository, when `launch.root` is a subdirectory of it) and a `replace-exact` operator whose `find` text must occur in that file exactly once, overlapping occurrences counted.
-A probe that seeds a defect on the `controlled-mutation` route names its mutation, and `preflight` qualifies it through six steps in a workspace of its own, before any preflight leg runs, so nothing its arms leave behind reaches another probe or a leg:
-
-1. The clean arm: every interaction plan step once, with its bindings (see [The interaction plan](#the-interaction-plan)), through the registry.
-   Each oracle of the behaviors the probe discharges is resolved by eval-quality's `resolveCheck` over the arm's observations, and every one must hold.
-2. The mutation, applied in the workspace.
-3. The mutated arm, in which at least one of those oracles must be violated.
-4. The original bytes, restored with the file's original mode, also when the mutated arm could not run.
-5. The restored file's digest and mode, which must equal the pre-mutation ones.
-6. The clean arm again, until it passes, at most `1 + reExecutionCap` times (`reExecutionCap` from `policy/scoring-policy.json`).
-
-`rollbackVerified` is true only when step 5's digest and mode match and step 6 passes.
-The evidence goes to `runs/<invocationId>/qualification/<probeId>/`: `baseline-pass.json` and `mutated-fail.json` (each arm's requests, observations and oracle resolutions), `rollback.json` (`preDigest`, `mutatedDigest` and `restoredDigest` of the `targetArtifact`, each `sha256:` and the hex SHA-256 of its bytes, and every re-run), and `fault.json` when an arm could not run.
-The qualified probe, with the runtime's digests and references to that evidence, is checked against eval-quality's probe schema and its qualification gate, handed to `eval-quality preflight`, and written to `runs/<invocationId>/probes/` only once your project is confirmed unchanged after the legs.
-A step that fails writes no qualified probe:
-
-| Exit | Cause                                                                                                                                                                                                                     |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 10   | the `find` text occurs in the target other than exactly once, the target is not a regular file, an arm's request is one the registry does not authorize, or the qualified probe fails eval-quality's checks               |
-| 11   | the clean arm does not pass, or the mutated arm does not fail                                                                                                                                                             |
-| 12   | the mutation or the restore cannot be written, the restored digest or mode differs, an arm cannot run or exits an infrastructure code, the restored workspace does not pass again within the cap, or your project changed |
-
-If the restored workspace fails its re-run, the harness cannot reproduce the clean result and exits 12.
-The restored target must match the original bytes.
-Each mutation then gets a mutated workspace of its own, whose `targetArtifact` digest must equal the one the cycle measured.
-A seeded probe on a route other than `controlled-mutation` or `historical` exits 12 before any workspace is made.
-
-## Historical probes
-
-A historical probe seeds a real defect that a release fixed: its defects carry `source: natural`, and its qualification names the fix boundary in one of two ways.
-A probe that names `fixCommit` runs from worktrees at two git revisions of the evaluated project; a probe that names `deployments` runs against two deployments of a target reachable only over HTTP, which no worktree can launch.
-`check` refuses a probe that names neither or both (`historical`).
-
-### From worktrees
-
-The qualification names the fix commit by its hexadecimal id (7 to 40 lowercase hex digits), never a ref, which would move as history advances:
-
-```json
-{ "route": "historical", "fixCommit": "4f9c2d1" }
-```
-
-The post-fix revision is that commit and the pre-fix revision its first parent, both by full identifier.
-A `fixCommit` that names no commit in a repository with its full history, or that resolves through a branch or tag of the same spelling, is an authoring defect: the command exits 10 naming the probe.
-The probe is refused when the pristine workspace is a copy (a `copy` workspace, a target outside git, or `--from-working-tree`); in a shallow clone, when `fixCommit` or its parent is not in the shallow history (fetch the full history to qualify it); when it is not an ancestor of the evaluated commit (or git cannot tell, when the reason is git's own error); when it has no parent (a one-commit repository, say); or when the target cannot run at a revision, before or at the fix: its worktree lacks `launch.root` or holds a submodule under it, the skill root is not a directory, or a registry target is missing or not executable, the same checks a launch meets (links followed, provisioned copies included).
-Both revisions' worktrees are checked before either arm runs.
-
-`preflight` qualifies the probe in two worktrees of its own, before any leg runs: the interaction plan once at the pre-fix revision, where the oracles of the probe's behaviors must be violated (`fail-before.json`), and once at the fix commit, where they must hold (`pass-after.json`).
-The qualified probe records `fixCommitDigest` (`sha256:` and the SHA-256 of the fix commit's full identifier) and as its `artifactDigest` the tracked tree of the implementation root at the pre-fix revision, where the defect lives.
-Each defect's manifestation-witness leg runs in a worktree at the pre-fix revision, and `run` runs the probe's trials on the arm `historical:<preFixSha>`, each in a fresh worktree at that revision.
-
-### Against deployments
-
-The qualification names a pre-fix and a post-fix deployment: the release identifier each runs, how each HTTP interface reports that release, and the origin each HTTP interface of the registry answers at in it.
-
-```json
-{
-  "route": "historical",
-  "deployments": {
-    "preFix": {
-      "release": "grader-1.4.2",
-      "reports": { "grader": { "operationId": "report-release", "pointer": "/release" } },
-      "origins": { "grader": "https://grader-1-4-2.staging.example.test" }
-    },
-    "fix": {
-      "release": "grader-1.4.3",
-      "reports": { "grader": { "operationId": "report-release", "pointer": "/release" } },
-      "origins": { "grader": "https://grader.example.test" }
-    }
-  }
-}
-```
-
-- `release`: the identifier the deployment runs, as you name your releases (a version, a tag, a build id): a letter or digit, then letters, digits, `.`, `_`, `+` or `-`, at most 128 characters.
-  The run asks each deployment which release each of its HTTP interfaces runs (see `reports`) and refuses the probe when an answer is another identifier, so name the release each deployment reports.
-  The pre-fix deployment is asked again after the witness legs and after the trials, so a release that changes while the run measures it refuses the probe too.
-  `check` refuses one release for both deployments.
-- `reports`: how each HTTP interface of the registry reports the release its origin runs, an object keyed by interface ID whose values are `{ "operationId", "pointer" }`, both required.
-  The run asks the origin of every HTTP interface of the registry which release it runs: `reports` names one report for each, and each request goes to that interface's own origin.
-  A deployment whose second origin runs another release than its first would otherwise be measured under the identifier the first reported, so `check` refuses a `reports` that leaves an HTTP interface of the registry without a report or names an interface the registry does not serve over HTTP.
-  A registry of one HTTP interface names one report.
-  Each interface's report operation needs a method and a path template that no other `api` operation of the contract uses, because eval-quality's compile refuses a duplicate operation signature across the whole contract.
-  Services that serve their release at the same path need distinct paths, for example a path prefix their proxy strips.
-  When a probe's deployments name a report operation, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature whose line names a report operation, exits 10 with one `historical` finding that quotes the engine's line, which names both interfaces, both operation IDs and the shared method and path.
-  The other operation can be another report operation or an ordinary `api` operation of the contract, on another interface or on the report's own, and the reports of all `historical` probes count together, so one reported interface is enough.
-  A collision between two operations that no report names stays the CI plan's `compile` check, whichever shape they have.
-  The engine names the first collision it meets, so a report operation's collision behind another collision shows once that one is fixed.
-  The compile output and its record go to a private temporary directory that `check` removes, so nothing is written under the evaluation folder.
-  Any other compile outcome (an accepted contract, another refusal, a fault, a stage that cannot start, is killed or ends with an exit the CLI does not document, or a temporary directory that cannot be made) draws no finding from this rule and is left to the CI plan's `compile` check and to `run`.
-  `operationId` names an operation the contract declares on the `api` interface its key names, which the registry serves over HTTP; `check` refuses an operation that interface does not declare, even when another interface declares an operation with that ID.
-  It is a permitted operation of the contract like any other, so `operationPhases` in `evaluation.json` names its phase, and adding it changes the compiled contract.
-  The request reads a release and goes to each live deployment before any arm runs, so `check` refuses an operation the contract marks as changing state.
-  It is sent with no bound inputs, so `check` refuses an operation whose path template has a parameter or whose request shape requires a key in any channel.
-  `pointer` is an RFC 6901 JSON pointer into the JSON body of the answer; `check` refuses one that is empty, has no leading `/`, or holds a `~` that is not `~0` or `~1`.
-- `origins`: `scheme://host[:port]` for every HTTP interface of the registry and no other, spelled exactly so with at most a trailing `/`: no path, query, fragment, credentials or surrounding space.
-  The authority is the one a URL keeps, letter case aside (an IPv4 address in dotted decimal, an IPv6 address as the URL writes it, a name in punycode), so the origin a run records is the one it reaches.
-  Each origin must be one the registry authorizes for its interface: the entry's own origin, when the entry names a deployed `port`, or an origin its `deployments` list names (see [The registry](#the-registry)).
-
-`check` refuses a probe that names one deployment without the other, and one in an evaluation whose registry holds an entry that is not an HTTP entry, since a deployment is reached over HTTP alone.
-It also refuses a pre-fix origin that reaches a post-fix one, for the same interface or another, read by scheme, host (lower-cased, one trailing dot dropped, an IP address as eval-quality's `parseAddress` reads it, so `[::ffff:7f00:1]` is `127.0.0.1`) and port, since the fail-before arm would then reach the post-fix deployment.
-Before either arm runs, the runtime resolves each origin's host once, to its first address, as the port does, within the entry's `maxElapsedMs` and the 15 seconds a port call gets beyond it, and asks eval-quality's `evaluateTarget` which of those authorizations allows the origin, at the first method the entry authorizes.
-A deployment none of them allows refuses the probe, the reason naming each authorization's denial in eval-quality's words (`port-not-authorized`, say).
-An origin whose scheme, host or port no authorization admits is refused before its host is resolved, as the port denies an unresolved host; a host some authorization admits that does not resolve in time leaves the deployment unreachable, which stops the run with exit 12.
-The authorization eval-quality allowed is the whole policy of the deployment's arm for its interface, so a redirect to any other origin, the other deployment's included, is denied.
-Once both deployments are allowed, and before either arm runs, the runtime sends each deployment, the pre-fix one first, one report request per HTTP interface, the interfaces in sorted order of their IDs, each through the evaluation's HTTP port to that interface's own origin, with the same eval-quality policy decision, redirects, ceilings and auth header every call to that interface meets, and reads the string at the pointer of a 2xx answer with a JSON body (the port reads a body as JSON under an `application/json` or `+json` content type).
-It refuses the probe when that string is not the declared `release`, naming both identifiers and the interface, so the digests a qualified probe records name the releases every origin of each deployment reported before the arms ran.
-A request the policy denies, and an answer with no string at the pointer (a status other than 2xx, a body the port reads as no JSON, or anything but a string at the pointer), refuse the probe too, the reason naming eval-quality's denial, or the pointer and what it found; in each case no arm runs.
-The first answer that refuses the probe stops the asking: a refusal needs one finding, so the interfaces after it and, after a pre-fix refusal, the post-fix deployment stay unasked.
-Qualifying a probe sends each of its two deployments exactly one report request per HTTP interface before the arms, so two probes on one pre-fix release send each of its origins two.
-A reported identifier is quoted in the refusal as JSON writes it, with each character outside printable ASCII escaped and at most 160 characters.
-The report call is no trial: it records no evidence artifact and counts against no trial budget.
-The run asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the trials.
-`preflight` runs no trial, so it asks at the first two.
-The witness legs and the trials of the arm `historical:<release>` reach the pre-fix deployment after the qualification, so a deployment redeployed in between would otherwise be measured under the identifier the probe declares, and the digests a qualified probe records would name a release the legs and trials never ran against.
-Each later point asks every HTTP interface through the same port, policy and refusal as the first, the interfaces in sorted order of their IDs and the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked before the arms only.
-The asking before the arms is once per probe, and each later point asks once per pre-fix release (the legs) or per arm (the trials), whatever the number of probes on it.
-A deployment that keeps its release is therefore asked, at each of its origins, once per probe before the arms and once at each later point: an arm of N probes sends each pre-fix origin N + 2 requests in a `run` (N + 1 in a `preflight`) and each post-fix origin N requests, so an arm of one probe sends the pre-fix origins three and the post-fix origins one.
-The point after the legs comes before `eval-quality preflight` reads the run directory: a pre-fix release that changed refuses every probe on it, which leaves `probes.json` and `observations.json` (each leg's own file under `observations/` stays), so no witness measured under another release reaches the verdict.
-The point after the trials comes after the arm's last trial and before any trial set is sealed: a changed release refuses every probe on the arm, no trial set of them is sealed, and the trials' own evidence stays in the run directory, since each trial ran.
-A refusal at a later point names the point (`after the witness legs` or `after the trials`), the side, the interface, the identifier reported or what was found, and the declared release.
-`run.json`'s `releases` keeps what each interface reported before the arms, and a later refusal is recorded in `refused`.
-A pre-fix deployment that cannot answer at a later point stops the run with exit 12, naming the point.
-When the engine refused the plan before any leg ran, nothing reached a deployment since the qualification and the point after the legs asks nothing.
-A call that reaches no answer (a refused or reset connection, an ended process) or passes a ceiling of the registry entry (the answer's size, its time, its redirects) stops the run with exit 12 as it does for any call, and so does a contract violation of the port.
-No worktree is made, so the route needs no git history: it runs from a `copy` workspace and under `--from-working-tree` alike.
-
-`preflight` qualifies the probe against the two deployments, before any leg runs, once each has reported the release every origin runs (`run.json`'s `releases` records, for each qualified probe, each side's declared identifier and the identifier each HTTP interface reported, keyed by interface ID): the interaction plan once against the pre-fix deployment, where the oracles of the probe's behaviors must be violated (`fail-before.json`, naming the release and its origins), and once against the post-fix one, where they must hold (`pass-after.json`).
-No server starts for a call to a deployment, and the evidence of a leg or trial that reached one names its origins.
-The qualified probe records `artifactDigest` as `sha256:` and the SHA-256 of the pre-fix release identifier, and `fixCommitDigest` as the same over the post-fix one; the two later points hold the legs and trials to the release those digests name.
-Each defect's manifestation-witness leg reaches the pre-fix deployment, and `run` runs the probe's trials on the arm `historical:<release>`, named by the pre-fix release, each trial's HTTP calls reaching the pre-fix deployment; `run.json`'s `deployments` names the arm's origins (a route whose probes were all refused after the legs has no arm and leaves it; an arm refused after the trials stays, since its trials ran).
-One arm runs one target, so two probes on one arm label at two targets (a worktree and a deployment, or two sets of pre-fix origins) exit 10, as do two labels that differ only in letter case, whose trial directories would meet on a case-insensitive file system.
-`check` refuses every such boundary first (neither boundary, deployments beside a `fixCommit`, one deployment, one release for both, a registry entry that is not an HTTP entry, origins off the registry's HTTP interfaces, a shared origin, `reports` that leave an HTTP interface of the registry without a report or name an interface it does not serve over HTTP, or a report that names an undeclared operation, an operation declared on another interface than its key, one the contract marks as changing state, one that needs an input, or a pointer that is no JSON pointer); the runtime refuses the same boundaries again with exit 12, as defence in depth.
-
-### Either route
-
-A refused probe is listed in `run.json`'s `refused` and in `runs/<invocationId>/refused/<probeId>.json`, stays out of the probe list `eval-quality preflight` reads (unless a deployment's release changed after the trials, when the verdict had read the probe already, and its `probes/<probeId>.probe.json` stays) and out of the trial sets, and the rest of the run goes on; a refusal alone does not fail the run, though a run whose every probe was refused, at qualification, after the witness legs or after the trials, has nothing to seal and exits 12.
-Either qualification arm going the other way exits 11, since the probe does not straddle the fix; an arm that cannot run exits 12, and one the registry refuses 10.
-The qualified probe records `oracleStableAcrossRevisions` as true: both arms are judged by the one compiled contract the run read before any arm ran.
 
 ## digest
 
@@ -1046,7 +275,7 @@ sha256:1ff6fd24bc3e328dfc4ca28e8ef66464c40fd9e1361435fd966bd205e9f1fc77
 npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs
 ```
 
-With `--calibration-inputs`, `digest` is read-only and prints the values a `records` harness copies into its calibration judgments (see [The evaluation layer](#the-evaluation-layer)): it writes nothing under the folder, `corpus-index.json` included, and prints no corpus digest.
+With `--calibration-inputs`, `digest` is read-only and prints the values a `records` harness copies into its calibration judgments (see [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer)): it writes nothing under the folder, `corpus-index.json` included, and prints no corpus digest.
 The document on stdout holds `calibrationDigest` (eval-quality's `digestBytes` over `policy/judge-calibration.json`, the value for `tea.judgeCalibrationDigest`), `scorerConfigurationDigest` (over `<records>/evaluator-configuration.json` without its two `tea.judgeCalibration*` bindings, so the file can exist without them) and `items`, one `{ "rubricId", "criterionId", "scorerInput" }` per labelled item in the labelled file's order.
 It carries no `answer` (your scorer supplies it) and no `expectedLevel`.
 `check` and `run` derive the same values with the same functions, so a change to how the runtime derives the observation or the digest changes this output and their verification together.
@@ -1068,8 +297,17 @@ Change one byte of the file and the printed digest changes.
 
 `preflight` qualifies each seeded probe in a disposable workspace, drives the preflight legs against the real target and takes the verdict from `eval-quality preflight`.
 
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-evaluate preflight --evaluation <path> [--from-working-tree] [--partition development|held-out]
+```
+
+Examples, for an evaluation with no `partitionPlan` and for the development partition of one that declares it:
+
 ```bash
-npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/my-evaluation [--from-working-tree] [--partition development|held-out]
+npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/my-evaluation --partition development
 ```
 
 | Option                | Meaning                                                                                                                                    |
@@ -1088,7 +326,7 @@ Exit codes:
 - `12`: infrastructure: a workspace that cannot be made, a target that cannot launch, a restore that fails, a change to your project during the run, or an engine stage that cannot run.
 - `64`: `--evaluation` is missing, `--partition` names an unknown partition, or `--partition` is missing over a `partitionPlan`.
 
-Output of a passing preflight over the one-skill evaluation above (the invocation ID differs on every run):
+Output of a passing preflight over the one-skill evaluation in [The evaluation.json fields](/docs/reference/tea-evaluate-manifest.md#the-evaluationjson-fields) (the invocation ID differs on every run):
 
 ```text
 tea-evaluate preflight: pristine workspace, a temp copy: <tmp>/tea-evaluate-pristine-22e1cf32-0dae-44d0-9ec0-955881f9f3c8/target
@@ -1115,7 +353,7 @@ tea-evaluate preflight: leg "manifest-exclusive-limit": observed
 tea-evaluate preflight: eval-quality preflight exited 0; its verdict and diagnostics are in runs/20261007T112706379Z-efa23a53 (exit 0, <project>/evals/my-evaluation/runs/20261007T112706379Z-efa23a53)
 ```
 
-With `--partition`, only that partition's seeded probes are qualified, over the contract that partition runs (`partitionPlan` above); an unknown partition exits 64 and a held-out set with no probe exits 10.
+With `--partition`, only that partition's seeded probes are qualified, over the contract that partition runs (see [Held-out probes and partition plans](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans)); an unknown partition exits 64 and a held-out set with no probe exits 10.
 When `evaluation.json` declares a `partitionPlan`, `--partition` is required: a `preflight` with no `--partition` exits 64 and names the flag and both values, because it would derive the both view and launch the held-out request.
 Preflight `development` while you author, and `held-out` after the development review.
 An evaluation with no `partitionPlan` preflights with no flag and qualifies every probe.
@@ -1125,26 +363,26 @@ Each invocation writes `runs/<invocationId>/` and creates `runs/.gitignore` on t
 The steps run in order, each stopping the run with its own exit:
 
 1. `check` over the folder; any finding exits 10 and is printed as `check` prints it.
-2. The evaluation must be one this release runs: every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass); and when the registry declares an HTTP target, the evaluation's HTTP port, started once and asked which protocol it speaks, must answer as TEA's host (exit 10 otherwise, and 12 when its process cannot start or answer in time; see [The HTTP port](#the-http-port)).
-3. The pristine workspace (see [The workspace](#the-workspace)), with every registry target present and executable in it (exit 12 otherwise), and `run.json`.
+2. The evaluation must be one this release runs: every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass); and when the registry declares an HTTP target, the evaluation's HTTP port, started once and asked which protocol it speaks, must answer as TEA's host (exit 10 otherwise, and 12 when its process cannot start or answer in time; see [The HTTP port](/docs/reference/tea-evaluate-manifest.md#the-http-port)).
+3. The pristine workspace (see [The workspace](/docs/reference/tea-evaluate-manifest.md#the-workspace)), with every registry target present and executable in it (exit 12 otherwise), and `run.json`.
 4. `eval-quality compile` and `eval-quality seal` over the run's own copy of `contract.json`, writing `eval-contract.json` and `sealed-evaluator-brief.json`; a non-zero exit the CLI documents is passed through.
-5. Each seeded probe qualified through its controlled mutation (see [Controlled mutations](#controlled-mutations)) or across its fix boundary, a fix commit or a pair of deployments (see [Historical probes](#historical-probes)), exiting 10, 11 or 12 when a step fails; a historical probe with no revisions to address, naming a deployment the registry does not authorize, or naming one that reports another release than the one it declares or whose report request is denied or answered with no string at the pointer, is refused and left out.
-   Each gameability probe qualified over its degenerate response with no target launched (see [Gameability probes](#gameability-probes)), exiting 11 when the naive oracle rejects it or the disciplined oracle accepts it; `run` reuses the result.
+5. Each seeded probe qualified through its controlled mutation (see [Controlled mutations](/docs/reference/tea-evaluate-manifest.md#controlled-mutations)) or across its fix boundary, a fix commit or a pair of deployments (see [Historical probes](/docs/reference/tea-evaluate-manifest.md#historical-probes)), exiting 10, 11 or 12 when a step fails; a historical probe with no revisions to address, naming a deployment the registry does not authorize, or naming one that reports another release than the one it declares or whose report request is denied or answered with no string at the pointer, is refused and left out.
+   Each gameability probe qualified over its degenerate response with no target launched (see [Gameability probes](/docs/reference/tea-evaluate-manifest.md#gameability-probes)), exiting 11 when the naive oracle rejects it or the disciplined oracle accepts it; `run` reuses the result.
 6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the adapter the registry authorizes, eval-quality's command-line adapter for a command, its MCP adapter for a tool call, and the evaluation's own HTTP port for an HTTP request.
    A manifestation witness's leg runs in its mutation's mutated workspace, or on the historical route in a worktree at the pre-fix revision or against the pre-fix deployment, and every other leg in the pristine workspace, each through an authorization whose working directory is that workspace.
    Each command request carries the host's values for the environment keys its registry entry permits, each tool server and each started HTTP service starts with the host's values for its entry's keys, and each HTTP request carries its entry's auth header.
-   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected or server environment value and every auth value of eight characters or more is replaced by `[redacted]` in the observation's strings, object keys and numbers, as written and in the JSON-escaped forms [the registry](#the-registry) lists, in whatever letter case the target echoes it (lower, upper, capitalized or mixed; a case mapping that changes a text's length, such as `ß` to `SS`, and the Turkish `i` and `I`, included).
+   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected or server environment value and every auth value of eight characters or more is replaced by `[redacted]` in the observation's strings, object keys and numbers, as written and in the JSON-escaped forms [the registry](/docs/reference/tea-evaluate-manifest.md#the-registry) lists, in whatever letter case the target echoes it (lower, upper, capitalized or mixed; a case mapping that changes a text's length, such as `ß` to `SS`, and the Turkish `i` and `I`, included).
    A leg the registry does not authorize is refused by the adapter before it starts: the fault is written to `faults/` and the command exits 10.
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
    A leg that exits one of its entry's `infrastructureExitCodes` is an observation like any other: the CLI's verdict reads it (a control leg that exits non-zero fails `clean-control`, exit 3), which `ci` classes as an infrastructure or integrity exit.
    A qualification arm step that exits one stops the cycle with exit 12, since an arm has no verdict to classify it.
-   Once the legs have run, the pre-fix deployment of each historical arm is asked again which release each of its HTTP interfaces runs (see [Against deployments](#against-deployments)).
+   Once the legs have run, the pre-fix deployment of each historical arm is asked again which release each of its HTTP interfaces runs (see [Against deployments](/docs/reference/tea-evaluate-manifest.md#against-deployments)).
    A release that changed refuses every probe on that pre-fix release: the probes leave `probes.json` and the observations the CLI reads, and the arm leaves `run.json`'s `deployments`.
    A deployment that cannot answer stops the run with exit 12, naming the point.
 7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes that remain.
    Its `preflight-verdict.json` is the verdict, and its exit code is the command's exit code, verbatim: 0 when the preflight passed, 3 when it failed.
 8. A passed verdict is then held to the mount allowlist `score` applies to a trial set's isolation manifest.
-   Each leg of the pristine workspace runs under the same audit as a trial (see [File-system confinement](#file-system-confinement)).
+   Each leg of the pristine workspace runs under the same audit as a trial (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)).
    A path that every one of those legs opened outside what it was granted exits 3, the exit `score` gives a trial that opens it: a target that lives outside its workspace loads its own files on every launch, so every trial opens them too.
    The message names the first paths and the two setups that work for such a target, `tea-skill-runner` named by its bare name for one: a registry `target` that is a path inside `launch.root` (`node_modules/.bin/tea-skill-runner` over a copy workspace, or over a git workspace with `workspace.provision`), or the bare name with the directories it runs from listed in `systemPaths`, the bin directory that holds its link on `PATH` among them.
    A path that only some legs opened is no refusal: `preflight` prints a note naming the path and the legs that opened it, and its exit does not change, since `score` judges the trials and not the legs.
@@ -1154,20 +392,12 @@ The steps run in order, each stopping the run with its own exit:
    The check grants nothing and widens no allowlist; a run that opted out of confinement observes no path and is not refused.
 
 `runPreflight` computes a verdict of its own, and `preflight` discards it: every verdict comes from the CLI over files you can rerun by hand from the run directory.
-`engine/<stage>.json` records each stage's executable, argv, exit code, stdout and stderr, with the path forms of [Paths in the records](#paths-in-the-records).
+`engine/<stage>.json` records each stage's executable, argv, exit code, stdout and stderr, with the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records).
 A stage that cannot start, is killed by a signal, or exits with a code eval-quality does not document for that stage exits 12.
 A SIGINT, SIGTERM, SIGHUP or SIGQUIT that reaches `check`, `preflight`, `run`, `score` or `ci` while a stage runs stops the stage's process group first, then the command removes its private directories and ends by the same signal.
 The documented codes: `compile` and `seal` 0, 4, 5 and 64; `preflight` 0, 3, 4, 5 and 64; `score` 0, 2, 3, 4, 5 and 64; `aggregate-strength` 0, 4, 5 and 64.
 Exit 1 is a CONCERNS promoted by `--strict`, which `tea-evaluate` never passes, so it is left out.
 Setting `ENGINE_CLI_ENV` substitutes another executable for the eval-quality CLI; `tea-evaluate` announces the substitution on stderr and records it in each stage's record.
-
-### The run directory
-
-`runs/` must be a real directory and `runs/.gitignore` a real file; a link at either is refused.
-The runtime creates every directory under `runs/<invocationId>/` itself and writes each file from inside it.
-Before the preflight verdict, and for `run` again before `run.json` says completed, the run directory must hold exactly the entries the runtime wrote, each file with the bytes it wrote.
-An entry the runtime did not write, a directory that was replaced or moved, or a file with other bytes exits 12.
-[Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md#the-run-directory) describes how the runtime guards each write.
 
 ## run
 
@@ -1175,8 +405,17 @@ An entry the runtime did not write, a directory that was replaced or moved, or a
 
 It starts with the whole preflight, so a run that cannot qualify its probes stops before the first trial.
 
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-evaluate run --evaluation <path> [--from-working-tree] [--partition development|held-out] [--seed <value>] [--before-state]
+```
+
+Examples, over both partitions and over the development partition with the uncommitted working tree:
+
 ```bash
-npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation [--from-working-tree] [--partition development|held-out] [--before-state]
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --partition development --from-working-tree
 ```
 
 | Option                | Meaning                                                                                                                                                                                                                  |
@@ -1197,7 +436,7 @@ Exit codes:
 - `12`: infrastructure: a trial that cannot run, exits an infrastructure code or is stopped by a signal from outside, a rubric judge or an evaluator that cannot answer, a run whose every probe was refused, a change to your project during the run, or a run directory holding an entry the runtime did not write, besides the causes `preflight` lists.
 - `64`: `--evaluation` is missing, `--partition` names an unknown partition, or `--before-state` finds no clean control that declares a known defect in the evaluation or the selected partition.
 
-The last lines of a run over the one-skill evaluation above, which seals three trial sets of three trials:
+The last lines of a run over the same one-skill evaluation, which seals three trial sets of three trials:
 
 ```text
 tea-evaluate run: probes/P-001.probe.json: qualified; its baseline passed
@@ -1211,26 +450,32 @@ tea-evaluate run: mutated:M-001: trial 3 of 3
 tea-evaluate run: 3 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261007T112710219Z-50f0b256 (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
 ```
 
+The closing line names the run and leaves out the prefix and `--evaluation`; the complete command, with the run captured as [A typical sequence](#a-typical-sequence) shows, is:
+
+```bash
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
+```
+
 Omitting `--partition` runs both development and held-out probes.
 `--partition development` or `--partition held-out` selects that set before preflight, qualification and trials.
 An unknown partition exits 64; selecting an empty held-out set exits 10.
-Under a `partitionPlan` the partition also selects the contract (`## The evaluation folder`): a development run launches the shared and development-only steps, a held-out run the shared and held-out steps, and each partition's run directory and baseline hold none of the other's requests, step IDs or oracles.
+Under a `partitionPlan` the partition also selects the contract (see [Held-out probes and partition plans](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans)): a development run launches the shared and development-only steps, a held-out run the shared and held-out steps, and each partition's run directory and baseline hold none of the other's requests, step IDs or oracles.
 It needs `policy/scoring-policy.json` (exit 10 without it), and every probe on the `clean-control`, `controlled-mutation`, `historical` or `gameability` route (a canary exits 12, since a retry cannot pass).
 The steps run in order in one invocation, each stopping the run with its own exit:
 
 1. The whole preflight, as `preflight` runs it, in the same `runs/<invocationId>/`; a verdict that does not pass ends the run with its exit, and no trial runs.
    The mount check of step 8 is `preflight`'s alone; `run` judges the trials' own manifests.
 2. Each clean control qualified: one clean arm in a workspace of its own, whose oracles for the control's behavior must hold (exit 11 otherwise, unless `--before-state` records the control as known-failing), its evidence under `qualification/<probeId>/baseline-pass.json`, or `baseline-known-failing.json` for a control recorded as known-failing.
-3. A `sealed-brief-agent` qualified on the clean arm and on each mutated arm, before any trial (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)); agreement below `evaluatorQualification.minimumAgreement` exits 11 with no trial set.
+3. A `sealed-brief-agent` qualified on the clean arm and on each mutated arm, before any trial (see [Qualifying a sealed-brief agent](/docs/reference/tea-evaluate-evaluators.md#qualifying-a-sealed-brief-agent)); agreement below `evaluatorQualification.minimumAgreement` exits 11 with no trial set.
 4. Each arm a probe needs, `trials` times: the clean arm (`conditionArm: clean`) for the clean controls, one mutated arm per mutation (`mutated:<mutationId>`) for the probes it seeds, one historical arm per pre-fix revision (`historical:<preFixSha>`) or pre-fix deployment (`historical:<release>`), and one gameability arm per gameability probe (`gameability:<probeId>`).
-   Every trial runs the interaction plan once, with its bindings (see [The interaction plan](#the-interaction-plan)), in a workspace of its own that reproduces the pristine one (the mutation applied for a mutated arm and its digest held to the one the qualification measured) or, on a historical arm, the pre-fix worktree, a deployment arm's HTTP calls reaching the pre-fix deployment; a gameability trial answers the plan from the degenerate response and launches nothing.
-   The evaluation layer judges the trial (see [The evaluation layer](#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](#the-rubric-judge)).
+   Every trial runs the interaction plan once, with its bindings (see [The interaction plan](/docs/reference/tea-evaluate-manifest.md#the-interaction-plan)), in a workspace of its own that reproduces the pristine one (the mutation applied for a mutated arm and its digest held to the one the qualification measured) or, on a historical arm, the pre-fix worktree, a deployment arm's HTTP calls reaching the pre-fix deployment; a gameability trial answers the plan from the degenerate response and launches nothing.
+   The evaluation layer judges the trial (see [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](/docs/reference/tea-evaluate-evaluators.md#the-rubric-judge)).
    Its requests, observations, oracle resolutions or judgment rows, and any judge reply go to `trials/<arm>/trial-<n>.json`.
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
-   A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server whose process ends the session during a call is an observation the same way, recorded with its exit code on the `exit-code` channel; a signal from outside stops either kind of step with exit 12 (see [The registry](#the-registry)).
+   A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server whose process ends the session during a call is an observation the same way, recorded with its exit code on the `exit-code` channel; a signal from outside stops either kind of step with exit 12 (see [The registry](/docs/reference/tea-evaluate-manifest.md#the-registry)).
    Your project is read again after every trial and every evaluator attempt (exit 12 on any change, with no trial set written).
-   After the last trial of a deployment arm, the pre-fix deployment is asked once more which release each of its HTTP interfaces runs (see [Against deployments](#against-deployments)); a changed release refuses every probe on the arm before any trial set is sealed.
-5. Every selected probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
+   After the last trial of a deployment arm, the pre-fix deployment is asked once more which release each of its HTTP interfaces runs (see [Against deployments](/docs/reference/tea-evaluate-manifest.md#against-deployments)); a changed release refuses every probe on the arm before any trial set is sealed.
+5. Every selected probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](/docs/reference/tea-evaluate-evidence.md#the-run-directory)).
 6. One trial set per probe under `trial-sets/<probeId>/`: `record-<n>.json` per trial and `isolation-manifest.json`, with `evaluator-configuration.json` for the whole run, each checked against the schema eval-quality publishes before it is written, and each written as eval-quality's canonical serialization; the contract and sealed-brief digests they carry were taken when `compile` and `seal` wrote those files, before any target ran.
 7. `trial-sets.json`, the index `score` reads.
    Your project is then read once more and the run directory verified again; a change to either exits 12, and the run is recorded as not completed, with its `trial-sets.json` removed.
@@ -1264,11 +509,11 @@ When a target gives no complete report, the closed record and manifest schemas s
 An empty list means every issued target call reported use, including an explicit measured zero.
 API and MCP calls have no usage report contract and appear as unreported when issued.
 Progress reports usage for scored trials only. It can show a trial cost when all trial calls report complete usage; otherwise trial cost is unknown and `reportedTrialCostUsd` is only the subtotal of reports received. `missingReports` gives the number of unreported trial calls. Qualification and preflight costs are not fully captured, so progress does not claim a full-run cost. An explicit zero in a complete report counts as measured zero.
-The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access; on macOS the log can lose reports, so read an empty list together with the trial's `observedMountsChannel` entry in `run.json`.
-The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and the hosts its entry lists through the proxy (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.
+The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access; on macOS the log can lose reports, so read an empty list together with the trial's `observedMountsChannel` entry in `run.json`.
+The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and the hosts its entry lists through the proxy (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)), and a macOS target keeps the host's network.
 Each forbidden input's note says what the runtime hands the target and names the confinement that withheld the rest, or, in a run that opted out, that the runtime does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
-Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
+Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer)):
 
 ```json
 {
@@ -1299,7 +544,8 @@ The statement for a control that passes stays `No known defect at this revision.
 
 ```bash
 npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation --before-state
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run <invocationId>
+RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
 ```
 
 Under the flag, a control that declares a known defect may fail its baseline when its oracles are violated; its evidence goes to `qualification/<probeId>/baseline-known-failing.json`.
@@ -1317,380 +563,22 @@ A before state is excluded from baseline acceptance.
 `compare` and `compare --accept` exit 10 on a run that records `beforeState`, and on any run whose sealed clean control still declares a known defect, so deleting the record by hand changes nothing.
 Once the defect is fixed, change the control's statement to `No known defect at this revision.`, run without the flag and accept that run.
 
-### Paths in the records
-
-The paths the runtime itself writes into a record are recorded in neutral forms, so `runs/` can be uploaded as a CI artifact and `baseline/` committed to a public repository without publishing a home directory, a temporary directory or a checkout location.
-The runtime writes these forms where a path would be:
-
-| Where                                                                                                 | Form                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.json` `workspaces`, and `cwd` in each `observations/` and `faults/` record                       | `<workspace>`, or `<workspace>/<path>` when `launch.root` sits below the workspace's top; the record's `workspace` label tells which workspace it was                                                                   |
-| `run.json` `adopterTree.repository`                                                                   | `<repository>` when your project sits in a git repository, `null` otherwise                                                                                                                                             |
-| `run.json` `logins[].file`, and the login entries of a manifest or its note                           | `<credentials-file>`                                                                                                                                                                                                    |
-| `cli` in each engine call record                                                                      | `eval-quality/<path below the package>`, or the file name of the program `TEA_EVALUATE_ENGINE_CLI` substituted                                                                                                          |
-| a file of your evaluation folder in an engine call's `argv`                                           | its path below the evaluation folder, for example `runs/<invocationId>/scoring-policy.json`                                                                                                                             |
-| the private staging file in an engine call's `argv` (`--out`)                                         | `<staging>/<file name>`                                                                                                                                                                                                 |
-| the score invocation's directory in the `argv` of the aggregate call                                  | `<score-invocation>`, because each `score` writes an invocation id of its own                                                                                                                                           |
-| `observedMounts` in an isolation manifest (host paths the audit saw a target open)                    | the path with your home directory as `<home>`, the temporary directory as `<tmp>`, the private root as `<private-root>` and the evaluation folder as `<evaluation-folder>`, so the entry still says which file was read |
-| `failure` and `reason` in a `score` summary, and `baseline.reasons` and `baseline.error` in `ci.json` | the same substitution as the output of a `ci` check below                                                                                                                                                               |
-| the output of an `evaluate` check of `ci` (`checks/<id>/stdout` and `stderr`, warnings and notes)     | the evaluation folder as `<evaluation-folder>`, the private root as `<private-root>`, the temporary directory as `<tmp>`, your home directory as `<home>`                                                               |
-
-A recorded argv reruns by hand from the evaluation folder: the relative paths resolve there, `<score-invocation>` is the name of the invocation's directory under `scores/`, and `--out` takes a fresh file.
-Every digest a record carries is taken over the bytes with these forms in them, so nothing is rewritten after a run and `compare --accept` copies the files as they are.
-A `gate` check of `ci` records the output of your command as it printed it, so a path it prints stays in `checks/<id>/stdout`.
-A target's printed output is recorded as received, so a target that prints its working directory, its home directory or a stack trace puts that text in its observation.
-
-### Gameability probes
-
-A gameability probe shows that a degenerate, compliant-looking response satisfies a naive oracle and is rejected by the disciplined one.
-eval-quality keeps its `degenerateResponse` as prose, so the response's bytes are committed at `corpus/gameability/<probeId>.json`, one response for every interaction plan step, and the committed probe names its naive oracle, an oracle of another behavior; the disciplined oracle is the one oracle of the probe's own behavior.
-A command step's response is its streams and exit code, which eval-quality's command-line adapter reads as it reads a real run's, so JSON-shaped output is JSON a later step's captured binding or an oracle can point into:
-
-```json
-{
-  "schemaVersion": 1,
-  "steps": { "judge-run": { "stdout": "verdict: pending\n", "stderr": "", "exitCode": 0 } }
-}
-```
-
-A tool-call step's response is the tool's error flag and, when it returns one, its structured result:
-
-```json
-{
-  "schemaVersion": 1,
-  "steps": { "grade-run": { "isError": false, "structuredResult": { "ok": true, "verdict": "pending" } } }
-}
-```
-
-An HTTP step's response is its status and, when it has them, its headers and its body as text, which the evaluation's HTTP port reads as it reads a real answer, so a JSON content type makes the body JSON.
-Nothing is sent: every host a request names resolves to the first address of its interface's entry, so eval-quality's policy decides every host, spelling included, and every method, scheme and port as on a real arm:
-
-```json
-{
-  "schemaVersion": 1,
-  "steps": {
-    "grade-run": {
-      "status": 200,
-      "headers": { "content-type": "application/json" },
-      "body": "{\"ok\":true,\"verdict\":\"pending\"}"
-    }
-  }
-}
-```
-
-```json
-{ "route": "gameability", "degenerateResponse": "Prints a verdict line without judging the request.", "naiveOracle": "O-002" }
-```
-
-`preflight` and `run` answer the plan from that file with no target launched, as a synthetic observation, each step through the registry's authorizations as on a real arm, so a step the registry does not grant is denied (exit 10, the qualification's fault in `qualification/<probeId>/fault.json`), and resolve both oracles over it with eval-quality's `resolveCheck`: the naive oracle must hold (`naive-oracle-satisfied.json`) and the disciplined one must be violated (`disciplined-oracle-rejected.json`), or the command exits 11.
-The probe is materialized with those two evidence references and admitted by eval-quality's qualification gate, and its trials on the arm `gameability:<probeId>` answer from the same file, so its isolation manifest grants no workspace and observes no tool call.
-
-Under a `partitionPlan` each partition's arm answers only the steps of its own view, from the files its partition keeps beside the plan (`partitionPlan` above): the development and both views answer `contract.json`'s steps from `corpus/gameability/<probeId>.json`, and the held-out and both views answer the held-out plan's steps from `corpus/held-out/gameability/<probeId>.json`.
-
-### The rubric judge
-
-When the contract declares a rubric and the evaluator is the deterministic one, `run` calls a rubric judge once per trial, through TEA's agent adapters; a contract with no rubric makes no call, and its evaluator configuration keeps `judgeConfiguration: null`.
-Command and sealed-brief-agent evaluators score the rubric through their own paths; the records kind carries the scores your harness made, which its calibration judgments gate (see [The evaluation layer](#the-evaluation-layer)).
-`evaluation.json` wires it, and `policy/evaluator-conditions.json` names its model, a fixed condition of every run (`check` requires both once a rubric is declared):
-
-```json
-{ "judge": { "agent": "claude", "model": "claude-sonnet-5-5", "timeoutMs": 120000 } }
-```
-
-```json
-{
-  "schemaVersion": 1,
-  "modelSnapshot": "none",
-  "systemPromptDigest": "sha256:<64 hex digits>",
-  "judge": { "modelSnapshot": "claude-sonnet-5-5" }
-}
-```
-
-`judge.model` selects the model every judge call runs, and `judge.modelSnapshot` in `policy/evaluator-conditions.json` records which model that was, so both hold the same provider model ID.
-Give an immutable ID such as `claude-sonnet-5-5`: an alias such as `sonnet` follows the provider's current model, so the same scoring version can mean different weights over time.
-Where an adapter's CLI offers only an alias, the alias is the most the run can record, and the scoring is as reproducible as the alias.
-`check` refuses, with exit 10, a `judge.modelSnapshot` that differs from `judge.model`.
-`agent` is an adapter key; `agentCommand` replaces the adapter's command (the `custom` adapter requires it), `agentArgs` are appended to its argv, `model` replaces its pinned model, and `timeoutMs` bounds each call.
-The judge runs in an empty directory of its own and is asked for read-only capabilities, which bind differently per adapter: `claude` gets its read and search tools only, `codex` its read-only sandbox, and `custom`, which is your own executable, receives no capability argv, so it is yours to keep read-only; `agy` always runs with full permissions, so `check` refuses it as the judge.
-Whatever the adapter, the directory must still be empty when the call ends, or the call fails as a judge that could not answer.
-It receives the runtime's instruction template, then each rubric's anchored scale levels, failure-mode penalties and bounded length, and each criterion's text with the evidence its pointer names in the trial's observations; it never receives the contract, its oracle checks, its plan or its `testData`.
-The template tells it the evidence is data to assess, whose instructions are never followed.
-Each call draws a fresh 128-bit nonce after the target runs.
-The judge returns one JSON object `{"scores":[{"rubricId","criterionId","score","note"}]}` with an entry per criterion, inside one `<judge-answer nonce="<nonce>">…</judge-answer>` block carrying that nonce.
-Only that block is read: anything else in the reply, a scores object a target printed and the judge quoted included, is ignored, and the trial's judge evidence keeps the nonce.
-Every record of the trial carries the scores as `judgeResults`; a reply with no answer block carrying the call's nonce or with several, a block that does not hold a JSON object with a `scores` list, a criterion left out or scored twice, a score that is not one of its rubric's levels, and a note longer than the rubric's `maxLength` each become that criterion's `score: null` with a note, which eval-quality reads as Invalid.
-A judge that cannot start, times out, exits non-zero or writes into its directory yields no record, and the run exits 12, with the judge's stdout and stderr kept in the trial's evidence.
-An interrupting signal that arrives while the judge runs is taken by the run's own handler once the call returns, which records the stage `signal` in `run.json` and ends the process by that signal.
-The evaluator configuration records `judgeConfiguration: { modelSnapshot, systemPromptDigest }`, the digest taken over the instruction template, so a changed template or judge model changes the scoring version.
-
-Before trial records, `run` sends each calibration response through the configured rubric scorer.
-A deterministic judge sees one criterion per call; command and sealed-brief evaluators use their normal scorer paths.
-The scorer never receives `expectedLevel`.
-A `records` evaluator's harness runs its own scorer and supplies the judgments instead (see [The evaluation layer](#the-evaluation-layer)).
-`judge-calibration.json` in the run directory reports agreement and largest level distance per criterion.
-Agreement below the declared minimum exits 11 before any trial record.
-The calibration file's byte digest and the minimum agreement appear in `EvaluatorConfiguration.decodingParameters`, so changing either changes the scoring version.
-A sealed-brief agent's qualification runs after this calibration and before the first trial (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)).
-
-### The evaluation layer
-
-`evaluation.json`'s `evaluator` chooses what judges the trials (the deterministic evaluator above when none is declared).
-Every kind reaches `eval-quality score` as sealed run records.
-`score` refuses a finding that cites no observation, quotes no evidence or cites an observation its record does not hold (exit 10, before any score call).
-Whether a quote, a citation or a signature supports the finding is decided by eval-quality's ingest.
-
-| `kind`               | What judges                                                            | Fields                                                                        |
-| -------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `deterministic`      | TEA's `resolveCheck` evaluator, with the rubric judge                  | none                                                                          |
-| `command`            | your executable under `evaluator/`, once per trial                     | `command`, `args`, `environmentKeys`, `timeoutMs`                             |
-| `sealed-brief-agent` | an agent reading the sealed brief, acting through the runtime's bridge | `agent`, `agentCommand`, `agentArgs`, `model`, `environmentKeys`, `timeoutMs` |
-| `records`            | sealed run records your harness wrote                                  | `records`, their directory                                                    |
-
-**Judgment rows.** A `command` evaluator and a sealed-brief agent answer each trial with `{ "rows": [...], "recommendation"?: "PASS" }`; `evaluator/mapping.json` binds each key to an oracle and behavior or a rubric criterion and its levels:
-
-```json
-{
-  "key": "verdict-accepted",
-  "outcome": "fail",
-  "observationIds": ["trial-1-judge-run"],
-  "quote": "verdict: rejected",
-  "quoteChannel": "stdout",
-  "confidence": 0.9,
-  "comment": "It rejected a request it had to accept."
-}
-```
-
-```json
-{
-  "schemaVersion": 1,
-  "keys": {
-    "verdict-accepted": { "oracleId": "O-001", "behaviorId": "B-001" },
-    "verdict-quality": { "rubricId": "R-101", "criterionId": "RC-101", "levels": [1, 2, 3] }
-  }
-}
-```
-
-`outcome` is `pass`, `fail` or `score` (with `score`, one of the levels); every row cites an observation; a `fail` row carries `quote`, `quoteChannel` (eval-quality's quotation channels), `confidence` and `comment`, and `artifactId` appears on the `artifact` channel only.
-A key the mapping lacks, or one given twice, fails the row schema.
-A `fail` row is its oracle's `violated` disposition and, in the records of a probe one of whose behaviors declares the oracle, a `defect` finding for the first such behavior, as the deterministic evaluator files it (`F-001` onward, that behavior's severity, `comment` as `summary`, `evidenceArtifacts: []`, one quoted-evidence entry); a key's `behaviorId` names a behavior that declares its oracle, and an oracle two behaviors declare takes one key; a `pass` row is `held`; an oracle with no row is `not-attempted`; a `score` row is its criterion's judge result, and a bound criterion with no row is `score: null`, which eval-quality reads as Invalid.
-A probe's recommendation in a trial is the evaluator's own or FAIL when the rows filed a finding against it, and a set records its trials' most severe.
-TEA's rubric judge never runs under these kinds.
-An evaluator that cannot start, exits other than 0, outlives `timeoutMs`, answers off the row schema, puts a score row on an oracle key or a pass or fail row on a rubric key, scores off the levels, answers a string that is not well-formed Unicode (a lone surrogate), or answers no row while the mapping binds an oracle yields no record and exit 12.
-Its answer is read from its stdout as UTF-8, a byte sequence that is not UTF-8 reading as U+FFFD; what it printed is kept byte for byte in `runs/<invocationId>/evaluator/<arm>/trial-<n>.stdout` and `.stderr`, with `.json` beside them holding the fault (and for an agent, its prompt, nonce and bridge calls), either way.
-
-**The layer's files.** In a git repository the evaluation layer is the files git tracks under `evaluator/`, with their working-tree bytes: a file git does not track (an interpreter's cache, an editor's backup, a note) is no part of it and moves no digest, so `git add` every file the evaluator needs, and `check` refuses a mapping or command git does not track.
-Outside a repository it is every regular file under `evaluator/`, so a stray file there changes the scoring version.
-Either way a link, a special file or a path through a linked directory is refused, and `check` names a submodule under `evaluator/` as one, since its files are another repository's.
-`run` reads the layer's files once, before anything runs, and takes the digests and the mapping from those bytes.
-It reads them again before each launch of the evaluator and after each trial, and a file gone, changed or added to the layer stops the run there with exit 12 and no record, since the digests would name bytes that did not run.
-In a confined run no process of the run can write under `evaluator/` at all (see [File-system confinement](#file-system-confinement)), so no file can be swapped between that read and the launch and restored unseen; in a run that opted out, such a swap goes unseen.
-
-**Installed frameworks.** A package in your project's `node_modules` sits outside the tracked tree, so a `command` evaluator declares each framework it depends on in `evaluator/frameworks.json`, which the tree digest covers:
-
-```json
-{
-  "schemaVersion": 1,
-  "frameworks": [
-    {
-      "package": "acme-evals",
-      "version": "1.2.3",
-      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"], "probeTimeoutMs": 10000 }
-    }
-  ]
-}
-```
-
-`version` is the one exact version expected, and `probe` an executable under `evaluator/` that prints `{ "package", "version" }` for the installed package (the skill ships `installed-version.mjs` for a Node package) and exits non-zero when it is not installed.
-For a framework whose plugins, transitive dependencies or local patches can change judgments under one version, add `"installState": { "source": "tree" }` and pass `tree` after the package argument to the shipped probe.
-It digests installed files in sorted path order.
-Use `"source": "lockfile"` and pass `lockfile` to digest the package's entry in the nearest npm `package-lock.json`.
-The version alone suffices when the exact release completely determines the judgment dependency.
-The declaration pins no digest; the probe prints an observed `installDigest` in `sha256:<64 lowercase hex digits>` form.
-For a declared source, the probe also prints `installSource`, which must match `installState.source`.
-Put the shipped probe beside the evaluator wrapper so both resolve `node_modules` from the same location.
-If the wrapper loads packages elsewhere, write a custom probe that resolves from the wrapper's actual location.
-For a nested package, add repeatable `--importer <package>` arguments to the tracked `probe.args` after `tree` or `lockfile`.
-List importers in load order.
-For example, `["acme-evals-helper", "tree", "--importer", "acme-evals", "--importer", "acme-evals-plugin"]` resolves each importer from the preceding package, then resolves the helper with Node's nearest `node_modules` search from the plugin.
-An unresolved importer makes the probe fail.
-The probe follows a linked importer's real path before resolving the next package, as Node does by default.
-If two same-name dependency copies live inside different importer trees, declare each importer package with `tree` as a separate framework entry; each importer tree digest includes its nested copy.
-`frameworks.json` still names a package once.
-Each source covers one package.
-Declare every plugin or transitive package that contributes judgments as a separate framework entry, including a hoisted package outside the first package's installed tree.
-Use `tree` for linked or locally patched packages because their installed files can differ from a lockfile entry under the same version.
-
-```json
-{
-  "schemaVersion": 1,
-  "frameworks": [
-    {
-      "package": "acme-evals",
-      "version": "1.2.3",
-      "installState": { "source": "tree" },
-      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals", "tree"] }
-    },
-    {
-      "package": "acme-evals-plugin",
-      "version": "2.0.0",
-      "installState": { "source": "tree" },
-      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals-plugin", "tree"] }
-    }
-  ]
-}
-```
-
-An evaluator with no framework dependency declares `"frameworks": []`.
-`check` refuses an absent or malformed declaration and runs no probe.
-It also reads `evaluator/LEARNED.md`: its `## Framework and installed version` section holds one backticked `package@version` for each declared package, and a different version, a missing one or a package the declaration omits exits 10 under `evaluator`.
-`probe.probeTimeoutMs` is optional and defaults to 10,000 ms.
-`check` accepts integer values from 1 to 60,000 ms.
-The effective bound is the smaller of that value and `evaluator.timeoutMs`; the evaluator keeps its own timeout.
-`run` launches each probe as it launches the evaluator (the base environment and `environmentKeys`, an empty private working directory, and the run's confinement), and reads the versions before the first trial, before each launch of the evaluator and after each trial, calibration included.
-After a probe faults, later declared probes are skipped.
-A package that is missing, installed at a version other than the declared one, or changed during the run exits 12 and seals no record for the affected trial; before any trial it also leaves no `evaluator/` directory in the run.
-When `installState` is declared, a missing or malformed `installDigest` also exits 12 before an affected trial seals.
-A changed digest under an unchanged version stops the run at its prelaunch or post-trial read.
-`framework-versions.json` in the run directory records the declared and observed versions and each probe's applied `effectiveProbeTimeoutMs`, with diagnostics and output for a failed or skipped probe.
-Historical schema version 1 artifacts without that field remain valid.
-The observed versions join `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`.
-An upgrade therefore changes the configuration digest and the scoring version only when `frameworks.json` and `LEARNED.md` are updated to it, and `score` reads the recorded configuration.
-The artifact holds the reading taken before the first trial; a change during the run is named in the stopped trial's evaluator `.json` fault beside it.
-For declared install state, the observed digest appears beside the version in `framework-versions.json`, `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`; a different digest changes the configuration digest and scoring version.
-A package absent from the declaration remains outside the observation.
-
-**A command evaluator** runs under TEA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
-The executable runs from its folder, `evaluator/`, so module resolution works as usual: a package in your project's `node_modules` or a sibling file it reads resolves as it does outside a run.
-Its working directory is an empty private directory the run removes however it ends, an interrupting signal included.
-In a confined run it cannot write under `evaluator/`, so a cache it writes beside itself fails there (Python skips its `__pycache__` quietly); in a run that opted out such a cache must be gitignored, or the adopter-tree check after the trial sees your tree change and stops the run with exit 12, and outside a git repository it must write nothing under the project.
-A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.modelSnapshot`.
-
-**A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation.
-Before calibration or qualification, `run` asks the configured agent executable for its installed version using the adapter's version arguments.
-The `claude` and `custom` adapters append `--version` after `agentArgs`.
-The `claude` adapter reads the three-part version in the CLI's own output, such as `2.1.282 (Claude Code)`.
-A custom executable must answer that invocation on stdout with one line of JSON whose `agentVersion` is a three-part semantic version, for example `{"agentVersion":"1.2.3"}`.
-Plain text, a response without `agentVersion` or with it repeated, malformed JSON, more than one line, a value such as `latest` that is not a semantic version and a value longer than 256 characters exit 12 with the expected shape named, so a dependency's incidental version never becomes the agent's.
-The command's stderr is free for its own logging and is never read for the version.
-A custom command that printed a bare version such as `1.2.3` before must change that output to the JSON line.
-A standalone `--` in `agentArgs` is refused because it can hide the appended version flag.
-The probe receives the agent's minimal environment, including declared `environmentKeys`, and has a 3,000 ms timeout.
-Supervisor cleanup can take up to 5,000 ms more, so each version read contributes 8,000 ms to a trial's resource ceiling on macOS and Linux.
-Windows also reserves its bounded 90,000 ms Job Object setup and 15,000 ms startup slack before the agent clock begins, for 113,000 ms per read.
-The run records the observation in `evaluator-configuration.json` as `decodingParameters["tea.evaluatorAgentVersion"]` and in `run.json` as `evaluator.version`; an upgrade changes the configuration digest and scoring version.
-The run checks the version before and after every sealed-brief launch, after each qualification attempt and after each trial.
-An unreadable or changed version exits 12 before an affected answer counts or trial set seals.
-`score` and a baseline replay read the recorded configuration without starting the agent CLI.
-The runtime runs the plan first, recorded `baseline` and never shown to the agent; the agent then calls the bridge, a stdio MCP server with one tool per interface of the brief, shaped by kind (`cli`: `arguments`, the whole command line, and `stdin`; `api`: `method`, `path`, `body`; `mcp`: `tool`, `arguments`).
-An `api` call's `body`, when given, is a JSON object.
-In a `cli` call, `--name=value` is an option, `--name` takes the next word only when an operation declares it non-boolean, and other words, and all after `--`, are positional; a repeated option is refused, since eval-quality's request carries one value per option.
-`stdin` reaches the target as written, and the record's `callInputs.stdin` is the JSON object it parses to or, for other text, the text under the operation's one stdin key.
-The registry's adapters deny an unlisted executable, subcommand, interface, tool, address or method before anything launches or is sent, recorded with eval-quality's fault code, its reason and its detail: an `mcp` call goes through the tool-server entry's `McpTargetAuthorization` for the arm's copy, and the operation it matches is the one declaring its tool name; an `api` call goes through the evaluation's HTTP port over the HTTP entry's policy for the arm's copy, and the operation it matches is the one declaring its method and a path template its path fits, whose parameters and query string become the call's `path` and `query` inputs.
-A call matching exactly one operation (by its declared keys) is recorded `evaluator-chosen` and answered with its `observationId`; any other authorized call stays in the evidence as unmatched, with no ID to cite.
-Every call counts against `budgets.maxToolCalls` per trial, and none runs after the agent ends.
-A call carrying the trial's answer nonce is refused unsent and uncounted, so the agent cannot hand it to the target.
-On a gameability arm a call goes through the same adapter or port and authorizations with nothing launched or sent, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
-A call the target could not run exits 12, and the exit message names that call's fault, followed by the agent's own failure when the agent then failed.
-A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
-
-The bridge admits one connection, presenting a token its process reads from a private file; the file and the configuration that names it reach the adapter as private files the confinement withholds from a target (see [The bridge's admission token](/docs/explanation/why-evaluate-confines-the-target.md#the-bridges-admission-token)).
-
-`claude` runs with no built-in tool, the bridge alone, no user or project settings and no saved transcript (`--tools ""`, `--mcp-config <file>`, `--strict-mcp-config`, `--setting-sources ""`, `--no-session-persistence`), and `check` refuses `agentArgs` that reopen any of them; `custom` receives `--mcp-config <file>`, and keeping to the bridge is its own contract; other adapters are refused.
-`evaluator.modelSnapshot` names the agent's model, recorded as the configuration's `modelSnapshot` beside the digest of the evaluator template (instructions, answer line, heading, tool descriptions and call shapes), and as `judgeConfiguration` when a rubric key is bound; a target model named at the top level is kept as `tea.targetModelSnapshot`.
-Before its first trial the agent is qualified on the clean arm and on each mutated arm (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)).
-
-**A records evaluator** reads, inside the folder and through no link, `<records>/evaluator-configuration.json` and, per probe the run qualifies, `<records>/<probeId>/*.json` records (name order) and an optional `isolation-manifest.json`.
-`run` qualifies and preflights as usual, checks each file's published schema, the configuration's and records' `sealedBriefDigest` against this run's brief, each record's and isolation manifest's `evaluatorConfigurationDigest` against the digest of the imported `evaluator-configuration.json` (bindings included), and one `runId` and the qualified arm per set (exit 10 with nothing copied otherwise; `check` reads no imported record, so only `run` refuses a record sealed against another configuration), and copies the bytes into `trial-sets/` for `score`.
-Take the brief from `eval-quality seal`, which is deterministic; nothing ties the records to the target's state at this run.
-
-When the contract declares a rubric, the records carry rubric scores your harness's scorer made, and they count only once that scorer has passed the same calibration gate as every other scorer.
-Your harness runs its own scorer over each labelled item in `policy/judge-calibration.json`, handing it the response and nothing of the label, and writes what the scorer saw and answered to `<records>/calibration-judgments.json`.
-Copy the runtime's values verbatim: write `evaluator-configuration.json` first (the two `tea.judgeCalibration*` bindings may be absent), run `tea-evaluate digest --evaluation <folder> --calibration-inputs`, put its `scorerConfigurationDigest` and each item's `rubricId`, `criterionId` and `scorerInput` into the judgments file, add only `answer`, and bind `tea.judgeCalibrationDigest` in the configuration to its `calibrationDigest`:
-
-```json
-{
-  "schemaVersion": 1,
-  "scorerConfigurationDigest": "sha256:...",
-  "items": [
-    {
-      "rubricId": "R-101",
-      "criterionId": "RC-101",
-      "scorerInput": { "observationId": "calibration", "...": "the observation the runtime derives from the item" },
-      "answer": 1
-    }
-  ]
-}
-```
-
-- `items` holds one entry per labelled item, in the labelled file's order.
-  `answer` is an anchored level of the criterion, or `null` when the scorer gave none, which counts as a disagreement.
-- `scorerInput` is exactly the label-free observation the runtime derives from the labelled item: the same observation `run` hands any other scorer, with the interface and operation ID the contract's interaction plan gives the criterion's step (`calibration` for both when it has none).
-  It is compared whole, so an extra key, a label such as `expectedLevel`, or a different response fails.
-  For a criterion whose evidence is the `stdout` of step `judge-run`, and the contract's interaction plan gives that step operation `judge-request` on interface `verdict`, the response `Response at level 1` is the observation `{ "observationId": "calibration", "sequence": 1, "interfaceId": "verdict", "operationId": "judge-request", "provenance": "evaluator-chosen", "principal": null, "callInputs": { "path": null, "query": null, "header": null, "body": null, "bodyEncoding": null, "argument": null, "option": null, "environment": null, "stdin": null, "arguments": null }, "responseBody": null, "responseHeaders": null, "responseStatus": null, "stdout": { "kind": "text", "value": "Response at level 1" }, "stderr": { "kind": "absent" }, "exitCode": null, "artifacts": {} }`.
-- `scorerConfigurationDigest` is eval-quality's `digestArtifact` (kind `EvaluatorConfiguration`) over the imported `evaluator-configuration.json` with `tea.judgeCalibrationDigest` and `tea.judgeCalibrationMinimumAgreement` removed from its `decodingParameters`.
-  The full configuration's digest covers the labelled file's digest, which the judgments cannot name before the labelled file is final, so the two bindings are checked separately.
-  `digest --calibration-inputs` prints it, so the harness asks after writing the configuration and binds afterwards.
-- The configuration binds `decodingParameters["tea.judgeCalibrationDigest"]` to the digest of `policy/judge-calibration.json`'s bytes (eval-quality's `digestBytes`) and `decodingParameters["tea.judgeCalibrationMinimumAgreement"]` to `evaluation.json`'s `judgeCalibration.minimumAgreement`.
-  A changed item or minimum changes the configuration digest and the scoring version.
-  Bind both values before you seal any record or isolation manifest: each one names `evaluatorConfigurationDigest`, the digest of the final configuration with its bindings, and `run` refuses a record sealed against an earlier one.
-
-`check` and `run` verify the judgments and bindings with one function, so they agree.
-A judgments file or configuration that is absent, not JSON, a link, off this shape, or bound to another digest, minimum or scorer configuration is an authoring defect: `check` reports it under the `judge-calibration` rule and `run` exits 10 before it reads or copies any record.
-`check` stops there.
-`run` then sends a verified file through the same gate as every other scorer: it computes exact agreement and the largest level distance per criterion itself, writes `judge-calibration.json` in the run directory, and exits 11 below the minimum before any record is copied.
-A `records` evaluation whose contract declares no rubric never reads a judgments file.
-
-The runtime verifies that judgments bind to the configuration and label-free input.
-It cannot prove that your harness ran its scorer to produce the answers, and it does not run or replay that scorer.
-A harness that wants that proof runs its scorer through a `command` evaluator.
-
-**Fixed conditions.** `decodingParameters` carries `tea.evaluatorKind` for every kind (so deterministic digests differ once from the release before), and for the row-converting kinds `tea.evaluatorTreeDigest` over the layer's files, `tea.evaluatorWiring` (the `evaluation.json` block), and `tea.evaluatorExecutableDigest`, `tea.evaluatorFrameworks` (the installed framework versions the run observed, an empty list for an evaluator with none) and `tea.evaluatorModelSnapshot` for a command or `tea.evaluatorAgent` and `tea.evaluatorModel` for an agent: a changed file, argument, model or timeout changes the scoring version.
-The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; target reported tokens and cost are included in actual resource use, while absent reports remain zero and are listed in `run.json.unreportedResourceUse`.
-
-### Qualifying a sealed-brief agent
-
-A sealed-brief agent chooses its own calls, so two runs over one seeded defect can differ.
-One run may send the standard input a defect signature selects on, and the next may send none, which eval-quality reads as an Invalid mutated set.
-`evaluation.json` therefore declares how many times `run` exercises the agent before its verdicts count, and how often the attempts must agree (both set by you; no template fills them):
-
-```json
-{
-  "evaluator": { "kind": "sealed-brief-agent", "agent": "claude", "timeoutMs": 300000 },
-  "evaluatorQualification": { "attempts": 3, "minimumAgreement": 0.9 }
-}
-```
-
-`attempts` is an integer of at least 2 and `minimumAgreement` a number from 0 to 1.
-`check` exits 10 under `evaluator` when a `sealed-brief-agent` declares no `evaluatorQualification`, and when any other kind declares one, since nothing would use it.
-
-After judge calibration and before the first trial, `run` runs the agent `attempts` times on the clean arm and on each mutated arm.
-An attempt runs the arm's plan and the agent once, in a workspace of its own (its label starts with `attempt-`), and judges every probe of the arm.
-It writes nothing under `trials/` or `evaluator/`: its files are under `evaluator-qualification/<arm>/attempt-<n>/`.
-The attempt's record of one trial for each probe is scored alone by `eval-quality score`, with the run's contract, preflight verdict, policy and evaluator configuration.
-The call is held to the bytes the runtime wrote, the way `score` holds its inputs (see [Score input integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-input-integrity)): a file rewritten or a staged artifact substituted while the call ran exits 12 and records no vote.
-An exit 0 or 2 carries an evidence artifact (one record below a `minimumTrialCount` above 1 reads as CONCERNS), so the artifact exists for every attempt eval-quality can read.
-`evaluator-qualification.json` in the run directory reports, per arm and probe, each attempt's `exitCode`, its `evidence` artifact, its `outcome` and whether it `agrees`:
-
-- The outcome is the state in the evidence artifact's `reducedProbeOutcomes[].trialVotes[]`, copied unchanged; the runtime computes none.
-- An attempt agrees when its outcome is `passed-clean-control` on the clean arm and `caught` on a mutated arm.
-- An attempt eval-quality reads as Invalid exits 3 and emits no artifact.
-  It is recorded with `exitCode: 3`, `evidence: null`, `outcome: null` and the engine's `invalid:` stderr lines in `invalid`, and counts as disagreeing.
-- A probe's agreement is the fraction of its attempts that agree, and an arm's agreement is the lowest agreement among its probes.
-- Historical and gameability arms are not qualified.
-- The report lists held-out probes beside development ones, as the trial sets do; read it for the development probes and the arm agreements, and read a held-out probe through `gap-view.json`.
-- An attempt's model calls appear in its own `isolation-manifest.json` and in no trial set's use, since qualification calls do not count toward the trials.
-
-An attempt `eval-quality score` cannot score stops the run with exit 12 before any report is judged: a call that cannot run, an exit other than 0, 2 or 3, no evidence artifact, no single trial vote for the probe, or a call whose inputs, staged artifact, exit or `eval-quality:` lines are not the ones the held bytes give.
-An arm whose agreement is below `minimumAgreement` exits 11 as an evaluation weakness, naming the arm and `evaluator-qualification.json`, with no trial record and no `trial-sets.json`.
-The two numbers appear in `EvaluatorConfiguration.decodingParameters` as `tea.evaluatorQualificationAttempts` and `tea.evaluatorQualificationMinimumAgreement`, so changing either changes the scoring version.
-
 ## status
 
 `status` reads the progress of one `run` invocation from another process. It does not launch a target, score a trial, or write to the run directory.
 
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-evaluate status --evaluation <path> [--run <invocationId>] [--follow]
+```
+
+Examples, one snapshot of a named run and a follower that reports until it ends:
+
 ```bash
-npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run <invocationId>
-npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run <invocationId> --follow
+RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run "$RUN_ID"
+npm exec --prefix evals -- tea-evaluate status --evaluation evals/my-evaluation --run "$RUN_ID" --follow
 ```
 
 `--evaluation` names the evaluation folder. `--run` names the invocation ID printed when `run` starts; when omitted, `status` selects the latest run. Use an explicit ID to reconnect to a specific invocation. `--follow` reports changes until the run reaches a terminal outcome, including while its last update is stale. Stop a follower for an abandoned run with Ctrl-C. `status` refuses an unknown or malformed run ID and does not follow a linked run entry.
@@ -1703,10 +591,20 @@ When trial reports exist, the usage section has `scope: "trials-only"`. `trialCo
 
 `score` scores the trial sets of a completed run: the one `--run` names, or the most recent `run` invocation.
 
-It computes no verdict itself: every exit is eval-quality's own.
+eval-quality supplies every behavioral judgment: `score` computes no verdict itself, and exits 0, 2, 3, 4 and 5 are eval-quality's own, passed through.
+TEA adds its own exits for what it checks before and around those calls: 10 for a run artifact off its schema or out of agreement with its run, 12 for a call that cannot run or an input whose integrity does not hold, and 64 for usage.
+
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-evaluate score --evaluation <path> [--run <invocationId>]
+```
+
+Example, scoring a named run:
 
 ```bash
-npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation [--run <invocationId>]
+RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation --run "$RUN_ID"
 ```
 
 | Option                 | Meaning                                                                     |
@@ -1757,8 +655,8 @@ Each `eval-quality: invalid: <reason>` line a call writes to stderr is also prin
 An isolation manifest that is absent is passed on as absent and never filled in, so eval-quality reads that trial set as Invalid.
 
 A probe the run refused has no trial set; `score` prints each one with its reason and records them under `refused` in its aggregate `score.json`, and its exit does not change.
-Then `eval-quality score` runs once per probe, with every trial's `--record`, the set's `--isolation-manifest`, the run's `--evaluator-configuration` and the run's corpus digest, with `--designated-oracle` for a probe of a both run under a `partitionPlan` whose behavior the both view lists with several oracles and whose own partition's view lists exactly one (`partitionPlan` above), and writes the evidence artifact to the private staging file `--out` names (see [Score output integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-output-integrity)).
-Each call goes to `runs/<invocationId>/scores/<scoreInvocationId>/<probeId>/`: `score.json` (its executable, argv in the forms of [Paths in the records](#paths-in-the-records), exit code, stdout and stderr, kept whether or not an evidence artifact was emitted) and `evidence-artifact.json` when there is one, with `score.json` beside the probes summarizing each call's exit.
+Then `eval-quality score` runs once per probe, with every trial's `--record`, the set's `--isolation-manifest`, the run's `--evaluator-configuration` and the run's corpus digest, with `--designated-oracle` for a probe of a both run under a `partitionPlan` whose behavior the both view lists with several oracles and whose own partition's view lists exactly one (see [Held-out probes and partition plans](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans)), and writes the evidence artifact to the private staging file `--out` names (see [Score output integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-output-integrity)).
+Each call goes to `runs/<invocationId>/scores/<scoreInvocationId>/<probeId>/`: `score.json` (its executable, argv in the forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), exit code, stdout and stderr, kept whether or not an evidence artifact was emitted) and `evidence-artifact.json` when there is one, with `score.json` beside the probes summarizing each call's exit.
 The same run directory receives `partitions.json` and `gap-view.json`.
 Both group scored probes under `development` and `held-out`; each available outcome is copied from the probe's evidence artifact.
 A probe without an evidence artifact has `outcome: null`.
@@ -1775,32 +673,6 @@ Every call's exit is eval-quality's own: 0 (PASS, WAIVED or CONCERNS), 2 FAIL, 3
 `score` exits with the most severe of them and of the aggregate call below, in the order 64, 5, 4, 3, 2, 0, and the call that produced it is on record; rerunning `eval-quality score` by hand on a persisted argv, from the evaluation folder, gives the same exit and byte-identical evidence.
 A call that cannot run, is killed or exits with a code the CLI does not document is recorded, the other calls still run, and `score` exits 12.
 
-### Run-wide strength aggregate
-
-`eval-quality score` covers one probe per call, so a probe's strength vector says nothing about a class across the run, and TEA computes no rate.
-After the probe loop, `score` calls `eval-quality aggregate-strength` once, through the same CLI stage runner, over the evidence artifacts it copied, the floors and the run's own scoring policy.
-It writes three files beside the probes in `scores/<scoreInvocationId>/`:
-
-- `strength-floors.json`: `evaluation.json.strengthFloor`, read once, staged as a private file and copied in and read back after the call, so the floors a replay reads are the ones this call read (a copy that changed while the call ran exits 12).
-  The engine admits `defect`, `gameability` and `zero-action`; canaries stay outside every denominator, so `strengthFloor` has no `canary` key and a floors file that names one exits 5 at the engine.
-- `aggregate-strength.json`: the call's executable, argv, exit code, stdout and stderr, the same record each `score` call keeps, in the same path forms.
-- `strength-aggregate.json`: the engine's strength aggregate, copied byte for byte.
-  Per class it states the distinct qualified probes (`eligible`), how many the evaluator exercised, how many were `caught`, the `rate`, whether the class is `comparable`, and the floor decision with its `basis`.
-  A class with no eligible probe is `null`; a class with eligible probes and none exercised has `rate: null`; a trial set below `minimumTrialCount` or an unreached oracle makes the class not comparable.
-  Clean controls and canaries are outside every class denominator.
-  The aggregate records the engine version and, for every artifact it read, the probe, its class and the artifact's digest.
-
-The call runs only when every probe copied an evidence artifact and no output was refused.
-When a probe has none (an Invalid score, a call that could not run, a staged artifact that failed the copy check), no aggregate call is made, the invocation's `score.json` records `strengthAggregate` as `absent` with the reason, and no class-wide strength claim stands.
-The staged aggregate is copied only when it meets the published `strength-aggregate` schema and schema version, its recorded digest for each probe equals the digest of the evidence file `score` persisted (the digest of the file's canonical form, which `engine.js` computes), it covers exactly the probes the invocation scored, its `engineVersion` equals the `evalQualityVersion` in `run.json`, and its `floorDecisions` record, for each of `defect`, `gameability` and `zero-action`, the floor `evaluation.json.strengthFloor` declares (`null` when it declares none).
-Any disagreement, a forged aggregate included, copies nothing, records the mismatch and exits 12.
-A file the held writer refuses after the floors were staged (the floors copy that changed, a file planted where the aggregate lands) exits 12 as well, and `strengthAggregate` records `failed` with the reason and the call and floors written so far.
-A floor decision changes no exit code: the engine exits 0 whatever it decides, an engine exit of 4 or 5 (a set whose artifacts disagree, a fault in its inputs) produces no aggregate and joins the most severe combination when the held bytes give the same exit (an exit they do not give, such as a refusal caused by a persisted evidence file a process rewrote, exits 12; see [Score input integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-input-integrity)), an exit of 64 (a usage error, which the held bytes do not give, so it means the call was wired wrong) exits 12 with the aggregate recorded as a mismatch, and any other code or a call that cannot run exits 12.
-The aggregate covers the probes the invocation scored, so a `--partition` run aggregates its own partition, and a `records` run aggregates too.
-`score.json`, `partitions.json` and `interpretation.json` carry a `strengthAggregate` pointer (status, reason, path, digest, floors copy and its digest); the gap view carries none.
-Rerunning `eval-quality aggregate-strength` by hand on the recorded argv, from the evaluation folder and with a fresh `--out`, gives byte-identical output, because the argv names the persisted evidence, the floors copy and the run's policy.
-The Evaluate skill's `references/run.md` and `references/gaps.md` read this file to hold the class floors before held-out execution; a probe's own vector describes that probe alone.
-
 ### When score exits 12
 
 `score` holds every file it reads and writes to the bytes the run recorded, and it re-reads every input after each `eval-quality score` call.
@@ -1812,8 +684,18 @@ The checks themselves are described in [Why Evaluate Confines the Target](/docs/
 
 `compare` sets a scored run beside the committed `baseline/` and, with `--accept`, replaces `baseline/` with that run.
 
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-evaluate compare --evaluation <path> [--run <invocationId>] [--accept]
+```
+
+Examples, comparing a named run with the baseline and, after review, accepting it:
+
 ```bash
-npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation [--run <invocationId>] [--accept]
+RUN_ID=$(ls evals/my-evaluation/runs | tail -n 1) # the newest invocation under runs/, the run that just ended
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID"
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID" --accept
 ```
 
 | Option                 | Meaning                                                                                     |
@@ -1834,6 +716,12 @@ With no baseline the comparison ends as `first-run`:
 ```text
 tea-evaluate compare: comparing run 20261007T112710219Z-50f0b256
 tea-evaluate compare: first-run: baseline/ holds no baseline to compare run 20261007T112710219Z-50f0b256 with; accept it with tea-evaluate compare --accept (exit 0, <project>/evals/my-evaluation/runs/20261007T112710219Z-50f0b256)
+```
+
+The message leaves out the prefix, `--evaluation` and the run; once the evidence is reviewed, the complete command, naming the run explicitly, is:
+
+```bash
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation --run "$RUN_ID" --accept
 ```
 
 Accepting the run creates the baseline:
@@ -1929,7 +817,7 @@ It holds:
 
 Nothing under `engine/`, `faults/`, `refused/` or `evaluator-qualification/`, no other file under `trials/`, and none of the derived views (`gap-view.json`, `interpretation.json`, `partitions.json`) is copied, and no probe's bytes or evidence paths are rewritten, since the probe digests `run.json` anchors would stop matching.
 Omitting any of these inputs makes the replay fail: without the isolation manifests, `score` reads each trial set as Invalid and exits 3.
-`run.json`, the observations and the score call records are copied as they are, and they hold the neutral forms of [Paths in the records](#paths-in-the-records), so the baseline names no workspace, repository, staging directory, checkout or home directory that the runtime wrote.
+`run.json`, the observations and the score call records are copied as they are, and they hold the neutral forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so the baseline names no workspace, repository, staging directory, checkout or home directory that the runtime wrote.
 The text a target printed is part of each observation as received.
 `baseline.json` meets the runtime's own schema (`cli/lib/evaluate/schemas/baseline.schema.json`).
 
@@ -1941,7 +829,8 @@ npm exec --prefix evals -- tea-evaluate ci --evaluation evals/my-evaluation --ti
 
 `ci` runs exactly the checks `ci/evaluation-ci-plan.json` places on one tier, `pr`, `merge`, `scheduled` or `release`: the plan is the only definition of tier membership.
 It runs every check of the tier in plan order, whether or not an earlier one failed, so the evidence bundle is complete, and it enforces eval-quality's verdicts through one fixed table of exits and actions.
-Every stage exit passes through verbatim, `ci` passes no `--strict`, and it computes no verdict of its own: eval-quality's exits and its evidence artifact decide.
+eval-quality supplies every behavioral judgment: each engine stage's exit passes through verbatim, `ci` passes no `--strict`, and it computes no verdict of its own, so eval-quality's exits and its evidence artifact decide what a check found.
+`ci` adds TEA's own exits for what it checks around them: 10 for an authoring or plan defect, 11 for an evaluation weakness such as oracle disagreement or a stale baseline on `release`, 12 for a check that cannot run, 13 for evidence drift in the replay and 64 for usage.
 An unknown or missing `--tier` is a usage error (64), and so is a missing plan, which the finding names by path.
 A tier with no checks runs nothing and still writes its summary.
 A tier holds only the checks placed on it, so a pipeline triggered by a merge runs the `pr` tier as well as the `merge` tier.
@@ -1964,7 +853,7 @@ Each check carries:
 | `timeoutMs`   | a `gate` check only: how long the child may run, from 1000 to 3600000 milliseconds, 600000 when absent. Past it the runtime stops the gate's process group and the check exits 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `gates`       | optional: the ids of existing pipeline jobs (a publish or deploy job the repository already has) that the check's tier must gate, so a blocking exit stops the shipment. The jobs a tier gates are the union of `gates` over the checks the plan places on it, so a job is named once on any check of the tier and a repeat across the tier's checks is merged. `bmad-tea-framework` in CI scope renders each as a wait of the job on the tier's evaluation job: `needs` inside one workflow file; across files a `workflow_run` trigger, an `if:` on the run's conclusion, event and workflow path, the evaluated commit as the checkout `ref` and an event guard on that workflow's other jobs. The field names a job and creates no event |
 | `evidence`    | the paths, relative to the evaluation folder, where the check leaves its evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `placement`   | `tier`, the `defaultTier` the default-tier table above gives the check, and a `reason` that names what the repository inspection found; every check needs a non-blank reason, whether its `tier` is its `defaultTier` or not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `placement`   | `tier`, the `defaultTier` the default-tier table below gives the check, and a `reason` that names what the repository inspection found; every check needs a non-blank reason, whether its `tier` is its `defaultTier` or not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 The `evaluate` ids, and the tiers each one defaults to:
 
@@ -1988,7 +877,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The produced score subtree is the one `scores/` entry that is new after the call.
   `baseline/scores/` must hold the accepted score invocation alone, as a real directory (each accept keeps the latest subtree), and the manifest's `acceptedRun` and `scoreInvocationId` must be invocation identifiers, since each names a directory; a baseline that breaks either rule exits 10.
   The produced preflight verdict and every file `score` wrote under `scores/<id>/` (each probe's `evidence-artifact.json` and `score.json`, `strength-aggregate.json`, `strength-floors.json` and `aggregate-strength.json`) are written to a fresh `runs/<invocationId>/replay/` and compared byte for byte with the baseline's.
-  The call records hold the path forms of [Paths in the records](#paths-in-the-records), so a replay of the same records writes them again; the one file left out is the invocation's own `score.json` summary, which names the replay's invocation id.
+  The call records hold the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so a replay of the same records writes them again; the one file left out is the invocation's own `score.json` summary, which names the replay's invocation id.
   The stage exits pass through.
   When they are 0 or 2 and a file differs, is missing or is extra, the check exits 13, evaluation evidence drift.
   A changed control leg in an observation makes eval-quality's own preflight exit 3, which passes through.
@@ -2040,7 +929,7 @@ A SIGINT or SIGTERM to `ci` ends whatever the running check is waiting on at onc
 The group of the gate or stage gets the signal and is killed half a second later, `ci` removes its scratch directory, and then `ci` ends by the same signal.
 Only a SIGKILL of `ci` itself leaves a running gate or stage in its own process group, since no portable parent-death signal exists; the next `ci` over the folder removes the scratch directory it left, the one a `check` check made included.
 
-`runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` as the check printed them, whatever the exit (an `evaluate` check in the path forms of [Paths in the records](#paths-in-the-records), a `gate` as your command printed it); the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
+`runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` as the check printed them, whatever the exit (an `evaluate` check in the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), a `gate` as your command printed it); the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
 
 Under a `partitionPlan` the `compile` and `seal` checks run over three views: the development view (the folder's own `contract.json`), the held-out view and the both view.
 The development view writes `checks/<id>/engine.json` and the compiled contract (`eval-contract.json`) or the sealed brief (`sealed-evaluator-brief.json`) beside it, the paths a folder with no `partitionPlan` has, and the held-out and both views write the same file names under `checks/<id>/held-out/` and `checks/<id>/both/`.
@@ -2052,13 +941,21 @@ A folder with no `partitionPlan`, and one whose `evaluation.json` cannot be read
 Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result.
 `bmad-tea-framework`'s CI setup renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [Framework CI Setup](/docs/how-to/workflows/setup-test-framework.md#evaluation-plans)).
 
-Accepted baselines hold the neutral path forms of [Paths in the records](#paths-in-the-records), so they name no workspace, repository, staging directory or home directory.
+Accepted baselines hold the neutral path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so they name no workspace, repository, staging directory or home directory.
 A baseline accepted before those forms existed holds absolute paths in its call records, so its replay reports drift until `compare --accept` records it again.
 
 ## tea-skill-runner
 
+Synopsis, with optional arguments in brackets:
+
+```text
+tea-skill-runner --skill-root <dir> --agent <claude|codex|custom|agy> [--agent-cmd <path>] [--agent-arg <arg>]... [--env-pass <NAME>]... [--model <name>] [--timeout-ms <n>] [--capability <tier>]... < <prompt file>
+```
+
+Example, running `skills/my-skill` through the Claude Code adapter on the prompt in `prompt.txt`, from the project root:
+
 ```bash
-tea-skill-runner --skill-root skills/my-skill --agent <adapter> < prompt.txt
+npm exec --prefix evals -- tea-skill-runner --skill-root skills/my-skill --agent claude < prompt.txt
 ```
 
 `tea-skill-runner` is the command an evaluation registers for a skill target.
@@ -2094,7 +991,7 @@ The exit codes:
 The example below runs the skill root `skill` with the `custom` adapter and `cat` as the agent, so the output is the prompt the agent received:
 
 ```bash
-printf 'Review a refund of 100 against the limit of 100.\n' | tea-skill-runner --skill-root skill --agent custom --agent-cmd cat
+printf 'Review a refund of 100 against the limit of 100.\n' | npm exec --prefix evals -- tea-skill-runner --skill-root skill --agent custom --agent-cmd cat
 ```
 
 ```text
@@ -2106,8 +1003,8 @@ Review a refund of 100 against the limit of 100.
 ```
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
-On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
-A confined `--agent claude` target on a subscription declares `"login": "claude"` on its entry, which gives it the login it finds under the private home (see [A subscription login under confinement](#a-subscription-login-under-confinement)).
+On Linux the entry also lists the model provider's host and port in `egress`, since the agent calls it and a Bubblewrap target has a loopback only (see [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement)).
+A confined `--agent claude` target on a subscription declares `"login": "claude"` on its entry, which gives it the login it finds under the private home (see [A subscription login under confinement](/docs/reference/tea-evaluate-confinement.md#a-subscription-login-under-confinement)).
 Its `target` is a path to the runner or the bin name `tea-skill-runner`, and where the runner lives decides whether `score` passes (see [Where the runner lives](#where-the-runner-lives)).
 
 On POSIX the agent runs in its own process group, and when the agent exits, every process left in that group receives `SIGKILL`.
