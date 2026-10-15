@@ -2726,7 +2726,7 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
       signature: diagnostic.signature,
       qualification,
     };
-    records[ref] = brandNativeRecord(record, 'manifest-checked');
+    records[ref] = record;
     rows.push({
       attemptId: `${runId}/${diagnostic.caseId}/${diagnostic.repetition}/${provenance.attempt ?? 1}`,
       runId,
@@ -2769,9 +2769,13 @@ function loadRecordedTestDesignRun({ dir, arm = 'A', stage = 'baseline', runId =
       },
     });
   }
+  // Records are native records only when the whole run matched its manifest.
+  const checked = problems.length === 0;
   return {
     rows,
-    records,
+    records: Object.fromEntries(
+      Object.entries(records).map(([ref, record]) => [ref, checked ? brandNativeRecord(record, 'manifest-checked') : deepFreeze(record)]),
+    ),
     integrity: { checked: manifest.files.length, problems },
     source: {
       dir,

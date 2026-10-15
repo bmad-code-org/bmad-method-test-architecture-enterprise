@@ -3419,11 +3419,19 @@ async function checkRecordedEvidenceVerification() {
     .readdirSync(path.join(tamperedDir, 'cases'))
     .map((entry) => path.join(tamperedDir, 'cases', entry, 'provenance.json'))[0];
   fs.appendFileSync(provenanceFile, ' ');
+  const tampered = experiment.loadRecordedTestDesignRun({ dir: tamperedDir, arm: 'A', stage: 'selection' });
   check(
-    experiment
-      .loadRecordedTestDesignRun({ dir: tamperedDir })
-      .integrity.problems.some((problem) => /sha256 differs from the manifest/.test(problem)),
+    tampered.integrity.problems.some((problem) => /sha256 differs from the manifest/.test(problem)),
     'a native run whose provenance changed after its manifest is refused',
+  );
+  const tamperedRows = tampered.rows.map((row) => ({ ...row, attemptId: `tampered-${row.attemptId}` }));
+  const tamperedRead = readRecorded(recordedDeclaration, interleave(tamperedRows, beforeB), { ...records, ...tampered.records });
+  check(
+    outcomeOf(tamperedRead) === 'blocked' &&
+      tamperedRead.evidenceIndex.rows
+        .filter((row) => row.attemptId.startsWith('tampered-'))
+        .every((row) => row.verification === 'claimed' && row.nativeSource === null),
+    `records of a run that failed its manifest are no native records, got ${outcomeOf(tamperedRead)}`,
   );
   const unlistedDir = nativeRun('two-run-before-numeric', 'unlisted', 'A');
   const unlistedManifest = JSON.parse(fs.readFileSync(path.join(unlistedDir, 'manifest.json'), 'utf8'));
