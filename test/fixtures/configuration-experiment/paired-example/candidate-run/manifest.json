@@ -1,0 +1,69 @@
+{
+  "files": [
+    {
+      "path": "result.json",
+      "sha256": "394e2a03650844facf9f087a19b7921a8cc63124d05911f8000c7b1021a7b0a7",
+      "bytes": 31247
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/provenance.json",
+      "sha256": "e7c3a7280e495c97238587bfbb23c30f6d70788ea8e013884fc8789d1b33f172",
+      "bytes": 1680
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/observation.json",
+      "sha256": "7813580bf370a4eeea0105a742d9e21bc4d400e64cb3f88cb15b1c12bb0c6eba",
+      "bytes": 56465
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-1/prompt.txt",
+      "sha256": "3d648bee699ab7aab1544d28ba1bb270db66ae3a5db17f59abc5e59626c1227e",
+      "bytes": 1820
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/provenance.json",
+      "sha256": "0fd15c8c12aab3890e68da8d48294b7fbcd879ced432456ed4af13e808270544",
+      "bytes": 1680
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/observation.json",
+      "sha256": "226bd15d081946739b5fd3351b6f85310485398711431f32a1ef9cadba4c194a",
+      "bytes": 54226
+    },
+    {
+      "path": "cases/clean-last-sync-indicator-run-2/prompt.txt",
+      "sha256": "3d648bee699ab7aab1544d28ba1bb270db66ae3a5db17f59abc5e59626c1227e",
+      "bytes": 1820
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/provenance.json",
+      "sha256": "ad70f34620206b4674b78eaebf3f8082df1952eb74d5b13b00629a0ddd05b79b",
+      "bytes": 1690
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/observation.json",
+      "sha256": "607dd1685a1280ee11b8188d6f32ebb6fe4b1a6a64fea416adfe6142f6484c95",
+      "bytes": 104187
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-1/prompt.txt",
+      "sha256": "2299ab0d4ab5390cd7fef31c131e7d04df2b2ace1764225fd79332048f6724a6",
+      "bytes": 1813
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/provenance.json",
+      "sha256": "f1d104b9f192d53d9ea902105b778cfffcdb415aafaf1491f2ce7f000ad30c84",
+      "bytes": 1690
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/observation.json",
+      "sha256": "c890fe6e569d1040a9810dc713697bd439d843ea8245366336f780c4aa48bcc6",
+      "bytes": 86854
+    },
+    {
+      "path": "cases/seeded-offline-order-capture-run-2/prompt.txt",
+      "sha256": "2299ab0d4ab5390cd7fef31c131e7d04df2b2ace1764225fd79332048f6724a6",
+      "bytes": 1813
+    }
+  ]
+}

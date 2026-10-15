@@ -5,401 +5,129 @@ description: Read saved Test Design runs for repeatability, then judge one cheap
 
 # How to Measure Repeatability and Compare One Configuration with TEA
 
-**Bottom line:** Use this guide to ask two questions of evidence you already hold. First, does an unchanged workflow produce the same result when it runs again? Second, when exactly one factor changes (the model, the effort setting or one prompt region), does the cheaper configuration stay good enough and cost less? The reader works offline on saved records. It makes no model call, runs no workflow and never accepts a baseline. **Its output is an advisory analysis. Adoption stays a human decision.**
+**Bottom line:** This guide answers two questions from records you already hold. Does an unchanged workflow give the same result when it runs again? When exactly one setting changes (the model, the effort or one prompt region), does the cheaper configuration stay good enough and cost less? The answer is an advisory analysis. **Adoption stays a human decision.**
 
-## What the Reader Does
+## Who This Is For
 
-The reader is `test/lib/configuration-experiment.js` in a TEA repository checkout. It has no `tea-*` command of its own and leaves normal Evaluate runs and verdicts unchanged.
+This is an optional tool for TEA maintainers. You run it from a TEA repository checkout as `node test/lib/configuration-experiment.js`. It is not a `tea-evaluate` command, and the Evaluate skill does not prepare its inputs. It works offline on saved records: it makes no model call, runs no workflow and accepts no baseline.
 
-| You give it                                      | It returns                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| A frozen `experiment.json` declaration           | Whether the declaration is complete and unchanged since freezing     |
-| Saved Test Design runs or your own evidence rows | Per-case success fractions, metric spread and native stability       |
-| The saved documents                              | A replay of the deterministic scorer, kept apart from the native run |
-| A second arm and a declared changed factor       | A paired contrast with explicit gates and a decision                 |
+Run every command below from the repository root. The first three read committed fixtures; the last reads the report the paired analysis writes. Field rules, file formats and the full decision order live in the [Configuration Experiment Reader](/docs/reference/configuration-experiment-reader.md) reference.
 
-It writes three files: `experiment-report.json`, `experiment-report.md` and `evidence-index.json`. The index has one row per attempt. Failed, canceled, invalid and retried attempts stay in it. Every aggregate in the report lists the attempts it came from, and the index holds each of them.
+## 1. Measure Repeatability
 
-## 1. Read What You Already Have
-
-Start with repeatability. It needs no candidate and no budget. Declare the baseline once, freeze it and point the reader at the saved runs.
-
-This declaration matches the two recorded Test Design runs in `test/results/codex-test-design/raw/`:
-
-```json
-{
-  "schemaVersion": "1.0.0",
-  "experimentId": "test-design-baseline-repeatability",
-  "stage": "baseline",
-  "scope": {
-    "workflow": "bmad-tea-test-design",
-    "owner": "TEA maintainers",
-    "claim": "fixed-suite",
-    "judge": "none",
-    "objective": "repeatability",
-    "baseline": {
-      "id": "incumbent",
-      "description": "The Test Design workflow as installed, unchanged."
-    },
-    "candidate": null,
-    "changedFactor": null,
-    "memberships": {
-      "development": ["seeded-offline-order-capture", "clean-last-sync-indicator"],
-      "validation": [],
-      "confirmation": []
-    },
-    "clusters": [
-      {
-        "caseId": "seeded-offline-order-capture",
-        "clusterId": "seeded-offline-order-capture",
-        "weight": 0.5
-      },
-      {
-        "caseId": "clean-last-sync-indicator",
-        "clusterId": "clean-last-sync-indicator",
-        "weight": 0.5
-      }
-    ]
-  },
-  "identity": {
-    "fixed": {
-      "suiteDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
-      "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
-      "groundTruthDigest": "record the digest of test/fixtures/test-design-eval/ground-truth.json",
-      "scorerDigest": "record the digest of test/eval-test-design.js",
-      "thresholdsDigest": "record the digest of the suite thresholds",
-      "rubricDigest": "not-applicable"
-    }
-  },
-  "design": {
-    "repeats": 2,
-    "order": "interleaved",
-    "isolation": "fresh staged workspace per attempt",
-    "maxAttempts": 1,
-    "stoppingRule": "fixed repeat schedule"
-  },
-  "gates": {
-    "success": {
-      "metrics": {
-        "groundedRiskRecall": 0.8,
-        "riskPrecision": 0.8,
-        "scaleComplianceAccuracy": 1,
-        "scoreArithmeticAccuracy": 1,
-        "categoryValidityAccuracy": 1,
-        "bandPlacementAccuracy": 1,
-        "riskIdWellFormedAccuracy": 1,
-        "riskLinkResolutionAccuracy": 1,
-        "priorityOrderingAccuracy": 1,
-        "coverageMappingAccuracy": 0.8
-      }
-    },
-    "critical": {
-      "tolerance": 0,
-      "rules": [
-        {
-          "id": "top-severity-risk-missed",
-          "count": "topSeverityMissed"
-        },
-        {
-          "id": "ungrounded-risk-reported",
-          "count": "ungroundedRisks"
-        }
-      ]
-    }
-  },
-  "resources": {
-    "authorization": null
-  }
-}
-```
-
-Freeze it by recording the digest of its bytes:
+Start here. Repeatability needs no candidate and no budget. The committed evidence file points the repeatability declaration at a recorded Test Design run with two cases at two repetitions each:
 
 ```bash
-node test/lib/configuration-experiment.js freeze experiment.json
+node test/lib/configuration-experiment.js analyze test/fixtures/configuration-experiment/baseline-evidence.json --out experiment-output/repeatability
 ```
 
-Add the printed value as `"frozen": { "digest": "sha256:…" }`. Any later edit changes the digest. The report then marks the digest as not matching, and a paired contrast is blocked. A declaration without a candidate gives the repeatability reading alone, so freezing is optional there. A paired contrast needs it.
+The reader writes `experiment-report.md`, `experiment-report.json` and `evidence-index.json` into the `--out` directory. It refuses to overwrite earlier output, so give each run its own directory. For each case the report shows:
 
-Describe the saved material in an evidence file. Relative paths resolve against the evidence file:
-
-```json
-{
-  "declaration": "experiment.json",
-  "recordedRuns": [
-    { "kind": "test-design", "dir": "test/results/codex-test-design/raw/two-run-before-numeric", "arm": "A", "stage": "baseline" }
-  ]
-}
-```
-
-Run the reader into a new directory. It never overwrites earlier outputs, and it stops if a recorded run no longer matches its manifest hashes:
-
-```bash
-node test/lib/configuration-experiment.js analyze evidence.json --out experiment-output
-```
-
-## 2. Read the Repeatability Report
-
-For each case the report shows:
-
-- **Success fraction.** Completed repetitions that meet the declared success rule, divided by completed repetitions. The rule is `gates.success`: every listed metric at or above its minimum, and no critical miss.
-- **Metric spread.** The minimum, maximum and range of each metric across repetitions. A metric with no denominator for a case (recall on a case with no seeded risks) is not applicable there and is left out.
-- **Native stability.** Whether every repetition signed the same under the suite's own stability signature, as the loaded native records hold it. A row without a loaded record has no known signature. When they differ, the report names the signature components that differ. A case can have a success fraction of 1 and still be unstable.
-- **Scorer replay.** The saved documents run twice through the deterministic scorer. Two identical runs show the scorer is deterministic. A difference from the recorded signature means the scorer changed since the capture. The replay is its own result and the native record stays as recorded.
+- **Success fraction:** completed repetitions that meet `gates.success`, over completed repetitions.
+- **Metric spread:** minimum, maximum and range of each metric across repetitions.
+- **Native stability:** whether every repetition produced the same native signature, and which signature components differ. A case can succeed every time and still be unstable. In this run both cases are unstable.
+- **Scorer replay:** each saved document scored twice. Two identical scorings show the scorer agreed with itself on those saved bytes. A difference from the recorded signature means the scorer's reading changed since the capture.
 
 Read these limits before you quote a number:
 
-- Runs captured earlier are imported historical evidence. A recorded workspace path is provenance. Only a fresh-workspace receipt shows that an attempt generated its deliverable, so imported runs are never counted as fresh trials.
-- Total variability across repetitions comes from the target. None of it is labeled judge noise.
-- Test Design scores with a parser, so judge variance is not applicable. A workflow that uses a rubric judge supplies repeated judgments of one frozen output, and the report then shows disagreement, missing verdicts and validity on labeled good and bad controls. A judge that is stable and wrong is invalid.
-- Two exposed cases show instability. They cannot establish noninferiority or population precision.
+- All variability across repetitions comes from the target. None of it is labeled judge noise.
+- Runs captured earlier are imported historical evidence. Only a fresh-workspace receipt shows that an attempt generated its document, so this report counts four imported trials and no fresh ones.
+- Two cases show instability. They cannot establish noninferiority or population precision.
 
-## 3. Compare One Configuration
+## 2. Choose One Change
 
-Run the contrast only when you have chosen a baseline, one candidate, the cases, the repeat count, the tolerances and the budget. Declaring them is a human decision made before any data is examined. This example shows the full shape:
+Pick one baseline and one candidate that differ in a single setting: the model, the effort (or one decode setting) or one prompt region. A second difference ends the comparison with `revised-design-required`. Choose the cases, the repeat count, the allowed quality loss, the required saving and the budget now, before you see any candidate result.
 
-```json
-{
-  "schemaVersion": "1.0.0",
-  "experimentId": "test-design-cheaper-model",
-  "stage": "selection",
-  "scope": {
-    "workflow": "bmad-tea-test-design",
-    "owner": "TEA maintainers",
-    "claim": "fixed-suite",
-    "judge": "none",
-    "objective": "cost",
-    "baseline": {
-      "id": "incumbent",
-      "description": "The Test Design workflow on the incumbent model at high effort."
-    },
-    "candidate": {
-      "id": "cheaper-model-v1",
-      "description": "The same workflow on one cheaper model at high effort."
-    },
-    "changedFactor": {
-      "kind": "model",
-      "setting": "model",
-      "detail": "incumbent model to cheaper model; nothing else differs"
-    },
-    "memberships": {
-      "development": ["seeded-offline-order-capture", "clean-last-sync-indicator"],
-      "validation": ["validation-case-1", "validation-case-2"],
-      "confirmation": ["confirmation-case-1", "confirmation-case-2", "confirmation-case-3", "confirmation-case-4"]
-    },
-    "clusters": [
-      {
-        "caseId": "seeded-offline-order-capture",
-        "clusterId": "seeded-offline-order-capture",
-        "weight": 0.25
-      },
-      {
-        "caseId": "clean-last-sync-indicator",
-        "clusterId": "clean-last-sync-indicator",
-        "weight": 0.25
-      },
-      {
-        "caseId": "validation-case-1",
-        "clusterId": "validation-case-1",
-        "weight": 0.25
-      },
-      {
-        "caseId": "validation-case-2",
-        "clusterId": "validation-case-2",
-        "weight": 0.25
-      }
-    ]
-  },
-  "identity": {
-    "fixed": {
-      "suiteDigest": "record the digest of the suite manifest entry",
-      "fixtureDigest": "record the digest of the staged fixtures",
-      "groundTruthDigest": "record the digest of test/fixtures/test-design-eval/ground-truth.json",
-      "scorerDigest": "record the digest of test/eval-test-design.js",
-      "thresholdsDigest": "record the digest of the suite thresholds",
-      "rubricDigest": "not-applicable",
-      "promptDigest": "record the digest of the task prompts",
-      "sourcePins": {
-        "tea": "record the TEA commit",
-        "evalQuality": "record the eval-quality version"
-      },
-      "environment": {
-        "runner": "record the runner and its version",
-        "cacheRegime": "cold cache on every attempt"
-      }
-    },
-    "arms": {
-      "A": {
-        "model": {
-          "requested": "incumbent-model-id",
-          "resolved": "record the model id the provider reports"
-        },
-        "effort": {
-          "requested": "high",
-          "applied": "record the effort the provider applied"
-        },
-        "decode": {
-          "temperature": "record the applied setting"
-        },
-        "promptDigest": "record the digest of the target package prompt"
-      },
-      "B": {
-        "model": {
-          "requested": "cheaper-model-id",
-          "resolved": "record the model id the provider reports for the cheaper model"
-        },
-        "effort": {
-          "requested": "high",
-          "applied": "record the effort the provider applied"
-        },
-        "decode": {
-          "temperature": "record the applied setting"
-        },
-        "promptDigest": "record the digest of the target package prompt"
-      }
-    }
-  },
-  "design": {
-    "repeats": 3,
-    "order": "interleaved",
-    "isolation": "fresh staged workspace per attempt; every deliverable regenerated",
-    "maxAttempts": 2,
-    "stoppingRule": "fixed repeat schedule; no early stop",
-    "failureRules": {
-      "timeout": "incomplete"
-    },
-    "analysis": {
-      "alpha": 0.05,
-      "B": 10000,
-      "seed": 20261014,
-      "prng": "mulberry32",
-      "quantile": "linear",
-      "simultaneous": true
-    }
-  },
-  "gates": {
-    "success": {
-      "metrics": {
-        "groundedRiskRecall": 0.8,
-        "riskPrecision": 0.8,
-        "scaleComplianceAccuracy": 1,
-        "scoreArithmeticAccuracy": 1,
-        "categoryValidityAccuracy": 1,
-        "bandPlacementAccuracy": 1,
-        "riskIdWellFormedAccuracy": 1,
-        "riskLinkResolutionAccuracy": 1,
-        "priorityOrderingAccuracy": 1,
-        "coverageMappingAccuracy": 0.8
-      }
-    },
-    "quality": {
-      "riskPrecision": {
-        "maxLoss": 0.05
-      },
-      "scaleComplianceAccuracy": {
-        "maxLoss": 0.05
-      },
-      "riskLinkResolutionAccuracy": {
-        "maxLoss": 0.05
-      }
-    },
-    "floors": {
-      "riskPrecision": 0.8
-    },
-    "saving": {
-      "minFraction": 0.25
-    },
-    "critical": {
-      "tolerance": 0,
-      "rules": [
-        {
-          "id": "top-severity-risk-missed",
-          "count": "topSeverityMissed"
-        },
-        {
-          "id": "ungrounded-risk-reported",
-          "count": "ungroundedRisks"
-        }
-      ]
-    }
-  },
-  "resources": {
-    "authorization": null,
-    "overhead": []
-  },
-  "frozen": {
-    "digest": "sha256:3b5d6173637dc1c24cf7123dea4fbe97b7c0ed30c1205d00f43c480da2fc90ec"
-  }
-}
-```
+Repetitions sharpen the measurement of a case. They never count as extra cases, so the number of cases sets how much the comparison can show.
 
-`resources.authorization: null` means no live execution is authorized. The reader never runs anything either way.
+## 3. Declare Limits and Freeze
 
-The contrast needs all of the following, and names whatever is missing:
-
-- A frozen declaration whose digest matches.
-- Identity for both arms and for everything that stays fixed, including a cache regime leaf in `identity.fixed` (the example's `identity.fixed.environment.cacheRegime`) for the cache policy both arms run under. An unknown applied setting blocks the contrast.
-- Exactly one changed setting, named in `scope.changedFactor.setting`:
-
-  | Factor   | Setting                | What has to change together                              |
-  | -------- | ---------------------- | -------------------------------------------------------- |
-  | `model`  | `model`                | The requested model and the model the provider resolved  |
-  | `effort` | `effort`               | The requested effort and the effort the provider applied |
-  | `effort` | `decode.<name>`        | That one decode leaf                                     |
-  | `prompt` | `promptRegions.<name>` | That one prompt region and the whole `promptDigest`      |
-
-  Any other difference, a second decode leaf or a second prompt region included, stops the contrast with `revised-design-required`. So does a requested change the resolved or applied identity does not show.
-
-- Evidence rows that record the identity they ran under. A changed task, ground truth, rubric, scorer or threshold, or an arm that differs from its declaration, ends in `new-baseline-required`.
-- Verified evidence on every attempt, failed, canceled and retried ones included. A receipt and a row's numbers are claims until the reader checks them against a native record. The records come from run directories the reader loads and checks against their `manifest.json`: the evidence file lists them under `recordedRuns` or `nativeRuns`, every file the reader takes from a run has to be listed in its manifest, a run that fails its manifest yields no records, and two runs that hold different records under one reference are refused. A record holds the run's attempt identity, input hash (of its `prompt.txt`), output hash, signature, and qualification (`passed` for failure class `none`, `failed` for any other class, unknown when none is recorded). It also holds what the runner recorded for the attempt in `provenance.json`: `receipt` (with ISO 8601 `startedAt` and `endedAt` in order), `blockId`, `observed`, `usage`, `cost` and `latency`. A recorded `observed` identity has to agree with what `result.json` and the requested model show (suite always, and prompt, source commit and runner where it names them), or the run is refused. Without one the record holds what `result.json` shows, and a field the runner did not record is null, so a row that states it does not match. Every row names its record in `native.ref`, pins its run's manifest digest in `native.manifestSha256`, and repeats the record's case, repetition, `attempt` number, status, hashes, receipt, block, observed identity, usage, cost and latency, and any `signature` or `qualification` it states. The row also names its stage. Within a pair's arm the `attempt` numbers run 1, 2, and so on without a gap or a repeat; a row without one blocks. A row that completed or claims an artifact also carries the saved bytes in `outputText`; they hash to `outputSha256` and to the receipt's `artifactSha256`, and the deterministic scorer, run again over them, reproduces every required metric and every critical count on the row. An attempt that saved nothing records no output hash and no `artifactSha256`. The native gates (`gates.native.requireQualification`, `gates.native.requireStableSignatures`) read the records of verified attempts, and a missing verdict or signature blocks. The evidence index marks each attempt `verified` or `claimed`, lists what failed, and names the source of its record. A claimed attempt blocks the contrast. A candidate attempt left out of this stage blocks it too, unless it is labeled with the other paired stage and sits on that stage's own cases. For a Test Design declaration the command line supplies the scorer. A caller of `readExperiment` passes it as `replay`, and passes as `nativeRecords` the records `loadRecordedTestDesignRun` returns; an object built any other way is no native record. The Test Design scorer reads documents, so it cannot see fixture mutations in the workspace: a `fixtureMutations` critical rule stays claimed and blocks.
-- A complete pair for each planned case and repetition, with both arms in one pairing block named by `blockId`. A block holds one pair, and the pair's retries belong to it. The receipts' start times are the recorded dispatch order: every attempt of a block starts strictly before the next block's first attempt, and an `interleaved` schedule starts the two arms of a pair at different times. Equal start times across blocks show no order. A missing block, a block shared by two pairs, a pair split across blocks or an order off the declared schedule blocks the contrast. An attempt for a repetition the schedule does not plan blocks it too, and its charge stays in the cost totals.
-- Every critical count recorded as a nonnegative integer on every completed candidate attempt. A missing, negative or fractional count is unknown and blocks, and a row's `notApplicable` list cannot excuse it. A retry or failed attempt that saved an artifact is scored again like any other, so its counts have to match what its bytes show, and a negative or fractional count on any attempt blocks. Required metrics are recorded on every attempt. A required metric has to apply to every case, so gate on metrics that are defined for all of them.
-- All-in task cost for both arms when the objective is cost or a saving gate is declared, with `gates.saving.minFraction` in (0, 1). `resources.costScope.taskExecution` has to include `target` and `tools` and may add components. The judge scope counts only with a rubric judge and names no task component. A charged component in neither scope blocks the contrast, so no charge drops out of the saving gate.
-- Required metrics are rates in [0, 1]; a value outside that range on any attempt blocks, and an allowed quality loss stays below 1. A timeout scored as a failure (`design.failureRules.timeout: "failure"`) takes `failureMetricValue: 0`, the worst outcome on that scale, and every success minimum is then above 0. A candidate that completes no attempt at all blocks.
-- An exposure ledger that records which cases the candidate has seen. A confirmation declaration pins the ledger head it was frozen against in `exposure.ledgerHeadAtFreeze`, and a ledger that no longer extends that head is refused. A confirmation case that was exposed during selection, or used to confirm another candidate, is refused. A selection case that already served as confirmation is refused too.
-
-### Confirmation
-
-A confirmation runs only for a candidate whose selection cleared. Its declaration pins the frozen selection declaration in `selection.declarationDigest` (the value `freeze` printed) and the `selection-cleared` report the selection analysis wrote in `selection.reportDigest`:
+Write the declaration. The paired example at `test/fixtures/configuration-experiment/paired-example/experiment.json` lowers the effort from high to medium on the same model and changes nothing else; its full text and every field rule are in the [reference](/docs/reference/configuration-experiment-reader.md#paired-example). Then freeze it:
 
 ```bash
-node test/lib/configuration-experiment.js digest selection-output/experiment-report.json
+node test/lib/configuration-experiment.js freeze test/fixtures/configuration-experiment/paired-example/experiment.json
 ```
 
-The confirmation's evidence file names the selection's evidence file, as `"selection": "selection-evidence.json"`. The reader reads the selection again from that evidence, with the same scorer, and the report it gets has to match the pinned digest and read `selection-cleared`; an edited report never matches. A confirmation may change its stage, its confirmation cases and their clusters, its ledger pin and these two pins. Every other field stays as selection froze it: the candidate, the baseline, the identities, the gates and margins, the design and analysis, and the cost rules. Missing selection evidence, evidence that does not reproduce the pinned report, a selection that did not clear, or any other change blocks the confirmation. The ledger head the selection report recorded has to still be in the ledger.
+For your own experiment, copy `paired-example/` (or `baseline-evidence.json` and `example-baseline-experiment.json` for a repeatability reading) to a directory of your own, point the evidence file at your own run directories, edit the declaration, and freeze your copy.
 
-### The estimator
+Record the printed value as `"frozen": { "digest": "sha256:…" }`. The digest is the SHA-256 of the declaration's canonical JSON without the `frozen` block, so whitespace and key order do not change it and any other edit does. A paired contrast is blocked when the digest no longer matches. The digest carries no time: it cannot show when you froze the plan or that you froze it before seeing results, so commit the frozen declaration before you collect evidence.
 
-Each case is one cluster. The reader averages a cluster's repetitions within each arm, takes the paired difference (candidate minus baseline), and resamples whole clusters with replacement. Alpha, the resample count, the seed, the generator and the quantile convention are declared and frozen. The same draws serve every metric and the cost contrast. Repetitions improve the measurement of a case and never count as extra cases. Unequal weights and clusters that share a generated build stay descriptive-only. Before any bound can support a decision, the bootstrap must reproduce its reference fixtures, and the report says whether it did.
+## 4. Collect Evidence
 
-### The decision
+The contrast reads a recorded run directory per arm and an exposure ledger, listed in an evidence file such as `test/fixtures/configuration-experiment/paired-example/evidence.json`. Each attempt's `provenance.json` has to carry a fresh-workspace `receipt`, its pairing `blockId`, and the `observed` identity it ran under. It also has to carry its `cost` when `scope.objective` is `cost` or a saving gate is declared, and `latency` under a latency gate.
 
-Gates are checked in this order, and the first that applies decides:
+**Capturing these inputs is manual today.** No TEA runner writes `receipt`, `blockId`, `observed`, `usage`, `cost` or `latency` into `provenance.json`, and nothing outside the tests builds an exposure ledger. You add the fields, build the ledger and regenerate each run's manifest yourself, and you own their truth. There is no supported capture procedure to follow yet. The reference lists [every field](/docs/reference/configuration-experiment-reader.md#a-recorded-run-directory).
 
-1. An unusable or unfrozen declaration is `blocked`, and so is a confirmation without its pinned `selection-cleared` report.
-2. A changed measurement identity is `new-baseline-required`. An undeclared second change, or a declared setting that does not change on every identity it has to, is `revised-design-required`.
-3. A verified candidate critical miss is `rejected`, whatever the averages and costs say.
-4. A declared binding native gate that is red is `rejected`.
-5. Claimed evidence the reader cannot verify, an unverified critical miss, an unrecorded critical count, incomplete pairs, missing pairing blocks, a dispatch order off the declared schedule, unknown or unclassified required cost, unknown latency under a latency gate, non-finite data or an unusable ledger are `blocked`.
-6. An unsupported design is `descriptive-only`.
-7. Too few clusters, a degenerate interval or an uncalibrated bootstrap is `inconclusive`.
-8. Every required lower bound must strictly exceed its threshold: the quality bound above the negative of the allowed loss, the saving bound above zero for the contrast `(1 - minFraction) * baseline cost - candidate cost`, so a candidate has to cost less than the baseline by more than the declared `gates.saving.minFraction`, each absolute floor and any latency limit. Equality does not pass. A failed bound is `inconclusive`, because failing to show noninferiority is not proof of loss.
+A cost that was never recorded stays unknown. It never counts as zero, and an unknown cost that a cost objective or saving gate needs blocks the contrast.
 
-A passing selection run reports `selection-cleared`. Only a confirmation on untouched cases reports `recommend`. A recommendation names a configuration and carries no authority. It applies no patch, accepts no baseline and carries no native verdict.
+The paired example reuses one recorded run's documents for both arms, with receipts, identities and costs written in by hand. It demonstrates the files and the report, and its numbers are no measurement.
 
-## Cost and Latency
+## 5. Analyze
 
-The report lists task-execution cost, judge cost and total experiment cost separately. Retries, canceled and failed attempts stay in the totals. A component that is not recorded is unknown, and one unknown component makes its total unknown. Tokens become money only through a complete price sheet in `resources.pricing` over complete usage. Overhead outside the attempts (preflight, calibration, diagnostics) is declared in `resources.overhead`. Recorded Test Design runs carry no usage, so they can show repeatability and no saving. Under a declared latency gate, unknown or negative task latency blocks the contrast.
+```bash
+node test/lib/configuration-experiment.js analyze test/fixtures/configuration-experiment/paired-example/evidence.json --out experiment-output/paired
+```
 
-## How You Know It Worked
+The reader verifies every attempt against its manifest, receipt and saved bytes, scores the bytes again, checks the pairs and their order, then decides. This is the paired section of `experiment-output/paired/experiment-report.md`:
 
-The Markdown report opens with the decision and its reasons. The JSON report carries the same fields, the declaration digest, the schema and analysis versions, the denominator reconciliation, every exclusion and the source limitations.
+```text
+## Paired contrast
 
-## Related Guides
+Decision: **inconclusive**
 
-- [How to Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md): Native comparison and baseline acceptance
-- [How to Choose an Evaluator and Calibrate a Judge](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md): Judge calibration against labels
+- degenerate interval (all cluster contrasts equal) for quality:riskPrecision, quality:scaleComplianceAccuracy, quality:riskLinkResolutionAccuracy, floor:riskPrecision: diagnostic only, not proof of zero uncertainty
 
-## Reference
+Adoption would require explicit human approval of the exact configuration bytes and destination.
 
-- [How Evaluate Works](/docs/explanation/how-evaluate-works.md): Qualification, held-out probes and the limits of a pass
+| Arm | Attempts | Completed | Errors | Canceled | Task cost | Task latency (ms) |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 4 | 4 | 0 | 0 | 1.6 USD | unknown |
+| B | 4 | 4 | 0 | 0 | 0.5 USD | unknown |
+
+| Gate | Threshold | Lower bound | Result |
+| --- | --- | --- | --- |
+| quality:riskPrecision | -0.05 | 0 | clears |
+| quality:scaleComplianceAccuracy | -0.05 | 0 | clears |
+| quality:riskLinkResolutionAccuracy | -0.05 | 0 | clears |
+| floor:riskPrecision | 0 | 0.2 | clears |
+| saving | 0 | 0.125 | clears |
+```
+
+Each quality row compares the lower bound of candidate minus baseline with the negative of its `gates.quality.<metric>.maxLoss`. The floor row shows the margin above the declared floor, and the saving row is the contrast `(1 - minFraction) * baseline cost - candidate cost`, which has to stay above zero.
+
+Every bound clears, and the decision is still `inconclusive`. Both arms hold the same documents, so every case shows the same quality difference and the interval has no width. The reader treats that as too little evidence to decide. The saving clears because the hand-written costs differ.
+
+The decision is one of these outcomes:
+
+| Outcome                   | What it means                                                                                                                            | What you do next                                                                                                                                                                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blocked`                 | The declaration is incomplete or unfrozen, or the evidence is missing, unverifiable, unpaired or out of order. The reasons name each gap | Fix what the reasons name and analyze into a new directory                                                                                                                                                                                                          |
+| `new-baseline-required`   | Something both arms should share changed: task, ground truth, rubric, scorer, thresholds, or an arm's own identity                       | Measure the baseline again under the current identity and declare a new experiment                                                                                                                                                                                  |
+| `revised-design-required` | More than the declared setting differs, or the declared setting did not change everywhere it has to                                      | Redesign so exactly one setting changes, and freeze a new declaration                                                                                                                                                                                               |
+| `rejected`                | A verified candidate critical miss, or a binding native gate that is red. Savings never override it                                      | Drop the candidate                                                                                                                                                                                                                                                  |
+| `descriptive-only`        | The design is unsupported, for example unequal case weights or cases that share a generated build                                        | Read the numbers as description; redesign with equal, independent cases to get a decision                                                                                                                                                                           |
+| `inconclusive`            | Too few cases, an interval with no width, an uncalibrated bootstrap, or a lower bound that misses its threshold                          | Too few cases or a missed bound: add cases and run again. No width: the cases need to differ, because identical results give no measure of uncertainty. Uncalibrated bootstrap: the reader's statistics need repair before any decision. None of these shows a loss |
+| `aa-control`              | Both arms have the same configuration                                                                                                    | Use it as a noise check; declare a real change to compare                                                                                                                                                                                                           |
+| `selection-cleared`       | Every gate clears on the selection cases                                                                                                 | Freeze a confirmation on cases the candidate has never seen                                                                                                                                                                                                         |
+| `recommend`               | Every gate clears on untouched confirmation cases                                                                                        | Review the exact configuration and approve or decline it by hand                                                                                                                                                                                                    |
+
+## 6. Confirm on Untouched Cases
+
+A selection that clears earns a confirmation; only a confirmation on cases the candidate has never seen can return `recommend`. Print the digest of the selection report:
+
+```bash
+node test/lib/configuration-experiment.js digest experiment-output/paired/experiment-report.json
+```
+
+The example's selection is `inconclusive`, so it cannot go on to confirmation. With a `selection-cleared` report, pin that digest and the selection declaration's digest in the confirmation declaration, point its evidence file at the selection evidence, and analyze. The confirmation may change only its stage, its cases and their clusters, its ledger pin and these two pins. The [reference](/docs/reference/configuration-experiment-reader.md#confirmation-pins) lists the rules.
+
+## 7. Approve by Hand
+
+`recommend` names a configuration and carries no authority. The reader applies no patch, accepts no baseline and records no native verdict. A maintainer reviews the exact configuration bytes and where they go, then adopts or declines them.
+
+## Related
+
+- [Configuration Experiment Reader](/docs/reference/configuration-experiment-reader.md): commands, fields, rules and the full decision order
+- [How to Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md): native comparison and baseline acceptance
+- [How to Choose an Evaluator and Calibrate a Judge](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md): judge calibration against labels
+- [How Evaluate Works](/docs/explanation/how-evaluate-works.md): qualification, held-out probes and the limits of a pass

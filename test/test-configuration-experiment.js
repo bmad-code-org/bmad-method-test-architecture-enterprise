@@ -6,7 +6,9 @@
  * No live call and no subprocess except the reader's own command line. The synthetic
  * fixtures are built here; the repository-backed fixtures are the recorded Test
  * Design runs under `test/results/codex-test-design/raw/two-run-before-numeric/` and
- * `two-run-after-numeric/`, read first for what they actually contain.
+ * `two-run-after-numeric/`, read first for what they actually contain, and the
+ * paired example under `test/fixtures/configuration-experiment/paired-example/`,
+ * which the how-to guide runs command by command.
  *
  * The statistics are held to a reference calculation written in this file. It uses
  * BigInt arithmetic for the generator and its own quantile, shares no helper with the
@@ -30,7 +32,9 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const READER = path.join(__dirname, 'lib', 'configuration-experiment.js');
 const RAW = path.join(__dirname, 'results', 'codex-test-design', 'raw');
 const EXAMPLES = path.join(__dirname, 'fixtures', 'configuration-experiment');
+const PAIRED = path.join(EXAMPLES, 'paired-example');
 const DOC = path.join(PROJECT_ROOT, 'docs', 'how-to', 'evaluate', 'measure-repeatability-and-compare-a-configuration.md');
+const REFERENCE_DOC = path.join(PROJECT_ROOT, 'docs', 'reference', 'configuration-experiment-reader.md');
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 const failures = [];
@@ -1732,6 +1736,10 @@ function exampleBaseline() {
   return JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'example-baseline-experiment.json'), 'utf8'));
 }
 
+function pairedExample() {
+  return JSON.parse(fs.readFileSync(path.join(PAIRED, 'experiment.json'), 'utf8'));
+}
+
 async function checkRecordedRuns() {
   const groundTruth = await loadGroundTruth();
   const replay = experiment.testDesignReplay({ groundTruth });
@@ -1780,13 +1788,17 @@ async function checkRecordedRuns() {
     );
   }
 
-  // The example contrast gates only on metrics that every recorded case defines.
-  const contrastExample = JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'example-contrast-experiment.json'), 'utf8'));
+  // The paired example gates only on metrics that every recorded case defines.
+  const contrastExample = pairedExample();
   for (const [name, run] of Object.entries(loaded)) {
-    for (const metric of [...Object.keys(contrastExample.gates.quality), ...Object.keys(contrastExample.gates.floors)]) {
+    for (const metric of [
+      ...Object.keys(contrastExample.gates.success.metrics),
+      ...Object.keys(contrastExample.gates.quality),
+      ...Object.keys(contrastExample.gates.floors),
+    ]) {
       check(
         run.rows.every((row) => Number.isFinite(row.metrics[metric])),
-        `${name}: ${metric}, which the example contrast gates on, is defined for every recorded attempt`,
+        `${name}: ${metric}, which the paired example gates on, is defined for every recorded attempt`,
       );
     }
   }
@@ -2070,6 +2082,10 @@ function checkAcceptance10() {
   check(!experiment.verifyLedger(edited).ok, 'editing an exposure entry breaks the chain');
   const reordered = [ledger[1], ledger[0], ...ledger.slice(2)];
   check(!experiment.verifyLedger(reordered).ok, 'reordering entries breaks the chain');
+  check(
+    experiment.verifyLedger(ledger.slice(0, 3)).ok,
+    'dropping entries from the end leaves a valid chain, as the reference says; only a pinned head protects them',
+  );
   check(
     !experiment.verifyLedger(ledger.slice(0, 3), [{ head: ledger[5].hash, length: 6 }]).ok,
     'a ledger shorter than a pinned head is refused',
@@ -2902,19 +2918,23 @@ function checkDeclarations() {
     baseline.design.repeats === 2 && baseline.scope.memberships.development.length === 2,
     'the example baseline matches the recorded two-case, two-repetition runs',
   );
-  const contrastExample = JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'example-contrast-experiment.json'), 'utf8'));
+  const contrastExample = pairedExample();
   const contrastValidation = experiment.validateDeclaration(contrastExample);
   check(
     contrastValidation.problems.length === 0 && contrastValidation.pairedProblems.length === 0,
-    `the example contrast declaration is complete: ${JSON.stringify([...contrastValidation.problems, ...contrastValidation.pairedProblems])}`,
+    `the paired example declaration is complete: ${JSON.stringify([...contrastValidation.problems, ...contrastValidation.pairedProblems])}`,
   );
-  check(contrastValidation.frozen.matches === true, 'the example contrast declaration carries the digest of its own bytes');
-  check(contrastExample.resources.authorization === null, 'the example authorizes no live execution');
+  check(contrastValidation.frozen.matches === true, 'the paired example declaration carries the digest of its own bytes');
+  check(contrastExample.resources.authorization === null, 'the paired example authorizes no live execution');
   const exampleRead = experiment.readExperiment({ declaration: contrastExample, attempts: [] });
-  check(['blocked', 'new-baseline-required'].includes(outcomeOf(exampleRead)), 'the example declaration alone decides nothing');
+  check(['blocked', 'new-baseline-required'].includes(outcomeOf(exampleRead)), 'the paired declaration alone decides nothing');
+
+  // The reference page shows both declarations as they are committed; the how-to guide
+  // stays a task flow and links there.
   const docText = fs.existsSync(DOC) ? fs.readFileSync(DOC, 'utf8') : '';
+  const referenceText = fs.existsSync(REFERENCE_DOC) ? fs.readFileSync(REFERENCE_DOC, 'utf8') : '';
   const shown = new Set(
-    [...docText.matchAll(/```json\n([\s\S]*?)\n```/g)].flatMap((match) => {
+    [...referenceText.matchAll(/```json\n([\s\S]*?)\n```/g)].flatMap((match) => {
       try {
         return [canonicalJsonOf(JSON.parse(match[1]))];
       } catch {
@@ -2922,17 +2942,40 @@ function checkDeclarations() {
       }
     }),
   );
-  check(shown.has(canonicalJsonOf(contrastExample)), 'the operator page shows the example contrast declaration');
-  check(shown.has(canonicalJsonOf(baseline)), 'the operator page shows the example baseline declaration');
+  check(shown.has(canonicalJsonOf(contrastExample)), 'the reference page shows the paired example declaration');
+  check(shown.has(canonicalJsonOf(baseline)), 'the reference page shows the example baseline declaration');
   for (const heading of [
-    '## What the Reader Does',
-    '## 1. Read What You Already Have',
-    '## 3. Compare One Configuration',
-    '### The decision',
+    '## Commands',
+    '### The declaration digest',
+    '## The Declaration',
+    '### Capturing paired inputs',
+    '### Rewriting a manifest',
+    '## The Decision Order',
   ]) {
-    check(docText.includes(heading), `the operator page has "${heading}"`);
+    check(referenceText.includes(heading), `the reference page has "${heading}"`);
   }
-  check(!/story|_bmad-output|pull request|PR #/i.test(docText), 'the operator page names no story, planning path or review process');
+  for (const heading of [
+    '## Who This Is For',
+    '## 1. Measure Repeatability',
+    '## 2. Choose One Change',
+    '## 3. Declare Limits and Freeze',
+    '## 4. Collect Evidence',
+    '## 5. Analyze',
+    '## 6. Confirm on Untouched Cases',
+    '## 7. Approve by Hand',
+  ]) {
+    check(docText.includes(heading), `the how-to guide has "${heading}"`);
+  }
+  check(!/```json/.test(docText), 'the how-to guide leaves the declarations to the reference page');
+  for (const outcome of Object.values(experiment.OUTCOMES)) {
+    check(new RegExp(`^\\| \`${outcome}\` +\\|`, 'm').test(docText), `the how-to guide's outcome table explains ${outcome}`);
+  }
+  for (const [name, text] of [
+    ['how-to guide', docText],
+    ['reference page', referenceText],
+  ]) {
+    check(!/\bstor(?:y|ies)\b|_bmad-output|pull request|PR #/i.test(text), `the ${name} names no story, planning path or review process`);
+  }
 }
 
 function checkOutputsAndCommandLine() {
@@ -2995,7 +3038,7 @@ function checkOutputsAndCommandLine() {
       encoding: 'utf8',
       cwd: PROJECT_ROOT,
     });
-    check(again.status !== 0, 'the command line refuses to overwrite earlier outputs');
+    check(again.status === 1, `the command line refuses to overwrite earlier outputs with exit 1, got ${again.status}`);
     const digest = spawnSync(process.execPath, [READER, 'freeze', path.join(EXAMPLES, 'example-baseline-experiment.json')], {
       encoding: 'utf8',
       cwd: PROJECT_ROOT,
@@ -3109,6 +3152,216 @@ function checkOutputsAndCommandLine() {
     malformed.report.exclusions.filter((entry) => entry.reason === 'malformed-row').length === 3,
     'malformed rows are excluded with a reason',
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The how-to guide, run as a maintainer runs it                                 */
+/* -------------------------------------------------------------------------- */
+
+const READER_COMMAND = 'node test/lib/configuration-experiment.js ';
+
+/** Every non-empty, non-comment line of a page's bash blocks, in page order. */
+function bashLines(text) {
+  return [...text.matchAll(/```bash\n([\s\S]*?)\n```/g)]
+    .flatMap((match) => match[1].split('\n'))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+}
+
+/** The report excerpt the how-to guide shows: its one `text` block. */
+function guideExcerpt(docText) {
+  const blocks = [...docText.matchAll(/```text\n([\s\S]*?)\n```/g)].map((match) => match[1]);
+  return blocks.length === 1 ? blocks[0] : null;
+}
+
+/**
+ * Every reader command the how-to guide shows runs from the repository root, with each
+ * `--out` directory moved into a scratch directory and later arguments under it moved
+ * along. What the page says about the output has to be what the reader writes: the
+ * excerpt is a verbatim part of the paired report, `freeze` prints the committed digest,
+ * the paired outcome is the one the page explains, and every paired attempt verifies.
+ * The paired fixture reuses the recorded run's documents byte for byte.
+ */
+function checkRunnableGuide() {
+  const docText = fs.existsSync(DOC) ? fs.readFileSync(DOC, 'utf8') : '';
+  const lines = bashLines(docText);
+  const strays = lines.filter((line) => !line.startsWith(READER_COMMAND));
+  check(strays.length === 0, `every line of the how-to guide's bash blocks is a reader command the check runs: ${strays.join(' | ')}`);
+  const commands = lines.filter((line) => line.startsWith(READER_COMMAND));
+  const verbs = commands.map((command) => command.split(/\s+/)[2]);
+  check(
+    verbs.includes('analyze') && verbs.includes('freeze') && verbs.includes('digest'),
+    `the how-to guide shows the analyze, freeze and digest commands, got: ${verbs.join(', ')}`,
+  );
+  const excerpt = guideExcerpt(docText);
+  check(excerpt !== null, 'the how-to guide shows exactly one report excerpt in a text block');
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-experiment-guide-'));
+  const moved = new Map();
+  const relocate = (arg) => {
+    for (const [from, to] of moved) {
+      if (arg === from || arg.startsWith(`${from}/`)) return `${to}${arg.slice(from.length)}`;
+    }
+    return path.resolve(PROJECT_ROOT, arg);
+  };
+  const resolveArg = (arg) => (arg.startsWith('-') || !/[./]/.test(arg) ? arg : relocate(arg));
+  try {
+    const runs = [];
+    for (const [index, command] of commands.entries()) {
+      const [, script, ...args] = command.split(/\s+/);
+      const outIndex = args.indexOf('--out');
+      if (outIndex !== -1) {
+        const out = args[outIndex + 1];
+        check(
+          typeof out === 'string' && !path.isAbsolute(out) && !out.startsWith('..'),
+          `the guide writes into a directory under the repository root: ${command}`,
+        );
+        check(!moved.has(out), `two of the guide's commands write into ${out}, and the second would be refused`);
+        moved.set(out, path.join(directory, `out-${index}`));
+      }
+      const run = spawnSync(process.execPath, [path.resolve(PROJECT_ROOT, script), ...args.map(resolveArg)], {
+        encoding: 'utf8',
+        cwd: PROJECT_ROOT,
+        timeout: 60_000,
+      });
+      check(run.status === 0, `the guide's command succeeds from the repository root: ${command}: ${run.stderr}`);
+      runs.push({ command, verb: args[0], file: args[1], out: outIndex === -1 ? null : relocate(args[outIndex + 1]), run });
+    }
+
+    const evidenceFor = (fixture) => runs.find((entry) => entry.verb === 'analyze' && entry.file === fixture && entry.run.status === 0);
+    const readOut = (entry, name) => fs.readFileSync(path.resolve(entry.out, name), 'utf8');
+
+    const repeatability = evidenceFor('test/fixtures/configuration-experiment/baseline-evidence.json');
+    check(repeatability !== undefined, 'the guide measures repeatability from the committed baseline evidence');
+    if (repeatability) {
+      const report = JSON.parse(readOut(repeatability, 'experiment-report.json'));
+      check(report.contrast.status === 'not-requested', 'the repeatability step reads no contrast');
+      check(
+        report.descriptive.importedHistoricalTrials === 4 && report.descriptive.freshIndependentTrials === 0,
+        'the repeatability step counts four imported trials and no fresh ones, as the guide says',
+      );
+      check(
+        report.descriptive.groups.every((group) => group.cases.every((entry) => entry.stability.stable === false)),
+        'both recorded cases are unstable, as the guide says',
+      );
+    }
+
+    for (const entry of runs.filter((candidate) => candidate.verb === 'freeze')) {
+      const declared = JSON.parse(fs.readFileSync(path.resolve(PROJECT_ROOT, entry.file), 'utf8'));
+      check(
+        entry.run.stdout.trim() === declared.frozen?.digest,
+        `${entry.command} prints the frozen.digest committed in ${entry.file}, got ${entry.run.stdout.trim()}`,
+      );
+    }
+
+    const paired = evidenceFor('test/fixtures/configuration-experiment/paired-example/evidence.json');
+    check(paired !== undefined, 'the guide analyzes the committed paired example');
+    if (paired) {
+      const markdown = readOut(paired, 'experiment-report.md');
+      check(
+        excerpt !== null && markdown.includes(excerpt),
+        `the how-to guide's report excerpt is a verbatim part of the paired experiment-report.md; the reader now writes:\n${markdown}`,
+      );
+      const report = JSON.parse(readOut(paired, 'experiment-report.json'));
+      check(
+        report.contrast.decision?.outcome === 'inconclusive',
+        `the paired example is inconclusive, got ${report.contrast.decision?.outcome}: ${(report.contrast.decision?.reasons ?? []).join(' | ')}`,
+      );
+      check(
+        report.contrast.gates.length > 0 && report.contrast.gates.every((gate) => gate.passes),
+        'every bound of the paired example clears, so degeneracy alone keeps it inconclusive, as the guide says',
+      );
+      const index = JSON.parse(readOut(paired, 'evidence-index.json'));
+      check(
+        index.rows.length === 8 && index.rows.every((row) => row.verification === 'verified'),
+        `every paired attempt is verified: ${index.rows.map((row) => `${row.attemptId} ${row.verification}`).join(', ')}`,
+      );
+      for (const entry of runs.filter((candidate) => candidate.verb === 'digest')) {
+        const saved = JSON.parse(fs.readFileSync(relocate(entry.file), 'utf8'));
+        check(entry.run.stdout.trim() === experiment.digestOf(saved), `${entry.command} prints the digest of the report it names`);
+      }
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+
+  // Both arms of the paired example hold the recorded run's documents, prompts and
+  // result byte for byte; only provenance.json and the manifest differ.
+  const recorded = path.join(RAW, 'two-run-before-numeric');
+  const caseFolders = fs.readdirSync(path.join(recorded, 'cases')).sort();
+  for (const arm of ['incumbent-run', 'candidate-run']) {
+    const armDir = path.join(PAIRED, arm);
+    check(
+      canonicalJsonOf(fs.readdirSync(path.join(armDir, 'cases')).sort()) === canonicalJsonOf(caseFolders),
+      `${arm} holds the recorded run's case folders`,
+    );
+    const files = [
+      'result.json',
+      ...caseFolders.flatMap((folder) => ['observation.json', 'prompt.txt'].map((name) => `cases/${folder}/${name}`)),
+    ];
+    for (const file of files) {
+      const copy = path.join(armDir, file);
+      check(
+        fs.existsSync(copy) && fs.readFileSync(copy).equals(fs.readFileSync(path.join(recorded, file))),
+        `${arm}/${file} has the recorded run's bytes`,
+      );
+    }
+  }
+}
+
+/**
+ * The reference page's two `node -e` recipes run verbatim from the repository root:
+ * the ledger recipe prints the paired example's committed ledger, and the manifest
+ * recipe, pointed at a copy of the candidate run whose manifest was broken first,
+ * writes the committed manifest byte for byte.
+ */
+function checkReferenceRecipes() {
+  const referenceText = fs.existsSync(REFERENCE_DOC) ? fs.readFileSync(REFERENCE_DOC, 'utf8') : '';
+  const recipes = bashLines(referenceText).filter((line) => line.startsWith('node -e '));
+  const ledgerRecipe = recipes.find((line) => line.includes('appendExposure'));
+  const manifestRecipe = recipes.find((line) => line.includes("'manifest.json'"));
+  check(
+    recipes.length === 2 && ledgerRecipe && manifestRecipe,
+    `the reference page shows the ledger and manifest recipes, got ${recipes.length}`,
+  );
+  const shell = (line) => spawnSync('/bin/sh', ['-c', line], { encoding: 'utf8', cwd: PROJECT_ROOT, timeout: 60_000 });
+
+  if (ledgerRecipe) {
+    const run = shell(ledgerRecipe);
+    const committed = JSON.parse(fs.readFileSync(path.join(PAIRED, 'evidence.json'), 'utf8')).ledger;
+    let printed = null;
+    try {
+      printed = JSON.parse(run.stdout);
+    } catch {
+      printed = null;
+    }
+    check(
+      run.status === 0 && canonicalJsonOf(printed) === canonicalJsonOf(committed),
+      `the ledger recipe prints the paired example's committed ledger: ${run.stderr}${run.stdout}`,
+    );
+  }
+
+  if (manifestRecipe) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-experiment-manifest-'));
+    try {
+      const copy = path.join(directory, 'candidate-run');
+      fs.cpSync(path.join(PAIRED, 'candidate-run'), copy, { recursive: true });
+      fs.writeFileSync(path.join(copy, 'manifest.json'), '{"files":[]}\n');
+      const target = manifestRecipe.split(' ').at(-1);
+      check(
+        target === 'test/fixtures/configuration-experiment/paired-example/candidate-run',
+        `the manifest recipe names a run directory last, got ${target}`,
+      );
+      const run = shell(`${manifestRecipe.slice(0, -target.length)}'${copy}'`);
+      check(
+        run.status === 0 &&
+          fs.readFileSync(path.join(copy, 'manifest.json')).equals(fs.readFileSync(path.join(PAIRED, 'candidate-run', 'manifest.json'))),
+        `the manifest recipe rewrites a broken manifest to the committed bytes: ${run.stderr}`,
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -4472,6 +4725,8 @@ async function main() {
   checkAdversarialInputs();
   checkRuleByRule();
   checkOutputsAndCommandLine();
+  checkRunnableGuide();
+  checkReferenceRecipes();
 
   if (failures.length > 0) {
     console.error(`${colors.red}configuration experiment: ${failures.length} failure(s) across ${checks} checks${colors.reset}`);

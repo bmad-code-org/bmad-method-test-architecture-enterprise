@@ -1,0 +1,433 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-10-14T00:32:13.422Z",
+  "mode": "live",
+  "repository": {
+    "commit": "2a90c6baaeff7a263a0f7777f441a87a07d98b04",
+    "dirty": false
+  },
+  "suite": {
+    "id": "test-design",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-test-design"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/test-design.contract.json",
+        "version": "7"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+    "promptDigest": "sha256:e114e910f40d0ffe4b4594c7b6ba27d301ea95a480cd988acba6bd6dfe894c9f",
+    "caseIds": [
+      "seeded-offline-order-capture",
+      "clean-last-sync-indicator"
+    ],
+    "cases": [
+      {
+        "id": "seeded-offline-order-capture",
+        "promptDigest": "sha256:5053f310f168e5f075c0a454b4859f282c64a452a3c87cf042b2388fd7004f7c"
+      },
+      {
+        "id": "clean-last-sync-indicator",
+        "promptDigest": "sha256:2d7c2c69e46bfd1b138b7f50c3c6b5216e5832604bcc09cd661f7046d2019b0c"
+      }
+    ],
+    "thresholds": {
+      "groundedRiskRecall": 0.8,
+      "riskPrecision": 0.8,
+      "scaleComplianceAccuracy": 1,
+      "scoreArithmeticAccuracy": 1,
+      "categoryValidityAccuracy": 1,
+      "bandPlacementAccuracy": 1,
+      "riskIdWellFormedAccuracy": 1,
+      "riskLinkResolutionAccuracy": 1,
+      "priorityOrderingAccuracy": 1,
+      "coverageMappingAccuracy": 0.8,
+      "maxUnscoredRiskTables": 0,
+      "maxUngroundedRisks": 0,
+      "maxTopSeverityMissed": 0,
+      "maxRiskCeilingExcess": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.162.1",
+      "model": "gpt-6.1-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 4,
+        "completed": 4
+      },
+      "measurements": {
+        "groundedRiskRecall": 1,
+        "riskPrecision": 1,
+        "scaleComplianceAccuracy": 0.8888888888888888,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": 1,
+        "coverageMappingAccuracy": 1,
+        "ungroundedRisks": 0,
+        "unscoredRiskTables": 0,
+        "topSeverityMissed": 0,
+        "riskCeilingExcess": 0,
+        "unstableCases": 2,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 1754994,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "scaleComplianceAccuracy",
+        "2 unstable case(s)"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "seeded-offline-order-capture",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":28,\"resolved\":28,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\",\"ok\":true,\"levels\":[\"Integration\"],\"reason\":null},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\",\"ok\":true,\"levels\":[\"API\",\"E2E\",\"Integration\"],\"reason\":null},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\",\"ok\":true,\"levels\":[\"Unit\",\"Integration\",\"Integration\",\"E2E\"],\"reason\":null},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\",\"ok\":true,\"levels\":[\"E2E\",\"API\"],\"reason\":null},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\",\"ok\":true,\"levels\":[\"E2E\",\"Integration\"],\"reason\":null}],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"}],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 5,
+            "groundedRiskRecall.numerator": 5,
+            "groundedRiskRecall.denominator": 5,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 8,
+            "riskPrecision.denominator": 8,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 8,
+            "scaleComplianceAccuracy.denominator": 8,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 8,
+            "scoreArithmeticAccuracy.denominator": 8,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 8,
+            "categoryValidityAccuracy.denominator": 8,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 8,
+            "bandPlacementAccuracy.denominator": 8,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 8,
+            "riskIdWellFormedAccuracy.denominator": 8,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 28,
+            "riskLinkResolutionAccuracy.denominator": 28,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 9,
+            "priorityOrderingAccuracy.numerator": 9,
+            "priorityOrderingAccuracy.denominator": 9,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 5,
+            "coverageMappingAccuracy.numerator": 5,
+            "coverageMappingAccuracy.denominator": 5,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "model-instability",
+          "reason": "unstable case",
+          "triage": [
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":8,\"wellFormedIds\":8,\"validCategories\":8,\"inScale\":8,\"arithmeticOk\":8,\"banded\":8,\"bandOk\":8,\"arithmeticTotal\":8},[],{\"total\":28,\"resolved\":28,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\",\"ok\":true,\"levels\":[\"Integration\"],\"reason\":null},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\",\"ok\":true,\"levels\":[\"API\",\"E2E\",\"Integration\"],\"reason\":null},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\",\"ok\":true,\"levels\":[\"Unit\",\"Integration\",\"Integration\",\"E2E\"],\"reason\":null},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\",\"ok\":true,\"levels\":[\"E2E\",\"API\"],\"reason\":null},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\",\"ok\":true,\"levels\":[\"E2E\",\"Integration\"],\"reason\":null}],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-r…sha256:67071f84fa754a2c1f143f764311530008408a54ace9b98139d16a11d862db1c"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-order-capture/test-artifacts/test-design/test-design-epic-7.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:8a33a859c6a59b8b6ca00b46aa4c546bea42d480fba3cfe4759b8b93f5180c73 --- runScope: 'epic' runKey: 'epic-7' workflowStatus: 'completed' totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-13' mode: 'epic-level' designLevel: 'full' executionMode: 'sequential' capabilityProbe: false inputDocuments: - 'field-order-capture/_bmad/config.toml' - 'field-order-capture/docs/epics/epic-7-offline-order-capture."
+            }
+          ]
+        },
+        {
+          "caseId": "seeded-offline-order-capture",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":6,\"wellFormedIds\":6,\"validCategories\":6,\"inScale\":6,\"arithmeticOk\":6,\"banded\":6,\"bandOk\":6,\"arithmeticTotal\":6},[],{\"total\":25,\"resolved\":25,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\",\"ok\":true,\"levels\":[\"Integration\"],\"reason\":null},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\",\"ok\":true,\"levels\":[\"Integration\",\"API\"],\"reason\":null},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\",\"ok\":true,\"levels\":[\"Integration\",\"Unit\",\"E2E\",\"Integration\",\"E2E\"],\"reason\":null},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\",\"ok\":true,\"levels\":[\"E2E\",\"API\"],\"reason\":null},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\",\"ok\":true,\"levels\":[\"E2E\",\"Integration\"],\"reason\":null}],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"data-sync-conflict-overwrite\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"tech-uncapped-retry-loop\",\"lower\":\"ops-no-release-kill-switch\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"}],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 5,
+            "groundedRiskRecall.numerator": 5,
+            "groundedRiskRecall.denominator": 5,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 6,
+            "riskPrecision.denominator": 6,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 6,
+            "scaleComplianceAccuracy.denominator": 6,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 6,
+            "scoreArithmeticAccuracy.denominator": 6,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 6,
+            "categoryValidityAccuracy.denominator": 6,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 6,
+            "bandPlacementAccuracy.denominator": 6,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 6,
+            "riskIdWellFormedAccuracy.denominator": 6,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 25,
+            "riskLinkResolutionAccuracy.denominator": 25,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 9,
+            "priorityOrderingAccuracy.numerator": 9,
+            "priorityOrderingAccuracy.denominator": 9,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 5,
+            "coverageMappingAccuracy.numerator": 5,
+            "coverageMappingAccuracy.denominator": 5,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "model-instability",
+          "reason": "unstable case",
+          "triage": [
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"seeded-offline-order-capture\",{\"sec-unencrypted-offline-queue\":true,\"data-sync-conflict-overwrite\":true,\"tech-uncapped-retry-loop\":true,\"perf-backlog-sync-budget\":true,\"ops-no-release-kill-switch\":true,\"payment-gateway-failure\":false,\"cross-tenant-data-leak\":false,\"browser-and-accessibility-regression\":false,\"data-residency-compliance\":false},{\"rows\":6,\"wellFormedIds\":6,\"validCategories\":6,\"inScale\":6,\"arithmeticOk\":6,\"banded\":6,\"bandOk\":6,\"arithmeticTotal\":6},[],{\"total\":25,\"resolved\":25,\"dangling\":[]},{\"declared\":5,\"matched\":5,\"matches\":[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\"},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\"},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\"},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\"},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\"}],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":8,\"excess\":0},[{\"riskId\":\"sec-unencrypted-offline-queue\",\"rowId\":\"R-001\",\"ok\":true,\"levels\":[\"Integration\"],\"reason\":null},{\"riskId\":\"data-sync-conflict-overwrite\",\"rowId\":\"R-002\",\"ok\":true,\"levels\":[\"Integration\",\"API\"],\"reason\":null},{\"riskId\":\"tech-uncapped-retry-loop\",\"rowId\":\"R-004\",\"ok\":true,\"levels\":[\"Integration\",\"Unit\",\"E2E\",\"Integration\",\"E2E\"],\"reason\":null},{\"riskId\":\"perf-backlog-sync-budget\",\"rowId\":\"R-003\",\"ok\":true,\"levels\":[\"E2E\",\"API\"],\"reason\":null},{\"riskId\":\"ops-no-release-kill-switch\",\"rowId\":\"R-005\",\"ok\":true,\"levels\":[\"E2E\",\"Integration\"],\"reason\":null}],[{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"data-sync-conflict-overwrite\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"tech-uncapped-retry-loop\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P0\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"perf-backlog-sync-budget\",\"resolvable\":true,\"ok\":true,\"higherPriority\":\"P0\",\"lowerPriority\":\"P1\"},{\"higher\":\"sec-unencrypted-offline-queue\",\"lower\":\"ops-no-r…sha256:07792ecdb0506446880f96f9dfe1aaeac0399dcb98334bb37ff12d66f3e29c70"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-order-capture/test-artifacts/test-design/test-design-epic-7.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:143ec3af8e8bc2b81bf8f96b41d315474aa213a338a8143b7ea445b491a3d0d1 --- runScope: 'epic' runKey: 'epic-7' workflowStatus: 'completed' totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-14T00:20:00.945000+00:00' inputDocuments: - 'field-order-capture/_bmad/config.toml' - 'field-order-capture/docs/epics/epic-7-offline-order-capture.md' - 'bmod-tea/knowledge/tea-index.csv' - 'bmod-tea/knowledge/risk-"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 0,
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 2,
+            "riskPrecision.denominator": 2,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 2,
+            "scaleComplianceAccuracy.denominator": 2,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 2,
+            "scoreArithmeticAccuracy.denominator": 2,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 2,
+            "categoryValidityAccuracy.denominator": 2,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 2,
+            "bandPlacementAccuracy.denominator": 2,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 2,
+            "riskIdWellFormedAccuracy.denominator": 2,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 8,
+            "riskLinkResolutionAccuracy.denominator": 8,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 0,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 0,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "model-instability",
+          "reason": "unstable case",
+          "triage": [
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":2,\"arithmeticOk\":2,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":2},[],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:1a5178aefe40d3a9b29d34f6ad2652de03ede7bce15196e76e56ff9a75d02aac --- workflowStatus: 'completed' runScope: 'epic' runKey: 'epic-9' mode: 'epic-level' design_level: 'full' tea_execution_mode: 'sequential' tea_capability_probe: false totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-13' inputDocuments: - field-sync-indicator/_bmad/config.toml - field-sync-indicator/docs/epics/epic-9-last-sync-in"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-last-sync-indicator",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":0,\"arithmeticOk\":0,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":0},[{\"id\":\"R-001\",\"check\":\"scale\",\"probability\":null,\"impact\":null},{\"id\":\"R-002\",\"check\":\"scale\",\"probability\":null,\"impact\":null}],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]",
+          "metricContributions": {
+            "groundedRiskRecall.expected": 0,
+            "groundedRiskRecall.numerator": 0,
+            "groundedRiskRecall.denominator": 0,
+            "groundedRiskRecall.threshold": 0.8,
+            "riskPrecision.numerator": 2,
+            "riskPrecision.denominator": 2,
+            "riskPrecision.threshold": 0.8,
+            "scaleComplianceAccuracy.numerator": 0,
+            "scaleComplianceAccuracy.denominator": 2,
+            "scaleComplianceAccuracy.threshold": 1,
+            "scoreArithmeticAccuracy.numerator": 0,
+            "scoreArithmeticAccuracy.denominator": 0,
+            "scoreArithmeticAccuracy.threshold": 1,
+            "categoryValidityAccuracy.numerator": 2,
+            "categoryValidityAccuracy.denominator": 2,
+            "categoryValidityAccuracy.threshold": 1,
+            "bandPlacementAccuracy.numerator": 2,
+            "bandPlacementAccuracy.denominator": 2,
+            "bandPlacementAccuracy.threshold": 1,
+            "riskIdWellFormedAccuracy.numerator": 2,
+            "riskIdWellFormedAccuracy.denominator": 2,
+            "riskIdWellFormedAccuracy.threshold": 1,
+            "riskLinkResolutionAccuracy.numerator": 8,
+            "riskLinkResolutionAccuracy.denominator": 8,
+            "riskLinkResolutionAccuracy.threshold": 1,
+            "priorityOrderingAccuracy.expected": 0,
+            "priorityOrderingAccuracy.numerator": 0,
+            "priorityOrderingAccuracy.denominator": 0,
+            "priorityOrderingAccuracy.threshold": 1,
+            "coverageMappingAccuracy.expected": 0,
+            "coverageMappingAccuracy.numerator": 0,
+            "coverageMappingAccuracy.denominator": 0,
+            "coverageMappingAccuracy.threshold": 0.8,
+            "ungroundedRisks": 0,
+            "maxUngroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "maxUnscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "maxTopSeverityMissed": 0,
+            "riskCeilingExcess": 0,
+            "maxRiskCeilingExcess": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "scaleComplianceAccuracy; unstable case",
+          "triage": [
+            {
+              "reason": "scaleComplianceAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "scaleComplianceAccuracy",
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-last-sync-indicator\",{\"data-loss-or-corruption\":false,\"unauthorized-exposure\":false,\"render-performance-degradation\":false,\"rollout-without-kill-switch\":false},{\"rows\":2,\"wellFormedIds\":2,\"validCategories\":2,\"inScale\":0,\"arithmeticOk\":0,\"banded\":2,\"bandOk\":2,\"arithmeticTotal\":0},[{\"id\":\"R-001\",\"check\":\"scale\",\"probability\":null,\"impact\":null},{\"id\":\"R-002\",\"check\":\"scale\",\"probability\":null,\"impact\":null}],{\"total\":8,\"resolved\":8,\"dangling\":[]},{\"declared\":0,\"matched\":0,\"matches\":[],\"missed\":[],\"topSeverityMissed\":0},[],{\"maxRisks\":3,\"excess\":0},[],[],false,[],0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:13c2b38044f738f1c1c412812d6b996fa44d7fa6f4781f1ef2ea730ec62bbd9a --- runScope: 'epic' runKey: 'epic-9' workflowStatus: 'completed' totalSteps: 5 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output'] lastStep: 'step-05-generate-output' nextStep: '' lastSaved: '2026-10-13' mode: 'epic-level' designLevel: 'full' executionMode: 'sequential' capabilityProbe: false inputDocuments: - field-sync-indicator/_bmad/config.toml - field-sync-indicator/docs/epics/epic-9-last-sync-indicator.md "
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 1755094,
+  "failureClass": "quality",
+  "exitCode": 1
+}

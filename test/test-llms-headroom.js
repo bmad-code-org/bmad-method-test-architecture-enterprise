@@ -22,7 +22,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { LLM_MAX_CHARS, LLM_MIN_HEADROOM_CHARS, LLM_WARN_CHARS, buildLlmsFullText, llmSizeStatus } = require('../tools/build-docs');
+const {
+  LLM_MAX_CHARS,
+  LLM_MIN_HEADROOM_CHARS,
+  LLM_WARN_CHARS,
+  LLM_EXCLUDE_PATTERNS,
+  buildLlmsFullText,
+  buildLlmsTxt,
+  llmsTxtLinkProblems,
+  llmSizeStatus,
+} = require('../tools/build-docs');
 
 const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 
@@ -92,6 +101,26 @@ function main() {
     headroomProblem('x'.repeat(LLM_WARN_CHARS + 1)) === null,
     llmSizeStatus(LLM_WARN_CHARS + 1).level === 'ok',
     'the warning and the test agree',
+  );
+
+  // A page moved out of the bundle stays reachable: llms.txt links every excluded page, and every page link resolves.
+  const llmsTxt = buildLlmsTxt();
+  assert.deepEqual(llmsTxtLinkProblems(llmsTxt, DOCS_ROOT), [], 'llms.txt links every page the bundle leaves out');
+  const dropped = LLM_EXCLUDE_PATTERNS.find((pattern) => pattern !== '404.md');
+  const withoutLink = llmsTxt
+    .split('\n')
+    .filter((line) => !line.includes(`/${dropped})`))
+    .join('\n');
+  assert.notEqual(withoutLink, llmsTxt, `llms.txt has a line linking ${dropped}`);
+  assert.deepEqual(
+    llmsTxtLinkProblems(withoutLink, DOCS_ROOT),
+    [`${dropped} is left out of llms-full.txt and llms.txt does not link it`],
+    'dropping one excluded page from llms.txt names that page',
+  );
+  assert.match(
+    llmsTxtLinkProblems(`${llmsTxt}\n- [Gone](${llmsTxt.match(/Documentation: (\S+)/)[1]}/reference/no-such-page)`, DOCS_ROOT).join(';'),
+    /reference\/no-such-page, which no document under docs\/ serves/,
+    'a link to a missing page is named',
   );
 
   console.log('test-llms-headroom: ok');

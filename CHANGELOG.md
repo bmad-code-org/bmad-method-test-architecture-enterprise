@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The repeatability and configuration-comparison guide is now a short task flow for maintainers, with commands that run from the repository root against a committed paired example, a real report excerpt and a table of every outcome with its next step. It states that paired inputs are captured by hand today, describes the declaration digest and the scorer replay accurately, and moves field and rule detail to the new [Configuration Experiment Reader](docs/reference/configuration-experiment-reader.md) reference.
 - The tea-evaluate CLI reference leads with a platform checklist, the confinement limits, a short command sequence and the exit-0 semantics beside its command table, separates each command's synopsis from copyable examples run through the private install, and moves the manifest, confinement, evaluator and evidence detail into four linked companion pages. A new `test:doc-shell-blocks` gate keeps every shell block on the Evaluate pages parseable, free of synopsis notation and on the `npm exec --prefix evals --` prefix.
 
 ## [3.1.0] - 2026-10-15

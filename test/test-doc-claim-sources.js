@@ -400,6 +400,67 @@ check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts 
   assert.strictEqual(count, 34);
 });
 
+check('PAIRED_CAPTURE_IS_MANUAL matches what retainSkillArtifacts actually writes into provenance.json', () => {
+  // Independent of the module's reading of the source text: run the writer itself
+  // in a child process and read back the keys of the file it wrote.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-provenance-'));
+  try {
+    const workspace = path.join(scratch, 'workspace');
+    fs.mkdirSync(workspace);
+    const script = `
+      const { retainSkillArtifacts } = require(${JSON.stringify(path.join(__dirname, 'lib', 'retain-skill-artifacts.js'))});
+      retainSkillArtifacts({ artifactsDir: ${JSON.stringify(path.join(scratch, 'out'))}, workspace: { dir: ${JSON.stringify(workspace)} },
+        caseId: 'probe', agent: 'probe', model: 'probe-model', repetition: 1, attempt: 1, prompt: 'probe', observation: {} })
+        .then((dir) => process.stdout.write(JSON.stringify(Object.keys(JSON.parse(require('node:fs').readFileSync(dir + '/provenance.json', 'utf8'))))));
+    `;
+    const run = require('node:child_process').spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+    assert.strictEqual(run.status, 0, run.stderr);
+    const written = JSON.parse(run.stdout);
+    assert.deepStrictEqual(
+      written,
+      source.retainedProvenanceKeys(fs.readFileSync(path.join(__dirname, 'lib', 'retain-skill-artifacts.js'), 'utf8')),
+    );
+    assert.ok(
+      source.PAIRED_CAPTURE_FIELDS.every((field) => !written.includes(field)),
+      `the writer now records ${written.join(', ')}`,
+    );
+    assert.strictEqual(source.PAIRED_CAPTURE_IS_MANUAL, true);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('pairedCaptureIsManual turns false on each revert case', () => {
+  const manual = {
+    provenanceKeys: ['mode', 'caseId', 'agent', 'requestedModel', 'repetition', 'attempt', 'capturedAt', 'originalWorkspace'],
+    testDesignSource: '    usage: null, // no adapter reports tokens\n',
+    scripts: [{ file: 'test/lib/configuration-experiment.js', text: 'function appendExposure(ledger, entry) {}' }],
+  };
+  assert.strictEqual(source.pairedCaptureIsManual(manual), true);
+  assert.strictEqual(
+    source.pairedCaptureIsManual({
+      ...manual,
+      scripts: [...manual.scripts, { file: 'cli/lib/capture.js', text: 'ledger = appendExposure(ledger, entry);' }],
+    }),
+    false,
+    'a planted ledger writer',
+  );
+  assert.strictEqual(
+    source.pairedCaptureIsManual({ ...manual, testDesignSource: '    usage: { inputTokens: 10 },\n' }),
+    false,
+    'a non-null usage',
+  );
+  assert.strictEqual(
+    source.pairedCaptureIsManual({ ...manual, provenanceKeys: [...manual.provenanceKeys, 'cost'] }),
+    false,
+    'a provenance cost key',
+  );
+});
+
+check('retainedProvenanceKeys refuses a writer it cannot read', () => {
+  assert.throws(() => source.retainedProvenanceKeys('writeText(file, provenance)'), /no longer writes provenance\.json/);
+});
+
 removeStagingFile();
 process.off('SIGINT', removeStagingFile);
 process.off('SIGTERM', removeStagingFile);

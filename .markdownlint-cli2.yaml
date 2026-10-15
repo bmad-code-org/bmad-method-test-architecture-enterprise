@@ -13,6 +13,9 @@ ignores:
   # Live Evaluate working drafts are generated under this gitignored path.
   # The committed evaluation under test/evaluations/ remains linted.
   - test/eval-artifacts/**
+  # Configuration experiment reports the how-to guide's commands write here;
+  # gitignored and rendered by the reader, so their layout is the reader's.
+  - experiment-output/**
   # Captured live generation output preserves exact model-authored bytes.
   - test/results/automate-codex-2026-10-09/{before,after,red,final,reviewed}/**
   # Live Trace output preserves the model's original report formatting.
