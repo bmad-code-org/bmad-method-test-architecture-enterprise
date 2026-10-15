@@ -480,6 +480,21 @@ function checkSettle() {
     settled('missing-evidence').disposition === 'undetermined' && settled('missing-evidence').state === 'observed',
     'a short run settles as undetermined and stays observed',
   );
+  const stale = (disposition) => ({ ...observed['harmless-edit'].record, disposition });
+  for (const stop of ['undetermined', 'target-error']) {
+    check(
+      review.settleCandidate(stale(stop), observed['harmless-edit'].inputs).disposition === null,
+      `the ${stop} stop is cleared once complete evidence no longer supports it`,
+    );
+  }
+  check(
+    review.settleCandidate(stale('judge-failure'), observed['harmless-edit'].inputs).disposition === 'judge-failure',
+    'a stop this function did not set is left as it is',
+  );
+  check(
+    review.settleCandidate(stale('undetermined'), observed['missing-evidence'].inputs).disposition === 'undetermined',
+    'a stop the evidence still supports is kept',
+  );
   check(settled('seeded-gap').disposition === null, 'a confirmed classification is left to a reviewer');
   check(settled('harmless-edit').disposition === null, 'an unchanged classification is left to a reviewer');
   refuses(

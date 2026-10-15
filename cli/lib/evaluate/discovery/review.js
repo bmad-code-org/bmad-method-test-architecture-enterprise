@@ -266,8 +266,9 @@ function classifyCandidate(record, { evidence = {}, reference } = {}) {
 
 /**
  * The candidate with the stop the evidence settles on its own: `target-error` when an arm only errored, `undetermined`
- * when the evidence is short, absent or unreadable. The record stays in the `observed` state, so the stop stays visible
- * and a later observation can lift it. Any other classification needs a person, and the record comes back unchanged.
+ * when the evidence is short, absent or unreadable. The record stays in the `observed` state, so the stop stays visible.
+ * Settling again once the evidence no longer supports a stop this function set clears it. Any other classification needs
+ * a person, and a disposition this function did not set is left as it is.
  *
  * @param {object} record an observed candidate
  * @param {object} [inputs] as for {@link classifyCandidate}
@@ -277,8 +278,10 @@ function settleCandidate(record, inputs) {
   if (record.state !== 'observed')
     throw new ReviewError([`candidate ${record.candidateId} is ${record.state}; only an observed candidate settles`]);
   const { disposition } = classifyCandidate(record, inputs);
-  if (disposition !== 'target-error' && disposition !== 'undetermined') return record;
-  return validateCandidate({ ...structuredClone(record), disposition });
+  const stops = disposition === 'target-error' || disposition === 'undetermined';
+  const settledBefore = record.disposition === 'target-error' || record.disposition === 'undetermined';
+  if (!stops && !settledBefore) return record;
+  return validateCandidate({ ...structuredClone(record), disposition: stops ? disposition : null });
 }
 
 /**
