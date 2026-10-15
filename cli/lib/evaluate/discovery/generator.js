@@ -154,13 +154,44 @@ function wordAfter(line, index) {
 }
 
 /**
+ * `line` with every protected character blanked, so punctuation and words inside a quotation, inline code, a placeholder, a
+ * link target, a URL or a path read as part of that token and not as the sentence around it. The punctuation that closes a
+ * sentence after a URL or a path stays, and so does the text of a link only as blanks.
+ *
+ * @param {string} line
+ * @param {Array<string|undefined>} reasons the reason each character of the line is protected, or `undefined`
+ * @returns {string} a string of the same length
+ */
+function maskProtected(line, reasons) {
+  const masked = Array.from({ length: line.length }, (_, at) => line[at]);
+  for (let from = 0; from < masked.length; ) {
+    const reason = reasons[from];
+    let to = from + 1;
+    if (reason !== undefined) {
+      while (to < masked.length && reasons[to] === reason) to += 1;
+      // The punctuation that closes a sentence after a URL or a path belongs to the sentence.
+      let kept = to;
+      if (reason === 'url' || reason === 'path') while (kept > from && '.,;:!?'.includes(masked[kept - 1])) kept -= 1;
+      for (let at = from; at < kept; at += 1) masked[at] = ' ';
+    }
+    from = to;
+  }
+  // The text of a link is not the sentence around it.
+  for (const link of line.matchAll(/\[[^\]\n]*\](?=\()/g)) masked.fill(' ', link.index, link.index + link[0].length);
+  return masked.join('');
+}
+
+/**
  * The question test of one line: `(index) => boolean`, whether the sentence holding `index` ends in a question mark. A full
- * stop between digits ends nothing, and a mark inside a quotation or inline code ends nothing either. The terminators are
+ * stop between digits ends nothing, and a mark inside any protected span (a quotation, inline code, a placeholder, a link
+ * target, a URL or a path) ends nothing either; `reasons` says which characters of the line are protected. The terminators are
  * found once per line, so each test is a search over them and a line of many sites costs time in proportion to its length.
  */
-function questionTest(line) {
-  const masked = line.replaceAll(/`[^`]*`|"[^"]*"|“[^”]*”/g, (span) => ' '.repeat(span.length));
-  const ends = [...masked.matchAll(/[!?]|\.(?!\d)/g)].map((match) => ({ at: match.index, question: match[0] === '?' }));
+function questionTest(line, reasons) {
+  const ends = [...maskProtected(line, reasons).matchAll(/[!?]|\.(?!\d)/g)].map((match) => ({
+    at: match.index,
+    question: match[0] === '?',
+  }));
   return (index) => {
     let low = 0;
     let high = ends.length;
@@ -235,11 +266,12 @@ function isEpistemic(line, end) {
  * The modal-strength sites of a line.
  *
  * @param {string} line
+ * @param {Array<string|undefined>} reasons the reason each character of the line is protected, or `undefined`
  * @returns {Array<object>}
  */
-function modalSites(line) {
+function modalSites(line, reasons) {
   const sites = [];
-  const asks = questionTest(line);
+  const asks = questionTest(line, reasons);
   for (const match of line.matchAll(/(?<![\w-])(must|shall)(?![\w-])/giu)) {
     const [word] = match;
     const start = match.index;
@@ -283,11 +315,12 @@ function modalSites(line) {
  * The negation sites of a line.
  *
  * @param {string} line
+ * @param {Array<string|undefined>} reasons the reason each character of the line is protected, or `undefined`
  * @returns {Array<object>}
  */
-function negationSites(line) {
+function negationSites(line, reasons) {
   const sites = [];
-  const asks = questionTest(line);
+  const asks = questionTest(line, reasons);
   const patterns = [
     { pattern: /(?<![\w-])(do|must|shall|should)(\s+)not(?![\w-])/giu, keep: (m) => m[1] },
     { pattern: /(?<![\w-])(do|must|should)n['’]t(?![\w-])/giu, keep: (m) => m[1] },
@@ -337,11 +370,13 @@ function negationSites(line) {
  * The numeric-threshold sites of a line.
  *
  * @param {string} line
+ * @param {Array<string|undefined>} reasons the reason each character of the line is protected, or `undefined`
  * @returns {Array<object>}
  */
-function numericSites(line) {
+function numericSites(line, reasons) {
   const sites = [];
-  const asks = questionTest(line);
+  const asks = questionTest(line, reasons);
+  const masked = maskProtected(line, reasons);
   for (const match of line.matchAll(BOUND_SITE)) {
     const { groups } = match;
     const lower = groups.lower !== undefined;
@@ -357,7 +392,7 @@ function numericSites(line) {
     // Attached letters are the unit (`500ms`); a spaced word is the unit too (`3 retries`).
     const next = /^\s+(\p{L}+)/u.exec(after)?.[1];
     const unit = percent ? '%' : tail === '' ? (next === undefined || FILLER.has(next.toLowerCase()) ? 'none' : next) : tail;
-    const clause = /[^.;:!?,]*$/.exec(line.slice(Math.max(0, match.index - 200), match.index))[0];
+    const clause = /[^.;:!?,]*$/.exec(masked.slice(Math.max(0, match.index - 200), match.index))[0];
     if (asks(end)) {
       sites.push(refuse(start, end, 'question', `"${bound}" sits in a question, which asks and does not instruct`));
     } else if (NEGATED.test(clause)) {
@@ -694,9 +729,10 @@ function scan(text, families) {
   let lineStart = 0;
   for (const [index, raw] of text.split('\n').entries()) {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    const lineReasons = reasons.slice(lineStart, lineStart + line.length);
     let repeats;
     for (const family of families) {
-      for (const site of family.sites(line)) {
+      for (const site of family.sites(line, lineReasons)) {
         const where = { family: family.name, line: index + 1, column: site.start + 1 };
         const covered = Array.from({ length: site.end - site.start }, (_, offset) => reasons[lineStart + site.start + offset]).find(
           Boolean,

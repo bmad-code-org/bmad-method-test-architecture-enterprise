@@ -66,7 +66,7 @@ rejected:
   line 21 column 5 modal-strength protected-span: the site sits in code fence, which an edit leaves alone
   line 21 column 5 negation protected-span: the site sits in code fence, which an edit leaves alone
   line 21 column 31 negation protected-span: the site sits in code fence, which an edit leaves alone
-  line 21 column 53 numeric-threshold negated-bound: "at least 4" follows a negation, which turns the direction the bound constrains around
+  line 21 column 53 numeric-threshold protected-span: the site sits in code fence, which an edit leaves alone
   line 24 column 13 modal-strength protected-span: the site sits in block quote, which an edit leaves alone
   line 24 column 18 negation protected-span: the site sits in block quote, which an edit leaves alone
   line 27 column 24 numeric-threshold beyond-range: "at most 80%" would become 160%, which no percentage can reach

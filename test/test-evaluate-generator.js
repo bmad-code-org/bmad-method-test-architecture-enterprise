@@ -639,6 +639,30 @@ const EDGE_RULES = [
     edited: 'You should explain what `?` means in one sentence.',
   },
   { line: 'Answer "why?" in at most 20 words.', family: 'numeric-threshold', edited: 'Answer "why?" in at most 40 words.' },
+  // Punctuation inside a protected span, or closing a URL, is read for what it is.
+  { line: 'Can you keep responses at most 5 words for https://example.test?', family: 'numeric-threshold', code: 'question' },
+  {
+    line: 'Keep responses at most 5 words for https://example.test.',
+    family: 'numeric-threshold',
+    edited: 'Keep responses at most 10 words for https://example.test.',
+  },
+  { line: 'Can you keep responses at most 5 words for docs/guide.md?', family: 'numeric-threshold', code: 'question' },
+  { line: "You must answer 'why?' in one sentence.", family: 'modal-strength', edited: "You should answer 'why?' in one sentence." },
+  { line: 'You must answer ‘why?’ in one sentence.', family: 'modal-strength', edited: 'You should answer ‘why?’ in one sentence.' },
+  { line: 'You must answer {{why?}} in one sentence.', family: 'modal-strength', edited: 'You should answer {{why?}} in one sentence.' },
+  {
+    line: 'You must answer [why?](https://example.test/a?b) in one sentence.',
+    family: 'modal-strength',
+    edited: 'You should answer [why?](https://example.test/a?b) in one sentence.',
+  },
+  { line: "Do not answer 'why?' in one sentence.", family: 'negation', edited: "Do answer 'why?' in one sentence." },
+  {
+    line: 'Do you know https://example.test? You must say.',
+    family: 'modal-strength',
+    edited: 'Do you know https://example.test? You should say.',
+  },
+  { line: 'Say "do not" and keep it at most 5 words.', family: 'numeric-threshold', edited: 'Say "do not" and keep it at most 10 words.' },
+  { line: 'Do not visit https://example.test and keep it at most 5 words.', family: 'numeric-threshold', code: 'negated-bound' },
   { line: 'Can you keep responses at most 5 words?', family: 'numeric-threshold', code: 'question' },
   { line: 'Keep responses at most 5 words.', family: 'numeric-threshold', edited: 'Keep responses at most 10 words.' },
   {

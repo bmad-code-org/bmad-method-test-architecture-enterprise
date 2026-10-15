@@ -658,8 +658,8 @@
       "line": 21,
       "column": 53,
       "text": "You must not edit this block. Never change at least 4 lines.",
-      "code": "negated-bound",
-      "message": "\"at least 4\" follows a negation, which turns the direction the bound constrains around"
+      "code": "protected-span",
+      "message": "the site sits in code fence, which an edit leaves alone"
     },
     {
       "family": "modal-strength",
