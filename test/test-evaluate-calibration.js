@@ -11,7 +11,9 @@ const {
   calibrationStepPair,
   runCalibration,
 } = require('../cli/lib/evaluate/calibration');
+const { isKnownEvaluator } = require('../cli/lib/evaluate/evaluators');
 const { planCriterionName } = require('../cli/lib/evaluate/partition');
+const { sectionOf } = require('./lib/docs-pages');
 const { suite } = require('./lib/evaluate-story-121');
 
 const test = suite('tea-evaluate-calibration');
@@ -23,6 +25,30 @@ const STUB = path.join(ROOT, 'test/fixtures/evaluate/stub-judge.js');
 const awaited = [];
 
 try {
+  // The judge guide routes every evaluator kind: `check` refuses a judge block beside a non-deterministic kind or a contract
+  // with no rubric, `run` calibrates through the configured scorer, and a records run reads the harness's judgments. A guide
+  // that sends every reader through TeA's judge, or that lowers the agreement minimum to pass, fails here.
+  const guide = fs.readFileSync(path.join(ROOT, 'docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md'), 'utf8');
+  const routing = sectionOf(guide, '### 3. Route the Rubric by Evaluator Kind') ?? '';
+  const routes = routing.split('\n').filter((line) => line.startsWith('- '));
+  const routeOf = (text) => routes.find((line) => line.includes(text)) ?? '';
+  for (const kind of ['deterministic', 'command', 'sealed-brief-agent', 'records']) {
+    assert.ok(isKnownEvaluator({ kind }), `${kind} is no evaluator kind the runtime knows`);
+    assert.ok(routeOf(`\`${kind}\``) !== '', `the judge guide's routing names no route for the ${kind} evaluator`);
+  }
+  assert.match(routeOf('No rubric'), /add no `judge` block/, 'the judge guide does not tell a contract with no rubric to add no judge');
+  assert.match(routeOf('`command`'), /Omit `judge`/, 'the judge guide does not tell a command or sealed-brief agent to omit the judge');
+  assert.match(routeOf('`records`'), /Omit `judge`/, 'the judge guide does not tell a records evaluator to omit the judge');
+  assert.match(routeOf('`records`'), /the scorer runs only in your harness/, 'the judge guide implies TeA runs a records harness scorer');
+  assert.match(routeOf('`records`'), /`partitionPlan`/, 'the judge guide omits the records rubric partition plan refusal');
+  assert.doesNotMatch(guide, /lower it only after/, 'the judge guide treats a lower agreement minimum as a label repair');
+  assert.match(guide, /Do not lower it to pass calibration/, 'the judge guide does not keep the agreement minimum apart from label repair');
+  assert.match(
+    guide,
+    /`minimumAgreement` is the share of labels the scorer must match/,
+    'the judge guide misstates what minimumAgreement measures',
+  );
+
   const nested = calibrationObservation({
     criterion: { evidence: '/interactions/judge-run/stdout/0' },
     response: '["calibration example"]',

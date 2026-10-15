@@ -39,8 +39,9 @@ If your network blocks GitHub, use a local clone or internal Git mirror.
    bmad setup tea
    ```
 
-Setup and every TEA skill run locally once the skills are installed.
-Updates are the exception: `bmad setup` updates through `npx skills update`, which looks for new versions on GitHub.
-To update behind the firewall, pull the new version into your clone or mirror and run step 2 again.
+Once installed, setup and the TEA skill instructions need no GitHub access.
+Your assistant still reaches its model provider, and optional browser automation, Pact broker calls or the app under test reach their own hosts.
+Updates go through `npx skills update`, which looks for new versions on GitHub.
+To update behind the firewall, pull the new version into your clone or mirror and run step 2 again, and step 3 for the BMad core clone.
 
 If your environment also blocks npm, use an internal npm proxy so `npx` can fetch the `skills` CLI.
