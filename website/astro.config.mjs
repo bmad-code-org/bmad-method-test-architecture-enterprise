@@ -142,6 +142,7 @@ export default defineConfig({
               items: [
                 { label: 'Automate', slug: 'how-to/workflows/run-automate' },
                 { label: 'Test Review', slug: 'how-to/workflows/run-test-review' },
+                { label: 'Test Review in CI', slug: 'how-to/workflows/run-test-review-in-ci' },
                 { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
                 { label: 'Framework', slug: 'how-to/workflows/setup-test-framework' },
                 { label: 'NFR', slug: 'how-to/workflows/run-nfr-assess' },

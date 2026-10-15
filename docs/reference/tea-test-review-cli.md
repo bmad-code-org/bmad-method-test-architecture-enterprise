@@ -11,6 +11,8 @@ The skill is the source of truth for all review logic (checklist, scoring, repor
 
 ## Prerequisites
 
+The TEA package includes the skill and knowledge base. It does not install or authenticate an agent CLI.
+
 - Node.js 22.20.0 or later, with the `tea-test-review` bin (`npm install --global bmad-method-test-architecture-enterprise`, or via `npx`).
 - The review skill ships inside the CLI package. `tea-test-review` reviews with the `bmad-tea-test-review` skill and `bmod-tea` knowledge base from its own install, so the skill and the CLI are always one version and the reviewed repo needs no BMAD files and no TEA module. When the CLI is installed outside the checkout (a global install, or a pinned install step in CI), that copy is out of reach of the pull request under review, so it cannot edit the reviewer that judges it. A CLI installed as a project dependency lives in the checkout's `node_modules`; pin its version in CI. Two flags change the source:
   - **`--project-skill`** reviews with the copy the project vendored instead, probed at `.claude/skills/bmad-tea-test-review`, `.agents/skills/bmad-tea-test-review`, `skills/bmad-tea-test-review`, and last the classic installer's `_bmad/tea/workflows/testarch/bmad-tea-test-review`, which a project upgraded from v6 can still hold. The control-plane guard applies to it: a PR diff that edits the vendored skill or its `bmod-tea` knowledge base exits 2.
@@ -45,99 +47,32 @@ To review with the skill a project vendored instead, add `--project-skill`.
 Three things worth knowing before the first run:
 
 - **Use `--files` for uncommitted work.** The default scoping is `git diff <base>...HEAD`, which only sees committed changes. Once the tests are committed, drop `--files` and use `--base main` to exercise the real pull-request scoping.
-- **It prints nothing while the agent works,** which can take several minutes. Pipe through `tee` if you want a file to watch.
+- **Progress goes to stderr while the agent works,** normally every 15 seconds, and the agent's full output is not streamed. A review can take several minutes. Redirect stderr with `2>tea-progress.log` to keep the progress lines, and use `--json` for the result.
 - **`--agent none` costs nothing.** It prints the prompt bundle and exits without spawning an agent, which is the fastest way to confirm the right files are in the review set.
 
 Authentication is whatever your agent CLI already uses. A `claude` or `codex` subscription login stored under `$HOME` is passed through and needs no API key. For claude, the key variables in Prerequisites work as a fallback; for codex they do not, so see the `--agent codex` note above before running anywhere without an interactive login.
 
 ## Run it in CI
 
-The CLI is the whole integration. It runs the same way in any CI, because everything the review needs is in it: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher. A CI job installs the CLI and an agent, logs the agent in, and runs one command.
+The CLI is the whole integration: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher are in it. A CI job installs the CLI and an agent, logs the agent in, and runs one command. The job's exit code is the verdict.
+
+```bash
+tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
+```
+
+The complete, copyable recipes live in [Run Test Review in CI](/docs/how-to/workflows/run-test-review-in-ci.md).
 
 ### GitHub Actions
 
-`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. The job's exit code is the verdict.
-
-```yaml
-name: TEA Test Review
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-permissions: {}
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    # Forks receive no secrets, so skip them rather than fail.
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: read
-      pull-requests: write
-      checks: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # the review diffs changed test files against the base ref
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - name: Install the pinned CLI and agent
-        run: npm install --global bmad-method-test-architecture-enterprise@1.28.0 @anthropic-ai/claude-code@2.1.220
-      - name: Review
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: tea-test-review
-          path: |
-            test-review.md
-            test-review.json
-```
-
-Make the job a required status check to gate merges. [`cli/examples/pr-test-review.yml`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is this workflow with the gate-policy flags annotated.
-
-The standalone [`tea-test-review` action](https://github.com/muratkeremozcan/tea-test-review) is a GitHub-specific convenience around a CLI run: `@mention` triggers with a trusted-author gate, the agent install and login, and the artifact upload.
+`--github` opens a check run before the review, closes it with the verdict, and keeps one comment on the pull request up to date. Recipe: [GitHub Actions](/docs/how-to/workflows/run-test-review-in-ci.md#github-actions).
 
 ### GitLab
 
-GitLab has no `--github` equivalent: the CLI runs the review and writes the comment text, and the job posts it. `--base` names the merge request's target branch, and `--run-url` and `--artifact-name` let the comment link the job and its artifact.
-
-```yaml
-tea-test-review:
-  stage: test
-  image: node:22
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  variables:
-    GIT_DEPTH: '0'
-  script:
-    - npm install --global bmad-method-test-architecture-enterprise@1.28.0 @anthropic-ai/claude-code@2.1.220
-    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
-    - |
-      status=0
-      tea-test-review --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --agent claude \
-        --run-url "$CI_JOB_URL" --artifact-name tea-test-review \
-        --output test-review.md --json test-review.json --comment-out tea-comment.md || status=$?
-      if [ -s tea-comment.md ]; then
-        curl --silent --fail --request POST --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
-          --data-urlencode "body@tea-comment.md" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || echo "could not post the comment"
-      fi
-      exit "$status"
-  artifacts:
-    when: always
-    paths: [test-review.md, test-review.json, tea-comment.md]
-```
-
-`--comment-out` is written for every outcome, including a run that produced no verdict, so a broken gate is posted too. The note is a new one on every pipeline; to update one in place, look up your earlier note by its hidden marker the way `--github` does on GitHub.
+GitLab has no `--github` equivalent. The CLI writes the comment text with `--comment-out` and the job posts it. Recipe: [GitLab](/docs/how-to/workflows/run-test-review-in-ci.md#gitlab).
 
 ### Jenkins, Buildkite and other CIs
 
-Run the same command, then publish `tea-comment.md` wherever the pull request lives. A GitHub repository on Jenkins or Buildkite passes `--github` and a `GITHUB_TOKEN`, along with `--pr <number>` and `--repo <owner/name>` when the job has no `GITHUB_*` variables, and gets the check run and the comment without any GitHub Actions. `--head-sha`, `--run-url` and `--check-name` fill in what a non-Actions run does not carry.
+Run the same command and publish `tea-comment.md` wherever the pull request lives, or pass `--github` and a `GITHUB_TOKEN`. Recipe: [Jenkins, Buildkite and other CIs](/docs/how-to/workflows/run-test-review-in-ci.md#jenkins-buildkite-and-other-cis).
 
 ## Flags
 
@@ -181,7 +116,7 @@ Run the same command, then publish `tea-comment.md` wherever the pull request li
 | `--fail-on-skip`                                       | off                                                                | Exit 1 instead of 0 on skip (no changed test files).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `--waive <reason>`                                     | -                                                                  | Waive a fail (exit 0), record the reason; requires `--waive-until`. Exit 2/3 never waivable.                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `--waive-until <YYYY-MM-DD>`                           | -                                                                  | Waiver expiry; must be a real future calendar date.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `--isolate` / `--no-isolate`                           | isolated when `CI` is set                                          | Run the agent under filesystem isolation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `--isolate` / `--no-isolate`                           | isolated when `CI` is set                                          | Run the agent under filesystem isolation (see [Filesystem isolation](#filesystem-isolation)). Explicit `--isolate` exits 2 when no backend is available; the CI default warns and continues.                                                                                                                                                                                                                                                                                                                                |
 | `--use-playwright-utils` / `--no-use-playwright-utils` | resolved (below)                                                   | Force `tea_use_playwright_utils`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `--use-pactjs-utils` / `--no-use-pactjs-utils`         | resolved (below)                                                   | Force `tea_use_pactjs_utils`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `--pact-mcp <mode>`                                    | resolved (below)                                                   | Force `tea_pact_mcp` (`mcp` \| `none`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -264,26 +199,6 @@ line ranges of each review file and writes up only what the pull request introdu
   line is treated as modified, so missing evidence cannot bypass the gate.
 - `pre_existing`: its reported line is outside the pull request's changed lines.
 
-An unchanged line can still be broken by a changed one. New setup can turn `expected = 18.0` into
-`expected = apply_discount(...)`, which leaves the untouched assertion below it unable to fail. The agent places that
-finding on the changed setup line. When it reports the unchanged assertion instead, the CLI looks for a changed line
-that defines something the assertion reads, directly or through the test's own assignments: an assignment (a wrapped
-statement counts as one), a mock, patch or spy, a new or changed parameter, or a changed parametrize table. For a name the
-test does not define itself it also looks at module-level lines, fixtures and setup hooks of the file, and at changed
-test-support files such as `conftest.py`. It moves the finding to that line, in that file, and keeps the original in
-`changed_line_evidence.symptomLine`. This applies to the rows that ask whether an assertion can still fail (C3, C4, C5,
-C6, H3 and H10). A comment, a rename, a changed line that only shares a name with the assertion, and a change in another
-test never take a finding.
-
-Three more cases belong to the pull request. A test that lost an assertion, or had one replaced by a statement. A test
-the pull request changed, for the rows that describe the whole test (C4, C5 and H10). A finding whose location is a
-range such as `path:4-8` that covers a changed line. A finding with no usable line, or a line outside the file, counts
-against the pull request.
-
-Two rows judge the whole file. Row M4 (ungrouped suite) belongs to the base in a file the pull request modified,
-unless the pull request changed a `describe`, `context`, `suite` or `class` line. Row H5 (oversize file) belongs to the
-pull request that takes a file over 1000 lines.
-
 Introduced and modified findings are the PR verdict. A finding that is still pre-existing is cut from the report and
 left out of `findings`, `violations`, `qualityScore` and the recommendation. The cut removes its finding block, the
 counts, ledger and score lines, the list items and table rows that name it, and the Immediate Actions and Re-Review
@@ -293,6 +208,14 @@ request decision, the reviewed commit and how many findings were left out, and s
 Use `--gate-on all` for a baseline audit. An explicit `--files` review skips git,
 so it defaults to `all`; combining `--files` with `--gate-on introduced` is
 rejected instead of guessing provenance.
+
+#### How a finding is attributed
+
+An unchanged line can still be broken by a changed one. New setup can turn `expected = 18.0` into `expected = apply_discount(...)`, which leaves the untouched assertion below it unable to fail. The agent places that finding on the changed setup line. When it reports the unchanged assertion instead, the CLI looks for a changed line that defines something the assertion reads, directly or through the test's own assignments: an assignment (a wrapped statement counts as one), a mock, patch or spy, a new or changed parameter, or a changed parametrize table. For a name the test does not define itself it also looks at module-level lines, fixtures and setup hooks of the file, and at changed test-support files such as `conftest.py`. It moves the finding to that line, in that file, and keeps the original in `changed_line_evidence.symptomLine`. This applies to the rows that ask whether an assertion can still fail (C3, C4, C5, C6, H3 and H10). A comment, a rename, a changed line that only shares a name with the assertion, and a change in another test never take a finding.
+
+Three more cases belong to the pull request. A test that lost an assertion, or had one replaced by a statement. A test the pull request changed, for the rows that describe the whole test (C4, C5 and H10). A finding whose location is a range such as `path:4-8` that covers a changed line. A finding with no usable line, or a line outside the file, counts against the pull request.
+
+Two rows judge the whole file. Row M4 (ungrouped suite) belongs to the base in a file the pull request modified, unless the pull request changed a `describe`, `context`, `suite` or `class` line. Row H5 (oversize file) belongs to the pull request that takes a file over 1000 lines.
 
 ### Review mode
 
@@ -543,24 +466,57 @@ The bonus is read from the template's `Total Bonus:             +N` line, and a 
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
 
-The `**Total Violations**` summary line is not trusted either. The CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, then rejects a report whose summary disagrees with what it wrote (exit 3). This closes a real defect: a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone.
+The `**Total Violations**` summary line is not trusted either. The CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, then rejects a report whose summary disagrees with what it wrote (exit 3). A genuine Critical finding documented in prose beside a summary line that claims zero can therefore never reach Approve.
 
 Exact equality is scoped to Critical and High, the two severities `deriveRecommendation` acts on. Medium and Low are bounded in one direction: a report may summarize a counted Medium finding in prose rather than write a block for it, and may never document more findings than it counted, which would deduct less than its own findings require. [`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so the mapping never drifts from the shipped rubric.
 
 The finding blocks are read exactly once, and both this cross-check and the verdict's `findings` array come out of that single pass. A consumer therefore never has to re-parse the markdown report to learn which defects were found: the verdict is the contract.
 
-## Example workflow
-
-[Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: one job, full-history checkout, the CLI and agent installed from exactly-pinned npm versions, `--github` for the check run and the comment, and an artifact upload for the report and the verdict JSON. Make the job a required status check to gate merges.
-
-[Adapting it](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/README.md) covers a central reusable-workflows repo, a repo already using a third-party review bot like CodeRabbit, and GitLab.
-
 ## Security model
 
-- **Prompt delivery**: `claude`, `codex`, and `custom` receive the complete prompt on stdin, so their prompt does not appear in process arguments. `agy` requires the prompt in its `--print` argument. Its complete prompt can therefore be visible to local process inspection and CI diagnostics; use it only in an appropriately isolated runner.
-- **Agent execution**: the `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep,Task`. `Task` is delegation, which `step-03-quality-evaluation.md` needs to dispatch its four quality workers in parallel; without it the skill's capability probe finds no launcher and every run falls back to `sequential`. The `codex` adapter confines its run with `--sandbox workspace-write`. Both are the `scoped-artifact-writes` tier, which is what this CLI runs at; a caller of `cli/lib/run-agent.js` that declares `read-only`, as the fragment-selection eval and `tea-fragment-selection-runner` do, gets `Read,Glob,Grep` and `--sandbox read-only`, with no delegation, and only a `command-execution` declaration adds `Bash`. The `agy` adapter uses `--dangerously-skip-permissions`, with filesystem limits supplied by the CLI's isolation wrapper. A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy. Every adapter gets a minimal child environment; only `--env-pass` variables are added. On POSIX, every agent runs in its own process group, and every process left in that group receives SIGKILL when the agent exits. The agent's input and output pass through pipes a supervising process owns, which it closes once the agent has exited and each pipe reaches its end, stays empty for 100 ms, or has been read for 2 s, so output any process writes after that is dropped and a process the agent started outside its group (in a session of its own, say) is not waited for; a custom runner finishes its writes before it exits. On Windows, the guardian joins a kill-on-close Windows Job Object before starting the agent. The agent and its ordinary descendants inherit the job and end when the guardian's lifeline closes or its turn ends; the Windows integration gate gives each PID a 10 s end bound. A failed Job Object setup stops the launch and exits 4.
-- **Filesystem isolation**: with `--isolate` (default on in CI) the agent may read the project but can't modify the tree under review; it writes only the report, verdict, and the temp files the skill's own subagent steps declare (sandbox-exec on macOS, bwrap on Linux, chmod fallback).
-- **Publishing credentials**: `GITHUB_TOKEN` is read by the CLI itself and is not in the agent's environment, which carries only the minimal set plus the `--env-pass` variables. The review job holds `pull-requests: write` and `checks: write` next to the agent, so keep the job to the review. The comment's free text (finding titles, paths, the requester's focus, reasons) is neutralized before it is posted: an HTML comment cannot carry another run's hidden marker and an `@mention` does not ping.
-- **Control-plane guard**: the default reviewer is the skill packaged with the CLI, outside the checkout, so a PR diff cannot touch it when the CLI is installed outside the checkout. With `--project-skill`, or an explicit `--skill-root` inside the checkout, a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
-- **Untrusted-content contract**: reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.
-- **Fail-closed parsing**: the strict report schema above; a parse failure is never a silent pass, and inconsistent verdicts (Critical violations with an approve recommendation) are rejected.
+### Prompt delivery
+
+`claude`, `codex`, and `custom` receive the complete prompt on stdin, so their prompt does not appear in process arguments. `agy` requires the prompt in its `--print` argument. Its complete prompt can therefore be visible to local process inspection and CI diagnostics; use it only in an appropriately isolated runner.
+
+### Agent capability
+
+- The `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep,Task`. `Task` is delegation, which `step-03-quality-evaluation.md` needs to dispatch its four quality workers in parallel; without it the skill's capability probe finds no launcher and every run falls back to `sequential`.
+- The `codex` adapter confines its run with `--sandbox workspace-write`.
+- Both are the `scoped-artifact-writes` tier, which is what this CLI runs at. A caller of `cli/lib/run-agent.js` that declares `read-only`, as the fragment-selection eval and `tea-fragment-selection-runner` do, gets `Read,Glob,Grep` and `--sandbox read-only`, with no delegation, and only a `command-execution` declaration adds `Bash`.
+- The `agy` adapter uses `--dangerously-skip-permissions`, with filesystem limits supplied by the CLI's isolation wrapper.
+- A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy.
+
+### Agent environment
+
+Every adapter gets a minimal child environment; only `--env-pass` variables are added.
+
+### Process supervision
+
+- **POSIX:** every agent runs in its own process group, and every process left in that group receives SIGKILL when the agent exits. The agent's input and output pass through pipes a supervising process owns, which it closes once the agent has exited and each pipe reaches its end, stays empty for 100 ms, or has been read for 2 s. Output any process writes after that is dropped, and a process the agent started outside its group (in a session of its own, say) is not waited for. A custom runner finishes its writes before it exits.
+- **Windows:** the guardian joins a kill-on-close Windows Job Object before starting the agent. The agent and its ordinary descendants inherit the job and end when the guardian's lifeline closes or its turn ends; the Windows integration gate gives each PID a 10 s end bound. A failed Job Object setup stops the launch and is reported as an agent failure (exit 3).
+
+Supervision governs process lifetime. It does not restrict filesystem writes.
+
+### Filesystem isolation
+
+With isolation on, the agent may read the project but cannot modify the tree under review. It writes only the report, the verdict, and the temp files the skill's own subagent steps declare.
+
+- **macOS and Linux:** the CLI uses `sandbox-exec` on macOS or `bwrap` on Linux when the tool is installed, and otherwise falls back to `chmod`. The fallback clears the project's write permission bits for the run and restores them afterward. It is weaker than an OS sandbox, because a process owned by the same user can change permission bits.
+- **Windows:** no backend exists. The Job Object above supervises process lifetime, not filesystem writes.
+- **When it applies:** CI requests isolation by default (`CI` set). If no backend is available, the run prints a warning and continues without filesystem isolation. Pass `--isolate` explicitly to exit 2 in that case instead, or `--no-isolate` to turn isolation off.
+
+### Publishing credentials
+
+`GITHUB_TOKEN` is read by the CLI itself and is not in the agent's environment, which carries only the minimal set plus the `--env-pass` variables. The review job holds `pull-requests: write` and `checks: write` next to the agent, so keep the job to the review. The comment's free text (finding titles, paths, the requester's focus, reasons) is neutralized before it is posted: an HTML comment cannot carry another run's hidden marker and an `@mention` does not ping.
+
+### Control-plane guard
+
+The default reviewer is the skill packaged with the CLI, outside the checkout, so a PR diff cannot touch it when the CLI is installed outside the checkout. With `--project-skill`, or an explicit `--skill-root` inside the checkout, a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
+
+### Untrusted content
+
+Reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.
+
+### Fail-closed parsing
+
+The strict report schema above; a parse failure is never a silent pass, and inconsistent verdicts (Critical violations with an approve recommendation) are rejected.

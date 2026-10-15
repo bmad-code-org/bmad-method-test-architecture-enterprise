@@ -8,10 +8,14 @@ description: Audit supplied NFR implementation evidence and publish a verified r
 `tea-nfr` runs the packaged `bmad-tea-nfr` Create workflow against existing project evidence.
 It supplies resolved TEA configuration and NFR customizations, runs the workflow, validates the report and its canonical context, and publishes both files together.
 
+Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+
+Run it from a project that contains the example input paths:
+
 ```bash
 npx --package bmad-method-test-architecture-enterprise tea-nfr \
   --agent codex \
-  --project-root /work/relay \
+  --project-root . \
   --input docs/tech-spec.md \
   --implementation src \
   --evidence evidence \
@@ -36,6 +40,7 @@ The workflow determines whether measured evidence meets a declared threshold.
 | Option                                     | Meaning                                                                                                              |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `--agent codex\|claude\|agy\|custom\|none` | Required vendor selection. `none` retains a prompt without invoking a vendor or publishing an audit.                 |
+| `--project-root <dir>`                     | Consuming project root, defaults to the current directory.                                                           |
 | `--input <path>`                           | Required requirements document, repeatable. Project TEA configuration files also remain protected threshold sources. |
 | `--implementation <path>`                  | Required implementation file or directory, repeatable.                                                               |
 | `--evidence <path>`                        | Required existing implementation evidence file or directory, repeatable.                                             |
@@ -46,11 +51,13 @@ The workflow determines whether measured evidence meets a declared threshold.
 | `--fail-on concerns\|fail\|none`           | Gate threshold, defaults to `concerns`. `none` accepts a valid audit with any status.                                |
 | `--timeout-ms <n>`                         | Timeout per vendor attempt, defaults to 1,200,000 milliseconds.                                                      |
 | `--retries <n>`                            | Additional transport or timeout attempts, defaults to zero, maximum three.                                           |
-| `--model <name>`                           | Model override. Omitted selects the repository's pinned adapter model.                                               |
+| `--model <name>`                           | Model override; not accepted with `custom` or `none`.                                                                |
 | `--agent-cmd <path>`                       | Agent executable override. Required with `--agent custom`.                                                           |
 | `--agent-arg <arg>`                        | Additional agent argument, repeatable.                                                                               |
 | `--env-pass <NAME>`                        | Additional environment name passed to the agent, repeatable.                                                         |
 | `--skill-root <dir>`                       | Explicit trusted installed skill override with its sibling `bmod-tea` knowledge.                                     |
+
+Claude and Codex default to an adapter model and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
 
 Create is the command's supported operation.
 Each invocation performs a fresh audit.

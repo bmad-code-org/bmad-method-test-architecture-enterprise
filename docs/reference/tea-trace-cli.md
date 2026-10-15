@@ -47,7 +47,7 @@ Use `runtime_manifest` when no static test directory is available.
 Missing or unreadable live evidence reports `INACCESSIBLE` and leaves the gate unevaluated.
 The CLI rejects reports that claim collected coverage from missing evidence.
 It reads the [live verification contract](/docs/reference/live-verification-results.md).
-Existing Test Design and NFR documents are read from the project's artifact root.
+Existing Test Design and NFR documents are read from the same artifact root.
 
 ## Agent and execution
 
@@ -57,13 +57,15 @@ Use the agent CLI's existing login; [Test Review CLI prerequisites](/docs/refere
 
 | Option                | Meaning                                                                  |
 | --------------------- | ------------------------------------------------------------------------ |
-| `--model <name>`      | Override the adapter's default model.                                    |
+| `--model <name>`      | Model override; not accepted with `custom` or `none`.                    |
 | `--agent-cmd <path>`  | Override the executable; required for `custom`.                          |
 | `--agent-arg <arg>`   | Pass an extra agent argument. Repeat as needed.                          |
 | `--env-pass <NAME>`   | Pass an environment variable. Repeat as needed.                          |
 | `--timeout-ms <n>`    | Timeout per attempt, default `1200000`.                                  |
 | `--retries <n>`       | Additional transport or timeout attempts, default `1`, maximum `3`.      |
 | `--skill-root <path>` | Use an explicit Trace skill directory with sibling `bmod-tea/knowledge`. |
+
+Claude and Codex default to an adapter model and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
 
 `--agent none` prints and saves the resolved prompt without invoking an agent or replacing reports.
 Each retry uses a fresh attempt directory.
@@ -72,7 +74,7 @@ Invalid or incomplete output retains diagnostic evidence.
 
 ## Outputs and exit codes
 
-`--output-dir` sets the artifact root, default `_bmad-output/test-artifacts`.
+`--output-dir` overrides the artifact root resolved from the TEA `test_artifacts` setting in the [project configuration](/docs/reference/configuration.md). Without project configuration, the root is `_bmad-output/test-artifacts`.
 The CLI publishes scope-specific files under `trace/`:
 
 - `traceability-matrix-{run_key}.md`
@@ -103,6 +105,6 @@ Publication stages the report set and restores it after a write failure.
 If rollback fails, the error names retained recovery backups.
 Reports for other scopes remain in place.
 
-The repository diagnostic harness accepts `--artifacts-dir <path>` to retain staged projects, prompts, observations, and output streams during skill evaluations.
-Use a path outside the repository to keep the evaluated Git state unchanged.
-The harness runs `tea-trace-runner`; public CLI integration checks run `tea-trace`.
+## Diagnostic harness
+
+The repository's `tea-trace-runner` diagnostic harness, which skill evaluations use, takes `--artifacts-dir <path>` to retain staged projects, prompts and output streams. Point it outside the repository to keep the evaluated Git state unchanged. Public CLI checks run `tea-trace`.

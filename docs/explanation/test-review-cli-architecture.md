@@ -30,11 +30,11 @@ A TEA skill expects a human: it asks which mode to run and what inputs to use. A
 | Say what happened to a person                    | `lib/render.js`                      |
 | Put it where the pull request is                 | `lib/github-publisher.js`            |
 
-`cli/test-review.js` runs them in order: open the check run (with `--github`, before any flag is validated, so even a refused flag reaches the pull request), resolve skill, resolve config, look up the pull request base (with `--pr`), split the diff, measure the convention baseline, load the registry's row severities, build prompt, check the agent CLI is installed and logged in, then spawn agent under isolation and parse report, once per attempt (`--retries` repeats the pair after an agent or parse failure), emit verdict, render the comment file and publish to GitHub when asked, exit. A failure at any step still reaches the last two: the run ends in an exit code, the renderer turns a run with no verdict into a broken gate, and the publisher closes the check run it opened.
+`cli/test-review.js` runs them in order: open the check run (with `--github`, before any flag is validated, so even a refused flag reaches the pull request), resolve skill and config, look up the pull request base (with `--pr`), split the diff, measure the convention baseline, load the registry's row severities, build the prompt, check the agent CLI is installed and logged in, then spawn the agent under isolation and parse the report, once per attempt (`--retries` repeats the pair after an agent or parse failure). Last come the verdict, the rendered comment file and the GitHub publish when asked, and the exit. A failure at any step still reaches the last two: the renderer turns a run with no verdict into a broken gate, and the publisher closes the check run it opened.
 
-`lib/registry-rows.js` closes a gap found while auditing the parser: a report could document a real, row-cited Critical finding in prose while its `**Total Violations**:` summary line claimed zero, and nothing compared the two. The CLI computed Approve at 100/100 straight from the summary line, with the finding sitting right there unread. It now reads `criteria-registry.md`'s row → severity map directly from the skill, never a hardcoded copy that could drift, and `parse-report.js` binds every `**Row**: <id>` citation to a real row with a matching severity and reconciles the documented Critical/High finding blocks against the counts the summary claims. Scoped to Critical and High, the two severities that flip `deriveRecommendation`'s output.
+`lib/registry-rows.js` exists because the score is computed rather than trusted. It reads `criteria-registry.md`'s row → severity map directly from the skill, never a hardcoded copy that could drift. `parse-report.js` binds every `**Row**: <id>` citation to a real row with a matching severity and reconciles the documented Critical/High finding blocks against the counts the summary claims. Without that, a report could document a real Critical finding in prose while its `**Total Violations**:` line claimed zero, and the CLI would compute Approve from the summary. The check is scoped to Critical and High, the two severities that flip `deriveRecommendation`'s output.
 
-`lib/convention-baseline.js` exists for the same reason the score is computed rather than trusted. A live codex run on a couture-cast pull request reported `Convention: priorityMarkers (18 of 40 sampled)` against a repo with zero instances of that convention anywhere, because nothing forced the "sample the corpus" step in the skill's own `step-02-discover-tests.md` §2b to be a real Glob/Grep rather than a plausible guess. The CLI now samples itself: `git ls-files`, review set excluded, ranked closest-first by directory distance, capped at 8. It states the result in the prompt as a fixed fact and exits 3 on a report whose `Convention: <key> (<adopted> of <sampled> sampled)` citations disagree with what it measured.
+`lib/convention-baseline.js` exists for the same reason. Nothing forced the skill's "sample the corpus" step (`step-02-discover-tests.md` §2b) to be a real Glob/Grep, so a live run could report `Convention: priorityMarkers (18 of 40 sampled)` against a repo with zero instances of that convention. The CLI now samples itself: `git ls-files`, review set excluded, ranked closest-first by directory distance, capped at 8. It states the result in the prompt as a fixed fact and exits 3 on a report whose `Convention: <key> (<adopted> of <sampled> sampled)` citations disagree with what it measured.
 
 ---
 
@@ -73,13 +73,15 @@ Fix: a precedence chain, resolved once, stated in full.
 2. Project's config file
 3. Module default
 
+Where the config is read from is a trust boundary. A git-diff review takes policy, configuration and skill customization from the pinned base tree, so a pull request cannot edit the settings that judge it; an explicit-file review normally reads the working tree. Details: [TEA config resolution](/docs/reference/tea-test-review-cli.md#tea-config-resolution).
+
 The CLI hardcodes the module defaults (mirroring `skills/bmod-tea/bmod.toml`) so it can state them when no config file exists. A test asserts the two stay equal; drift fails the gate instead of silently changing what CI reviews.
 
 ### The rule outlives the prompt
 
-The same argument covers inputs the prompt never sees. The model is one: nothing about it appears in the prompt text, and it decides the verdict more than most things that do. An unpinned model is resolved by the vendor CLI from its own config file, which exists on a developer machine and not on a CI runner, so "vendor agnostic" quietly meant "different reviewer in each environment", and the CI reviewer changed whenever the vendor shipped a new default. Same defect as the unstated config keys, one layer down: the branch lived in the spawn instead of the prompt, which is why it survived the first pass.
+The same argument covers inputs the prompt never sees, and the model is one: nothing about it appears in the prompt text, yet it decides the verdict more than most things that do. An unpinned model is resolved by the vendor CLI from its own config file, which exists on a developer machine and not on a CI runner, so "vendor agnostic" meant "a different reviewer in each environment", and the CI reviewer changed whenever the vendor shipped a new default. Same defect as the unstated config keys, one layer down: the branch lived in the spawn instead of the prompt.
 
-Each built-in adapter now records an attributable model and accepts a `--model` override. Claude and Codex pin defaults. Agy uses its session model when no override is supplied and records `null` for that unresolved value. The resolved value goes into the verdict JSON next to the agent, because a score with no attribution cannot be compared to another. The custom runner has no portable model flag, so its caller supplies model selection through explicit runner arguments and keeps that configuration beside the result. An input is stated or it is decided for you, and where the input lives has nothing to do with whether that is true.
+Each built-in adapter now records an attributable model and accepts `--model`. Claude and Codex pin defaults; Agy uses its session model and records `null` for that unresolved value. The resolved value goes into the verdict JSON next to the agent, because a score with no attribution cannot be compared to another. The custom runner has no portable model flag, so its caller selects the model through runner arguments and keeps that configuration beside the result. An input is stated or it is decided for you.
 
 ---
 
@@ -130,22 +132,18 @@ Prompt contract, parser, and report template are one contract in three files; th
 
 ## Trying it locally
 
-The CLI reviews with the skill shipped in its own package, so a clone of this repo needs no install step and no skill flag.
+The CLI reviews with the skill shipped in its own package, so a clone of this repo needs no separate skill installation and no skill flag. It does need the Node.js dependencies (Node.js 22.20.0 or later), installed once with `npm ci`.
 
-`--agent none` builds the prompt, prints it, exits. No subprocess, no API cost:
+`--agent none` builds the prompt, prints it, exits. No subprocess, no API cost, no agent credentials:
 
 ```bash
+npm ci
 node cli/test-review.js --agent none --files test/test-test-review-cli.js
 ```
 
-Add a second file and `review_scope` flips from `single` to `directory`.
+The command exits 0 and prints a prompt that names the selected file. Add a second file and `review_scope` flips from `single` to `directory`.
 
-With a real agent, same flags, swap in `--agent claude` and export `ANTHROPIC_API_KEY` first:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-node cli/test-review.js --agent claude --files test/test-test-review-cli.js --output test-review.md
-```
+With a real agent, install and authenticate its CLI first (an existing login works as well as an API key; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)), then replace `--agent none` with `--agent claude` and add `--output test-review.md`.
 
 Installed in a consuming repo, the bare `tea-test-review` binary does the same. `--project-skill` reviews with a copy the project vendored, and `--skill-root` names an exact skill directory.
 
