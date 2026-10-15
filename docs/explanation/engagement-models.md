@@ -50,7 +50,7 @@ Run TEA skills standalone, without BMad Method planning.
 
 Run `framework` if you want TEA to scaffold the harness, the CI pipeline, or both. The agent's `CI` menu code selects CI scope.
 Both work best after the stack and architecture are decided.
-Browser scaffolds apply to browser projects; other stacks use their own runner, listed in [Execution Targets](/docs/reference/execution-targets.md).
+Browser scaffolds apply to browser projects; see [Execution Targets](/docs/reference/execution-targets.md) for other runners.
 `evaluate` fits any existing skill, agent, or API and needs no earlier `automate` run.
 
 **You bring:** coverage oracle inputs (requirements, specs, external system-of-record pointers, or an analyzable source tree), a development environment, and project context.

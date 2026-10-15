@@ -894,8 +894,7 @@ Or keep Cypress values in `cypress.env.json`, which Cypress loads itself:
 ```
 
 Framework setup writes `.env.example`; copy it to `.env` and fill in real values.
-A `.env` file only helps when something loads it into the environment: your shell (`set -a; source .env; set +a`), your test runner's config, or CI.
-Creating the file does not export the variables.
+A `.env` file helps only when something loads it: your shell (`set -a; source .env; set +a`), your runner's config, or CI.
 
 Split them per environment (`.env.development`, `.env.staging`, `.env.production`) and keep the production file pointed at read-only tests only.
 Ignore every file that holds real credentials, and commit only a sanitized example:
@@ -905,8 +904,6 @@ Ignore every file that holds real credentials, and commit only a sanitized examp
 !.env.example
 cypress.env.json
 ```
-
-Use placeholders in `.env.example` and in any sample you share.
 
 **CI/CD:** set the same names as secrets in your CI platform.
 

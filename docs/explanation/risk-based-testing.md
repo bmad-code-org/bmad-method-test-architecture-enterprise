@@ -41,8 +41,7 @@ b      Low  Med  High
 ```
 
 TEA applies this in `test-design`.
-The bands below form the risk-governance release policy: a team rule about which risks must be resolved before release.
-The computed `trace` gate decision is separate and rests on requirement coverage.
+The bands below form the risk-governance release policy: which risks must be resolved before release.
 
 ### What each band buys
 
@@ -86,10 +85,10 @@ flowchart TD
 An open score-9 risk blocks release under this policy.
 A mitigation plan records the work needed to resolve it; writing the plan alone does not clear the block.
 
-The policy and the `trace` gate decision answer different questions.
-`trace` computes PASS, CONCERNS, or FAIL from P0, P1, and overall requirement coverage, oracle confidence, and live evidence, and does not read the risk register; its critical-gap counts are coverage gaps.
-A run with full requirement coverage can PASS while a score-9 risk is still open, so review open risks and NFR evidence separately before release.
-See the [gate rules](/docs/reference/commands.md#trace) for the exact thresholds.
+The `trace` gate decision is separate.
+It computes PASS, CONCERNS, or FAIL from requirement coverage, oracle confidence, and live evidence, and does not read the risk register.
+Full coverage can PASS while a score-9 risk is open, so review open risks and NFR evidence separately before release.
+See the [gate rules](/docs/reference/commands.md#trace).
 The trace skill reports human waivers separately and keeps its derived decision.
 
 Every score at 6 or above needs a written mitigation with an owner and a date:

@@ -53,7 +53,6 @@ flowchart TB
 TEA Core supplies:
 
 - **Risk model.** Probability × impact on a 1-9 scale, with scores ≥6 requiring documented mitigation and an open 9 blocking release under the risk-governance policy.
-  The computed `trace` decision rests on coverage, so review open risks separately.
   See [Risk-Based Testing](/docs/explanation/risk-based-testing.md).
 - **Priority assignment.** P0-P3 with coverage targets and execution ordering per band.
 - **Test level selection.** Unit, integration, and end-to-end chosen by what the risk actually demands, with a duplicate-coverage guard that pushes verification to the cheapest level that can carry it.
@@ -66,8 +65,7 @@ TEA Core supplies:
 
 Two of TEA's eight skills, `nfr-assess` and `trace`, apply stack-neutral rules.
 The NFR verdict criteria and the Trace coverage and gate rules are the same for a React app, a Go service, or a payment terminal.
-Evidence discovery and optional collection can use stack-specific tools, such as browser evidence when browser automation is enabled.
-A Go service needs no browser tooling.
+Evidence discovery and optional collection can use stack-specific tools, such as browser evidence; a Go service needs no browser tooling.
 
 ## What an execution target supplies
 

@@ -46,18 +46,18 @@ For a global install, add `--global`. Move unmanaged old folders out after backu
 **Symptom**: `npx skills add` hangs, times out, or cannot fetch the repository.
 
 **Cause**: The npm registry is unreachable or slow, or a firewall blocks GitHub.
-The two fail differently, so check each before changing anything.
+Check each before changing anything.
 
 ```bash
-npm config get registry                        # the registry npm uses; a corporate mirror here is intentional
+npm config get registry                        # a corporate mirror here is intentional
 npm ping                                       # HTTPS check against that registry
 curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://github.com   # prints 200 when GitHub answers, or the connection error
 ```
 
-- `npm ping` fails: the registry or proxy is the problem. Ask your administrator about the mirror and proxy settings.
+- `npm ping` fails: the registry or proxy is the problem. Ask your administrator.
 - `curl` prints a connection error or a status other than 200: GitHub is blocked. See [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
-- The error names the npm cache (`EACCES` on the cache folder, `integrity checksum failed`): run `npm cache verify`, which drops corrupt entries and rebuilds the index, then retry. Run `npm cache clean --force` only if that does not help.
-- The registry is a leftover from a proxy you no longer use and your organization allows the public one: note the current value, then set it with `npm config set registry https://registry.npmjs.org/`. Restore the original with `npm config set registry <noted value>`.
+- The error names the npm cache (`EACCES`, `integrity checksum failed`): run `npm cache verify`, then retry. Run `npm cache clean --force` only if that fails.
+- The registry is a leftover from an old proxy and your organization allows the public one: note the value, then run `npm config set registry https://registry.npmjs.org/`. Restore it with the same command and the noted value.
 
 ### TEA Says It Is Not Set Up
 
