@@ -53,7 +53,7 @@ const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-discovery-
 const SLICE_ONE_FOLDER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-discovery');
 const ADR = path.join(PROJECT_ROOT, '_bmad-output', 'planning-artifacts', 'evaluate', 'adr-offline-candidate-review-and-promotion.md');
 const TARGET = 'skill/steps-c/step-04-generate-tests.md';
-const REFERENCE_PATH = 'discovery/red-phase-review/reference.json';
+const REFERENCE_PATH = 'discovery/red-phase-review/evidence/reference.json';
 const SEED = '20261014';
 const BIDI_OVERRIDE = String.fromCodePoint(0x20_2e);
 
@@ -118,7 +118,11 @@ function observedRecord(generated, scenario) {
   record.observations = [baseline.observation, candidate.observation];
   return {
     record: validateCandidate(record),
-    inputs: { evidence: { 'OBS-001': baseline.bytes, 'OBS-002': candidate.bytes }, reference: referenceBytes },
+    inputs: {
+      evidence: { 'OBS-001': baseline.bytes, 'OBS-002': candidate.bytes },
+      reference: referenceBytes,
+      referencePath: REFERENCE_PATH,
+    },
   };
 }
 
@@ -322,6 +326,20 @@ function checkClassification() {
   );
   const badReference = classifyGap(() => {}, Buffer.from('not json'));
   check(badReference.disposition === 'undetermined', 'an unreadable reference leaves the departure undetermined');
+  for (const [label, referencePath] of [
+    ['kept outside the evidence directory', 'discovery/red-phase-review/reference.json'],
+    ['kept in another campaign', 'discovery/other-campaign/evidence/reference.json'],
+    ['given no path', undefined],
+  ]) {
+    const { record, inputs } = gapWith(() => {});
+    const placed = review.classifyCandidate(record, { ...inputs, referencePath });
+    check(
+      placed.disposition === 'undetermined' &&
+        /must be kept at discovery\/red-phase-review\/evidence\/<file>/.test(placed.reasons.join(' ')) &&
+        placed.independentEvidence === null,
+      `a reference ${label} is not cited as independent evidence: ${placed.disposition} ${JSON.stringify(placed.reasons)}`,
+    );
+  }
 
   const { record, inputs } = observed['seeded-gap'];
   const lost = review.classifyCandidate(record, { ...inputs, evidence: { 'OBS-001': inputs.evidence['OBS-001'] } });
@@ -685,7 +703,7 @@ async function checkPromotion() {
 
   const claimed = structuredClone(stored);
   claimed.promotion.qualificationReceipt = {
-    path: 'baseline/qualification/P-003.mutated-fail.json',
+    path: 'baseline/qualification/P-003/mutated-fail.json',
     digest: bytesDigest(Buffer.from('a receipt nobody wrote')),
   };
   plant(folder, gapPath, serializeCandidate(claimed));
@@ -710,11 +728,20 @@ async function checkPromotion() {
     const damaged = evaluationCopy('promotion-damaged');
     const damagedPath = plantObserved(damaged, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
     damage(damaged);
-    refuses(
-      `promoting after ${label}`,
-      () => review.promoteCandidate(damaged, damagedPath, REFERENCE_PATH),
-      /now classifies as undetermined/,
-    );
+    if (label.startsWith('the reference')) {
+      // The reader holds the cited reference snapshot to its digest before the classification runs.
+      const error = outcome(() => review.promoteCandidate(damaged, damagedPath, REFERENCE_PATH));
+      check(
+        error instanceof candidateModule.CandidateError && /digests to|does not exist/.test(error.message),
+        `promoting after ${label}: expected the reader to refuse the cited snapshot, got ${error?.message ?? 'a result'}`,
+      );
+    } else {
+      refuses(
+        `promoting after ${label}`,
+        () => review.promoteCandidate(damaged, damagedPath, REFERENCE_PATH),
+        /now classifies as undetermined/,
+      );
+    }
     check(!fs.existsSync(path.join(damaged, 'mutations', 'M-002.mutation.json')), `promoting after ${label} wrote no draft`);
   }
 

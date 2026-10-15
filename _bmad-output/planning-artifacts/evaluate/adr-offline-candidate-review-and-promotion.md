@@ -3,7 +3,7 @@ name: Offline candidate review and promotion
 type: adr
 status: accepted
 created: 2026-10-14
-scope: Evaluate discovery lane, features F03 and F14 of the MutEval adoption plan, third slice
+scope: Evaluate discovery lane, features F03 and F14 of the Evaluate discovery plan, third slice
 binds: [AD-8, AD-9, AD-22]
 sources: [adr-exploratory-candidate-contract.md, adr-offline-prompt-candidate-generator.md]
 ---
@@ -18,14 +18,14 @@ The plan asks for F03 at its minimum (independently supported classification, ex
 
 ## Decision
 
-`classifyCandidate(record, {evidence, reference})` reads the bytes of each observation's retained evidence file and, when the outputs of the two arms differ, the bytes of an independent reference. It returns a candidate disposition and the reasons for it. The disposition is a suggestion and decides nothing.
+`classifyCandidate(record, {evidence, reference, referencePath})` reads the bytes of each observation's retained evidence file and, when the outputs of the two arms differ, the bytes of an independent reference. It returns a candidate disposition and the reasons for it. The disposition is a suggestion and decides nothing.
 
 - `target-error`: an arm recorded errors and no completed trial.
 - `undetermined`: an arm is short of its planned trials; an evidence file is absent, no longer digests to what the record retained, or disagrees with the recorded counts; the baseline varies between trials; the arms ran different inputs; the outputs differ and no reference says which is right; the reference does not label a differing input; or the baseline itself departs from the reference, so the difference is not attributable to the edit. One departing trial among missing ones is `undetermined`.
 - `observationally-unchanged`: every sampled input produced the same output on both arms. The reasons say that an unsampled input may still differ.
 - `confirmed-undesirable-missed` and `confirmed-undesirable-caught`: the candidate arm departs from the reference where the baseline matches it. The evaluator's recorded verdict on each departing trial separates the two: it passed at least one (missed) or failed every one (caught).
 
-The evidence file is `{arm, trials: [{trial, input, status, output, evaluator, error}]}` at `discovery/<campaignId>/evidence/<candidateId>.<observationId>.json`, and its digest is the observation's `evidence`. Outputs are an independently defined behavioral projection of the target (a count, a field, a code), compared as exact strings. A free-text output has to be projected before it is recorded, since the classifier infers no semantic equivalence. Both files are read as strict UTF-8 JSON and refused when an object states a key twice. The reference is `{kind, reference, cases: {input: expected output}}` and is recorded as the candidate's independent evidence with its own digest, which the first slice's reader already holds apart from the requirement, the target and every observation.
+The evidence file is `{arm, trials: [{trial, input, status, output, evaluator, error}]}` at `discovery/<campaignId>/evidence/<candidateId>.<observationId>.json`, and its digest is the observation's `evidence`. Outputs are an independently defined behavioral projection of the target (a count, a field, a code), compared as exact strings. A free-text output has to be projected before it is recorded, since the classifier infers no semantic equivalence. Both files are read as strict UTF-8 JSON and refused when an object states a key twice. The reference is `{kind, reference, cases: {input: expected output}}`, kept as a snapshot at `discovery/<campaignId>/evidence/<file>`, and is recorded as the candidate's independent evidence under that path with its own digest (a reference kept anywhere else classifies as undetermined), which the first slice's reader already holds apart from the requirement, the target and every observation.
 
 `settleCandidate` stores the stops the evidence settles alone (`target-error`, `undetermined`) on an observed record, so they stay in the record and the report. `reviewCandidate` records a person's decision. A confirmed or unchanged conclusion is accepted only where the classification says the same; `undetermined` and `inapplicable` can always be chosen; an errored run cannot be reviewed. The review scope is `decisionScope` of the first slice: identity, determination and the observations the decision rested on.
 

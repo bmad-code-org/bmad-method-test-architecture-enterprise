@@ -126,8 +126,15 @@ function readEvidence(observation, bytes) {
   return problems.length > 0 ? { problems } : { problems, trials };
 }
 
-/** The reference file's labels, or the reason it cannot be used. It is `{kind, reference, cases: {input: expected output}}`. */
-function readReference(bytes) {
+/**
+ * The reference file's labels, or the reason it cannot be used. It is `{kind, reference, cases: {input: expected output}}`,
+ * kept at `referencePath` in the campaign's evidence directory, which is how the record cites it as independent evidence.
+ */
+function readReference(bytes, referencePath, record) {
+  const directory = `discovery/${record.campaignId}/evidence/`;
+  if (typeof referencePath !== 'string' || !referencePath.startsWith(directory)) {
+    return { problem: `the independent reference must be kept at ${directory}<file>, so the record cites the snapshot a reviewer saw` };
+  }
   const parsed = parseStrict(bytes);
   if (parsed.problem) return { problem: `the independent reference ${parsed.problem}` };
   const { value } = parsed;
@@ -141,7 +148,7 @@ function readReference(bytes) {
   if (!valid) return { problem: 'the independent reference is not {kind, reference, cases: {input: expected output}}' };
   return {
     cases: new Map(Object.entries(value.cases)),
-    evidence: { kind: value.kind, reference: value.reference, digest: bytesDigest(bytes) },
+    evidence: { kind: value.kind, reference: referencePath, digest: bytesDigest(bytes) },
   };
 }
 
@@ -161,13 +168,13 @@ function outputsByInput(trials) {
  * Classifies what a candidate did from the evidence the record retains.
  *
  * @param {object} record a candidate with observations
- * @param {{evidence?: Record<string, Uint8Array>, reference?: Uint8Array}} [inputs] the bytes of each observation's
- *   evidence file by observation ID, and the bytes of the independent reference
+ * @param {{evidence?: Record<string, Uint8Array>, reference?: Uint8Array, referencePath?: string}} [inputs] the bytes of each
+ *   observation's evidence file by observation ID, the bytes of the independent reference and the path in the folder it is kept at
  * @returns {{disposition: string, reasons: string[], arms: object, compared: number, deviations: object[], independentEvidence: object|null}}
  *   `disposition` is a candidate disposition, never a native outcome; `reasons` says why, every missing, errored or
  *   unreadable piece of evidence included
  */
-function classifyCandidate(record, { evidence = {}, reference } = {}) {
+function classifyCandidate(record, { evidence = {}, reference, referencePath } = {}) {
   const reasons = [];
   const arms = {};
   const trialsByArm = { baseline: [], candidate: [] };
@@ -231,7 +238,7 @@ function classifyCandidate(record, { evidence = {}, reference } = {}) {
     );
     return result('undetermined', { compared: inputs.size });
   }
-  const labels = readReference(reference);
+  const labels = readReference(reference, referencePath, record);
   if (labels.problem) {
     reasons.push(labels.problem);
     return result('undetermined', { compared: inputs.size });
@@ -478,7 +485,7 @@ function loadReviewInputs(folder, record, referencePath) {
     if (bytes !== null) evidence[observation.observationId] = bytes;
   }
   const reference = referencePath === undefined ? null : held(referencePath);
-  return reference === null ? { evidence } : { evidence, reference };
+  return reference === null ? { evidence } : { evidence, reference, referencePath };
 }
 
 module.exports = {
