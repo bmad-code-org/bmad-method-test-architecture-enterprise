@@ -745,6 +745,60 @@ async function checkPromotion() {
     check(!fs.existsSync(path.join(damaged, 'mutations', 'M-002.mutation.json')), `promoting after ${label} wrote no draft`);
   }
 
+  // Applying a promotion holds the cited evidence and the stored record to what the promotion was computed from.
+  const applied = (label) => {
+    const target = evaluationCopy(label);
+    const targetPath = plantObserved(target, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));
+    return { target, targetPath, promotion: review.promoteCandidate(target, targetPath, REFERENCE_PATH) };
+  };
+  const evidenceChanged = applied('apply-evidence-changed');
+  plant(evidenceChanged.target, REFERENCE_PATH, '{"kind":"reference-computation","reference":"x","cases":{}}\n');
+  refuses(
+    'applying after the cited reference changed',
+    () => review.applyPromotion(evidenceChanged.target, evidenceChanged.promotion),
+    /no longer digests to/,
+  );
+  check(
+    !fs.existsSync(path.join(evidenceChanged.target, 'mutations', 'M-002.mutation.json')),
+    'applying after the cited reference changed wrote no draft',
+  );
+  const raced = applied('apply-raced');
+  const rewrittenRecord = fs
+    .readFileSync(path.join(raced.target, ...raced.targetPath.split('/')), 'utf8')
+    .replace('The reference and the cited', 'A rewrittenRecord review: the reference and the cited');
+  const originalWrite = fs.writeFileSync;
+  fs.writeFileSync = (file, content, options) => {
+    if (String(file).endsWith('M-002.mutation.json'))
+      originalWrite(path.join(raced.target, ...raced.targetPath.split('/')), rewrittenRecord);
+    return originalWrite(file, content, options);
+  };
+  try {
+    refuses(
+      'applying while a newer review is written',
+      () => review.applyPromotion(raced.target, raced.promotion),
+      /changed while the promotion was written/,
+    );
+  } finally {
+    fs.writeFileSync = originalWrite;
+  }
+  check(
+    fs.readFileSync(path.join(raced.target, ...raced.targetPath.split('/')), 'utf8') === rewrittenRecord &&
+      !fs.existsSync(path.join(raced.target, 'mutations', 'M-002.mutation.json')),
+    'a review written while a promotion was applied is kept and the draft is cleaned up',
+  );
+  for (const reference of [
+    'discovery/red-phase-review/evidence/../reference.json',
+    'discovery/red-phase-review/evidence/sub/reference.json',
+    'discovery/red-phase-review/evidence/x.candidate.json',
+  ]) {
+    const { record, inputs } = gapWith(() => {});
+    const placed = review.classifyCandidate(record, { ...inputs, referencePath: reference });
+    check(
+      placed.disposition === 'undetermined' && placed.independentEvidence === null,
+      `a reference at ${reference} is not cited: ${placed.disposition}`,
+    );
+  }
+
   // A decision written while the promotion is computed is never overwritten by it.
   const midway = evaluationCopy('promotion-midway');
   const midwayPath = plantObserved(midway, 'seeded-gap', reviewedRecord('seeded-gap', 'confirmed-undesirable-missed'));

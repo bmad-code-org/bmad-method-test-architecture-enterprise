@@ -132,7 +132,12 @@ function readEvidence(observation, bytes) {
  */
 function readReference(bytes, referencePath, record) {
   const directory = `discovery/${record.campaignId}/evidence/`;
-  if (typeof referencePath !== 'string' || !referencePath.startsWith(directory)) {
+  if (
+    typeof referencePath !== 'string' ||
+    !referencePath.startsWith(directory) ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(referencePath.slice(directory.length)) ||
+    referencePath.endsWith('.candidate.json')
+  ) {
     return { problem: `the independent reference must be kept at ${directory}<file>, so the record cites the snapshot a reviewer saw` };
   }
   const parsed = parseStrict(bytes);
@@ -434,6 +439,11 @@ function applyPromotion(folder, promotion) {
   if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
     throw new ReviewError([`${candidate.path} changed after the promotion was computed; promote again`]);
   }
+  for (const evidence of JSON.parse(candidate.content).independentEvidence) {
+    if (bytesDigest(readHeldFile(folder, evidence.reference, 'independent evidence')) !== evidence.digest) {
+      throw new ReviewError([`${evidence.reference} no longer digests to ${evidence.digest}; promote again`]);
+    }
+  }
   const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;
@@ -453,6 +463,10 @@ function applyPromotion(folder, promotion) {
     create(staging, candidate.content, path.posix.basename(staging));
     madeDirectory = fs.mkdirSync(path.dirname(mutationFile), { recursive: true });
     create(mutationFile, mutation.content, mutation.path);
+    // A decision written while the files were staged is never overwritten: the stored record is read again just before the swap.
+    if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
+      throw new ReviewError([`${candidate.path} changed while the promotion was written; promote again`]);
+    }
     fs.renameSync(staging, candidateFile);
   } catch (error) {
     for (const file of created) fs.rmSync(file, { force: true });
