@@ -153,6 +153,14 @@ function wordAfter(line, index) {
   return /^\W*([\p{L}']+)/u.exec(line.slice(index, index + WINDOW))?.[1].toLowerCase() ?? '';
 }
 
+const SENTENCE_START = /[\s)\]"'”’]*(?:$|\p{Lu})/uy;
+
+/** Whether the line ends at `at`, or a sentence starts there, past the closing marks of a quotation. */
+function endsSentence(line, at) {
+  SENTENCE_START.lastIndex = at;
+  return SENTENCE_START.test(line);
+}
+
 /**
  * `line` with every protected character blanked, so punctuation and words inside a quotation, inline code, a placeholder, a
  * link target, a URL or a path read as part of that token and not as the sentence around it. The punctuation that closes a
@@ -169,15 +177,37 @@ function maskProtected(line, reasons) {
     let to = from + 1;
     if (reason !== undefined) {
       while (to < masked.length && reasons[to] === reason) to += 1;
-      // The punctuation that closes a sentence after a URL or a path belongs to the sentence.
-      let kept = to;
-      if (reason === 'url' || reason === 'path') while (kept > from && '.,;:!?'.includes(masked[kept - 1])) kept -= 1;
-      for (let at = from; at < kept; at += 1) masked[at] = ' ';
+      if (reason === 'url' || reason === 'path') {
+        // The punctuation that closes a sentence after a URL or a path belongs to the sentence, except a `?` right after a `/`.
+        let kept = to;
+        while (kept > from && '.,;:!?'.includes(masked[kept - 1])) kept -= 1;
+        if (kept > from && masked[kept - 1] === '/' && masked[kept] === '?') kept += 1;
+        masked.fill(' ', from, kept);
+      } else if (
+        reason === 'quotation' &&
+        to - from > 2 &&
+        '.!?'.includes(masked[to - 2]) &&
+        /["”’']/.test(masked[to - 1]) &&
+        endsSentence(line, to)
+      ) {
+        // A quotation that ends in a mark closes its sentence when the line ends after it or a new sentence starts there.
+        masked.fill(' ', from, to - 2);
+        masked[to - 1] = ' ';
+      } else {
+        masked.fill(' ', from, to);
+      }
     }
     from = to;
   }
-  // The text of a link is not the sentence around it.
-  for (const link of line.matchAll(/\[[^\]\n]*\](?=\()/g)) masked.fill(' ', link.index, link.index + link[0].length);
+  // The text of a link is not the sentence around it: from the nearest `[` to a `]` that a `(` follows.
+  let open = -1;
+  for (let at = 0; at < line.length; at += 1) {
+    if (line[at] === '[') open = at;
+    else if (line[at] === ']') {
+      if (open !== -1 && line[at + 1] === '(') masked.fill(' ', open, at + 1);
+      open = -1;
+    }
+  }
   return masked.join('');
 }
 
