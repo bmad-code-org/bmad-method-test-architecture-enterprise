@@ -540,6 +540,9 @@ const MULTI_LINE_RULES = [
   // A line is code inside a list item when it sits four columns past the item's content column.
   { text: '-     Item\n\n        You must cite.\n', family: 'modal-strength', code: 'protected-span', reason: 'indented code' },
   { text: '- Item\n\n    You must cite.\n', family: 'modal-strength', edited: 'You should cite.' },
+  { text: '> Note\n---\nYou must cite.\n', family: 'modal-strength', edited: 'You should cite.' },
+  { text: '> Note\n***\nYou must cite.\n', family: 'modal-strength', edited: 'You should cite.' },
+  { text: '-     ```\n  You must cite.\n', family: 'modal-strength', edited: 'You should cite.' },
   // Only a bullet or `1.` interrupts a paragraph, so a span runs over a `2.` line; front matter belongs to no paragraph.
   { text: 'Use `code\n2. You must not x` y\n', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
   { text: '---\nname: x`\n---\nYou must act `y\n', family: 'modal-strength', edited: 'You should act `y' },
@@ -628,6 +631,14 @@ const EDGE_RULES = [
   { line: 'Never ever skip.', family: 'negation', code: 'grammar' },
   { line: 'Never again skip.', family: 'negation', code: 'grammar' },
   // A bound in a question asks and does not instruct; the same bound as an instruction loosens.
+  // A question mark inside a quotation or inline code ends no sentence.
+  { line: 'You must answer "why?" in one sentence.', family: 'modal-strength', edited: 'You should answer "why?" in one sentence.' },
+  {
+    line: 'You must explain what `?` means in one sentence.',
+    family: 'modal-strength',
+    edited: 'You should explain what `?` means in one sentence.',
+  },
+  { line: 'Answer "why?" in at most 20 words.', family: 'numeric-threshold', edited: 'Answer "why?" in at most 40 words.' },
   { line: 'Can you keep responses at most 5 words?', family: 'numeric-threshold', code: 'question' },
   { line: 'Keep responses at most 5 words.', family: 'numeric-threshold', edited: 'Keep responses at most 10 words.' },
   {
@@ -926,6 +937,8 @@ function checkCostStaysLinear() {
   const cases = [
     ['a run of apostrophes before a digit', `${"'".repeat(5000)}1 must go\n`],
     ['a long word before a digit', `${'a'.repeat(200_000)}1b must go\n`],
+    ['fifty thousand sites on one line', `${'must '.repeat(50_000)}\n`],
+    ['fifty thousand questions on one line', `${'Why? must '.repeat(25_000)}\n`],
     ['twenty thousand sites on one line', `${'must '.repeat(20_000)}\n`],
     ['ten thousand bounds on one line', `${'at most 5 '.repeat(10_000)}\n`],
     ['a long run of path separators', `${'a/'.repeat(100_000)}\n`],

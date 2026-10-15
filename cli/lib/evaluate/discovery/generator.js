@@ -153,9 +153,24 @@ function wordAfter(line, index) {
   return /^\W*([\p{L}']+)/u.exec(line.slice(index, index + WINDOW))?.[1].toLowerCase() ?? '';
 }
 
-/** Whether the sentence holding `index` ends in a question mark; a full stop between digits ends nothing. */
-function asks(line, index) {
-  return /[!?]|\.(?!\d)|$/.exec(line.slice(index))[0] === '?';
+/**
+ * The question test of one line: `(index) => boolean`, whether the sentence holding `index` ends in a question mark. A full
+ * stop between digits ends nothing, and a mark inside a quotation or inline code ends nothing either. The terminators are
+ * found once per line, so each test is a search over them and a line of many sites costs time in proportion to its length.
+ */
+function questionTest(line) {
+  const masked = line.replaceAll(/`[^`]*`|"[^"]*"|“[^”]*”/g, (span) => ' '.repeat(span.length));
+  const ends = [...masked.matchAll(/[!?]|\.(?!\d)/g)].map((match) => ({ at: match.index, question: match[0] === '?' }));
+  return (index) => {
+    let low = 0;
+    let high = ends.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (ends[middle].at < index) low = middle + 1;
+      else high = middle;
+    }
+    return ends[low]?.question ?? false;
+  };
 }
 
 /** A site the family recognized but cannot edit safely. */
@@ -224,11 +239,12 @@ function isEpistemic(line, end) {
  */
 function modalSites(line) {
   const sites = [];
+  const asks = questionTest(line);
   for (const match of line.matchAll(/(?<![\w-])(must|shall)(?![\w-])/giu)) {
     const [word] = match;
     const start = match.index;
     const end = start + word.length;
-    if (asks(line, end)) {
+    if (asks(end)) {
       sites.push(refuse(start, end, 'question', `"${word}" sits in a question, which asks and does not instruct`));
     } else if (NOUN_DETERMINERS.has(wordBefore(line, start))) {
       sites.push(
@@ -271,6 +287,7 @@ function modalSites(line) {
  */
 function negationSites(line) {
   const sites = [];
+  const asks = questionTest(line);
   const patterns = [
     { pattern: /(?<![\w-])(do|must|shall|should)(\s+)not(?![\w-])/giu, keep: (m) => m[1] },
     { pattern: /(?<![\w-])(do|must|should)n['’]t(?![\w-])/giu, keep: (m) => m[1] },
@@ -283,7 +300,7 @@ function negationSites(line) {
       const end = start + match[0].length;
       const before = wordBefore(line, start);
       const after = wordAfter(line, end);
-      if (asks(line, end)) {
+      if (asks(end)) {
         sites.push(refuse(start, end, 'question', `"${match[0]}" sits in a question, which asks and does not instruct`));
       } else if (NEGATION_WORDS.has(after) || NEGATION_WORDS.has(before) || /^\W*\p{L}*n['’]t\b/iu.test(line.slice(end, end + WINDOW))) {
         sites.push(
@@ -324,6 +341,7 @@ function negationSites(line) {
  */
 function numericSites(line) {
   const sites = [];
+  const asks = questionTest(line);
   for (const match of line.matchAll(BOUND_SITE)) {
     const { groups } = match;
     const lower = groups.lower !== undefined;
@@ -340,7 +358,7 @@ function numericSites(line) {
     const next = /^\s+(\p{L}+)/u.exec(after)?.[1];
     const unit = percent ? '%' : tail === '' ? (next === undefined || FILLER.has(next.toLowerCase()) ? 'none' : next) : tail;
     const clause = /[^.;:!?,]*$/.exec(line.slice(Math.max(0, match.index - 200), match.index))[0];
-    if (asks(line, end)) {
+    if (asks(end)) {
       sites.push(refuse(start, end, 'question', `"${bound}" sits in a question, which asks and does not instruct`));
     } else if (NEGATED.test(clause)) {
       sites.push(
@@ -411,11 +429,17 @@ function indentOf(line) {
 }
 
 /** The column where the content of a list item starts, given its match; a tab after the marker reaches the next tab stop. */
-function contentColumn([, indentText, marker, gap]) {
+function contentColumn(item) {
+  const width = gapWidth(item);
+  return indentOf(item[1]) + item[2].length + (width >= 5 ? 1 : width);
+}
+
+/** The columns between a list marker and its text, a tab reaching the next tab stop; five or more make the text indented code. */
+function gapWidth([, indentText, marker, gap]) {
   const markerEnd = indentOf(indentText) + marker.length;
   let column = markerEnd;
   for (const character of gap) column += character === '\t' ? 4 - (column % 4) : 1;
-  return markerEnd + (column - markerEnd >= 5 ? 1 : column - markerEnd);
+  return column - markerEnd;
 }
 
 /** Marks `[from, to)` of `reasons` as protected for `reason`, keeping a reason already set. */
@@ -513,7 +537,9 @@ function protectedSpans(text) {
         ? indent >= container && indent - container <= 3
           ? /^[ \t]*(`{3,}|~{3,})([^\n]*)$/.exec(rawLine)
           : null
-        : /^(`{3,}|~{3,})([^\n]*)$/.exec(rawLine.slice(listItem[0].length - 1));
+        : gapWidth(listItem) >= 5
+          ? null
+          : /^(`{3,}|~{3,})([^\n]*)$/.exec(rawLine.slice(listItem[0].length - 1));
     let quotedNow = false;
     if (opening !== null && !(opening[1][0] === '`' && opening[2].includes('`'))) {
       endParagraph();
@@ -525,13 +551,14 @@ function protectedSpans(text) {
       indentedCode = !blank && indent - container >= 4 && (blankBefore || indentedCode);
       const heading = /^ {0,3}#{1,6}(\s|$)/.test(rawLine) || (!blank && /^ {0,3}(?:=+|-+)[ \t]*\r?$/.test(lines[index + 1] ?? ''));
       // A line after a quoted one that starts no other block continues the quote, as a lazy continuation.
-      const quoted = /^ {0,3}>/.test(rawLine) || (quotedBefore && !blank && !heading && listItem === null);
+      const thematic = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t\r]*$/.test(rawLine);
+      const quoted = /^ {0,3}>/.test(rawLine) || (quotedBefore && !blank && !heading && !thematic && listItem === null);
       quotedNow = quoted;
       if (indentedCode) protect(reasons, at, lineEnd, 'indented-code');
       if (heading) protect(reasons, at, lineEnd, 'heading');
       if (quoted) protect(reasons, at, lineEnd, 'block-quote');
-      if (blank || indentedCode || heading || quoted || listItem !== null) endParagraph();
-      if (!blank && !indentedCode && !heading && !quoted) {
+      if (blank || indentedCode || heading || quoted || thematic || listItem !== null) endParagraph();
+      if (!blank && !indentedCode && !heading && !quoted && !thematic) {
         paragraph ??= { from: at, to: lineEnd };
         paragraph.to = lineEnd;
       }
