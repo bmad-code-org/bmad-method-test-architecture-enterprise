@@ -42,7 +42,7 @@ In a confined run, four things stay apart.
 ## When isolation fails
 
 - Exit 12 from `preflight` or `run` that names the sandbox or its observer: the host cannot confine or observe.
-- Exit 12 that names a file of the run directory or a score input: a process changed the evidence the runtime wrote.
+- Exit 12 that names a file of the run directory or a score input: the runtime could not write its evidence, or a process changed what it wrote.
 - Exit 3 with `mount outside allowlist`: the audit saw the target reach a path outside its grants.
   Review the path before you grant it through `systemPaths`.
 - A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list leaves the trial unproven.
