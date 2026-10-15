@@ -1736,6 +1736,7 @@ function exampleBaseline() {
   return JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'example-baseline-experiment.json'), 'utf8'));
 }
 
+/** The frozen selection declaration of the committed paired example. */
 function pairedExample() {
   return JSON.parse(fs.readFileSync(path.join(PAIRED, 'experiment.json'), 'utf8'));
 }
@@ -3198,12 +3199,14 @@ function checkRunnableGuide() {
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-experiment-guide-'));
   const moved = new Map();
+  /** A repository path the guide names, moved under the temporary directory when it falls in a relocated --out. */
   const relocate = (arg) => {
     for (const [from, to] of moved) {
       if (arg === from || arg.startsWith(`${from}/`)) return `${to}${arg.slice(from.length)}`;
     }
     return path.resolve(PROJECT_ROOT, arg);
   };
+  /** A command argument as the test passes it: flags and bare words as written, paths relocated. */
   const resolveArg = (arg) => (arg.startsWith('-') || !/[./]/.test(arg) ? arg : relocate(arg));
   try {
     const runs = [];
@@ -3228,7 +3231,9 @@ function checkRunnableGuide() {
       runs.push({ command, verb: args[0], file: args[1], out: outIndex === -1 ? null : relocate(args[outIndex + 1]), run });
     }
 
+    /** The successful analyze run of the guide over one evidence file. */
     const evidenceFor = (fixture) => runs.find((entry) => entry.verb === 'analyze' && entry.file === fixture && entry.run.status === 0);
+    /** One output file an analyze run wrote. */
     const readOut = (entry, name) => fs.readFileSync(path.resolve(entry.out, name), 'utf8');
 
     const repeatability = evidenceFor('test/fixtures/configuration-experiment/baseline-evidence.json');
@@ -3324,6 +3329,7 @@ function checkReferenceRecipes() {
     recipes.length === 2 && ledgerRecipe && manifestRecipe,
     `the reference page shows the ledger and manifest recipes, got ${recipes.length}`,
   );
+  /** Run one recipe line through the shell from the repository root, as a maintainer pastes it. */
   const shell = (line) => spawnSync('/bin/sh', ['-c', line], { encoding: 'utf8', cwd: PROJECT_ROOT, timeout: 60_000 });
 
   if (ledgerRecipe) {
