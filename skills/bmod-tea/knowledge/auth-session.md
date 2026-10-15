@@ -110,15 +110,19 @@ test.describe('admin actions', () => {
 });
 
 // Option 2: Parallel execution with different users, one describe block per user
-for (const userIdentifier of ['user1', 'user2']) {
-  test.describe(`as ${userIdentifier}`, () => {
-    test.use({ authOptions: { userIdentifier } });
+test.describe('multi-user tests', () => {
+  test.describe.configure({ mode: 'parallel' });
 
-    test('sees own profile', async ({ page }) => {
-      await page.goto('/profile'); // signed in as this user
+  for (const userIdentifier of ['user1', 'user2']) {
+    test.describe(`as ${userIdentifier}`, () => {
+      test.use({ authOptions: { userIdentifier } });
+
+      test('sees own profile', async ({ page }) => {
+        await page.goto('/profile'); // signed in as this user
+      });
     });
-  });
-}
+  }
+});
 ```
 
 **Key Points**:
