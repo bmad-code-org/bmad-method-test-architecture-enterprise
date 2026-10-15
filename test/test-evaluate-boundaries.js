@@ -73,8 +73,8 @@
  * - `discovery-import`: the exploratory candidate module (`cli/lib/evaluate/discovery/`) and the scored runtime never meet.
  *   No load outside it resolves into it, relatively or through this package's own name, and no string literal outside it
  *   other than `check.js`'s placement rule names the `discovery` directory. A load inside it takes only `node:fs`,
- *   `node:path`, `node:crypto`, `ajv/dist/2020`, `../digest` and `../formats`, so the candidate code reaches no module that
- *   decides a score or reads a run.
+ *   `node:path`, `node:crypto`, `ajv/dist/2020`, `../digest`, `../formats` and `../finding-lines` (a pure printer), so the
+ *   candidate code reaches no module that decides a score or reads a run.
  * - `install-probe` (Story 1.6, AD-4): `cli/skill-runner.js` takes its skill
  *   from `--skill-root` alone, so it names no home directory (`homedir`, a
  *   `HOME`, `USERPROFILE` or `XDG_CONFIG_HOME` read), no agent-specific or
@@ -205,6 +205,7 @@ const DISCOVERY_LOADS = new Set(['node:fs', 'node:path', 'node:crypto', 'ajv/dis
 const DISCOVERY_RELATIVE_LOADS = new Set([
   path.join('cli', 'lib', 'evaluate', 'digest.js'),
   path.join('cli', 'lib', 'evaluate', 'formats.js'),
+  path.join('cli', 'lib', 'evaluate', 'finding-lines.js'),
 ]);
 const DISCOVERY_SEGMENT = /(^|\/)discovery(\/|$)/;
 const SKILL_RUNNER = 'skill-runner.js';
@@ -811,7 +812,7 @@ function fileViolations({ source, ast, isEngine, isReproduction, callerModule = 
           report(
             node,
             'discovery-import',
-            `loads ${value}; the candidate module reads digests and formats and nothing that decides a score`,
+            `loads ${value}; the candidate module reads digests, formats and the finding printer and nothing that decides a score`,
           );
       }
       if (value === undefined) {

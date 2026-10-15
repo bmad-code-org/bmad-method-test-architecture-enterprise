@@ -84,6 +84,7 @@
   "test:evaluate-confinement-git-state": 287.6,
   "test:evaluate-confinement-history": 282.9,
   "test:evaluate-confinement-network": 156.9,
+  "test:evaluate-candidate-review": 2.0,
   "test:evaluate-discovery": 2.0,
   "test:evaluate-generator": 2.0,
   "test:evaluate-dogfood": 133.5,

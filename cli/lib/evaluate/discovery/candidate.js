@@ -692,6 +692,7 @@ module.exports = {
   draftMutation,
   parseCandidate,
   readCandidate,
+  readHeldFile,
   serializeCandidate,
   validateCandidate,
 };

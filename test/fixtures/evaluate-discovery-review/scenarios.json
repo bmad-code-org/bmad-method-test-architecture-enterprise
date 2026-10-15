@@ -1,0 +1,238 @@
+{
+  "campaignId": "red-phase-review",
+  "scenarios": [
+    {
+      "name": "seeded-gap",
+      "note": "Removes the prohibition on a placeholder assertion. The scaffold still carries its skip markers, so the red-phase gate passes it.",
+      "edit": {
+        "find": "You must not add a passing placeholder assertion to any test.",
+        "replace": "You must add a passing placeholder assertion to any test."
+      },
+      "label": {
+        "verdict": "undesirable",
+        "expected": "confirmed-undesirable-missed",
+        "why": "The reference counts no placeholder assertion in any story's scaffold; the candidate arm writes one per test while the evaluator passes it."
+      },
+      "baseline": {
+        "arm": "baseline",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:0"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:0"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:0"
+          }
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:3",
+            "evaluator": "pass"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:2",
+            "evaluator": "pass"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:4",
+            "evaluator": "pass"
+          }
+        ]
+      }
+    },
+    {
+      "name": "harmless-edit",
+      "note": "Doubles the file length limit. No sampled story writes a file near either limit.",
+      "edit": {
+        "find": "Keep every generated test file under 200 lines.",
+        "replace": "Keep every generated test file under 400 lines."
+      },
+      "label": {
+        "verdict": "harmless",
+        "expected": "observationally-unchanged",
+        "why": "Every sampled story produced the same scaffold on both arms and the reference matches both."
+      },
+      "baseline": {
+        "arm": "baseline",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:0"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:0"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:0"
+          }
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:0",
+            "evaluator": "pass"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:0",
+            "evaluator": "pass"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:0",
+            "evaluator": "pass"
+          }
+        ]
+      }
+    },
+    {
+      "name": "target-error",
+      "note": "The candidate arm's target crashed on every trial.",
+      "edit": {
+        "find": "The generated tests must cover every acceptance criterion.",
+        "replace": "The generated tests should cover every acceptance criterion."
+      },
+      "label": {
+        "verdict": "error",
+        "expected": "target-error",
+        "why": "No candidate trial completed, so nothing was observed."
+      },
+      "baseline": {
+        "arm": "baseline",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:0"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:0"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:0"
+          }
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "error",
+            "error": "target exited 3 before writing a scaffold"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "error",
+            "error": "target exited 3 before writing a scaffold"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "error",
+            "error": "target exited 3 before writing a scaffold"
+          }
+        ]
+      },
+      "planned": 3
+    },
+    {
+      "name": "missing-evidence",
+      "note": "One candidate trial completed and shows a departure; the other two never reported.",
+      "edit": {
+        "find": "Never reuse a test name across files.",
+        "replace": "Always reuse a test name across files."
+      },
+      "label": {
+        "verdict": "incomplete",
+        "expected": "undetermined",
+        "why": "One of three planned candidate trials completed. A single departing trial is not enough to confirm a defect."
+      },
+      "baseline": {
+        "arm": "baseline",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:0"
+          },
+          {
+            "trial": 2,
+            "input": "story-list-reservations",
+            "status": "completed",
+            "output": "skipped:2 placeholders:0"
+          },
+          {
+            "trial": 3,
+            "input": "story-hold-seat",
+            "status": "completed",
+            "output": "skipped:4 placeholders:0"
+          }
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "trials": [
+          {
+            "trial": 1,
+            "input": "story-cancel-reservation",
+            "status": "completed",
+            "output": "skipped:3 placeholders:1",
+            "evaluator": "pass"
+          }
+        ]
+      },
+      "planned": 3
+    }
+  ]
+}
