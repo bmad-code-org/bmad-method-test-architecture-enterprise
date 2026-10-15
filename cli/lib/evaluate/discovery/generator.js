@@ -153,9 +153,9 @@ function wordAfter(line, index) {
   return /^\W*([\p{L}']+)/u.exec(line.slice(index, index + WINDOW))?.[1].toLowerCase() ?? '';
 }
 
-/** Whether the line ends in a question mark. */
-function asks(line) {
-  return line.trimEnd().endsWith('?');
+/** Whether the sentence holding `index` ends in a question mark; a full stop between digits ends nothing. */
+function asks(line, index) {
+  return /[!?]|\.(?!\d)|$/.exec(line.slice(index))[0] === '?';
 }
 
 /** A site the family recognized but cannot edit safely. */
@@ -168,6 +168,54 @@ function edit(start, end, replacement, hypothesis) {
   return { start, end, replacement, hypothesis };
 }
 
+/** Participles that follow `have` without ending in -ed or -en. */
+const IRREGULAR_PARTICIPLES = new Set(
+  'been had done gone made seen got gotten left kept held run come become given found said thought meant built sent set put read won lost paid sold told heard begun written chosen broken spoken fallen eaten hidden driven risen worn torn drawn grown thrown flown sung stolen frozen forgotten known shown taken bought brought caught felt fed sat spent stood understood slept led met lent lain hung dug dealt'.split(
+    ' ',
+  ),
+);
+/** Words that take -ing or -ed and still name a thing, so `be nothing but` states a requirement. */
+
+/** Nouns, numbers and adjectives that look like a participle (`have ten items`, `be nothing but JSON`), so they state a requirement. */
+const NOT_A_PARTICIPLE = new Set(
+  'ten eleven seven green children men women token tokens screen open even seed seeds need needs speed feed embed kitchen golden wooden hundred nothing something anything everything string strings thing things'.split(
+    ' ',
+  ),
+);
+/** Adverbs that may stand between the modal and the verb of an inference (`must already have used`). */
+const ADVERBS = new Set([
+  'already',
+  'still',
+  'also',
+  'just',
+  'surely',
+  'always',
+  'currently',
+  'probably',
+  'definitely',
+  'clearly',
+  'simply',
+  'actually',
+]);
+
+/**
+ * Whether the modal ending at `end` reads as an inference about a past event or a state (`must have used`, `must have
+ * been`, `must be running`), which a requirement never states. A requirement such as `must have a test` is not one;
+ * a participle that a noun shares (`have read access`) is refused too, since the line cannot tell the two apart.
+ */
+function isEpistemic(line, end) {
+  const words = [...line.slice(end, end + WINDOW).matchAll(/[\p{L}\p{N}_'’]+/gu)].map((word) => word[0].toLowerCase());
+  while (ADVERBS.has(words[0])) words.shift();
+  const [next, following = ''] = words;
+  if (next === undefined) return false;
+  if (/^['’]ve$/.test(next)) return true;
+  if (next === 'have') {
+    const participle = ADVERBS.has(following) ? (words[2] ?? '') : following;
+    return !NOT_A_PARTICIPLE.has(participle) && (/(?:ed|en)$/.test(participle) || IRREGULAR_PARTICIPLES.has(participle));
+  }
+  return next === 'be' && following.endsWith('ing') && !NOT_A_PARTICIPLE.has(following);
+}
+
 /**
  * The modal-strength sites of a line.
  *
@@ -176,12 +224,11 @@ function edit(start, end, replacement, hypothesis) {
  */
 function modalSites(line) {
   const sites = [];
-  const question = asks(line);
   for (const match of line.matchAll(/(?<![\w-])(must|shall)(?![\w-])/giu)) {
     const [word] = match;
     const start = match.index;
     const end = start + word.length;
-    if (question) {
+    if (asks(line, end)) {
       sites.push(refuse(start, end, 'question', `"${word}" sits in a question, which asks and does not instruct`));
     } else if (NOUN_DETERMINERS.has(wordBefore(line, start))) {
       sites.push(
@@ -190,6 +237,20 @@ function modalSites(line) {
           end,
           'not-a-directive',
           `"${word}" follows "${wordBefore(line, start)}", which makes it a noun, and "should" would corrupt the grammar`,
+        ),
+      );
+    } else if (isEpistemic(line, end)) {
+      sites.push(
+        refuse(
+          start,
+          end,
+          'epistemic',
+          `"${word}" is followed by "${line
+            .slice(end, end + WINDOW)
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .join(' ')}", which can infer a past event or a state and not require a step`,
         ),
       );
     } else {
@@ -210,7 +271,6 @@ function modalSites(line) {
  */
 function negationSites(line) {
   const sites = [];
-  const question = asks(line);
   const patterns = [
     { pattern: /(?<![\w-])(do|must|shall|should)(\s+)not(?![\w-])/giu, keep: (m) => m[1] },
     { pattern: /(?<![\w-])(do|must|should)n['’]t(?![\w-])/giu, keep: (m) => m[1] },
@@ -223,7 +283,7 @@ function negationSites(line) {
       const end = start + match[0].length;
       const before = wordBefore(line, start);
       const after = wordAfter(line, end);
-      if (question) {
+      if (asks(line, end)) {
         sites.push(refuse(start, end, 'question', `"${match[0]}" sits in a question, which asks and does not instruct`));
       } else if (NEGATION_WORDS.has(after) || NEGATION_WORDS.has(before) || /^\W*\p{L}*n['’]t\b/iu.test(line.slice(end, end + WINDOW))) {
         sites.push(
@@ -280,7 +340,9 @@ function numericSites(line) {
     const next = /^\s+(\p{L}+)/u.exec(after)?.[1];
     const unit = percent ? '%' : tail === '' ? (next === undefined || FILLER.has(next.toLowerCase()) ? 'none' : next) : tail;
     const clause = /[^.;:!?,]*$/.exec(line.slice(Math.max(0, match.index - 200), match.index))[0];
-    if (NEGATED.test(clause)) {
+    if (asks(line, end)) {
+      sites.push(refuse(start, end, 'question', `"${bound}" sits in a question, which asks and does not instruct`));
+    } else if (NEGATED.test(clause)) {
       sites.push(
         refuse(start, end, 'negated-bound', `"${bound}" follows a negation, which turns the direction the bound constrains around`),
       );
@@ -337,9 +399,56 @@ const FAMILIES = Object.freeze([
 ]);
 const FAMILY_NAMES = Object.freeze(FAMILIES.map((family) => family.name));
 
+/** The width of the whitespace that opens `line`, a tab reaching the next multiple of four. */
+function indentOf(line) {
+  let width = 0;
+  for (const character of line) {
+    if (character === ' ') width += 1;
+    else if (character === '\t') width += 4 - (width % 4);
+    else break;
+  }
+  return width;
+}
+
+/** The column where the content of a list item starts, given its match; a tab after the marker reaches the next tab stop. */
+function contentColumn([, indentText, marker, gap]) {
+  const markerEnd = indentOf(indentText) + marker.length;
+  let column = markerEnd;
+  for (const character of gap) column += character === '\t' ? 4 - (column % 4) : 1;
+  return markerEnd + (column - markerEnd >= 5 ? 1 : column - markerEnd);
+}
+
 /** Marks `[from, to)` of `reasons` as protected for `reason`, keeping a reason already set. */
 function protect(reasons, from, to, reason) {
   for (let at = from; at < Math.min(to, reasons.length); at += 1) reasons[at] ??= reason;
+}
+
+/**
+ * Marks the inline code spans of the paragraph `text.slice(from, to)`: a run of backticks opens a span that the next run of
+ * the same length closes, and a run with no such partner is literal. The scan visits each run once.
+ */
+function protectCodeSpans(reasons, text, from, to) {
+  const runs = [...text.slice(from, to).matchAll(/`+/g)];
+  const byLength = new Map();
+  for (const [position, run] of runs.entries()) {
+    if (!byLength.has(run[0].length)) byLength.set(run[0].length, []);
+    byLength.get(run[0].length).push(position);
+  }
+  const cursor = new Map();
+  for (let position = 0; position < runs.length; ) {
+    const length = runs[position][0].length;
+    const same = byLength.get(length);
+    let next = cursor.get(length) ?? 0;
+    while (same[next] <= position) next += 1;
+    cursor.set(length, next);
+    const closer = same[next];
+    if (closer === undefined) {
+      position += 1;
+    } else {
+      protect(reasons, from + runs[position].index, from + runs[closer].index + length, 'inline-code');
+      position = closer + 1;
+    }
+  }
 }
 
 /**
@@ -363,25 +472,70 @@ function protectedSpans(text) {
   let at = 0;
   let blankBefore = true;
   let indentedCode = false;
+  let quotedBefore = false;
+  // The content column of the list item the lines are in, so a fence inside an item is read against it.
+  let container = 0;
+  // The paragraph being read: an inline code span may run over its lines, and over nothing else.
+  let paragraph = null;
+  const endParagraph = () => {
+    if (paragraph !== null) protectCodeSpans(reasons, text, paragraph.from, paragraph.to);
+    paragraph = null;
+  };
   for (const [index, rawLine] of lines.entries()) {
     const lineEnd = at + rawLine.length;
-    const marker = /^[ \t]*(`{3,}|~{3,})/.exec(rawLine);
+    if (reasons[at] === 'front-matter') {
+      endParagraph();
+      at = lineEnd + 1;
+      continue;
+    }
     const blank = rawLine.trim() === '';
+    const indent = indentOf(rawLine);
+    // A fence ends with the list item that holds it, when a line falls back left of the item's content column.
+    if (fence !== null && !blank && indent < fence.container) fence = null;
     if (fence !== null) {
       protect(reasons, at, lineEnd, 'code-fence');
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && /^[ \t]*[`~]+\s*$/.test(rawLine)) fence = null;
-    } else if (marker) {
-      fence = marker[1];
+      const closing = /^[ \t]*(`{3,}|~{3,})[ \t\r]*$/.exec(rawLine);
+      if (closing && closing[1][0] === fence.marker[0] && closing[1].length >= fence.marker.length && indent - fence.container <= 3) {
+        fence = null;
+      }
+      blankBefore = blank;
+      quotedBefore = false;
+      at = lineEnd + 1;
+      continue;
+    }
+    // Only a bullet or `1.` interrupts a paragraph.
+    const item = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)\S/.exec(rawLine);
+    const listItem = item !== null && (paragraph === null || /^(?:[-*+]|1[.)])$/.test(item[2])) ? item : null;
+    if (!blank && listItem === null && indent < container) container = 0;
+    // A fence opens at most three columns past the container's content column, or on the line of a list marker.
+    const opening =
+      listItem === null
+        ? indent >= container && indent - container <= 3
+          ? /^[ \t]*(`{3,}|~{3,})([^\n]*)$/.exec(rawLine)
+          : null
+        : /^(`{3,}|~{3,})([^\n]*)$/.exec(rawLine.slice(listItem[0].length - 1));
+    let quotedNow = false;
+    if (opening !== null && !(opening[1][0] === '`' && opening[2].includes('`'))) {
+      endParagraph();
+      if (listItem !== null) container = contentColumn(listItem);
+      fence = { marker: opening[1], container };
       protect(reasons, at, lineEnd, 'code-fence');
     } else {
-      // A line indented four spaces or a tab after a blank line, or after such a line, is an indented code block.
-      indentedCode = !blank && /^(?: {4}|\t)/.test(rawLine) && (blankBefore || indentedCode);
+      // A line indented four columns or a tab after a blank line, or after such a line, is an indented code block.
+      indentedCode = !blank && indent - container >= 4 && (blankBefore || indentedCode);
+      const heading = /^ {0,3}#{1,6}(\s|$)/.test(rawLine) || (!blank && /^ {0,3}(?:=+|-+)[ \t]*\r?$/.test(lines[index + 1] ?? ''));
+      // A line after a quoted one that starts no other block continues the quote, as a lazy continuation.
+      const quoted = /^ {0,3}>/.test(rawLine) || (quotedBefore && !blank && !heading && listItem === null);
+      quotedNow = quoted;
       if (indentedCode) protect(reasons, at, lineEnd, 'indented-code');
-      if (/^ {0,3}#{1,6}(\s|$)/.test(rawLine)) protect(reasons, at, lineEnd, 'heading');
-      if (!blank && /^ {0,3}(?:=+|-+)[ \t]*\r?$/.test(lines[index + 1] ?? '')) protect(reasons, at, lineEnd, 'heading');
-      if (/^ {0,3}>/.test(rawLine)) protect(reasons, at, lineEnd, 'block-quote');
-      for (const code of rawLine.matchAll(/(`+)(?:(?!\1).)+?\1/g))
-        protect(reasons, at + code.index, at + code.index + code[0].length, 'inline-code');
+      if (heading) protect(reasons, at, lineEnd, 'heading');
+      if (quoted) protect(reasons, at, lineEnd, 'block-quote');
+      if (blank || indentedCode || heading || quoted || listItem !== null) endParagraph();
+      if (!blank && !indentedCode && !heading && !quoted) {
+        paragraph ??= { from: at, to: lineEnd };
+        paragraph.to = lineEnd;
+      }
+      if (listItem !== null) container = contentColumn(listItem);
       // Straight quotes pair up left to right; an unpaired last one quotes the rest of the line.
       const quotes = [...rawLine.matchAll(/"/g)].map((quote) => quote.index);
       for (let pair = 0; pair < quotes.length; pair += 2) {
@@ -405,8 +559,10 @@ function protectedSpans(text) {
         protect(reasons, at + found.index, at + found.index + found[0].length, 'placeholder');
     }
     blankBefore = blank;
+    quotedBefore = quotedNow;
     at = lineEnd + 1;
   }
+  endParagraph();
   return reasons;
 }
 

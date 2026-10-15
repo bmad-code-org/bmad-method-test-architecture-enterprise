@@ -286,6 +286,29 @@ const RULES = [
   { line: 'Fill {{must}} in.', family: 'modal-strength', code: 'protected-span' },
   { line: 'See [what you must do](https://example.test/must).', family: 'modal-strength', code: 'protected-span', count: 1 },
   { line: 'Never use "must" lightly.', family: 'modal-strength', code: 'protected-span' },
+  // A modal that infers a past event or a state states no requirement; one that requires something stays eligible.
+  { line: 'The model must have used the cache.', family: 'modal-strength', code: 'epistemic' },
+  { line: "The model must've used the cache.", family: 'modal-strength', code: 'epistemic' },
+  { line: 'The tool must be running.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'The result shall have been cached.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'You must have a test.', family: 'modal-strength', edited: 'You should have a test.' },
+  { line: 'The agent must have made the call.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'The agent must have done it.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'You must have speed.', family: 'modal-strength', edited: 'You should have speed.' },
+  { line: 'A page must have children.', family: 'modal-strength', edited: 'A page should have children.' },
+  { line: 'The user must’ve used it.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'The model must already have used the cache.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'The model must have already used the cache.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'The model must have bought it.', family: 'modal-strength', code: 'epistemic' },
+  { line: 'Each list must have ten items.', family: 'modal-strength', edited: 'Each list should have ten items.' },
+  { line: 'The page must have green buttons.', family: 'modal-strength', edited: 'The page should have green buttons.' },
+  {
+    line: 'Records must have created_at and updated_at fields.',
+    family: 'modal-strength',
+    edited: 'Records should have created_at and updated_at fields.',
+  },
+  { line: 'The output must be nothing but JSON.', family: 'modal-strength', edited: 'The output should be nothing but JSON.' },
+  { line: 'You must be careful.', family: 'modal-strength', edited: 'You should be careful.' },
   // negation
   { line: 'Do not invent findings.', family: 'negation', edited: 'Do invent findings.' },
   { line: 'You must not invent findings.', family: 'negation', edited: 'You must invent findings.' },
@@ -439,6 +462,87 @@ const MULTI_LINE_RULES = [
   },
   { text: '```text you must\nx\n```\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
   { text: '```\nx\n```\nYou must act.\n', family: 'modal-strength', edited: 'You should act.' },
+  // A closing fence indented four columns is code, so it does not close; the fence runs to the unindented one.
+  {
+    text: '```\nfirst line\n    ```\nYou must not output secrets.\n```\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+  },
+  {
+    text: '```\nfirst line\n    ```\nYou must not output secrets.\n```\n',
+    family: 'negation',
+    code: 'protected-span',
+    reason: 'code fence',
+  },
+  // An opening fence indented four columns is indented code, so the next line is an instruction.
+  { text: '    ```\nYou must cite the source.\n', family: 'modal-strength', edited: 'You should cite the source.' },
+  { text: '\t```\nYou must cite the source.\n', family: 'modal-strength', edited: 'You should cite the source.' },
+  { text: '``` a`b\nYou must cite the source.\n', family: 'modal-strength', edited: 'You should cite the source.' },
+  // A fence in a list item opens and closes against the item's content column.
+  { text: '- Item:\n\n  ```\n  You must not cite.\n  ```\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
+  {
+    text: '1. Item:\n\n   ```\n   You must not cite.\n   ```\n\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  { text: '```\r\nYou must not cite.\r\n```\r\n', family: 'modal-strength', code: 'protected-span', reason: 'code fence' },
+  // An inline code span runs over a line ending, and over nothing else.
+  { text: 'Use `code\nYou must not output secrets` exactly.\n', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
+  { text: 'Use `code\nYou must not output secrets` exactly.\n', family: 'negation', code: 'protected-span', reason: 'inline code' },
+  { text: 'Use ``code ` with\nyou must `` exactly.\n', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
+  { text: 'Use `code\n\nYou must cite` exactly.\n', family: 'modal-strength', edited: 'You should cite` exactly.' },
+  { text: '- Use `code\n- You must cite` exactly.\n', family: 'modal-strength', edited: 'You should cite` exactly.' },
+  // The last paragraph of a target with no trailing newline is read like any other.
+  { text: 'Use `must` here', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
+  { text: 'Intro.\n\nUse the `You must act` form.', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
+  // A fence opens on the line of a list marker, and ends with the item that holds it.
+  {
+    text: '- ```bash\n  You must not leak.\n  ```\n\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  {
+    text: '1. ```\n   You must not leak.\n   ```\n\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  {
+    text: '-\t```\n\tYou must not leak.\n\t```\n\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  {
+    text: '- Item\n  ```\n  You must not x\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'code fence',
+    count: 1,
+  },
+  {
+    text: '> Quote:\nYou must not x\n\nYou must act.\n',
+    family: 'modal-strength',
+    code: 'protected-span',
+    reason: 'block quote',
+    count: 1,
+  },
+  // A code span ends at a fence or a heading inside its paragraph.
+  { text: 'Use `code\n```\nx\n```\nYou must cite` exactly.\n', family: 'modal-strength', edited: 'You should cite` exactly.' },
+  { text: 'Use `code\n# Title\nYou must cite` exactly.\n', family: 'modal-strength', edited: 'You should cite` exactly.' },
+  // A line is code inside a list item when it sits four columns past the item's content column.
+  { text: '-     Item\n\n        You must cite.\n', family: 'modal-strength', code: 'protected-span', reason: 'indented code' },
+  { text: '- Item\n\n    You must cite.\n', family: 'modal-strength', edited: 'You should cite.' },
+  // Only a bullet or `1.` interrupts a paragraph, so a span runs over a `2.` line; front matter belongs to no paragraph.
+  { text: 'Use `code\n2. You must not x` y\n', family: 'modal-strength', code: 'protected-span', reason: 'inline code' },
+  { text: '---\nname: x`\n---\nYou must act `y\n', family: 'modal-strength', edited: 'You should act `y' },
 ];
 
 /** Forms, boundaries and limits of each rule. */
@@ -523,6 +627,19 @@ const EDGE_RULES = [
   // A collocation that "always" cannot take.
   { line: 'Never ever skip.', family: 'negation', code: 'grammar' },
   { line: 'Never again skip.', family: 'negation', code: 'grammar' },
+  // A bound in a question asks and does not instruct; the same bound as an instruction loosens.
+  { line: 'Can you keep responses at most 5 words?', family: 'numeric-threshold', code: 'question' },
+  { line: 'Keep responses at most 5 words.', family: 'numeric-threshold', edited: 'Keep responses at most 10 words.' },
+  {
+    line: 'Keep answers at most 5 words. Is that clear?',
+    family: 'numeric-threshold',
+    edited: 'Keep answers at most 10 words. Is that clear?',
+  },
+  {
+    line: 'Is that clear? Keep answers at most 5 words.',
+    family: 'numeric-threshold',
+    edited: 'Is that clear? Keep answers at most 10 words.',
+  },
   { line: 'Fill <!-- x --> and keep at most 5 items.', family: 'numeric-threshold', edited: 'Fill <!-- x --> and keep at most 10 items.' },
 ];
 
@@ -813,6 +930,11 @@ function checkCostStaysLinear() {
     ['ten thousand bounds on one line', `${'at most 5 '.repeat(10_000)}\n`],
     ['a long run of path separators', `${'a/'.repeat(100_000)}\n`],
     ['fourteen thousand distinct editable lines', `${Array.from({ length: 14_000 }, (_, index) => `step ${index} must go`).join('\n')}\n`],
+    [
+      'a paragraph of unmatched backtick runs of every length',
+      `${Array.from({ length: 700 }, (_, index) => `${'`'.repeat(index + 1)} x`).join('\n')}\nYou must go.\n`,
+    ],
+    ['twenty thousand lone backticks in one paragraph', `${'` x\n'.repeat(20_000)}`],
     ['twenty-five thousand identical editable lines', `${'a must b\n'.repeat(25_000)}`],
   ];
   for (const [label, text] of cases) {
