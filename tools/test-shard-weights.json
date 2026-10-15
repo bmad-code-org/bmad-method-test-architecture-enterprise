@@ -85,6 +85,7 @@
   "test:evaluate-confinement-history": 282.9,
   "test:evaluate-confinement-network": 156.9,
   "test:evaluate-discovery": 2.0,
+  "test:evaluate-generator": 2.0,
   "test:evaluate-dogfood": 133.5,
   "test:evaluate-evaluators": 442.0,
   "test:evaluate-evaluators-agent-version": 369.3,

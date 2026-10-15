@@ -1,0 +1,80 @@
+prompt-edit 1.0.0, seed 20261014, per-family cap 5
+target skill/prompt.md sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6
+modal-strength: 2 found, 2 selected, 0 omitted, 9 rejected
+negation: 8 found, 5 selected, 3 omitted, 7 rejected
+numeric-threshold: 6 found, 5 selected, 1 omitted, 9 rejected
+
+C-001 modal-strength line 10 column 8
+  - 1. You must cite a file and a line for every finding.
+  + 1. You should cite a file and a line for every finding.
+
+C-002 modal-strength line 14 column 17
+  - 5. The reviewer shall read the whole diff before answering.
+  + 5. The reviewer should read the whole diff before answering.
+
+C-003 negation line 11 column 28
+  - 2. Do not invent findings. Never report a style preference as a defect.
+  + 2. Do not invent findings. Always report a style preference as a defect.
+
+C-004 negation line 28 column 31
+  - This is a must, and the reply cannot exceed budget. Don't pad the answer.
+  + This is a must, and the reply can exceed budget. Don't pad the answer.
+
+C-005 negation line 28 column 53
+  - This is a must, and the reply cannot exceed budget. Don't pad the answer.
+  + This is a must, and the reply cannot exceed budget. Do pad the answer.
+
+C-006 negation line 32 column 53
+  - Do not guess at the answer to the question and then do not guess again.
+  + Do not guess at the answer to the question and then do guess again.
+
+C-007 negation line 34 column 1
+  - Never skip the review. Then report.
+  + Always skip the review. Then report.
+
+C-008 numeric-threshold line 12 column 59
+  - 3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 10 in total.
+  + 3. Report at least 3 findings when the diff has more than 2 changed files, and no more than 10 in total.
+
+C-009 numeric-threshold line 12 column 93
+  - 3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 10 in total.
+  + 3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 20 in total.
+
+C-010 numeric-threshold line 13 column 61
+  - 4. Keep the reply under 90% of the quota, and finish within 30 seconds.
+  + 4. Keep the reply under 90% of the quota, and finish within 60 seconds.
+
+C-011 numeric-threshold line 26 column 21
+  - Pick a number up to 50% and a deadline within 7 days.
+  + Pick a number up to 100% and a deadline within 7 days.
+
+C-012 numeric-threshold line 26 column 47
+  - Pick a number up to 50% and a deadline within 7 days.
+  + Pick a number up to 50% and a deadline within 14 days.
+
+rejected:
+  line 3 column 18 modal-strength protected-span: the site sits in front matter, which an edit leaves alone
+  line 3 column 45 numeric-threshold protected-span: the site sits in front matter, which an edit leaves alone
+  line 6 column 23 modal-strength protected-span: the site sits in heading, which an edit leaves alone
+  line 12 column 20 numeric-threshold number-agreement: "at least 3" would become 1 findings, which breaks the singular or plural of "findings"
+  line 13 column 25 numeric-threshold beyond-range: "under 90%" would become 180%, which no percentage can reach
+  line 16 column 52 negation descriptive: "never" follows "has", which reads as a statement of fact and not an instruction
+  line 17 column 49 numeric-threshold not-a-threshold: "at least 1" continues as a decimal, a version, a date, a time, a range or an alternative, and a part of it is not a bound
+  line 18 column 28 modal-strength protected-span: the site sits in quotation, which an edit leaves alone
+  line 18 column 28 negation protected-span: the site sits in quotation, which an edit leaves alone
+  line 18 column 59 modal-strength protected-span: the site sits in inline code, which an edit leaves alone
+  line 21 column 5 modal-strength protected-span: the site sits in code fence, which an edit leaves alone
+  line 21 column 5 negation protected-span: the site sits in code fence, which an edit leaves alone
+  line 21 column 31 negation protected-span: the site sits in code fence, which an edit leaves alone
+  line 21 column 53 numeric-threshold protected-span: the site sits in code fence, which an edit leaves alone
+  line 24 column 13 modal-strength protected-span: the site sits in block quote, which an edit leaves alone
+  line 24 column 18 negation protected-span: the site sits in block quote, which an edit leaves alone
+  line 27 column 24 numeric-threshold beyond-range: "at most 80%" would become 160%, which no percentage can reach
+  line 27 column 37 numeric-threshold beyond-range: "up to 70%" would become 140%, which no percentage can reach
+  line 28 column 11 modal-strength not-a-directive: "must" follows "a", which makes it a noun, and "should" would corrupt the grammar
+  line 29 column 23 modal-strength repeated-span: the line occurs 2 times in the target, so an exact edit of it is ambiguous
+  line 30 column 23 modal-strength repeated-span: the line occurs 2 times in the target, so an exact edit of it is ambiguous
+  line 31 column 11 negation protected-span: the site sits in quotation, which an edit leaves alone
+  line 33 column 1 negation repeated-span: the line occurs 2 times in the target, so an exact edit of it is ambiguous
+  line 35 column 20 numeric-threshold not-a-threshold: "over 0" continues as a decimal, a version, a date, a time, a range or an alternative, and a part of it is not a bound
+  line 35 column 43 numeric-threshold number-agreement: "within 1" would become 2 day, which breaks the singular or plural of "day"

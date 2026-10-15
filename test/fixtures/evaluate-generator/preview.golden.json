@@ -1,0 +1,753 @@
+{
+  "generator": {
+    "name": "prompt-edit",
+    "version": "1.0.0",
+    "seed": "20261014"
+  },
+  "config": {
+    "families": [
+      "modal-strength",
+      "negation",
+      "numeric-threshold"
+    ],
+    "perFamilyCap": 5
+  },
+  "target": {
+    "artifact": "skill/prompt.md",
+    "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+  },
+  "counts": {
+    "families": {
+      "modal-strength": {
+        "found": 2,
+        "selected": 2,
+        "omitted": 0,
+        "rejected": 9
+      },
+      "negation": {
+        "found": 8,
+        "selected": 5,
+        "omitted": 3,
+        "rejected": 7
+      },
+      "numeric-threshold": {
+        "found": 6,
+        "selected": 5,
+        "omitted": 1,
+        "rejected": 9
+      }
+    },
+    "found": 16,
+    "selected": 12,
+    "omitted": 4,
+    "rejected": 25
+  },
+  "candidates": [
+    {
+      "family": "modal-strength",
+      "line": 10,
+      "column": 8,
+      "original": "must",
+      "replacement": "should",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-001",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:b0e984b2f09cb3650fab0beb42a453764c967c93ca1216a867bfcc7fbba9f41d",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "modal-strength, line 10: Softens \"must\" to \"should\", so a step the instruction requires becomes optional.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "1. You must cite a file and a line for every finding.",
+          "replace": "1. You should cite a file and a line for every finding.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "modal-strength",
+      "line": 14,
+      "column": 17,
+      "original": "shall",
+      "replacement": "should",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-002",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:d17473346dad3d77c9411ca464297b35f509fc3db3ecbe9b3263bda09ba3e8c5",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "modal-strength, line 14: Softens \"shall\" to \"should\", so a step the instruction requires becomes optional.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "5. The reviewer shall read the whole diff before answering.",
+          "replace": "5. The reviewer should read the whole diff before answering.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "negation",
+      "line": 11,
+      "column": 28,
+      "original": "Never",
+      "replacement": "Always",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-003",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:21217767baf03767fbe35d538b3fdd4a0c8cea19cecb29d047ac0c80cd206156",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "negation, line 11: Removes the prohibition in \"Never\", so the instruction reads \"Always\" and asks for the behavior it forbade.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "2. Do not invent findings. Never report a style preference as a defect.",
+          "replace": "2. Do not invent findings. Always report a style preference as a defect.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "negation",
+      "line": 28,
+      "column": 31,
+      "original": "cannot",
+      "replacement": "can",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-004",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:05add8b506f92c795f97274921d1fe223756080231bb7fd91714fd3dfe0203e8",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "negation, line 28: Removes the prohibition in \"cannot\", so the instruction reads \"can\" and asks for the behavior it forbade.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "This is a must, and the reply cannot exceed budget. Don't pad the answer.",
+          "replace": "This is a must, and the reply can exceed budget. Don't pad the answer.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "negation",
+      "line": 28,
+      "column": 53,
+      "original": "Don't",
+      "replacement": "Do",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-005",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:78bd100caa13c3b9eeab278053da8234f788c1634e56558e955f1bc91a4e5f21",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "negation, line 28: Removes the prohibition in \"Don't\", so the instruction reads \"Do\" and asks for the behavior it forbade.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "This is a must, and the reply cannot exceed budget. Don't pad the answer.",
+          "replace": "This is a must, and the reply cannot exceed budget. Do pad the answer.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "negation",
+      "line": 32,
+      "column": 53,
+      "original": "do not",
+      "replacement": "do",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-006",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:95b6fec7722e4938509912f426ceb08f2e138d31249b3b8883aef7fef9709dfd",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "negation, line 32: Removes the prohibition in \"do not\", so the instruction reads \"do\" and asks for the behavior it forbade.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "Do not guess at the answer to the question and then do not guess again.",
+          "replace": "Do not guess at the answer to the question and then do guess again.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "negation",
+      "line": 34,
+      "column": 1,
+      "original": "Never",
+      "replacement": "Always",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-007",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:8f10f4ede0a06bed72b0e436f6c81a338c3a7ab44220c8242135cf76740024e7",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "negation, line 34: Removes the prohibition in \"Never\", so the instruction reads \"Always\" and asks for the behavior it forbade.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "Never skip the review. Then report.",
+          "replace": "Always skip the review. Then report.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 12,
+      "column": 59,
+      "original": "5",
+      "replacement": "2",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-008",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:1a008cd7db7fe6481d5ffbeade4b86da05424f34fc376a702f76f2835de1a7da",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "numeric-threshold, line 12: Loosens the lower bound \"more than 5\" (unit changed) to \"more than 2\", so a smaller value than the requirement allows still meets the instruction.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 10 in total.",
+          "replace": "3. Report at least 3 findings when the diff has more than 2 changed files, and no more than 10 in total.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 12,
+      "column": 93,
+      "original": "10",
+      "replacement": "20",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-009",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:27dd60a5dc4ddd4e5e1a2654feafd4eeaae7c0627e69e1f4ca68acf2554a41f4",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "numeric-threshold, line 12: Loosens the upper bound \"no more than 10\" (unit none) to \"no more than 20\", so a larger value than the requirement allows still meets the instruction.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 10 in total.",
+          "replace": "3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 20 in total.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 13,
+      "column": 61,
+      "original": "30",
+      "replacement": "60",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-010",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:311865bfd62fc3d3a7b73e3abb8fdfd28c99f8778586a63085f1560c7748ef58",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "numeric-threshold, line 13: Loosens the upper bound \"within 30\" (unit seconds) to \"within 60\", so a larger value than the requirement allows still meets the instruction.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "4. Keep the reply under 90% of the quota, and finish within 30 seconds.",
+          "replace": "4. Keep the reply under 90% of the quota, and finish within 60 seconds.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 26,
+      "column": 21,
+      "original": "50",
+      "replacement": "100",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-011",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:13273b1cd3e3b8a53ffb29157009e27b8422e1d12d3b10adb3109b3b5b154b61",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "numeric-threshold, line 26: Loosens the upper bound \"up to 50%\" (unit %) to \"up to 100%\", so a larger value than the requirement allows still meets the instruction.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "Pick a number up to 50% and a deadline within 7 days.",
+          "replace": "Pick a number up to 100% and a deadline within 7 days.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 26,
+      "column": 47,
+      "original": "7",
+      "replacement": "14",
+      "record": {
+        "schemaVersion": 1,
+        "recordKind": "exploratory-candidate",
+        "candidateId": "C-012",
+        "campaignId": "prompt-pilot",
+        "partition": "development",
+        "identity": "sha256:143de0b2d1e9ef3c67964c475e14f8c43ab7da2b4a7eadcee1bd907cddd8625b",
+        "generator": {
+          "name": "prompt-edit",
+          "version": "1.0.0",
+          "seed": "20261014"
+        },
+        "intent": "regression",
+        "hypothesis": "numeric-threshold, line 26: Loosens the upper bound \"within 7\" (unit days) to \"within 14\", so a larger value than the requirement allows still meets the instruction.",
+        "requirement": {
+          "path": "requirements.md",
+          "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "target": {
+          "artifact": "skill/prompt.md",
+          "artifactDigest": "sha256:3eedd30d6da378d842d7d5d58d8098ac8f3cffc0e4b16eab73ab40f6f5fd34e6"
+        },
+        "edit": {
+          "find": "Pick a number up to 50% and a deadline within 7 days.",
+          "replace": "Pick a number up to 50% and a deadline within 14 days.",
+          "occurrences": 1
+        },
+        "state": "generated",
+        "disposition": null,
+        "observations": [],
+        "independentEvidence": [],
+        "review": null,
+        "acceptedRisk": null,
+        "promotion": null
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "family": "modal-strength",
+      "line": 3,
+      "column": 18,
+      "text": "description: You must keep the review under 3 paragraphs.",
+      "code": "protected-span",
+      "message": "the site sits in front matter, which an edit leaves alone"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 3,
+      "column": 45,
+      "text": "description: You must keep the review under 3 paragraphs.",
+      "code": "protected-span",
+      "message": "the site sits in front matter, which an edit leaves alone"
+    },
+    {
+      "family": "modal-strength",
+      "line": 6,
+      "column": 23,
+      "text": "# Reviewer rules (you must read these)",
+      "code": "protected-span",
+      "message": "the site sits in heading, which an edit leaves alone"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 12,
+      "column": 20,
+      "text": "3. Report at least 3 findings when the diff has more than 5 changed files, and no more than 10 in total.",
+      "code": "number-agreement",
+      "message": "\"at least 3\" would become 1 findings, which breaks the singular or plural of \"findings\""
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 13,
+      "column": 25,
+      "text": "4. Keep the reply under 90% of the quota, and finish within 30 seconds.",
+      "code": "beyond-range",
+      "message": "\"under 90%\" would become 180%, which no percentage can reach"
+    },
+    {
+      "family": "negation",
+      "line": 16,
+      "column": 52,
+      "text": "The tool does not cache results, and the cache has never been warm on first use.",
+      "code": "descriptive",
+      "message": "\"never\" follows \"has\", which reads as a statement of fact and not an instruction"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 17,
+      "column": 49,
+      "text": "The release is v2.1.0 from 2026-10-14; at least 1,000 requests ran at 0.95 coverage.",
+      "code": "not-a-threshold",
+      "message": "\"at least 1\" continues as a decimal, a version, a date, a time, a range or an alternative, and a part of it is not a bound"
+    },
+    {
+      "family": "modal-strength",
+      "line": 18,
+      "column": 28,
+      "text": "Quote the author with \"you must not skip tests\" and keep `must` exact.",
+      "code": "protected-span",
+      "message": "the site sits in quotation, which an edit leaves alone"
+    },
+    {
+      "family": "negation",
+      "line": 18,
+      "column": 28,
+      "text": "Quote the author with \"you must not skip tests\" and keep `must` exact.",
+      "code": "protected-span",
+      "message": "the site sits in quotation, which an edit leaves alone"
+    },
+    {
+      "family": "modal-strength",
+      "line": 18,
+      "column": 59,
+      "text": "Quote the author with \"you must not skip tests\" and keep `must` exact.",
+      "code": "protected-span",
+      "message": "the site sits in inline code, which an edit leaves alone"
+    },
+    {
+      "family": "modal-strength",
+      "line": 21,
+      "column": 5,
+      "text": "You must not edit this block. Never change at least 4 lines.",
+      "code": "protected-span",
+      "message": "the site sits in code fence, which an edit leaves alone"
+    },
+    {
+      "family": "negation",
+      "line": 21,
+      "column": 5,
+      "text": "You must not edit this block. Never change at least 4 lines.",
+      "code": "protected-span",
+      "message": "the site sits in code fence, which an edit leaves alone"
+    },
+    {
+      "family": "negation",
+      "line": 21,
+      "column": 31,
+      "text": "You must not edit this block. Never change at least 4 lines.",
+      "code": "protected-span",
+      "message": "the site sits in code fence, which an edit leaves alone"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 21,
+      "column": 53,
+      "text": "You must not edit this block. Never change at least 4 lines.",
+      "code": "protected-span",
+      "message": "the site sits in code fence, which an edit leaves alone"
+    },
+    {
+      "family": "modal-strength",
+      "line": 24,
+      "column": 13,
+      "text": "> Reviewers must never approve their own changes.",
+      "code": "protected-span",
+      "message": "the site sits in block quote, which an edit leaves alone"
+    },
+    {
+      "family": "negation",
+      "line": 24,
+      "column": 18,
+      "text": "> Reviewers must never approve their own changes.",
+      "code": "protected-span",
+      "message": "the site sits in block quote, which an edit leaves alone"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 27,
+      "column": 24,
+      "text": "Use a bound of at most 80% or up to 70% when the gate is open.",
+      "code": "beyond-range",
+      "message": "\"at most 80%\" would become 160%, which no percentage can reach"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 27,
+      "column": 37,
+      "text": "Use a bound of at most 80% or up to 70% when the gate is open.",
+      "code": "beyond-range",
+      "message": "\"up to 70%\" would become 140%, which no percentage can reach"
+    },
+    {
+      "family": "modal-strength",
+      "line": 28,
+      "column": 11,
+      "text": "This is a must, and the reply cannot exceed budget. Don't pad the answer.",
+      "code": "not-a-directive",
+      "message": "\"must\" follows \"a\", which makes it a noun, and \"should\" would corrupt the grammar"
+    },
+    {
+      "family": "modal-strength",
+      "line": 29,
+      "column": 23,
+      "text": "Repeat this rule: you must answer in English.",
+      "code": "repeated-span",
+      "message": "the line occurs 2 times in the target, so an exact edit of it is ambiguous"
+    },
+    {
+      "family": "modal-strength",
+      "line": 30,
+      "column": 23,
+      "text": "Repeat this rule: you must answer in English.",
+      "code": "repeated-span",
+      "message": "the line occurs 2 times in the target, so an exact edit of it is ambiguous"
+    },
+    {
+      "family": "negation",
+      "line": 31,
+      "column": 11,
+      "text": "The line \"Do not guess.\" is exact. Do not guess at the answer to the question",
+      "code": "protected-span",
+      "message": "the site sits in quotation, which an edit leaves alone"
+    },
+    {
+      "family": "negation",
+      "line": 33,
+      "column": 1,
+      "text": "Never skip the review.",
+      "code": "repeated-span",
+      "message": "the line occurs 2 times in the target, so an exact edit of it is ambiguous"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 35,
+      "column": 20,
+      "text": "Hold coverage over 0.95 and finish within 1 day.",
+      "code": "not-a-threshold",
+      "message": "\"over 0\" continues as a decimal, a version, a date, a time, a range or an alternative, and a part of it is not a bound"
+    },
+    {
+      "family": "numeric-threshold",
+      "line": 35,
+      "column": 43,
+      "text": "Hold coverage over 0.95 and finish within 1 day.",
+      "code": "number-agreement",
+      "message": "\"within 1\" would become 2 day, which breaks the singular or plural of \"day\""
+    }
+  ]
+}
