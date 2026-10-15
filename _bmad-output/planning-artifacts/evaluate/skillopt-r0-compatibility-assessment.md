@@ -160,8 +160,8 @@ The planning document requires a low-risk task skill that is not an evaluator, w
 
 - The committed evaluations are `test/evaluations/bmad-tea-evaluate` and `test/evaluations/bmad-tea-test-review`. Both are evaluator-class by this note's judgment: Evaluate evaluates other agents and skills, and test-review judges tests, which fits the planning document's exclusion of skills "whose primary job is evaluating" (section 8). No other skill under `skills/` has an evaluation folder (`test/evaluations/` holds these two). They hold 9 and 14 probe files, with 4 and 12 declared clean-control (`grep` for `"clean-control"` over each `probes/` directory).
 - The tutorial fixture holds 3 probes (`test/fixtures/evaluate-tutorial/evaluation/probes`).
-- Upstream draws a training batch of 40 tasks per step by default (`default.yaml:82`), a config value. The largest committed clean-control set is 12 probes.
-- Criterion 5 depends on the evaluator-class exclusion above. Without it, the 12 clean-control probes of `bmad-tea-test-review` are the nearest candidate and still fall short of the 40-task default for three roles.
+- The largest committed clean-control set is 12 probes. Three disjoint roles leave at most 4 probes each, and the strict `>` gate (`gate.py:200`) on a scalar over 4 tasks moves in steps of 0.25.
+- Criterion 5 depends on the evaluator-class exclusion above. Without it, the 12 clean-control probes of `bmad-tea-test-review` are the nearest candidate and still leave 4 per role.
 - No target, snapshot or editable region is named here. None qualifies today.
 
 ### Stop criteria, in force for any future scope
