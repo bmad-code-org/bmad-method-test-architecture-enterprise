@@ -99,6 +99,7 @@ function pageProblems(page, text) {
     .flatMap((block) => problemsOf(block).map((problem) => `${page}:${block.line}: ${problem}`));
 }
 
+/** Every page's shell blocks pass; the scan must find enough blocks to show it read the pages. Returns the block count. */
 function checkPages() {
   const problems = PAGES.flatMap((page) => pageProblems(page, fs.readFileSync(path.join(DOCS_ROOT, page), 'utf8')));
   assert.deepEqual(problems, [], `shell blocks a reader cannot copy:\n${problems.join('\n')}`);
