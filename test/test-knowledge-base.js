@@ -425,6 +425,39 @@ function runTests() {
   console.log('');
 
   // ============================================================
+  // Test 7: Auth-session options are fixed before the test body
+  // ============================================================
+  // `authToken`, `context` and `page` resolve from the `authOptions` and
+  // `authSessionEnabled` option fixtures during fixture setup, so assigning one
+  // inside a test body changes nothing: the test keeps the default user's token.
+  // auth-session.md once taught exactly that as its multi-user example. A fragment
+  // overrides these options with `test.use()`.
+  console.log(`${colors.yellow}Test Suite 7: Auth-Session Options${colors.reset}\n`);
+  const optionAssignment = /\b(authOptions\.\w+|authSessionEnabled)\s*=(?!=)/;
+  const assignmentsIn = (text) =>
+    text
+      .split('\n')
+      .map((line, index) => ({ line: index + 1, text: line }))
+      .filter((entry) => optionAssignment.test(entry.text));
+  assert(
+    assignmentsIn("test('admin', async ({ authToken, authOptions }) => {\n  authOptions.userIdentifier = 'admin';\n});").length === 1,
+    'the check catches an authOptions assignment in a test body',
+  );
+  assert(
+    assignmentsIn("test.use({ authOptions: { userIdentifier: 'admin' } });\nif (authOptions.userIdentifier === 'admin') {}").length === 0,
+    'the check passes test.use() and a comparison',
+  );
+  const optionMutations = fs
+    .readdirSync(knowledgeDir)
+    .filter((name) => name.endsWith('.md'))
+    .flatMap((name) =>
+      assignmentsIn(fs.readFileSync(path.join(knowledgeDir, name), 'utf8')).map((entry) => `${name}:${entry.line}: ${entry.text.trim()}`),
+    );
+  assert(optionMutations.length === 0, 'no knowledge fragment assigns an auth-session option inside a test', optionMutations.join('; '));
+
+  console.log('');
+
+  // ============================================================
   // Summary
   // ============================================================
   console.log(`${colors.cyan}========================================`);

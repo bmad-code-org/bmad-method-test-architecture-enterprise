@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Test Review score summary now shows the execution mode the run resolved. It no longer prints "Parallel Execution" and an unmeasured "~60% faster than sequential" figure for every run, sequential ones included.
+- The auth-session knowledge fragment's multi-user example now picks the user with `test.use({ authOptions })` inside a `test.describe()` block. Assigning `authOptions.userIdentifier` in a test body ran after the token fixture had resolved, so the test kept the default user. `test:knowledge` now fails on such an assignment in any fragment.
+
 ## [3.1.0] - 2026-10-15
 
 ### Added
