@@ -30,8 +30,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  CANDIDATE_PATH,
   REVIEW_DISPOSITIONS,
   bytesDigest,
+  candidatePath,
   canonicalJson,
   decisionScope,
   draftMutation,
@@ -53,6 +55,15 @@ class ReviewError extends Error {
 const ARMS = Object.freeze(['baseline', 'candidate']);
 const MUTATION_FILE = /^M-([0-9]{3,})\.mutation\.json$/;
 const EVALUATOR_VERDICTS = new Set(['pass', 'fail']);
+/** A path inside the evaluation folder: words joined by `.`, `_` and `-`, with no empty, `.` or `..` segment and no leading separator. */
+const FOLDER_PATH = /^[A-Za-z0-9][\w.-]*(?:\/[A-Za-z0-9][\w.-]*)*$/;
+
+/** Refuses a path that is not inside the evaluation folder, before anything is read or written through it. */
+function inFolder(relative, label) {
+  if (typeof relative !== 'string' || !FOLDER_PATH.test(relative)) {
+    throw new ReviewError([`${label} ${JSON.stringify(relative)} is not a path inside the evaluation folder`]);
+  }
+}
 
 /** A plain object, not an array or null. */
 function isObject(value) {
@@ -369,7 +380,27 @@ function nextMutationId(folder) {
  * @throws {import('./candidate').CandidateError} when the stored candidate or the files it names are invalid or stale
  * @throws {ReviewError} when the candidate is not reviewed with a confirmed conclusion the evidence still supports
  */
+/**
+ * Refuses a reviewed record whose retained evidence no longer classifies as the stored conclusion: the observations and the
+ * reference are read again from the folder, and the conclusion and the reference digest have to be the ones the record states.
+ */
+function assertEvidenceSupports(folder, record) {
+  const classification = classifyCandidate(record, loadReviewInputs(folder, record, record.independentEvidence[0]?.reference));
+  if (
+    classification.disposition !== record.disposition ||
+    classification.independentEvidence?.digest !== record.independentEvidence[0]?.digest
+  ) {
+    throw new ReviewError([
+      `the evidence now classifies as ${classification.disposition}, which does not support the stored ${record.disposition}: ${classification.reasons.join('; ')}`,
+    ]);
+  }
+}
+
 function promoteCandidate(folder, relative, referencePath) {
+  if (typeof relative !== 'string' || !CANDIDATE_PATH.test(relative)) {
+    throw new ReviewError([`${JSON.stringify(relative)} is not discovery/<campaignId>/C-NNN.candidate.json`]);
+  }
+  inFolder(referencePath, 'the independent reference');
   const previous = readHeldFile(folder, relative, 'candidate').toString('utf8');
   const record = readCandidate(folder, relative);
   if (record.state !== 'reviewed') {
@@ -380,15 +411,12 @@ function promoteCandidate(folder, relative, referencePath) {
       `candidate ${record.candidateId} concluded ${record.disposition}; only a confirmed undesirable candidate is promoted`,
     ]);
   }
-  const classification = classifyCandidate(record, loadReviewInputs(folder, record, referencePath));
-  if (
-    classification.disposition !== record.disposition ||
-    classification.independentEvidence?.digest !== record.independentEvidence[0]?.digest
-  ) {
+  if (referencePath !== record.independentEvidence[0]?.reference) {
     throw new ReviewError([
-      `the evidence now classifies as ${classification.disposition}, which does not support the stored ${record.disposition}: ${classification.reasons.join('; ')}`,
+      `the record cites ${record.independentEvidence[0]?.reference} as its independent evidence, not ${referencePath}`,
     ]);
   }
+  assertEvidenceSupports(folder, record);
   const next = structuredClone(record);
   next.state = 'promoted';
   next.promotion = { draftMutationId: nextMutationId(folder), qualificationReceipt: null };
@@ -434,16 +462,29 @@ function writableDirectory(folder, segments) {
  * @throws {ReviewError} when a path on the way is a link, the stored record changed, or a file the promotion creates exists
  */
 function applyPromotion(folder, promotion) {
-  const [mutation, candidate] = promotion.files;
-  for (const file of promotion.files) writableDirectory(folder, path.posix.dirname(file.path).split('/'));
+  // The files are the ones the promoted record states, never caller-chosen paths or contents.
+  const record = validateCandidate(structuredClone(promotion?.record ?? null));
+  if (record.state !== 'promoted' || record.promotion === null) {
+    throw new ReviewError([`candidate ${record.candidateId} is ${record.state}; only a promoted record is applied`]);
+  }
+  const relative = candidatePath(record.campaignId, record.candidateId);
+  const files = [
+    { path: `mutations/${record.promotion.draftMutationId}.mutation.json`, content: `${JSON.stringify(draftMutation(record), null, 2)}\n` },
+    { path: relative, content: canonicalJson(record) },
+  ];
+  if (
+    JSON.stringify(promotion.files) !== JSON.stringify(files) ||
+    JSON.stringify(promotion.draft) !== JSON.stringify(draftMutation(record))
+  ) {
+    throw new ReviewError(['the promotion files are not the ones its record states']);
+  }
+  const [mutation, candidate] = files;
+  for (const file of files) writableDirectory(folder, path.posix.dirname(file.path).split('/'));
   if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
     throw new ReviewError([`${candidate.path} changed after the promotion was computed; promote again`]);
   }
-  for (const evidence of JSON.parse(candidate.content).independentEvidence) {
-    if (bytesDigest(readHeldFile(folder, evidence.reference, 'independent evidence')) !== evidence.digest) {
-      throw new ReviewError([`${evidence.reference} no longer digests to ${evidence.digest}; promote again`]);
-    }
-  }
+  // The stored record reads clean and its retained evidence still supports the conclusion it stores.
+  assertEvidenceSupports(folder, readCandidate(folder, candidate.path));
   const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;
@@ -467,6 +508,7 @@ function applyPromotion(folder, promotion) {
     if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
       throw new ReviewError([`${candidate.path} changed while the promotion was written; promote again`]);
     }
+    assertEvidenceSupports(folder, readCandidate(folder, candidate.path));
     fs.renameSync(staging, candidateFile);
   } catch (error) {
     for (const file of created) fs.rmSync(file, { force: true });
@@ -486,6 +528,7 @@ function applyPromotion(folder, promotion) {
  * @returns {{evidence: Record<string, Buffer>, reference?: Buffer}}
  */
 function loadReviewInputs(folder, record, referencePath) {
+  if (referencePath !== undefined) inFolder(referencePath, 'the independent reference');
   const held = (relative) => {
     try {
       return readHeldFile(folder, relative, 'review input');

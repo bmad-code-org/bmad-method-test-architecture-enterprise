@@ -753,14 +753,83 @@ async function checkPromotion() {
   };
   const evidenceChanged = applied('apply-evidence-changed');
   plant(evidenceChanged.target, REFERENCE_PATH, '{"kind":"reference-computation","reference":"x","cases":{}}\n');
-  refuses(
+  const readerRefuses = (label, fn, expected) => {
+    const error = outcome(fn);
+    check(
+      error instanceof candidateModule.CandidateError && expected.test(error.message),
+      `${label}: expected the reader to refuse, got ${error?.message ?? 'a result'}`,
+    );
+  };
+  readerRefuses(
     'applying after the cited reference changed',
     () => review.applyPromotion(evidenceChanged.target, evidenceChanged.promotion),
-    /no longer digests to/,
+    /digests to/,
   );
-  check(
-    !fs.existsSync(path.join(evidenceChanged.target, 'mutations', 'M-002.mutation.json')),
-    'applying after the cited reference changed wrote no draft',
+  const untouched = (state, label) => {
+    check(!fs.existsSync(path.join(state.target, 'mutations', 'M-002.mutation.json')), `${label} wrote no draft`);
+    check(
+      !fs.existsSync(path.join(state.target, ...`${state.targetPath}.tmp`.split('/'))) &&
+        JSON.parse(fs.readFileSync(path.join(state.target, ...state.targetPath.split('/')), 'utf8')).state === 'reviewed',
+      `${label} left the candidate reviewed and no staging file`,
+    );
+  };
+  untouched(evidenceChanged, 'applying after the cited reference changed');
+  for (const [label, damage] of [
+    [
+      'an observation file replaced',
+      (target, id) => plant(target, `discovery/${scenarios.campaignId}/evidence/${id}.OBS-002.json`, 'not the evidence the review used'),
+    ],
+    [
+      'an observation file deleted',
+      (target, id) => fs.rmSync(path.join(target, 'discovery', scenarios.campaignId, 'evidence', `${id}.OBS-001.json`)),
+    ],
+  ]) {
+    const state = applied('apply-observation');
+    damage(state.target, state.promotion.record.candidateId);
+    refuses(`applying after ${label}`, () => review.applyPromotion(state.target, state.promotion), /now classifies as undetermined/);
+    untouched(state, `applying after ${label}`);
+  }
+  // The files come from the promoted record: a changed path or content is refused before anything is written.
+  const outside = path.join(path.dirname(evidenceChanged.target), 'outside.txt');
+  for (const [label, forge] of [
+    ['a mutation path outside the folder', (promotion) => (promotion.files[0].path = '../outside.txt')],
+    ['an absolute mutation path', (promotion) => (promotion.files[0].path = outside)],
+    ['another mutation name', (promotion) => (promotion.files[0].path = 'mutations/M-009.mutation.json')],
+    ['a candidate path outside the folder', (promotion) => (promotion.files[1].path = '../C-001.candidate.json')],
+    ['other mutation content', (promotion) => (promotion.files[0].content = 'written outside the evaluation folder\n')],
+    ['other record content', (promotion) => (promotion.files[1].content = '{}\n')],
+    ['another draft', (promotion) => (promotion.draft = { ...promotion.draft, mutationId: 'M-009' })],
+    ['another record', (promotion) => (promotion.record = { ...promotion.record, candidateId: 'C-099' })],
+  ]) {
+    const state = applied('apply-forged');
+    const forged = structuredClone(state.promotion);
+    forge(forged);
+    const error = outcome(() => review.applyPromotion(state.target, forged));
+    check(
+      error instanceof review.ReviewError || error instanceof candidateModule.CandidateError,
+      `applying ${label}: expected a refusal, got ${error?.message ?? 'a result'}`,
+    );
+    check(!fs.existsSync(outside), `applying ${label} wrote outside the evaluation folder`);
+    untouched(state, `applying ${label}`);
+  }
+  const paths = applied('promote-paths');
+  for (const [label, relative, reference] of [
+    ['a candidate path that climbs out of the folder', '../valid/discovery/red-phase-review/C-001.candidate.json', REFERENCE_PATH],
+    ['a candidate path outside the lane', 'requirements.md', REFERENCE_PATH],
+    ['a reference path that climbs out of the folder', paths.targetPath, '../outside.json'],
+    ['an absolute reference path', paths.targetPath, path.join(paths.target, ...REFERENCE_PATH.split('/'))],
+    ['a reference other than the one the record cites', paths.targetPath, 'discovery/red-phase-review/evidence/other.json'],
+  ]) {
+    refuses(
+      `promoting with ${label}`,
+      () => review.promoteCandidate(paths.target, relative, reference),
+      /not a path inside|not discovery|not .* as its independent evidence|cites/,
+    );
+  }
+  refuses(
+    'loading review inputs from a path that climbs out of the folder',
+    () => review.loadReviewInputs(paths.target, paths.promotion.record, '../../etc/passwd'),
+    /not a path inside the evaluation folder/,
   );
   const raced = applied('apply-raced');
   const rewrittenRecord = fs
