@@ -327,7 +327,87 @@ function harnessProjectionFixtures() {
   ];
 }
 
+/**
+ * The offline experiment reader (`test/lib/configuration-experiment.js`) reads two Test Design diagnostic surfaces by name: the
+ * signature it splits into components, and the numerator and denominator contributions it divides into per-metric values and its
+ * critical counts. Holding them here means a harness change that renames or reorders either one fails this suite before it can
+ * leave the reader describing the wrong thing.
+ */
+function checkExperimentReaderSurfaces() {
+  const experiment = require('./lib/configuration-experiment');
+  const baseline = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'fixtures', 'configuration-experiment', 'example-baseline-experiment.json'), 'utf8'),
+  );
+  // One distinct value per scored field, so a swap of two components anywhere in the signature is visible.
+  const scored = {
+    set: 'value-set',
+    mentions: 'value-mentions',
+    shape: 'value-shape',
+    shapeFailures: 'value-shapeFailures',
+    links: 'value-links',
+    grounding: 'value-grounding',
+    ungrounded: 'value-ungrounded',
+    ceiling: 'value-ceiling',
+    coverageChecks: 'value-coverageChecks',
+    orderingChecks: 'value-orderingChecks',
+    flattenedPriorities: 'value-flattenedPriorities',
+    unscoredRiskTables: 'value-unscoredRiskTables',
+  };
+  const signature = JSON.parse(design.signatureOf(scored, 'value-mutations'));
+  // The order the reader names its components in, written out here and not taken from the reader or the harness.
+  const readerOrder = [
+    'set',
+    'mentions',
+    'shape',
+    'shapeFailures',
+    'links',
+    'grounding',
+    'ungrounded',
+    'ceiling',
+    'coverageChecks',
+    'orderingChecks',
+    'flattenedPriorities',
+    'unscoredRiskTables',
+    'mutations',
+  ];
+  check(
+    JSON.stringify(experiment.SIGNATURE_COMPONENTS) === JSON.stringify(readerOrder),
+    'the experiment reader names the test-design signature components in the documented order',
+  );
+  check(
+    JSON.stringify(signature) === JSON.stringify(readerOrder.map((name) => `value-${name}`)),
+    'the test-design signature carries its components in that order, position by position',
+  );
+
+  const contributions = numericContributions(
+    design.testDesignDiagnosticProjection(
+      {
+        grounding: { matched: 1, declared: 1, topSeverityMissed: 0 },
+        shape: { rows: 1, inScale: 1, arithmeticOk: 1, arithmeticTotal: 1, validCategories: 1, bandOk: 1, banded: 1, wellFormedIds: 1 },
+        ungrounded: [],
+        links: { resolved: 1, total: 1 },
+        orderingChecks: [{ resolvable: true, ok: true }],
+        flattenedPriorities: false,
+        coverageChecks: [{ ok: true }],
+        unscoredRiskTables: [],
+        ceiling: { excess: 0 },
+      },
+      0,
+    ),
+  );
+  for (const metric of Object.keys(baseline.gates.success.metrics)) {
+    check(
+      `${metric}.numerator` in contributions && `${metric}.denominator` in contributions,
+      `the diagnostic contributions carry ${metric} as a numerator and a denominator, which the experiment reader divides`,
+    );
+  }
+  for (const rule of baseline.gates.critical.rules) {
+    check(rule.count in contributions, `the diagnostic contributions carry the ${rule.count} count that the example critical rule reads`);
+  }
+}
+
 async function main() {
+  checkExperimentReaderSurfaces();
   const first = diagnosticRecord({
     caseId: 'case-a',
     repetition: 1,

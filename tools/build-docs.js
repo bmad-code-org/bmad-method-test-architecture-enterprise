@@ -76,6 +76,11 @@ const LLM_EXCLUDE_PATTERNS = [
   'reference/configuration',
   'reference/knowledge-base',
   'reference/live-verification-results',
+  // The experiment-reader guide: a reference for the offline repeatability and configuration-comparison
+  // reader, with two full example declarations (about 17k characters). An agent opens it when a task names
+  // an experiment, and llms.txt links it under "Evaluate". With it in, the bundle left less than the 50k
+  // characters the headroom check requires.
+  'how-to/evaluate/measure-repeatability-and-compare-a-configuration',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -220,6 +225,7 @@ function generateLlmsTxt(docsDir, outputDir) {
     '',
     `- **[Evaluate Your First Skill](${SITE_URL}/tutorials/evaluate-your-first-skill)**: Tutorial: one skill from requirements to a scored run and an accepted baseline`,
     `- **[Evaluate a Skill or Agent](${SITE_URL}/how-to/evaluate/evaluate-a-skill-or-agent)**: First how-to guide of the Evaluate group`,
+    `- **[Measure Repeatability and Compare One Configuration](${SITE_URL}/how-to/evaluate/measure-repeatability-and-compare-a-configuration)**: Read saved runs for repeatability, then judge one cheaper configuration offline from a frozen declaration`,
     `- **[How Evaluate Works](${SITE_URL}/explanation/how-evaluate-works)**: The stack, the rules and the reasons behind an evaluation`,
     `- **[Why Evaluate Confines the Target](${SITE_URL}/explanation/why-evaluate-confines-the-target)**: Why the target of an evaluation runs under file-system confinement`,
     '',

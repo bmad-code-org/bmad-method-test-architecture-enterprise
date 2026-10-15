@@ -1,0 +1,183 @@
+{
+  "schemaVersion": "1.0.0",
+  "experimentId": "test-design-cheaper-model",
+  "stage": "selection",
+  "scope": {
+    "workflow": "bmad-tea-test-design",
+    "owner": "TEA maintainers",
+    "claim": "fixed-suite",
+    "judge": "none",
+    "objective": "cost",
+    "baseline": {
+      "id": "incumbent",
+      "description": "The Test Design workflow on the incumbent model at high effort."
+    },
+    "candidate": {
+      "id": "cheaper-model-v1",
+      "description": "The same workflow on one cheaper model at high effort."
+    },
+    "changedFactor": {
+      "kind": "model",
+      "setting": "model",
+      "detail": "incumbent model to cheaper model; nothing else differs"
+    },
+    "memberships": {
+      "development": [
+        "seeded-offline-order-capture",
+        "clean-last-sync-indicator"
+      ],
+      "validation": [
+        "validation-case-1",
+        "validation-case-2"
+      ],
+      "confirmation": [
+        "confirmation-case-1",
+        "confirmation-case-2",
+        "confirmation-case-3",
+        "confirmation-case-4"
+      ]
+    },
+    "clusters": [
+      {
+        "caseId": "seeded-offline-order-capture",
+        "clusterId": "seeded-offline-order-capture",
+        "weight": 0.25
+      },
+      {
+        "caseId": "clean-last-sync-indicator",
+        "clusterId": "clean-last-sync-indicator",
+        "weight": 0.25
+      },
+      {
+        "caseId": "validation-case-1",
+        "clusterId": "validation-case-1",
+        "weight": 0.25
+      },
+      {
+        "caseId": "validation-case-2",
+        "clusterId": "validation-case-2",
+        "weight": 0.25
+      }
+    ]
+  },
+  "identity": {
+    "fixed": {
+      "suiteDigest": "record the digest of the suite manifest entry",
+      "fixtureDigest": "record the digest of the staged fixtures",
+      "groundTruthDigest": "record the digest of test/fixtures/test-design-eval/ground-truth.json",
+      "scorerDigest": "record the digest of test/eval-test-design.js",
+      "thresholdsDigest": "record the digest of the suite thresholds",
+      "rubricDigest": "not-applicable",
+      "promptDigest": "record the digest of the task prompts",
+      "sourcePins": {
+        "tea": "record the TEA commit",
+        "evalQuality": "record the eval-quality version"
+      },
+      "environment": {
+        "runner": "record the runner and its version",
+        "cacheRegime": "cold cache on every attempt"
+      }
+    },
+    "arms": {
+      "A": {
+        "model": {
+          "requested": "incumbent-model-id",
+          "resolved": "record the model id the provider reports"
+        },
+        "effort": {
+          "requested": "high",
+          "applied": "record the effort the provider applied"
+        },
+        "decode": {
+          "temperature": "record the applied setting"
+        },
+        "promptDigest": "record the digest of the target package prompt"
+      },
+      "B": {
+        "model": {
+          "requested": "cheaper-model-id",
+          "resolved": "record the model id the provider reports for the cheaper model"
+        },
+        "effort": {
+          "requested": "high",
+          "applied": "record the effort the provider applied"
+        },
+        "decode": {
+          "temperature": "record the applied setting"
+        },
+        "promptDigest": "record the digest of the target package prompt"
+      }
+    }
+  },
+  "design": {
+    "repeats": 3,
+    "order": "interleaved",
+    "isolation": "fresh staged workspace per attempt; every deliverable regenerated",
+    "maxAttempts": 2,
+    "stoppingRule": "fixed repeat schedule; no early stop",
+    "failureRules": {
+      "timeout": "incomplete"
+    },
+    "analysis": {
+      "alpha": 0.05,
+      "B": 10000,
+      "seed": 20261014,
+      "prng": "mulberry32",
+      "quantile": "linear",
+      "simultaneous": true
+    }
+  },
+  "gates": {
+    "success": {
+      "metrics": {
+        "groundedRiskRecall": 0.8,
+        "riskPrecision": 0.8,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": 1,
+        "coverageMappingAccuracy": 0.8
+      }
+    },
+    "quality": {
+      "riskPrecision": {
+        "maxLoss": 0.05
+      },
+      "scaleComplianceAccuracy": {
+        "maxLoss": 0.05
+      },
+      "riskLinkResolutionAccuracy": {
+        "maxLoss": 0.05
+      }
+    },
+    "floors": {
+      "riskPrecision": 0.8
+    },
+    "saving": {
+      "minFraction": 0.25
+    },
+    "critical": {
+      "tolerance": 0,
+      "rules": [
+        {
+          "id": "top-severity-risk-missed",
+          "count": "topSeverityMissed"
+        },
+        {
+          "id": "ungrounded-risk-reported",
+          "count": "ungroundedRisks"
+        }
+      ]
+    }
+  },
+  "resources": {
+    "authorization": null,
+    "overhead": []
+  },
+  "frozen": {
+    "digest": "sha256:3b5d6173637dc1c24cf7123dea4fbe97b7c0ed30c1205d00f43c480da2fc90ec"
+  }
+}
