@@ -384,9 +384,9 @@ function validateDeclaration(declaration) {
     need(pairs, isFiniteNumber(design.failureRules.failureMetricValue), 'design.failureRules.failureMetricValue', 'is required');
     need(
       pairs,
-      Object.values(decl.gates?.success?.metrics ?? {}).every((minimum) => design.failureRules.failureMetricValue < minimum),
+      design.failureRules.failureMetricValue === 0,
       'design.failureRules.failureMetricValue',
-      'must fall below every success minimum: a timeout scored as a failure cannot count as a success',
+      'must be 0, the bottom of the [0, 1] scale of a required metric: a timeout scored as a failure scores the worst outcome',
     );
   }
   const analysis = isObject(design.analysis) ? design.analysis : {};
@@ -1451,6 +1451,8 @@ function resolveSlots(declaration, rows, plan) {
     nonFinite: [],
     missingMetric: [],
     unplanned: [],
+    outOfRange: [],
+    attemptGap: [],
   };
   for (const row of stageRows) {
     if (plan.some((entry) => entry.caseId === row.caseId) && row.repetition > repeats) {
@@ -1475,13 +1477,17 @@ function resolveSlots(declaration, rows, plan) {
           scoring = timeouts.at(-1);
         }
         if (attempts.length > declaration.design.maxAttempts) problems.overBudget.push(`${arm}/${entry.caseId}/${repetition}`);
+        if (attempts.some((row, index) => row.attemptNumber !== index + 1))
+          problems.attemptGap.push(`${arm}/${entry.caseId}/${repetition}`);
         if (scoring === null && completed.length === 0) problems.missing.push(`${arm}/${entry.caseId}/${repetition}`);
         let values = null;
         if (scoring !== null) {
           values = {};
           for (const metric of required) {
             const value = failureScored ? failureValue : scoring.metrics[metric];
-            if (isFiniteNumber(value)) values[metric] = value;
+            if (isFiniteNumber(value) && (value < 0 || value > 1))
+              problems.outOfRange.push(`${arm}/${entry.caseId}/${repetition}/${metric}`);
+            else if (isFiniteNumber(value)) values[metric] = value;
             else if (value === null || value === undefined) {
               const reason = scoring.notApplicable.includes(metric) ? 'not applicable to this case' : 'unmeasured';
               problems.missingMetric.push(`${arm}/${entry.caseId}/${repetition}/${metric} (${reason})`);
@@ -1688,8 +1694,15 @@ function analyzeContrast({ declaration, validation, rows, excluded, ledger, resu
 
   const sharedAcrossArms = excluded.filter((entry) => entry.sharedAcrossArms).map((entry) => entry.row.attemptId);
   facts.sharedAcrossArms = sharedAcrossArms;
+  // A candidate row left out of this stage has to belong to another paired stage, on
+  // that stage's own cases. Anything else hides candidate evidence from the decision.
+  const otherStage = (row) =>
+    ['selection', 'confirmation'].includes(row.stage) &&
+    row.stage !== declaration.stage &&
+    stageCases({ ...declaration, stage: row.stage }).includes(row.caseId);
   facts.mislabeled = excluded
-    .filter((entry) => entry.reason === 'wrong-stage' && entry.row.arm === 'B')
+    .filter((entry) => ['wrong-stage', 'outside-stage-membership'].includes(entry.reason) && entry.row.arm === 'B')
+    .filter((entry) => !otherStage(entry.row))
     .map((entry) => entry.row.attemptId);
 
   const resolved = resolveSlots(declaration, contrastRows, plan);
@@ -2022,7 +2035,7 @@ function decide({
     );
   if (facts.sharedAcrossArms.length > 0) blocks.push(`rows are shared between the arms: ${facts.sharedAcrossArms.join(', ')}`);
   if (facts.mislabeled.length > 0) {
-    blocks.push(`candidate attempts on this stage's cases are labeled with another stage: ${facts.mislabeled.join(', ')}`);
+    blocks.push(`candidate attempts belong to no stage this declaration plans: ${facts.mislabeled.join(', ')}`);
   }
   if (critical.unrecorded.length > 0) {
     blocks.push(
@@ -2046,6 +2059,10 @@ function decide({
     blocks.push(`${facts.malformedRows} evidence row(s) could not be read, so their charges and results are unknown`);
   if (problems.unplanned.length > 0) blocks.push(`attempts for repetitions the schedule does not plan: ${problems.unplanned.join(', ')}`);
   if (problems.overBudget.length > 0) blocks.push(`attempts exceed design.maxAttempts: ${problems.overBudget.join(', ')}`);
+  if (problems.attemptGap.length > 0) {
+    blocks.push(`attempt numbers do not run 1, 2, ... without a gap or a repeat: ${problems.attemptGap.join(', ')}`);
+  }
+  if (problems.outOfRange.length > 0) blocks.push(`required metric outside [0, 1]: ${problems.outOfRange.join(', ')}`);
   if (problems.missingBlock.length > 0) blocks.push(`pairing block not recorded on both arms: ${problems.missingBlock.join(', ')}`);
   if (problems.blockMismatch.length > 0) blocks.push(`pairing blocks differ: ${problems.blockMismatch.join(', ')}`);
   if (facts.schedule.length > 0) {

@@ -471,7 +471,7 @@ function checkAcceptance1() {
       body.identity.arms.B = clone(body.identity.arms.A);
     },
   });
-  const aaRows = world({ diffs: [0.2, 0.3, 0.1, 0.25, 0.3, 0.2], costB: (i) => 0.2 + 0.05 * i }).map((row) => {
+  const aaRows = world({ diffs: [0.1, 0.13, 0.05, 0.11, 0.13, 0.08], costB: (i) => 0.2 + 0.05 * i }).map((row) => {
     if (row.arm === 'B') row.observed.arm = clone(ARM_A);
     return row;
   });
@@ -808,7 +808,7 @@ function checkAcceptance5() {
   );
 
   // Failing to detect a loss is not noninferiority.
-  const wide = world({ diffs: [-0.2, 0.2, -0.15, 0.15, -0.1, 0.1] });
+  const wide = world({ diffs: [-0.2, 0.13, -0.15, 0.12, -0.1, 0.1] });
   check(outcomeOf(read(declaration(), wide)) === 'inconclusive', 'an interval too wide for noninferiority is inconclusive');
 
   // Equality at a boundary does not pass.
@@ -1088,7 +1088,7 @@ function checkAcceptance7() {
     ...relabeled('confirmation', 'B').map((row, index) => (index === 0 ? { ...row, counts: { topSeverityMissed: 2 } } : row)),
   ]);
   check(
-    outcomeOf(mislabeled) === 'blocked' && hasReason(mislabeled, /candidate attempts on this stage's cases are labeled with another stage/),
+    outcomeOf(mislabeled) === 'blocked' && hasReason(mislabeled, /candidate attempts belong to no stage this declaration plans/),
     'a candidate attempt that hides under another stage label blocks',
   );
 
@@ -1500,7 +1500,7 @@ function checkAcceptance8() {
   // A quality objective that declares no saving gate does not need cost.
   const quality = declaration({ objective: 'quality' });
   check(
-    outcomeOf(read(quality, world({ diffs: [0.2, 0.25, 0.3, 0.22, 0.28, 0.24], mutateRow: (row) => (row.cost = null) }))) !== 'blocked',
+    outcomeOf(read(quality, world({ diffs: [0.12, 0.13, 0.1, 0.11, 0.12, 0.13], mutateRow: (row) => (row.cost = null) }))) !== 'blocked',
     'a quality objective does not need cost to be read',
   );
 }
@@ -3718,6 +3718,99 @@ function checkEveryAttemptIsAccountedFor() {
     outcomeOf(sameInstantResult) === 'blocked' && hasReason(sameInstantResult, /does not finish starting attempts before/),
     'attempts that all start at one instant show no dispatch order',
   );
+
+  // A timeout scored as a failure scores the bottom of the scale.
+  for (const [label, failureRules, success] of [
+    ['just under the success minimums', { timeout: 'failure', failureMetricValue: 0.98 }, { recall: 0.99, precision: 0.99 }],
+    ['with no success minimums at all', { timeout: 'failure', failureMetricValue: 1 }, {}],
+  ]) {
+    const generous = declaration({
+      mutate: (body) => {
+        body.design.failureRules = failureRules;
+        body.gates.success.metrics = success;
+      },
+    });
+    check(
+      experiment.validateDeclaration(generous).pairedProblems.some((problem) => problem.where === 'design.failureRules.failureMetricValue'),
+      `a failure value ${label} is refused`,
+    );
+  }
+  const allTimeouts = world({
+    mutateRow: (row) => {
+      if (row.arm !== 'B') return;
+      row.status = 'timeout';
+      row.metrics = {};
+      row.counts = {};
+      delete row.outputText;
+      row.outputSha256 = null;
+      row.receipt.artifactSha256 = null;
+    },
+  });
+  const allTimeoutsResult = read(scoredAsFailure, allTimeouts, { seal: false });
+  check(
+    outcomeOf(allTimeoutsResult) === 'inconclusive',
+    `a candidate that only times out does not clear, got ${outcomeOf(allTimeoutsResult)}`,
+  );
+  const overRange = read(declaration(), world({ mutateRow: (row, i) => row.arm === 'B' && i === 0 && (row.metrics.recall = 1.2) }));
+  check(
+    outcomeOf(overRange) === 'blocked' && hasReason(overRange, /required metric outside \[0, 1\]: B\/c1\/1\/recall/),
+    'a required metric outside [0, 1] blocks',
+  );
+
+  // A candidate attempt relabeled out of the stage, or a retry with no first attempt.
+  const relabel = (change) => {
+    const rows = world();
+    const missed = seal({
+      ...clone(candidateRow(rows, 'c1', 1)),
+      attemptId: 'B-c1-1-missed',
+      attempt: 2,
+      counts: { topSeverityMissed: 2 },
+    });
+    missed.receipt.workspaceId = 'ws-missed';
+    change(missed);
+    rows.push(missed);
+    return read(declaration(), rows);
+  };
+  for (const [label, change] of [
+    ['a confirmation case', (row) => (row.caseId = 'k1')],
+    ['a case nobody planned', (row) => (row.caseId = 'c1-retry')],
+    ['no stage a contrast plans', (row) => (row.stage = 'baseline')],
+  ]) {
+    const result = relabel(change);
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /candidate attempts belong to no stage this declaration plans: B-c1-1-missed/),
+      `a candidate attempt relabeled to ${label} blocks, got ${outcomeOf(result)}`,
+    );
+  }
+  const confirmationRow = relabel((row) => {
+    row.caseId = 'k1';
+    row.stage = 'confirmation';
+    row.attempt = 1;
+  });
+  check(
+    !hasReason(confirmationRow, /belong to no stage/) &&
+      confirmationRow.report.exclusions.some((entry) => entry.attemptId === 'B-c1-1-missed' && entry.reason === 'outside-stage-membership'),
+    "a confirmation row on a confirmation case is another stage's evidence and is left out",
+  );
+  for (const [label, change] of [
+    ['a retry with no first attempt', (rows) => (candidateRow(rows, 'c2', 1).attempt = 2)],
+    [
+      'two first attempts',
+      (rows) => {
+        const second = seal({ ...clone(candidateRow(rows, 'c2', 1)), attemptId: 'B-c2-1-again', status: 'failed' });
+        second.receipt.workspaceId = 'ws-again';
+        rows.push(second);
+      },
+    ],
+  ]) {
+    const rows = world();
+    change(rows);
+    const result = read(declaration(), rows);
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /attempt numbers do not run 1, 2, ... without a gap or a repeat: B\/c2\/1/),
+      `${label} blocks, got ${outcomeOf(result)}`,
+    );
+  }
 
   // A retry outside its pair's block, and a copy that disagrees on anything.
   for (const [label, blockId] of [
