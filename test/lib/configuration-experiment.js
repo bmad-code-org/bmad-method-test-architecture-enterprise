@@ -166,10 +166,16 @@ function deepFreeze(value) {
 
 const clone = (value) => (value === undefined ? undefined : structuredClone(value));
 
-/** Leaf paths of a nested object. Arrays are leaves. */
+/**
+ * Leaf paths of a nested object. Arrays are leaves. A dot or backslash inside a key is
+ * escaped, so a key named `a.b` never collides with the path of `{ a: { b } }`.
+ */
 function flatten(value, prefix = '', out = Object.create(null)) {
   if (isObject(value)) {
-    for (const key of Object.keys(value).sort()) flatten(value[key], prefix ? `${prefix}.${key}` : key, out);
+    for (const key of Object.keys(value).sort()) {
+      const name = key.replaceAll('\\', '\\\\').replaceAll('.', String.raw`\.`);
+      flatten(value[key], prefix ? `${prefix}.${name}` : name, out);
+    }
     if (Object.keys(value).length === 0 && prefix) out[prefix] = {};
   } else if (prefix) {
     out[prefix] = value;

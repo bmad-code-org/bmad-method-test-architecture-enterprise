@@ -3454,6 +3454,14 @@ async function checkRecordedEvidenceVerification() {
     ['another suite', (provenance) => (provenance.observed.fixed.suiteDigest = sha('another suite')), 'fixed.suiteDigest'],
     ['another requested model', (provenance) => (provenance.observed.arm.model.requested = 'another-model'), 'arm.model.requested'],
     ['another source commit', (provenance) => (provenance.observed.fixed.sourceCommit = 'another-commit'), 'fixed.sourceCommit'],
+    [
+      'another suite behind a dotted key',
+      (provenance) => {
+        provenance.observed['fixed.suiteDigest'] = provenance.observed.fixed.suiteDigest;
+        provenance.observed.fixed.suiteDigest = sha('another suite');
+      },
+      'fixed.suiteDigest',
+    ],
   ]) {
     const loaded = rewriteProvenance(`observed-${leaf}`, change);
     check(
@@ -3465,6 +3473,22 @@ async function checkRecordedEvidenceVerification() {
       `a recorded identity naming ${label} than the run shows is refused`,
     );
   }
+
+  // A dotted key never stands in for a nested identity leaf.
+  const dottedDrift = read(
+    declaration(),
+    world({
+      mutateRow: (row) => {
+        if (row.arm !== 'B') return;
+        row.observed.arm['model.resolved'] = row.observed.arm.model.resolved;
+        row.observed.arm.model.resolved = 'cheaper-2026-11';
+      },
+    }),
+  );
+  check(
+    outcomeOf(dottedDrift) === 'new-baseline-required' && hasReason(dottedDrift, /arm\.B\.model\.resolved/),
+    'an observed identity that hides a change behind a dotted key is caught',
+  );
 
   // A record filed under another reference is not that reference's record.
   const [someRef, someRecord] = Object.entries(records)[0];
