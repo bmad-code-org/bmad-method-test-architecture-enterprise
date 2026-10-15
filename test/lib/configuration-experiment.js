@@ -673,22 +673,13 @@ function scopedCost(rows, names, pricing) {
 
 /**
  * Drop copies. Two rows with one attemptId are one trial; two attempts that claim one
- * fresh workspace are one trial. The later row is excluded and says why.
+ * fresh workspace are one trial. The later row is excluded and says why. A copy that
+ * differs from the first in anything but its attempt id and input position conflicts.
  */
 function rowContent(row) {
-  return canonicalJson([
-    row.caseId,
-    row.repetition,
-    row.status,
-    row.metrics,
-    row.counts,
-    row.critical,
-    row.outputSha256,
-    row.receipt,
-    row.cost,
-    row.usage,
-    row.latency,
-  ]);
+  const { inputIndex, attemptId, problems, ...content } = row;
+  void [inputIndex, attemptId, problems];
+  return canonicalJson(content);
 }
 
 function classifyRows(rows) {
@@ -1529,6 +1520,7 @@ function scheduleProblems(slots, order) {
     if (!isNonEmptyString(blockId) || blockId !== slot.arms.B.scoring?.blockId) continue;
     for (const arm of ARMS) {
       for (const row of slot.arms[arm].attempts) {
+        if (row.blockId !== blockId) problems.push(`${row.attemptId} is not in the block ${blockId} of its pair`);
         const start = timestampMs(row.receipt?.startedAt);
         if (start === null) {
           problems.push(`${row.attemptId} records no start time`);

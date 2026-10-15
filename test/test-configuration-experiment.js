@@ -3719,6 +3719,38 @@ function checkEveryAttemptIsAccountedFor() {
     'attempts that all start at one instant show no dispatch order',
   );
 
+  // A retry outside its pair's block, and a copy that disagrees on anything.
+  for (const [label, blockId] of [
+    ['with no block', undefined],
+    ["in another pair's block", 'c3-2'],
+  ]) {
+    const rows = world();
+    const pairFirst = candidateRow(rows, 'c2', 1);
+    const retry = seal({ ...clone(pairFirst), attemptId: 'B-c2-1-retry', attempt: 2, status: 'failed', blockId });
+    retry.receipt.workspaceId = 'ws-c2-retry';
+    rows.push(retry);
+    const result = read(declaration(), rows);
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /B-c2-1-retry is not in the block c2-1 of its pair/),
+      `a retry ${label} blocks, got ${outcomeOf(result)}`,
+    );
+  }
+  for (const [field, change] of [
+    ['input hash', (row) => (row.inputSha256 = sha('another prompt'))],
+    ['observed identity', (row) => (row.observed.arm.model.resolved = 'cheaper-2026-11')],
+    ['stage', (row) => (row.stage = 'baseline')],
+  ]) {
+    const rows = world();
+    const copy = clone(candidateRow(rows, 'c1', 1));
+    change(copy);
+    rows.push(copy);
+    const result = read(declaration(), rows);
+    check(
+      outcomeOf(result) === 'blocked' && hasReason(result, /disagree with the first: B-c1-1-1/),
+      `a copy that differs in its ${field} conflicts and blocks, got ${outcomeOf(result)}`,
+    );
+  }
+
   // Judge cost exists only with a rubric judge, and never names a task component.
   const judgeEscape = declaration({
     mutate: (body) => (body.resources.costScope = { taskExecution: ['target', 'tools'], judge: ['judge', 'retrieval'] }),
