@@ -483,8 +483,18 @@ function applyPromotion(folder, promotion) {
   if (readHeldFile(folder, candidate.path, 'candidate').toString('utf8') !== promotion.previous) {
     throw new ReviewError([`${candidate.path} changed after the promotion was computed; promote again`]);
   }
-  // The stored record reads clean and its retained evidence still supports the conclusion it stores.
-  assertEvidenceSupports(folder, readCandidate(folder, candidate.path));
+  // The stored record reads clean, its retained evidence still supports the conclusion it stores, and the promoted record is that
+  // record with the promotion added and nothing else changed.
+  const stored = readCandidate(folder, candidate.path);
+  assertEvidenceSupports(folder, stored);
+  const expected = {
+    ...structuredClone(stored),
+    state: 'promoted',
+    promotion: { draftMutationId: record.promotion.draftMutationId, qualificationReceipt: null },
+  };
+  if (stored.state !== 'reviewed' || canonicalJson(record) !== canonicalJson(expected)) {
+    throw new ReviewError(['the promoted record is not the stored reviewed record with a promotion added']);
+  }
   const mutationFile = path.join(folder, ...mutation.path.split('/'));
   const candidateFile = path.join(folder, ...candidate.path.split('/'));
   const staging = `${candidateFile}.tmp`;

@@ -790,26 +790,41 @@ async function checkPromotion() {
     untouched(state, `applying after ${label}`);
   }
   // The files come from the promoted record: a changed path or content is refused before anything is written.
-  const outside = path.join(path.dirname(evidenceChanged.target), 'outside.txt');
   for (const [label, forge] of [
     ['a mutation path outside the folder', (promotion) => (promotion.files[0].path = '../outside.txt')],
-    ['an absolute mutation path', (promotion) => (promotion.files[0].path = outside)],
+    ['an absolute mutation path', (promotion, state) => (promotion.files[0].path = path.join(path.dirname(state.target), 'outside.txt'))],
     ['another mutation name', (promotion) => (promotion.files[0].path = 'mutations/M-009.mutation.json')],
     ['a candidate path outside the folder', (promotion) => (promotion.files[1].path = '../C-001.candidate.json')],
     ['other mutation content', (promotion) => (promotion.files[0].content = 'written outside the evaluation folder\n')],
     ['other record content', (promotion) => (promotion.files[1].content = '{}\n')],
     ['another draft', (promotion) => (promotion.draft = { ...promotion.draft, mutationId: 'M-009' })],
     ['another record', (promotion) => (promotion.record = { ...promotion.record, candidateId: 'C-099' })],
+    [
+      'a record with another conclusion, re-scoped and rewritten consistently',
+      (promotion) => {
+        promotion.record.disposition = 'confirmed-undesirable-caught';
+        promotion.record.review.scope = candidateModule.decisionScope(promotion.record);
+        promotion.files[1].content = candidateModule.canonicalJson(promotion.record);
+      },
+    ],
+    [
+      'a record with another rationale',
+      (promotion) => {
+        promotion.record.review.rationale = 'A different rationale';
+        promotion.record.review.scope = candidateModule.decisionScope(promotion.record);
+        promotion.files[1].content = candidateModule.canonicalJson(promotion.record);
+      },
+    ],
   ]) {
     const state = applied('apply-forged');
     const forged = structuredClone(state.promotion);
-    forge(forged);
+    forge(forged, state);
     const error = outcome(() => review.applyPromotion(state.target, forged));
     check(
       error instanceof review.ReviewError || error instanceof candidateModule.CandidateError,
       `applying ${label}: expected a refusal, got ${error?.message ?? 'a result'}`,
     );
-    check(!fs.existsSync(outside), `applying ${label} wrote outside the evaluation folder`);
+    check(!fs.existsSync(path.join(path.dirname(state.target), 'outside.txt')), `applying ${label} wrote outside the evaluation folder`);
     untouched(state, `applying ${label}`);
   }
   const paths = applied('promote-paths');
