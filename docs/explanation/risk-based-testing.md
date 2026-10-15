@@ -87,7 +87,7 @@ An open score-9 risk blocks release under this policy.
 A mitigation plan records the work needed to resolve it; writing the plan alone does not clear the block.
 
 The policy and the `trace` gate decision answer different questions.
-`trace` computes PASS, CONCERNS, or FAIL from P0, P1, and overall requirement coverage, oracle confidence, and live evidence, and does not read the risk register; its critical-gap counts are coverage gaps, not risks.
+`trace` computes PASS, CONCERNS, or FAIL from P0, P1, and overall requirement coverage, oracle confidence, and live evidence, and does not read the risk register; its critical-gap counts are coverage gaps.
 A run with full requirement coverage can PASS while a score-9 risk is still open, so review open risks and NFR evidence separately before release.
 See the [gate rules](/docs/reference/commands.md#trace) for the exact thresholds.
 The trace skill reports human waivers separately and keeps its derived decision.

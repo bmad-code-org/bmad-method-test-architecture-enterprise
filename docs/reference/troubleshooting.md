@@ -51,13 +51,12 @@ The two fail differently, so check each before changing anything.
 ```bash
 npm config get registry                        # the registry npm uses; a corporate mirror here is intentional
 npm ping                                       # HTTPS check against that registry
-curl -sI https://github.com | head -n 1        # can this machine reach GitHub?
-npm cache verify                               # reports cache problems without deleting anything
+curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://github.com   # prints 200 when GitHub answers, or the connection error
 ```
 
 - `npm ping` fails: the registry or proxy is the problem. Ask your administrator about the mirror and proxy settings.
-- `curl` fails or hangs: GitHub is blocked. See [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
-- `npm cache verify` reports corruption: run `npm cache clean --force`, then retry.
+- `curl` prints a connection error or a status other than 200: GitHub is blocked. See [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
+- The error names the npm cache (`EACCES` on the cache folder, `integrity checksum failed`): run `npm cache verify`, which drops corrupt entries and rebuilds the index, then retry. Run `npm cache clean --force` only if that does not help.
 - The registry is a leftover from a proxy you no longer use and your organization allows the public one: note the current value, then set it with `npm config set registry https://registry.npmjs.org/`. Restore the original with `npm config set registry <noted value>`.
 
 ### TEA Says It Is Not Set Up

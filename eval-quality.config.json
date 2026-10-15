@@ -1221,6 +1221,10 @@
           "reason": "a shell variable the reference names among the variables a target receives as the call gave them, which no source declares"
         },
         {
+          "token": "pactUrls",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
           "token": "createCommandLineAdapter",
           "reason": "an eval-quality package export, not a TEA declaration"
         },

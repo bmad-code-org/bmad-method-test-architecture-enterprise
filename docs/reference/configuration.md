@@ -222,7 +222,8 @@ npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
 ```
 
 For the remote flow with a Pact Broker, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (you must set it explicitly: `${{ github.head_ref || github.ref_name }}`).
-The local monorepo flow needs no broker: the consumer generates pacts and the provider verifies them locally.
+The flow follows `PACT_BROKER_BASE_URL`: when it is set the remote flow runs, otherwise the local monorepo flow runs and needs `pactUrls`, the list of local pact files, instead of a broker.
+The consumer generates the pacts and the provider verifies them locally.
 
 **Related:**
 
