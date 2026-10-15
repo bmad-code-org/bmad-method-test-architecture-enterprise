@@ -46,6 +46,36 @@ const DISCOVERY_DIRECTORY = 'discovery';
 /** Where a campaign keeps the snapshots its independent evidence cites, below its own directory. */
 const EVIDENCE_DIRECTORY = 'evidence';
 const CANDIDATE_PATH = /^discovery\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(C-[0-9]{3,})\.candidate\.json$/;
+/** The fields of a qualified probe `qualifiedProbe` writes; the accepted baseline's copy of the probe holds all of them. */
+const QUALIFIED_PROBE_FIELDS = Object.freeze([
+  'schemaVersion',
+  'parentDigest',
+  'revisionCount',
+  'probeId',
+  'probeClass',
+  'behaviorId',
+  'systemId',
+  'implementationDigest',
+  'artifactDigest',
+  'commitDigest',
+  'rationale',
+  'qualification',
+  'expectedClean',
+  'defects',
+  'defectSignature',
+]);
+/** The fields of the controlled-mutation qualification inside it. */
+const QUALIFICATION_FIELDS = Object.freeze([
+  'route',
+  'mutationSource',
+  'mutationOperator',
+  'targetArtifact',
+  'expectedObservableFailure',
+  'baselinePassEvidence',
+  'mutatedFailEvidence',
+  'rollbackVerified',
+]);
+const SHA256 = /^sha256:[0-9a-f]{64}$/;
 /** The native receipt a promotion links: the mutated arm's evidence, which a qualification writes under `baseline/qualification/<probeId>/`. */
 const RECEIPT_PATH = /^baseline\/qualification\/(P-[0-9]{3,})\/mutated-fail\.json$/;
 const STATES = Object.freeze([...SCHEMA.properties.state.enum]);
@@ -485,10 +515,7 @@ function qualificationProblems(folder, record, receiptBytes, problems) {
   if (mutated !== undefined) {
     expectFields(problems, receipt.path, mutated, { ...arms, phase: 'mutated-fail', verdict: 'violated' });
     oracleProblems(problems, receipt.path, mutated, 'violated');
-    if (
-      mutated.targetArtifactDigest === record.target.artifactDigest ||
-      !/^sha256:[0-9a-f]{64}$/.test(mutated.targetArtifactDigest ?? '')
-    ) {
+    if (mutated.targetArtifactDigest === record.target.artifactDigest || !SHA256.test(mutated.targetArtifactDigest ?? '')) {
       problems.push(
         `${receipt.path} states targetArtifactDigest ${JSON.stringify(mutated.targetArtifactDigest)}; the mutated bytes digest to another value than the target's ${record.target.artifactDigest}`,
       );
@@ -504,7 +531,9 @@ function qualificationProblems(folder, record, receiptBytes, problems) {
     });
     if (rollback.rollbackVerified !== true) problems.push(`${directory}/rollback.json does not state that the rollback was verified`);
     const lastRePass = Array.isArray(rollback.rePasses) ? rollback.rePasses.at(-1) : undefined;
-    if (lastRePass?.verdict !== 'held') {
+    if (lastRePass?.verdict === 'held') {
+      oracleProblems(problems, `${directory}/rollback.json`, lastRePass, 'held');
+    } else {
       problems.push(`${directory}/rollback.json ends with no restored arm that held, which a verified rollback rests on`);
     }
   }
@@ -521,6 +550,19 @@ function qualificationProblems(folder, record, receiptBytes, problems) {
   if (accepted !== undefined) {
     const qualification = accepted.qualification ?? {};
     const acceptedFile = `baseline/probes/${probeId}.probe.json`;
+    const absent = QUALIFIED_PROBE_FIELDS.filter((field) => !Object.hasOwn(accepted, field));
+    if (absent.length > 0) problems.push(`${acceptedFile} is not a qualified probe; it lacks ${absent.join(', ')}`);
+    const unqualified = QUALIFICATION_FIELDS.filter((field) => !Object.hasOwn(qualification, field));
+    if (unqualified.length > 0)
+      problems.push(`${acceptedFile} holds no controlled-mutation qualification; it lacks ${unqualified.join(', ')}`);
+    expectFields(problems, acceptedFile, accepted, { probeId, expectedClean: false, artifactDigest: record.target.artifactDigest });
+    if (!Number.isInteger(accepted.schemaVersion) || accepted.schemaVersion < 1) {
+      problems.push(`${acceptedFile} states schemaVersion ${JSON.stringify(accepted.schemaVersion)}, which is not a probe schema version`);
+    }
+    for (const field of ['implementationDigest', 'commitDigest']) {
+      if (!SHA256.test(accepted[field] ?? ''))
+        problems.push(`${acceptedFile} states ${field} ${JSON.stringify(accepted[field])}, which is not a digest`);
+    }
     const operator = `replace-exact: ${JSON.stringify(record.edit.find)} -> ${JSON.stringify(record.edit.replace)} (occurrences ${record.edit.occurrences})`;
     if (qualification.route !== 'controlled-mutation') problems.push(`${acceptedFile} takes the ${qualification.route} route`);
     if (qualification.mutationOperator !== operator) {
@@ -636,6 +678,8 @@ module.exports = {
   DISCOVERY_DIRECTORY,
   DISPOSITIONS,
   EVIDENCE_DIRECTORY,
+  QUALIFICATION_FIELDS,
+  QUALIFIED_PROBE_FIELDS,
   RECORD_KIND,
   REVIEW_DISPOSITIONS,
   STATES,

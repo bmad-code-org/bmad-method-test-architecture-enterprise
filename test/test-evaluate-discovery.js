@@ -765,6 +765,39 @@ function checkQualificationChain() {
   ];
   const more = [
     [
+      'an accepted probe that is not a qualified probe',
+      ACCEPTED,
+      (value) => delete value.systemId,
+      /is not a qualified probe; it lacks systemId/,
+    ],
+    [
+      'an accepted probe with no qualification fields',
+      ACCEPTED,
+      (value) => delete value.qualification.rollbackVerified,
+      /lacks rollbackVerified/,
+    ],
+    [
+      'an accepted probe of a string schema version',
+      ACCEPTED,
+      (value) => (value.schemaVersion = '1.0.0'),
+      /which is not a probe schema version/,
+    ],
+    ['an accepted probe that expects a clean run', ACCEPTED, (value) => (value.expectedClean = true), /states expectedClean true/],
+    ['an accepted probe of another probe', ACCEPTED, (value) => (value.probeId = 'P-004'), /states probeId "P-004"/],
+    [
+      'an accepted probe of another artifact digest',
+      ACCEPTED,
+      (value) => (value.artifactDigest = discovery.bytesDigest(Buffer.from('other'))),
+      /states artifactDigest/,
+    ],
+    ['an accepted probe with a malformed commit digest', ACCEPTED, (value) => (value.commitDigest = 'abc'), /states commitDigest "abc"/],
+    [
+      'a rollback whose restored arm violated an oracle',
+      ROLLBACK,
+      (value) => (value.rePasses[0].oracles[0].disposition = 'violated'),
+      /rollback\.json holds oracle results that do not back the verdict held/,
+    ],
+    [
       'an accepted probe that qualified another operator',
       ACCEPTED,
       (value) => (value.qualification.mutationOperator = 'replace-exact: "a" -> "b" (occurrences 1)'),
@@ -954,6 +987,40 @@ function checkRealQualificationEvidence() {
   check(problems.length === 0, `the reader refused the committed native qualification of P-009: ${JSON.stringify(problems)}`);
 
   const keys = (value) => Object.keys(value).sort().join(',');
+  // The reader's fields of a qualified probe are the ones the native writer emits, and the fixture and the real baseline hold them.
+  const { qualifiedProbe } = require('../cli/lib/evaluate/mutation');
+  const written = qualifiedProbe({
+    probe: { probeId: 'P-001', probeClass: 'defect', behaviorId: 'B-001', rationale: 'r', defects: [] },
+    mutation: {
+      mutationSource: 's',
+      operator: { find: 'a', replace: 'b', occurrences: 1 },
+      targetArtifact: 't',
+      expectedObservableFailure: 'e',
+    },
+    systemId: 'x',
+    digests: { implementationDigest: 'i', artifactDigest: 'a', commitDigest: 'c' },
+    baselinePassEvidence: {},
+    mutatedFailEvidence: {},
+    rollbackVerified: false,
+  });
+  check(
+    keys(Object.fromEntries(discovery.QUALIFIED_PROBE_FIELDS.map((field) => [field, 0]))) === keys(written),
+    `the reader's qualified probe fields are ${discovery.QUALIFIED_PROBE_FIELDS}; the native writer emits ${Object.keys(written)}`,
+  );
+  check(
+    keys(Object.fromEntries(discovery.QUALIFICATION_FIELDS.map((field) => [field, 0]))) === keys(written.qualification),
+    "the reader's qualification fields are the ones the native writer emits",
+  );
+  const realProbe = readReal('baseline/probes/P-009.probe.json');
+  const ourProbe = JSON.parse(fs.readFileSync(path.join(FIXTURE_FOLDER, 'baseline', 'probes', 'P-003.probe.json'), 'utf8'));
+  check(
+    keys(realProbe) === keys(written) && keys(ourProbe) === keys(written),
+    'the fixture and the real accepted probe keep the fields a qualified probe has',
+  );
+  check(
+    typeof realProbe.schemaVersion === typeof ourProbe.schemaVersion,
+    "the fixture probe's schema version has the type a native probe's has",
+  );
   for (const name of ['baseline-pass', 'mutated-fail', 'rollback']) {
     const file = `baseline/qualification/P-009/${name}.json`;
     const ours = JSON.parse(fs.readFileSync(path.join(FIXTURE_FOLDER, 'baseline', 'qualification', 'P-003', `${name}.json`), 'utf8'));
