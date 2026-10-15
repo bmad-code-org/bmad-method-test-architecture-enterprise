@@ -197,7 +197,12 @@ function pinSelection(confirmationBody, { diffs } = {}) {
   if (body.scope) body.scope.clusters = cases.map((caseId) => ({ caseId, clusterId: caseId, weight: 1 / cases.length }));
   const frozen = freeze(body);
   const selectionDiffs = diffs ?? cases.map((_, i) => 0.04 + 0.01 * i);
-  const input = { declaration: frozen, attempts: sealAll(world({ cases, diffs: selectionDiffs })), ledger: selectionLedger(cases) };
+  const input = {
+    declaration: frozen,
+    attempts: sealAll(world({ cases, diffs: selectionDiffs })),
+    ledger: selectionLedger(cases),
+    nativeRecords: NATIVE,
+  };
   const { report } = read(input.declaration, input.attempts, { ledger: input.ledger });
   const pin = { declarationDigest: experiment.declarationDigest(frozen), reportDigest: experiment.digestOf(report) };
   SELECTIONS.set(pin.reportDigest, { input, report });
@@ -232,18 +237,55 @@ function syntheticScorer(text) {
 const documentOf = (row) => JSON.stringify({ attemptId: row.attemptId, metrics: row.metrics ?? {}, counts: row.counts ?? {} });
 
 /**
- * Re-export a row the way a native exporter would after a test edits its numbers: the
- * saved document, its hash and the receipt's artifact hash follow the row. A row whose
- * text and hashes a test already set apart stays as the test left it.
+ * The synthetic native runs: the trusted test adapter that stands in for run
+ * directories `loadRecordedTestDesignRun` checks against their manifests. Each row a
+ * test writes through `attempt` or `seal` is exported here as its native record, so a
+ * row edited afterwards without `seal` no longer matches the record it names.
+ */
+const NATIVE = {};
+const SYNTHETIC_MANIFEST = 'sha256:synthetic-native-manifest';
+function exportNative(row) {
+  if (row === null || typeof row !== 'object' || typeof row.native?.ref !== 'string') return;
+  if (row.native.ref.startsWith('native/')) {
+    // One reference per exported content, so a re-export never rewrites another row's record.
+    row.native.ref = `native/${row.attemptId}/${sha(canonicalJsonOf({ ...row, native: { ...row.native, ref: undefined } })).slice(7, 19)}`;
+    row.native.manifestSha256 = SYNTHETIC_MANIFEST;
+  }
+  NATIVE[row.native.ref] = clone({
+    ref: row.native.ref,
+    manifestSha256: SYNTHETIC_MANIFEST,
+    caseId: row.caseId,
+    repetition: row.repetition,
+    attempt: Number.isInteger(row.attempt) && row.attempt > 0 ? row.attempt : null,
+    status: row.status,
+    inputSha256: row.inputSha256 ?? null,
+    outputSha256: row.outputSha256 ?? null,
+    receipt: row.receipt ?? null,
+    observed: row.observed ?? null,
+    signature: row.native.signature ?? null,
+    qualification: row.native.qualification ?? null,
+  });
+}
+
+/**
+ * Re-export a row the way a native exporter would after a test edits it: the saved
+ * document, its hash and the receipt's artifact hash follow the row's numbers, and the
+ * row's native record follows the row. A row whose text and hashes a test already set
+ * apart keeps them.
  */
 function seal(row) {
-  if (row === null || typeof row !== 'object' || typeof row.outputText !== 'string') return row;
-  const consistent = row.outputSha256 === sha(row.outputText) && (!row.receipt || row.receipt.artifactSha256 === row.outputSha256);
-  if (!consistent || syntheticScorer(row.outputText).unmeasurable) return row;
+  if (row === null || typeof row !== 'object') return row;
   const copy = clone(row);
-  copy.outputText = documentOf(copy);
-  copy.outputSha256 = sha(copy.outputText);
-  if (copy.receipt && typeof copy.receipt === 'object') copy.receipt.artifactSha256 = copy.outputSha256;
+  const consistent =
+    typeof copy.outputText === 'string' &&
+    copy.outputSha256 === sha(copy.outputText) &&
+    (!copy.receipt || copy.receipt.artifactSha256 === copy.outputSha256);
+  if (consistent && !syntheticScorer(copy.outputText).unmeasurable) {
+    copy.outputText = documentOf(copy);
+    copy.outputSha256 = sha(copy.outputText);
+    if (copy.receipt && typeof copy.receipt === 'object') copy.receipt.artifactSha256 = copy.outputSha256;
+  }
+  exportNative(copy);
   return copy;
 }
 const sealAll = (attempts) => (Array.isArray(attempts) ? attempts.map((row) => seal(row)) : attempts);
@@ -277,7 +319,12 @@ function attempt({ arm, caseId, repetition, stage = 'selection', metrics, cost, 
     inputSha256: sha('prompt'),
     outputSha256: sha(text),
     outputText: text,
-    native: { ref: `native/${attemptId}`, signature: `sig-${signatureCounter}`, qualification: 'passed' },
+    native: {
+      ref: `native/${attemptId}`,
+      manifestSha256: SYNTHETIC_MANIFEST,
+      signature: `sig-${signatureCounter}`,
+      qualification: 'passed',
+    },
     metrics,
     counts: { topSeverityMissed: 0 },
     cost: cost === undefined ? undefined : { currency: 'USD', components: { target: cost, tools: 0 } },
@@ -285,6 +332,7 @@ function attempt({ arm, caseId, repetition, stage = 'selection', metrics, cost, 
     observed: { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) },
   };
   if (mutate) mutate(row);
+  exportNative(row);
   return row;
 }
 
@@ -305,7 +353,10 @@ function world({ cases = SELECTION_CASES, stage = 'selection', diffs = DIFFS, co
         metrics: { recall: base + diffs[i], precision: base - 0.1 + diffs[i] },
         cost: costB(i),
       });
-      for (const row of [a, b]) mutateRow?.(row, i, repetition);
+      for (const row of [a, b]) {
+        mutateRow?.(row, i, repetition);
+        exportNative(row);
+      }
       rows.push(a, b);
     }
   }
@@ -335,6 +386,7 @@ function read(declarationValue, attempts, { seal: sealRows = true, ...extra } = 
     ledger: selectionLedger(),
     replay: syntheticScorer,
     selection: selectionOf(declarationValue),
+    nativeRecords: NATIVE,
     ...extra,
   });
 }
@@ -3145,45 +3197,130 @@ async function checkRecordedEvidenceVerification() {
       ];
     },
   });
-  let clock = Date.parse('2026-10-15T00:00:00.000Z');
-  const receipted = (dir, arm, runId) =>
-    experiment.loadRecordedTestDesignRun({ dir: path.join(RAW, dir), arm, stage: 'selection', runId }).rows.map((row) => ({
+  // Native run directories: copies of the recorded runs whose runner wrote a fresh
+  // generation receipt into each provenance.json, under a regenerated manifest.
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-native-runs-'));
+  const iso = (ms) => new Date(ms).toISOString();
+  const nativeRun = (source, name, arm) => {
+    const dir = path.join(workspace, name);
+    fs.cpSync(path.join(RAW, source), dir, { recursive: true });
+    const manifestFile = path.join(dir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    for (const entry of manifest.files.filter((file) => file.path.endsWith('provenance.json'))) {
+      const file = path.join(dir, entry.path);
+      const provenance = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const observation = JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'observation.json'), 'utf8'));
+      const slot = (caseIds.indexOf(provenance.caseId) * 2 + provenance.repetition - 1) * 2 + (arm === 'A' ? 0 : 1);
+      const start = Date.parse('2026-10-15T00:00:00.000Z') + slot * 60_000;
+      provenance.receipt = {
+        kind: 'fresh-workspace',
+        workspaceId: `ws-${name}-${provenance.caseId}-${provenance.repetition}`,
+        startedAt: iso(start),
+        endedAt: iso(start + 30_000),
+        artifactSha256: sha(observation.artifacts.design.value),
+      };
+      const bytes = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`);
+      fs.writeFileSync(file, bytes);
+      entry.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+      entry.bytes = bytes.length;
+    }
+    fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+    return dir;
+  };
+  const records = {};
+  const load = (dir, arm) => {
+    const loaded = experiment.loadRecordedTestDesignRun({ dir, arm, stage: 'selection', runId: path.basename(dir) });
+    check(loaded.integrity.problems.length === 0, `the native run ${path.basename(dir)} matches its manifest`);
+    Object.assign(records, loaded.records);
+    return loaded.rows.map((row) => ({
       ...row,
       blockId: `${row.caseId}-${row.repetition}`,
-      inputSha256: sha(`prompt ${row.caseId}`),
       cost: { currency: 'USD', components: { target: arm === 'A' ? 1 : 0.5, tools: 0 } },
-      observed: { fixed: clone(FIXED), arm: clone(arm === 'A' ? ARM_A : ARM_B) },
     }));
-  const interleave = (rowsA, rowsB) =>
-    rowsA.flatMap((row, index) =>
-      [row, rowsB[index]].map((entry) => {
-        clock += 60_000;
-        const startedAt = new Date(clock).toISOString();
-        return {
-          ...entry,
-          receipt: {
-            kind: 'fresh-workspace',
-            workspaceId: `ws-${entry.attemptId}`,
-            startedAt,
-            endedAt: new Date(clock + 30_000).toISOString(),
-            artifactSha256: entry.outputSha256,
-          },
-        };
-      }),
-    );
-  const sameDocuments = interleave(
-    receipted('two-run-before-numeric', 'A', 'before-a'),
-    receipted('two-run-before-numeric', 'B', 'before-b'),
-  );
-  const verified = experiment.readExperiment({
-    declaration: recordedDeclaration,
-    attempts: sameDocuments,
-    ledger: selectionLedger(caseIds),
-    replay,
-  });
+  };
+  const beforeA = load(nativeRun('two-run-before-numeric', 'before-a', 'A'), 'A');
+  const beforeB = load(nativeRun('two-run-before-numeric', 'before-b', 'B'), 'B');
+  const afterB = load(nativeRun('two-run-after-numeric', 'after-b', 'B'), 'B');
+  const interleave = (rowsA, rowsB) => rowsA.flatMap((row, index) => [row, rowsB[index]]);
+  const sameDocuments = interleave(beforeA, beforeB);
+  const readRecorded = (declarationValue, attempts, nativeRecords = records) =>
+    experiment.readExperiment({ declaration: declarationValue, attempts, ledger: selectionLedger(caseIds), replay, nativeRecords });
+  const verified = readRecorded(recordedDeclaration, sameDocuments);
   check(
-    verificationOf(verified).every((value) => value === 'verified') && outcomeOf(verified) !== 'blocked',
-    `recorded documents with receipts and a reproducing scorer are verified, got ${outcomeOf(verified)}: ${reasonsOf(verified).join(' | ')}`,
+    verificationOf(verified).every((value) => value === 'verified'),
+    `attempts bound to a manifest-checked native run, with matching saved bytes and scorer output, are verified: ${reasonsOf(verified).join(' | ')}`,
+  );
+  check(
+    verificationOf(readRecorded(recordedDeclaration, sameDocuments, {})).every((value) => value === 'claimed'),
+    'the same rows without their native records are claimed',
+  );
+  const forgeRecorded = (label, change, pattern) => {
+    const rows = clone(sameDocuments);
+    change(
+      rows.find((row) => row.arm === 'B' && row.caseId === caseIds[0] && row.repetition === 1),
+      rows,
+    );
+    const result = readRecorded(recordedDeclaration, rows);
+    const indexed = result.evidenceIndex.rows.find((row) => row.attemptId === `before-b/${caseIds[0]}/1/1`);
+    check(
+      outcomeOf(result) !== 'selection-cleared' &&
+        indexed.verification === 'claimed' &&
+        indexed.verificationProblems.some((problem) => pattern.test(problem)),
+      `${label} leaves a recorded attempt claimed: ${indexed.verificationProblems.join(' | ')}`,
+    );
+  };
+  forgeRecorded('a nonexistent native reference', (row) => (row.native.ref = '/nonexistent/native-record.json'), /not among the records/);
+  forgeRecorded(
+    "a reference to another attempt's native record",
+    (row, rows) => (row.native.ref = rows.find((other) => other.arm === 'B' && other.repetition === 2).native.ref),
+    /repetition differs from the native record/,
+  );
+  forgeRecorded('a changed native signature', (row) => (row.native.signature = 'forged-native-signature'), /native signature differs/);
+  forgeRecorded(
+    'a passed qualification over a failed native run',
+    (row) => (row.native.qualification = 'passed'),
+    /native qualification differs/,
+  );
+  forgeRecorded(
+    'an output that is not the native output',
+    (row, rows) => {
+      const other = rows.find((entry) => entry.arm === 'B' && entry.caseId === caseIds[1]);
+      row.outputText = other.outputText;
+      row.outputSha256 = other.outputSha256;
+      row.receipt.artifactSha256 = other.outputSha256;
+    },
+    /outputSha256 differs from the native record/,
+  );
+  forgeRecorded('another manifest pin', (row) => (row.native.manifestSha256 = sha('another manifest')), /does not pin the manifest/);
+  forgeRecorded('a changed receipt', (row) => (row.receipt.workspaceId = 'ws-elsewhere'), /receipt differs from the native record/);
+  forgeRecorded('a changed input hash', (row) => (row.inputSha256 = sha('another prompt')), /inputSha256 differs from the native record/);
+  forgeRecorded(
+    'a changed observed identity',
+    (row) => (row.observed.arm.runner = 'another-runner'),
+    /observed differs from the native record/,
+  );
+
+  // A native run whose bytes or listing do not match its manifest is refused on load.
+  const tamperedDir = nativeRun('two-run-before-numeric', 'tampered', 'A');
+  const provenanceFile = fs
+    .readdirSync(path.join(tamperedDir, 'cases'))
+    .map((entry) => path.join(tamperedDir, 'cases', entry, 'provenance.json'))[0];
+  fs.appendFileSync(provenanceFile, ' ');
+  check(
+    experiment
+      .loadRecordedTestDesignRun({ dir: tamperedDir })
+      .integrity.problems.some((problem) => /sha256 differs from the manifest/.test(problem)),
+    'a native run whose provenance changed after its manifest is refused',
+  );
+  const unlistedDir = nativeRun('two-run-before-numeric', 'unlisted', 'A');
+  const unlistedManifest = JSON.parse(fs.readFileSync(path.join(unlistedDir, 'manifest.json'), 'utf8'));
+  unlistedManifest.files = unlistedManifest.files.filter((entry) => !entry.path.endsWith('provenance.json'));
+  fs.writeFileSync(path.join(unlistedDir, 'manifest.json'), JSON.stringify(unlistedManifest));
+  check(
+    experiment
+      .loadRecordedTestDesignRun({ dir: unlistedDir })
+      .integrity.problems.some((problem) => /not listed in the manifest/.test(problem)),
+    'a native run whose manifest leaves out a file the loader reads is refused',
   );
   const mutationRule = freeze({
     ...clone(recordedDeclaration),
@@ -3195,17 +3332,17 @@ async function checkRecordedEvidenceVerification() {
       },
     },
   });
-  const mutationResult = experiment.readExperiment({
-    declaration: mutationRule,
-    attempts: sameDocuments,
-    ledger: selectionLedger(caseIds),
-    replay,
-  });
+  const mutationResult = readRecorded(mutationRule, sameDocuments);
   check(
-    outcomeOf(mutationResult) === 'blocked' && hasReason(mutationResult, /count fixtureMutations is 0, the scorer gives undefined/),
+    outcomeOf(mutationResult) !== 'selection-cleared' &&
+      mutationResult.evidenceIndex.rows.every(
+        (row) =>
+          row.verification === 'claimed' &&
+          row.verificationProblems.some((problem) => /count fixtureMutations is 0, the scorer gives undefined/.test(problem)),
+      ),
     'a fixture mutation count the saved bytes cannot show stays claimed',
   );
-  const rescored = interleave(receipted('two-run-before-numeric', 'A', 'before-a'), receipted('two-run-after-numeric', 'B', 'after-b'));
+  const rescored = interleave(beforeA, afterB);
   const recallDeclaration = freeze({
     ...clone(recordedDeclaration),
     gates: {
@@ -3213,11 +3350,17 @@ async function checkRecordedEvidenceVerification() {
       quality: { ...clone(recordedDeclaration.gates.quality), groundedRiskRecall: { maxLoss: 0.1 } },
     },
   });
-  const stale = experiment.readExperiment({ declaration: recallDeclaration, attempts: rescored, ledger: selectionLedger(caseIds), replay });
+  const stale = readRecorded(recallDeclaration, rescored);
   check(
-    outcomeOf(stale) === 'blocked' && hasReason(stale, /metric groundedRiskRecall is .* the scorer gives/),
+    outcomeOf(stale) !== 'selection-cleared' &&
+      stale.evidenceIndex.rows.some(
+        (row) =>
+          row.verification === 'claimed' &&
+          row.verificationProblems.some((problem) => /metric groundedRiskRecall is .* the scorer gives/.test(problem)),
+      ),
     'a recorded number the current scorer does not reproduce stays claimed and blocks',
   );
+  fs.rmSync(workspace, { recursive: true, force: true });
 }
 
 function checkCriticalCountsCannotBeExcused() {
@@ -3948,6 +4091,90 @@ function checkEveryAttemptIsAccountedFor() {
   );
 }
 
+function checkNativeGatesReadTheRecord() {
+  const forged = (label, change, pattern, gates) => {
+    const rows = world();
+    change(candidateRow(rows, 'c2', 1), rows);
+    const declared = declaration({ mutate: (body) => gates && (body.gates.native = gates) });
+    const result = read(declared, rows, { seal: false });
+    const indexed = result.evidenceIndex.rows.find((row) => row.attemptId === 'B-c2-1-1');
+    check(
+      outcomeOf(result) === 'blocked' &&
+        indexed.verification === 'claimed' &&
+        indexed.verificationProblems.some((problem) => pattern.test(problem)),
+      `${label} blocks and is indexed as claimed, got ${outcomeOf(result)}: ${indexed.verificationProblems.join(' | ')}`,
+    );
+  };
+  forged('a nonexistent native reference', (row) => (row.native.ref = '/nonexistent/native-record.json'), /not among the records/);
+  forged(
+    'a nonexistent native reference under a qualification gate',
+    (row) => (row.native.ref = '/nonexistent/native-record.json'),
+    /not among the records/,
+    { requireQualification: true },
+  );
+  forged(
+    "another attempt's native record",
+    (row, rows) => (row.native.ref = candidateRow(rows, 'c3', 1).native.ref),
+    /caseId differs from the native record/,
+  );
+  forged('a changed native signature', (row) => (row.native.signature = 'forged-native-signature'), /native signature differs/);
+  forged('a native manifest the row does not pin', (row) => delete row.native.manifestSha256, /does not pin the manifest/);
+  forged('an attempt number the native record does not hold', (row) => (row.attempt = 2), /attempt differs from the native record/);
+  forged('a status the native record does not hold', (row) => (row.status = 'failed'), /status differs from the native record/);
+
+  // A qualification gate reads the run's own verdict.
+  const failedRun = world({
+    mutateRow: (row, i, repetition) => row.arm === 'B' && i === 1 && repetition === 1 && (row.native.qualification = 'failed'),
+  });
+  const qualification = declaration({ mutate: (body) => (body.gates.native = { requireQualification: true }) });
+  const honest = read(qualification, failedRun, { seal: false });
+  check(
+    outcomeOf(honest) === 'rejected' && hasReason(honest, /native qualification is not passed/),
+    `a native run that failed qualification rejects under the gate, got ${outcomeOf(honest)}`,
+  );
+  const claimedPass = clone(failedRun);
+  candidateRow(claimedPass, 'c2', 1).native.qualification = 'passed';
+  const claimedPassResult = read(qualification, claimedPass, { seal: false });
+  check(
+    outcomeOf(claimedPassResult) !== 'selection-cleared' &&
+      hasReason(claimedPassResult, /native qualification differs from the native record/),
+    `a row claiming passed over a failed native run does not clear, got ${outcomeOf(claimedPassResult)}`,
+  );
+  const omitted = clone(failedRun);
+  delete candidateRow(omitted, 'c2', 1).native.qualification;
+  check(
+    outcomeOf(read(qualification, omitted, { seal: false })) === 'rejected',
+    'a row that leaves out its qualification is held to the native run verdict',
+  );
+  const silent = world();
+  for (const row of silent) delete row.native.qualification;
+  check(
+    outcomeOf(read(qualification, silent, { seal: false })) === 'selection-cleared',
+    'rows that leave out their qualification pass on the native runs that passed',
+  );
+
+  // A stability gate reads the signatures the runs signed.
+  const stability = declaration({ mutate: (body) => (body.gates.native = { requireStableSignatures: true }) });
+  const invented = world();
+  for (const row of invented.filter((entry) => entry.arm === 'B')) row.native.signature = `stable-${row.caseId}`;
+  const inventedResult = read(stability, invented, { seal: false });
+  check(
+    outcomeOf(inventedResult) === 'blocked' &&
+      inventedResult.report.contrast.nativeRed.length === 0 &&
+      hasReason(inventedResult, /native signature differs/),
+    `invented stable signatures do not satisfy the stability gate, got ${outcomeOf(inventedResult)}`,
+  );
+  const signedStable = world({ mutateRow: (row) => row.arm === 'B' && (row.native.signature = `stable-${row.caseId}`) });
+  check(
+    outcomeOf(read(stability, signedStable, { seal: false })) === 'selection-cleared',
+    'signatures the runs signed alike pass the stability gate',
+  );
+  check(
+    outcomeOf(read(stability, world(), { seal: false })) === 'rejected',
+    'signatures the runs signed differently reject under the stability gate',
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 
 async function main() {
@@ -3971,6 +4198,7 @@ async function main() {
   checkOneNamedSetting();
   checkObservedPairingAndOrder();
   checkEveryAttemptIsAccountedFor();
+  checkNativeGatesReadTheRecord();
   checkAdversarialInputs();
   checkRuleByRule();
   checkOutputsAndCommandLine();
