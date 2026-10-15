@@ -31,18 +31,23 @@ const { addFormats } = require('../formats');
 const Ajv = AjvModule.default ?? AjvModule;
 
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'candidate.schema.json'), 'utf8'));
-const MUTATION_SCHEMA_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schemas', 'mutation.schema.json'), 'utf8'))
-  .properties.schemaVersion.const;
+const MUTATION_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schemas', 'mutation.schema.json'), 'utf8'));
+const MUTATION_SCHEMA_VERSION = MUTATION_SCHEMA.properties.schemaVersion.const;
 const ajv = new Ajv({ allErrors: true });
 addFormats(ajv);
 const validateSchema = ajv.compile(SCHEMA);
+const validateMutation = ajv.compile(MUTATION_SCHEMA);
 
 /** The record's format version, read from its schema so the two cannot disagree. */
 const CANDIDATE_SCHEMA_VERSION = SCHEMA.properties.schemaVersion.const;
 const RECORD_KIND = SCHEMA.properties.recordKind.const;
 /** Where candidates sit in the evaluation folder, outside every directory the scored path reads. */
 const DISCOVERY_DIRECTORY = 'discovery';
+/** Where a campaign keeps the snapshots its independent evidence cites, below its own directory. */
+const EVIDENCE_DIRECTORY = 'evidence';
 const CANDIDATE_PATH = /^discovery\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(C-[0-9]{3,})\.candidate\.json$/;
+/** The native receipt a promotion links: the mutated arm's evidence, which a qualification writes under `baseline/qualification/<probeId>/`. */
+const RECEIPT_PATH = /^baseline\/qualification\/(P-[0-9]{3,})\/mutated-fail\.json$/;
 const STATES = Object.freeze([...SCHEMA.properties.state.enum]);
 const DISPOSITIONS = Object.freeze([...SCHEMA.$defs.disposition.enum]);
 const REVIEW_DISPOSITIONS = Object.freeze([...SCHEMA.$defs.reviewDisposition.enum]);
@@ -357,11 +362,196 @@ function readHeldFile(folder, relative, label) {
   }
 }
 
+/** The JSON object `bytes` state; `problems` gets the reason when they state anything else. */
+function jsonObject(bytes, relative, label, problems) {
+  let value;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    value = JSON.parse(text);
+    if (repeatedKeys(text).length > 0) {
+      problems.push(`${label} ${relative} states a key twice in one object`);
+      return;
+    }
+  } catch {
+    problems.push(`${label} ${relative} is not JSON text`);
+    return;
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    problems.push(`${label} ${relative} is not a JSON object`);
+    return;
+  }
+  return value;
+}
+
+/** The bytes of a regular file `folder` holds; `problems` gets the reason when it cannot be read. */
+function heldBytes(folder, relative, label, problems) {
+  try {
+    return readHeldFile(folder, relative, label);
+  } catch (error) {
+    problems.push(...error.problems);
+  }
+}
+
+/** The parsed JSON of a regular file `folder` holds; `problems` gets every reason it cannot be read as an object. */
+function heldJson(folder, relative, label, problems) {
+  let bytes;
+  try {
+    bytes = readHeldFile(folder, relative, label);
+  } catch (error) {
+    problems.push(...error.problems);
+    return;
+  }
+  return jsonObject(bytes, relative, label, problems);
+}
+
+/** Pushes a problem for each `[field, expected]` pair the document does not state. */
+function expectFields(problems, relative, document, expected) {
+  for (const [field, value] of Object.entries(expected)) {
+    if (document[field] !== value) {
+      problems.push(`${relative} states ${field} ${JSON.stringify(document[field])}; the promotion needs ${JSON.stringify(value)}`);
+    }
+  }
+}
+
+/** An arm's evidence backs its verdict: it holds oracle results, and they decide the verdict the way a qualification decides it. */
+function oracleProblems(problems, relative, document, verdict) {
+  const oracles = Array.isArray(document.oracles) ? document.oracles : [];
+  const decided =
+    verdict === 'held'
+      ? oracles.every((oracle) => oracle?.disposition === 'held')
+      : oracles.some((oracle) => oracle?.disposition === 'violated');
+  if (oracles.length === 0 || !decided) {
+    problems.push(`${relative} holds oracle results that do not back the verdict ${verdict}`);
+  }
+}
+
+/**
+ * Holds a promotion's linked receipt to the native qualification of the draft: the probe names the draft mutation through
+ * the controlled-mutation route, the mutation file of the folder states the candidate's own edit, and the qualification's
+ * clean arm held, mutated arm violated an oracle and rollback restored the target the record digests, each stating the
+ * probe, the mutation and the target.
+ */
+function qualificationProblems(folder, record, receiptBytes, problems) {
+  const { draftMutationId: mutationId, qualificationReceipt: receipt } = record.promotion;
+  const probeId = RECEIPT_PATH.exec(receipt.path)[1];
+  const directory = `baseline/qualification/${probeId}`;
+  const target = record.target.artifact;
+  const draft = draftMutation(record);
+
+  const probe = heldJson(folder, `probes/${probeId}.probe.json`, 'qualified probe', problems);
+  if (probe !== undefined) {
+    if (probe.probeId !== probeId) problems.push(`probes/${probeId}.probe.json is the probe ${probe.probeId}`);
+    if (probe.qualification?.route !== 'controlled-mutation') {
+      problems.push(`probes/${probeId}.probe.json takes the ${probe.qualification?.route} route; a promotion needs controlled-mutation`);
+    }
+    if (probe.qualification?.mutation !== mutationId) {
+      problems.push(`${receipt.path} qualifies ${probeId}, whose mutation is ${probe.qualification?.mutation}; the draft is ${mutationId}`);
+    }
+  }
+
+  const mutationFile = `mutations/${mutationId}.mutation.json`;
+  const mutation = heldJson(folder, mutationFile, 'draft mutation', problems);
+  if (mutation !== undefined) {
+    if (validateMutation(mutation)) {
+      expectFields(problems, mutationFile, mutation, { mutationId, targetArtifact: target });
+      for (const field of ['kind', 'find', 'replace', 'occurrences']) {
+        if (mutation.operator[field] !== draft.operator[field]) {
+          problems.push(
+            `${mutationFile} states operator.${field} ${JSON.stringify(mutation.operator[field])}; the candidate's edit is ${JSON.stringify(draft.operator[field])}`,
+          );
+        }
+      }
+    } else {
+      problems.push(...schemaProblems(validateMutation.errors).map((problem) => `${mutationFile} ${problem}`));
+    }
+  }
+
+  const arms = { probeId, mutationId, targetArtifact: target };
+  const baselineBytes = heldBytes(folder, `${directory}/baseline-pass.json`, 'qualification evidence', problems);
+  const baseline =
+    baselineBytes === undefined
+      ? undefined
+      : jsonObject(baselineBytes, `${directory}/baseline-pass.json`, 'qualification evidence', problems);
+  if (baseline !== undefined) {
+    expectFields(problems, `${directory}/baseline-pass.json`, baseline, {
+      ...arms,
+      phase: 'baseline-pass',
+      verdict: 'held',
+      targetArtifactDigest: record.target.artifactDigest,
+    });
+    oracleProblems(problems, `${directory}/baseline-pass.json`, baseline, 'held');
+  }
+  const mutated = receiptBytes === undefined ? undefined : jsonObject(receiptBytes, receipt.path, 'qualification receipt', problems);
+  if (mutated !== undefined) {
+    expectFields(problems, receipt.path, mutated, { ...arms, phase: 'mutated-fail', verdict: 'violated' });
+    oracleProblems(problems, receipt.path, mutated, 'violated');
+    if (
+      mutated.targetArtifactDigest === record.target.artifactDigest ||
+      !/^sha256:[0-9a-f]{64}$/.test(mutated.targetArtifactDigest ?? '')
+    ) {
+      problems.push(
+        `${receipt.path} states targetArtifactDigest ${JSON.stringify(mutated.targetArtifactDigest)}; the mutated bytes digest to another value than the target's ${record.target.artifactDigest}`,
+      );
+    }
+  }
+  const rollback = heldJson(folder, `${directory}/rollback.json`, 'qualification evidence', problems);
+  if (rollback !== undefined) {
+    expectFields(problems, `${directory}/rollback.json`, rollback, {
+      ...arms,
+      preDigest: record.target.artifactDigest,
+      restoredDigest: record.target.artifactDigest,
+      ...(mutated === undefined ? {} : { mutatedDigest: mutated.targetArtifactDigest }),
+    });
+    if (rollback.rollbackVerified !== true) problems.push(`${directory}/rollback.json does not state that the rollback was verified`);
+    const lastRePass = Array.isArray(rollback.rePasses) ? rollback.rePasses.at(-1) : undefined;
+    if (lastRePass?.verdict !== 'held') {
+      problems.push(`${directory}/rollback.json ends with no restored arm that held, which a verified rollback rests on`);
+    }
+  }
+  const fault = `${directory}/fault.json`;
+  try {
+    fs.lstatSync(path.join(folder, ...fault.split('/')));
+    problems.push(`${fault} records a qualification that stopped before it finished`);
+  } catch {
+    // No fault file: the qualification finished.
+  }
+
+  // The accepted baseline's qualified probe binds the operator and the two arms' evidence digests; the authored mutation file does not.
+  const accepted = heldJson(folder, `baseline/probes/${probeId}.probe.json`, 'accepted baseline probe', problems);
+  if (accepted !== undefined) {
+    const qualification = accepted.qualification ?? {};
+    const acceptedFile = `baseline/probes/${probeId}.probe.json`;
+    const operator = `replace-exact: ${JSON.stringify(record.edit.find)} -> ${JSON.stringify(record.edit.replace)} (occurrences ${record.edit.occurrences})`;
+    if (qualification.route !== 'controlled-mutation') problems.push(`${acceptedFile} takes the ${qualification.route} route`);
+    if (qualification.mutationOperator !== operator) {
+      problems.push(
+        `${acceptedFile} qualified ${JSON.stringify(qualification.mutationOperator)}; the candidate's edit is ${JSON.stringify(operator)}`,
+      );
+    }
+    if (qualification.targetArtifact?.digest !== record.target.artifactDigest) {
+      problems.push(
+        `${acceptedFile} qualified a target digesting to ${qualification.targetArtifact?.digest}; the record names ${record.target.artifactDigest}`,
+      );
+    }
+    if (qualification.rollbackVerified !== true) problems.push(`${acceptedFile} does not state that the rollback was verified`);
+    const arm = (field, bytes, name) => {
+      if (bytes !== undefined && qualification[field]?.digest !== bytesDigest(bytes)) {
+        problems.push(
+          `${acceptedFile} records ${qualification[field]?.digest} for its ${name} evidence; ${directory}/${name}.json digests to ${bytesDigest(bytes)}`,
+        );
+      }
+    };
+    arm('baselinePassEvidence', baselineBytes, 'baseline-pass');
+    arm('mutatedFailEvidence', receiptBytes, 'mutated-fail');
+  }
+}
+
 /**
  * Reads the candidate an evaluation folder holds at `relative`, which must be `discovery/<campaignId>/C-NNN.candidate.json`,
  * and holds it to the folder: the record names that campaign and that candidate, the requirements file digests to the
- * record's `requirement.digest`, and a linked qualification receipt is a file of the folder with the recorded digest, named for a
- * probe of the folder whose qualification is the draft mutation.
+ * record's `requirement.digest`, each independent evidence is a snapshot under `discovery/<campaignId>/evidence/` that
+ * digests to the record's value, and a linked qualification receipt is the native qualification of the draft mutation
+ * (see `qualificationProblems`).
  *
  * @param {string} folder the evaluation folder
  * @param {string} relative
@@ -384,27 +574,34 @@ function readCandidate(folder, relative) {
   if (record.candidateId !== match[2]) problems.push(`candidateId ${record.candidateId} differs from the file name ${match[2]}`);
   const held = (label, file, expected) => {
     try {
-      const actual = bytesDigest(readHeldFile(folder, file, label));
+      const bytes = readHeldFile(folder, file, label);
+      const actual = bytesDigest(bytes);
       if (actual !== expected) problems.push(`${file} digests to ${actual}; the record names ${expected}`);
+      return bytes;
     } catch (error) {
-      problems.push(...error.problems);
+      problems.push(
+        ...(error instanceof CandidateError ? error.problems : [`${label} ${file} cannot be read: ${error.code ?? error.message}`]),
+      );
+      return;
     }
   };
   held('requirement', record.requirement.path, record.requirement.digest);
-  const receipt = record.promotion?.qualificationReceipt;
-  if (receipt) {
-    held('qualification receipt', receipt.path, receipt.digest);
-    const probeId = /^baseline\/qualification\/(P-[0-9]{3,})\./.exec(receipt.path)[1];
-    try {
-      const probe = JSON.parse(readHeldFile(folder, `probes/${probeId}.probe.json`, 'qualified probe').toString('utf8'));
-      if (probe?.qualification?.mutation !== record.promotion.draftMutationId) {
-        problems.push(
-          `${receipt.path} qualifies ${probeId}, whose mutation is ${probe?.qualification?.mutation}; the draft is ${record.promotion.draftMutationId}`,
-        );
-      }
-    } catch (error) {
-      problems.push(...(error.problems ?? [`probes/${probeId}.probe.json is not JSON`]));
+  const evidenceDirectory = `${DISCOVERY_DIRECTORY}/${record.campaignId}/${EVIDENCE_DIRECTORY}/`;
+  for (const [index, evidence] of record.independentEvidence.entries()) {
+    if (!evidence.reference.startsWith(evidenceDirectory)) {
+      problems.push(`independentEvidence[${index}].reference ${evidence.reference} is not a snapshot under ${evidenceDirectory}`);
+      continue;
     }
+    const bytes = held('independent evidence', evidence.reference, evidence.digest);
+    if (bytes?.length === 0) problems.push(`independent evidence ${evidence.reference} is empty, so it holds nothing a reviewer saw`);
+  }
+  if (record.promotion?.qualificationReceipt) {
+    const receiptBytes = held(
+      'qualification receipt',
+      record.promotion.qualificationReceipt.path,
+      record.promotion.qualificationReceipt.digest,
+    );
+    qualificationProblems(folder, record, receiptBytes, problems);
   }
   if (problems.length > 0) throw new CandidateError(problems);
   return record;
@@ -438,6 +635,7 @@ module.exports = {
   CandidateError,
   DISCOVERY_DIRECTORY,
   DISPOSITIONS,
+  EVIDENCE_DIRECTORY,
   RECORD_KIND,
   REVIEW_DISPOSITIONS,
   STATES,

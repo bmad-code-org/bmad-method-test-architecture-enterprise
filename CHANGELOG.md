@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Evaluate has a contract for exploratory discovery candidates: proposed edits that no declared oracle demonstrates yet. A candidate record under `discovery/<campaignId>/` holds the edit, its observations, independent evidence, an identity-bound review, an optional accepted risk and a promotion to a draft mutation.
 - `tea-evaluate check` has a `candidate-placement` rule that refuses a `*.candidate.json` file anywhere in an evaluation folder outside its top-level `discovery/` directory. No schema, verdict or exit code changes.
+- Reading a candidate checks the provenance it cites. A promotion's `qualificationReceipt.path` is now the native `baseline/qualification/<probeId>/mutated-fail.json` evidence (it was `baseline/qualification/<probeId>.<kind>.json`). The reader confirms it against the `baseline-pass.json` and `rollback.json` beside it, the probe, the accepted baseline probe that records the operator and the evidence digests, and the mutation file, which must state the candidate's own edit. An `independentEvidence[].reference` is now a snapshot path under `discovery/<campaignId>/evidence/` (it was free text) whose bytes digest to the recorded value.
 
 ## [3.0.2] - 2026-10-14
 

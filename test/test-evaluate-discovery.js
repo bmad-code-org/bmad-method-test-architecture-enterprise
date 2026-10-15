@@ -41,6 +41,8 @@ const CLI = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const VALID = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'valid');
 const FIXTURE_FOLDER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-discovery');
 const FIXTURE_PATH = discovery.candidatePath('red-phase-pilot', 'C-001');
+const RECEIPT = 'baseline/qualification/P-003/mutated-fail.json';
+const EVIDENCE = 'discovery/red-phase-pilot/evidence/playwright-test-annotations.md';
 const PLANNED = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'partition-plan', 'evals', 'verdict');
 const NATIVE_SCHEMAS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas');
 const DISCOVERY_ROOT = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'discovery');
@@ -327,7 +329,7 @@ function checkRefusals() {
   flipped.disposition = 'confirmed-undesirable-caught';
   refuses('a disposition flipped after the review', flipped, /review\.scope\.determination .* is stale/);
   const swapped = fixture();
-  swapped.independentEvidence[0].reference = 'another specification';
+  swapped.independentEvidence[0].reference = 'discovery/red-phase-pilot/evidence/another-specification.md';
   refuses('independent evidence replaced after the review', swapped, /review\.scope\.determination .* is stale/);
   const staleRequirement = fixture();
   staleRequirement.requirement.digest = digest('another requirement');
@@ -547,7 +549,8 @@ function checkFileReading() {
     for (const [label, relative] of [
       ['a candidate file', FIXTURE_PATH],
       ['the requirements file', 'requirements.md'],
-      ['a qualification receipt', 'baseline/qualification/P-003.mutated-fail.json'],
+      ['a qualification receipt', RECEIPT],
+      ['an independent evidence snapshot', EVIDENCE],
     ]) {
       const fifo = folderCopy('fifo');
       fs.rmSync(path.join(fifo, ...relative.split('/')));
@@ -583,8 +586,8 @@ function checkFileReading() {
   fs.rmSync(path.join(noRequirements, 'requirements.md'));
   refusesFile('a folder with no requirements file', noRequirements, FIXTURE_PATH, /requirement requirements\.md does not exist/);
   const receipt = folderCopy('receipt');
-  fs.appendFileSync(path.join(receipt, 'baseline', 'qualification', 'P-003.mutated-fail.json'), ' ');
-  refusesFile('a qualification receipt edited after promotion', receipt, FIXTURE_PATH, /P-003\.mutated-fail\.json digests to/);
+  fs.appendFileSync(path.join(receipt, ...RECEIPT.split('/')), ' ');
+  refusesFile('a qualification receipt edited after promotion', receipt, FIXTURE_PATH, /P-003\/mutated-fail\.json digests to/);
   const crossed = folderCopy('crossed');
   fs.writeFileSync(
     path.join(crossed, 'probes', 'P-003.probe.json'),
@@ -603,13 +606,445 @@ function checkFileReading() {
     FIXTURE_PATH,
     /qualified probe probes\/P-003\.probe\.json does not exist/,
   );
-  fs.rmSync(path.join(receipt, 'baseline', 'qualification', 'P-003.mutated-fail.json'));
+  fs.rmSync(path.join(receipt, ...RECEIPT.split('/')));
   refusesFile(
     'a qualification receipt that is gone',
     receipt,
     FIXTURE_PATH,
-    /qualification receipt baseline\/qualification\/P-003\.mutated-fail\.json does not exist/,
+    /qualification receipt baseline\/qualification\/P-003\/mutated-fail\.json does not exist/,
   );
+  checkQualificationChain();
+  checkEvidenceProvenance();
+}
+
+/** The folder copy `label` with its candidate rewritten by `edit` (and every decision re-bound to it) and `change` applied to the folder. */
+function resealedFolder(label, edit = () => {}, change = () => {}) {
+  const folder = folderCopy(label);
+  change(folder);
+  const record = JSON.parse(fs.readFileSync(path.join(folder, ...FIXTURE_PATH.split('/')), 'utf8'));
+  edit(record);
+  fs.writeFileSync(path.join(folder, ...FIXTURE_PATH.split('/')), discovery.serializeCandidate(rebound(record)));
+  return folder;
+}
+
+/** Rewrites the JSON at `relative` under `folder` with `edit` and points the candidate's receipt at the new bytes when it is the receipt. */
+function editHeld(relative, edit) {
+  return (folder) => {
+    rewriteJson(folder, relative, edit);
+    if (relative !== RECEIPT) return;
+    const candidate = path.join(folder, ...FIXTURE_PATH.split('/'));
+    const record = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+    record.promotion.qualificationReceipt.digest = discovery.bytesDigest(fs.readFileSync(path.join(folder, ...RECEIPT.split('/'))));
+    fs.writeFileSync(candidate, discovery.serializeCandidate(record));
+  };
+}
+
+/** A linked qualification receipt is the native qualification of the draft: arbitrary bytes, a failed or partial qualification and a mutation of another edit are refused. */
+function checkQualificationChain() {
+  const BASELINE = 'baseline/qualification/P-003/baseline-pass.json';
+  const ROLLBACK = 'baseline/qualification/P-003/rollback.json';
+  const MUTATION = 'mutations/M-002.mutation.json';
+  const ACCEPTED = 'baseline/probes/P-003.probe.json';
+  const accepted = discovery.readCandidate(FIXTURE_FOLDER, FIXTURE_PATH);
+  check(
+    accepted.promotion.qualificationReceipt.path === RECEIPT,
+    'the fixture links the native mutated-fail evidence of its qualification',
+  );
+
+  // Arbitrary bytes under a correct digest: the reproduction of the provenance defect.
+  const arbitrary = resealedFolder(
+    'arbitrary-receipt',
+    (record) => {
+      record.promotion.qualificationReceipt.digest = discovery.bytesDigest(Buffer.from('not a qualification receipt'));
+    },
+    (folder) => fs.writeFileSync(path.join(folder, ...RECEIPT.split('/')), 'not a qualification receipt'),
+  );
+  refusesFile('arbitrary bytes with a correct digest as the receipt', arbitrary, FIXTURE_PATH, /qualification receipt .* is not JSON text/);
+  const array = resealedFolder(
+    'array-receipt',
+    (record) => {
+      record.promotion.qualificationReceipt.digest = discovery.bytesDigest(Buffer.from('[]\n'));
+    },
+    (folder) => fs.writeFileSync(path.join(folder, ...RECEIPT.split('/')), '[]\n'),
+  );
+  refusesFile('a receipt that is not an object', array, FIXTURE_PATH, /qualification receipt .* is not a JSON object/);
+
+  const scenarios = [
+    ['a mutated arm that held', RECEIPT, (value) => (value.verdict = 'held'), /states verdict "held"; the promotion needs "violated"/],
+    [
+      'a mutated arm that was inconclusive',
+      RECEIPT,
+      (value) => (value.verdict = 'inconclusive'),
+      /states verdict "inconclusive"; the promotion needs "violated"/,
+    ],
+    ['a receipt of another phase', RECEIPT, (value) => (value.phase = 'baseline-pass'), /states phase "baseline-pass"/],
+    ['a receipt of another probe', RECEIPT, (value) => (value.probeId = 'P-004'), /states probeId "P-004"/],
+    ['a receipt of another mutation', RECEIPT, (value) => (value.mutationId = 'M-009'), /states mutationId "M-009"/],
+    [
+      'a receipt of another target',
+      RECEIPT,
+      (value) => (value.targetArtifact = 'skill/other.md'),
+      /states targetArtifact "skill\/other\.md"/,
+    ],
+    [
+      'a receipt whose mutated bytes are the target',
+      RECEIPT,
+      (value) => (value.targetArtifactDigest = accepted.target.artifactDigest),
+      /the mutated bytes digest to another value than the target's/,
+    ],
+    [
+      'a receipt with no mutated digest',
+      RECEIPT,
+      (value) => delete value.targetArtifactDigest,
+      /the mutated bytes digest to another value/,
+    ],
+    [
+      'a baseline that did not hold',
+      BASELINE,
+      (value) => (value.verdict = 'violated'),
+      /states verdict "violated"; the promotion needs "held"/,
+    ],
+    [
+      'a baseline of another target version',
+      BASELINE,
+      (value) => (value.targetArtifactDigest = discovery.bytesDigest(Buffer.from('another version'))),
+      /baseline-pass\.json states targetArtifactDigest/,
+    ],
+    [
+      'a rollback that was not verified',
+      ROLLBACK,
+      (value) => (value.rollbackVerified = false),
+      /does not state that the rollback was verified/,
+    ],
+    [
+      'a rollback that restored other bytes',
+      ROLLBACK,
+      (value) => (value.restoredDigest = discovery.bytesDigest(Buffer.from('other bytes'))),
+      /rollback\.json states restoredDigest/,
+    ],
+    [
+      'a rollback of another mutated file',
+      ROLLBACK,
+      (value) => (value.mutatedDigest = discovery.bytesDigest(Buffer.from('other bytes'))),
+      /rollback\.json states mutatedDigest/,
+    ],
+    [
+      'a qualification of a probe that takes another route',
+      'probes/P-003.probe.json',
+      (value) => (value.qualification.route = 'historical'),
+      /takes the historical route/,
+    ],
+    ['a probe of another ID', 'probes/P-003.probe.json', (value) => (value.probeId = 'P-004'), /is the probe P-004/],
+    [
+      'a mutation of another ID',
+      MUTATION,
+      (value) => (value.mutationId = 'M-009'),
+      /mutations\/M-002\.mutation\.json states mutationId "M-009"/,
+    ],
+    [
+      'a mutation of another target',
+      MUTATION,
+      (value) => (value.targetArtifact = 'skill/other.md'),
+      /states targetArtifact "skill\/other\.md"/,
+    ],
+    [
+      'a mutation with the same ID and another edit',
+      MUTATION,
+      (value) => (value.operator.replace = 'test.only('),
+      /operator\.replace "test\.only\("; the candidate's edit is "test\.fixme\("/,
+    ],
+    ['a mutation that finds other text', MUTATION, (value) => (value.operator.find = 'test.slow('), /operator\.find "test\.slow\("/],
+    ['a mutation that expects other occurrences', MUTATION, (value) => (value.operator.occurrences = 2), /operator\.occurrences 2/],
+    ['a mutation of another operator', MUTATION, (value) => (value.operator.kind = 'delete'), /operator\.kind "delete"/],
+    [
+      'a mutation that is not a native mutation file',
+      MUTATION,
+      (value) => delete value.mutationSource,
+      /mutations\/M-002\.mutation\.json .*mutationSource/,
+    ],
+  ];
+  const more = [
+    [
+      'an accepted probe that qualified another operator',
+      ACCEPTED,
+      (value) => (value.qualification.mutationOperator = 'replace-exact: "a" -> "b" (occurrences 1)'),
+      /qualified "replace-exact: \\"a\\"/,
+    ],
+    [
+      'an accepted probe of another target',
+      ACCEPTED,
+      (value) => (value.qualification.targetArtifact.digest = discovery.bytesDigest(Buffer.from('other'))),
+      /qualified a target digesting to/,
+    ],
+    [
+      'an accepted probe whose rollback was not verified',
+      ACCEPTED,
+      (value) => (value.qualification.rollbackVerified = false),
+      /does not state that the rollback was verified/,
+    ],
+    ['an accepted probe of another route', ACCEPTED, (value) => (value.qualification.route = 'historical'), /takes the historical route/],
+    [
+      'an accepted probe that records other mutated-fail bytes',
+      ACCEPTED,
+      (value) => (value.qualification.mutatedFailEvidence.digest = discovery.bytesDigest(Buffer.from('other'))),
+      /for its mutated-fail evidence/,
+    ],
+    [
+      'an accepted probe that records other baseline-pass bytes',
+      ACCEPTED,
+      (value) => (value.qualification.baselinePassEvidence.digest = discovery.bytesDigest(Buffer.from('other'))),
+      /for its baseline-pass evidence/,
+    ],
+    ['a baseline of another probe', BASELINE, (value) => (value.probeId = 'P-004'), /states probeId "P-004"/],
+    ['a baseline of another mutation', BASELINE, (value) => (value.mutationId = 'M-009'), /states mutationId "M-009"/],
+    ['a baseline of another target', BASELINE, (value) => (value.targetArtifact = 'skill/other.md'), /states targetArtifact/],
+    ['a baseline of another phase', BASELINE, (value) => (value.phase = 'mutated-fail'), /states phase "mutated-fail"/],
+    [
+      'a baseline with no oracle results',
+      BASELINE,
+      (value) => (value.oracles = []),
+      /holds oracle results that do not back the verdict held/,
+    ],
+    [
+      'a baseline whose oracle did not hold',
+      BASELINE,
+      (value) => (value.oracles[0].disposition = 'violated'),
+      /holds oracle results that do not back the verdict held/,
+    ],
+    [
+      'a receipt with no oracle results',
+      RECEIPT,
+      (value) => (value.oracles = []),
+      /holds oracle results that do not back the verdict violated/,
+    ],
+    [
+      'a receipt whose oracles all held',
+      RECEIPT,
+      (value) => (value.oracles[0].disposition = 'held'),
+      /holds oracle results that do not back the verdict violated/,
+    ],
+    ['a rollback of another probe', ROLLBACK, (value) => (value.probeId = 'P-004'), /states probeId "P-004"/],
+    ['a rollback of another mutation', ROLLBACK, (value) => (value.mutationId = 'M-009'), /states mutationId "M-009"/],
+    ['a rollback of another target', ROLLBACK, (value) => (value.targetArtifact = 'skill/other.md'), /states targetArtifact/],
+    [
+      'a rollback that started from other bytes',
+      ROLLBACK,
+      (value) => (value.preDigest = discovery.bytesDigest(Buffer.from('other bytes'))),
+      /states preDigest/,
+    ],
+    ['a rollback with no re-pass', ROLLBACK, (value) => (value.rePasses = []), /ends with no restored arm that held/],
+    [
+      'a rollback whose last re-pass did not hold',
+      ROLLBACK,
+      (value) => (value.rePasses[0].verdict = 'violated'),
+      /ends with no restored arm that held/,
+    ],
+  ];
+  for (const [label, relative, edit, expected] of [...scenarios, ...more]) {
+    const folder = resealedFolder('chain', () => {}, editHeld(relative, edit));
+    let problems = [];
+    try {
+      discovery.readCandidate(folder, FIXTURE_PATH);
+    } catch (error) {
+      if (!(error instanceof discovery.CandidateError)) throw error;
+      problems = error.problems;
+    }
+    check(
+      problems.some((problem) => expected.test(problem) && problem.includes(relative.replace(/^.*\//, ''))),
+      `${label}: expected a problem matching ${expected} that names ${relative}; got ${JSON.stringify(problems)}`,
+    );
+  }
+
+  for (const [label, relative, expected] of [
+    ['a mutation the folder does not hold', MUTATION, /draft mutation mutations\/M-002\.mutation\.json does not exist/],
+    [
+      'a qualification with no baseline evidence',
+      BASELINE,
+      /qualification evidence baseline\/qualification\/P-003\/baseline-pass\.json does not exist/,
+    ],
+    [
+      'a qualification with no rollback evidence',
+      ROLLBACK,
+      /qualification evidence baseline\/qualification\/P-003\/rollback\.json does not exist/,
+    ],
+  ]) {
+    const folder = folderCopy('partial');
+    fs.rmSync(path.join(folder, ...relative.split('/')));
+    refusesFile(label, folder, FIXTURE_PATH, expected);
+  }
+
+  for (const receiptPath of [
+    'baseline/qualification/P-003.mutated-fail.json',
+    'baseline/qualification/P-003/rollback.json',
+    'baseline/qualification/P-003/mutated-fail.txt',
+  ]) {
+    const unknown = fixture();
+    unknown.promotion.qualificationReceipt.path = receiptPath;
+    refuses(`a receipt spelled ${receiptPath}`, unknown, /\/promotion\/qualificationReceipt\/path must match pattern/);
+  }
+
+  const duplicated = resealedFolder(
+    'duplicate-key-receipt',
+    () => {},
+    (folder) => {
+      const file = path.join(folder, ...RECEIPT.split('/'));
+      fs.writeFileSync(
+        file,
+        fs.readFileSync(file, 'utf8').replace('"verdict": "violated",', '"verdict": "held",\n  "verdict": "violated",'),
+      );
+      const candidate = path.join(folder, ...FIXTURE_PATH.split('/'));
+      const record = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      record.promotion.qualificationReceipt.digest = discovery.bytesDigest(fs.readFileSync(file));
+      fs.writeFileSync(candidate, discovery.serializeCandidate(record));
+    },
+  );
+  refusesFile('a receipt that states a key twice', duplicated, FIXTURE_PATH, /mutated-fail\.json states a key twice in one object/);
+  const stopped = folderCopy('stopped');
+  fs.writeFileSync(path.join(stopped, 'baseline', 'qualification', 'P-003', 'fault.json'), '{"probeId":"P-003"}\n');
+  refusesFile('a qualification that stopped partway', stopped, FIXTURE_PATH, /fault\.json records a qualification that stopped/);
+
+  checkRealQualificationEvidence();
+  const authored = JSON.parse(fs.readFileSync(path.join(FIXTURE_FOLDER, ...MUTATION.split('/')), 'utf8'));
+  check(
+    JSON.stringify(authored) === JSON.stringify(discovery.draftMutation(accepted)),
+    'the fixture mutation file is the draft the candidate renders',
+  );
+}
+
+/**
+ * The reader accepts the evidence `tea-evaluate preflight` really wrote: the committed qualification of the bmad-tea-evaluate
+ * evaluation, linked from a candidate that states that qualification's mutation, and the fixture's evidence keeps its shape.
+ */
+function checkRealQualificationEvidence() {
+  const real = path.join(PROJECT_ROOT, 'test', 'evaluations', 'bmad-tea-evaluate');
+  const readReal = (relative) => JSON.parse(fs.readFileSync(path.join(real, ...relative.split('/')), 'utf8'));
+  const mutation = readReal('mutations/M-005.mutation.json');
+  const folder = folderCopy('real-qualification');
+  fs.rmSync(path.join(folder, 'baseline', 'qualification', 'P-003'), { recursive: true });
+  fs.rmSync(path.join(folder, 'probes', 'P-003.probe.json'));
+  fs.rmSync(path.join(folder, 'baseline', 'probes', 'P-003.probe.json'));
+  fs.rmSync(path.join(folder, 'mutations', 'M-002.mutation.json'));
+  fs.cpSync(path.join(real, 'baseline', 'qualification', 'P-009'), path.join(folder, 'baseline', 'qualification', 'P-009'), {
+    recursive: true,
+  });
+  fs.copyFileSync(path.join(real, 'probes', 'P-009.probe.json'), path.join(folder, 'probes', 'P-009.probe.json'));
+  fs.mkdirSync(path.join(folder, 'baseline', 'probes'), { recursive: true });
+  fs.copyFileSync(path.join(real, 'baseline', 'probes', 'P-009.probe.json'), path.join(folder, 'baseline', 'probes', 'P-009.probe.json'));
+  fs.copyFileSync(path.join(real, 'mutations', 'M-005.mutation.json'), path.join(folder, 'mutations', 'M-005.mutation.json'));
+  const receipt = 'baseline/qualification/P-009/mutated-fail.json';
+  const candidate = path.join(folder, ...FIXTURE_PATH.split('/'));
+  const record = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+  record.target = {
+    artifact: mutation.targetArtifact,
+    artifactDigest: readReal('baseline/qualification/P-009/baseline-pass.json').targetArtifactDigest,
+  };
+  record.edit = { find: mutation.operator.find, replace: mutation.operator.replace, occurrences: mutation.operator.occurrences };
+  record.promotion = {
+    draftMutationId: 'M-005',
+    qualificationReceipt: { path: receipt, digest: discovery.bytesDigest(fs.readFileSync(path.join(folder, ...receipt.split('/')))) },
+  };
+  fs.writeFileSync(candidate, discovery.serializeCandidate(rebound(record)));
+  let problems = [];
+  try {
+    discovery.readCandidate(folder, FIXTURE_PATH);
+  } catch (error) {
+    if (!(error instanceof discovery.CandidateError)) throw error;
+    problems = error.problems;
+  }
+  check(problems.length === 0, `the reader refused the committed native qualification of P-009: ${JSON.stringify(problems)}`);
+
+  const keys = (value) => Object.keys(value).sort().join(',');
+  for (const name of ['baseline-pass', 'mutated-fail', 'rollback']) {
+    const file = `baseline/qualification/P-009/${name}.json`;
+    const ours = JSON.parse(fs.readFileSync(path.join(FIXTURE_FOLDER, 'baseline', 'qualification', 'P-003', `${name}.json`), 'utf8'));
+    check(
+      keys(ours) === keys(readReal(file)),
+      `the fixture's ${name}.json keeps the fields a qualification writes: ${keys(ours)} against ${keys(readReal(file))}`,
+    );
+  }
+  const oursRollback = JSON.parse(
+    fs.readFileSync(path.join(FIXTURE_FOLDER, 'baseline', 'qualification', 'P-003', 'rollback.json'), 'utf8'),
+  );
+  check(
+    keys(oursRollback.rePasses[0]) === keys(readReal('baseline/qualification/P-009/rollback.json').rePasses[0]),
+    "the fixture's re-pass keeps the fields a qualification writes",
+  );
+}
+
+/** Independent evidence is a snapshot of the folder that digests to the record's value, so a later reader replays what the reviewer saw. */
+function checkEvidenceProvenance() {
+  const evidence = path.join(...EVIDENCE.split('/'));
+  const wrongDigest = resealedFolder('wrong-digest-evidence', (record) => {
+    record.independentEvidence[0].digest = `sha256:${'0'.repeat(64)}`;
+  });
+  refusesFile(
+    'evidence whose snapshot digests to another value',
+    wrongDigest,
+    FIXTURE_PATH,
+    /playwright-test-annotations\.md digests to sha256:[0-9a-f]+; the record names sha256:0{64}/,
+  );
+  const absent = resealedFolder(
+    'absent-evidence',
+    () => {},
+    (folder) => fs.rmSync(path.join(folder, evidence)),
+  );
+  refusesFile(
+    'evidence whose snapshot is gone',
+    absent,
+    FIXTURE_PATH,
+    /independent evidence discovery\/red-phase-pilot\/evidence\/playwright-test-annotations\.md does not exist/,
+  );
+  const edited = folderCopy('edited-evidence');
+  fs.appendFileSync(path.join(edited, evidence), 'An edited line.\n');
+  refusesFile('evidence edited after the review', edited, FIXTURE_PATH, /playwright-test-annotations\.md digests to/);
+  const empty = resealedFolder(
+    'empty-evidence',
+    (record) => {
+      record.independentEvidence[0].digest = discovery.bytesDigest(Buffer.alloc(0));
+    },
+    (folder) => fs.writeFileSync(path.join(folder, evidence), ''),
+  );
+  refusesFile('evidence that is an empty snapshot', empty, FIXTURE_PATH, /is empty, so it holds nothing a reviewer saw/);
+  const link = resealedFolder(
+    'linked-evidence',
+    () => {},
+    (folder) => {
+      fs.renameSync(path.join(folder, evidence), path.join(folder, 'snapshot.md'));
+      fs.symlinkSync(path.join(folder, 'snapshot.md'), path.join(folder, evidence));
+    },
+  );
+  refusesFile('evidence that is a link', link, FIXTURE_PATH, /reached through a link/);
+
+  const otherCampaign = resealedFolder('other-campaign-evidence', (record) => {
+    record.independentEvidence[0].reference = EVIDENCE.replace('red-phase-pilot', 'other-campaign');
+  });
+  refusesFile(
+    'evidence kept in another campaign',
+    otherCampaign,
+    FIXTURE_PATH,
+    /is not a snapshot under discovery\/red-phase-pilot\/evidence\//,
+  );
+  for (const reference of [
+    'https://invalid.example/no-evidence',
+    'the Playwright test annotations reference',
+    'requirements.md',
+    'discovery/red-phase-pilot/evidence/../C-001.candidate.json',
+    'discovery/red-phase-pilot/evidence/note.candidate.json',
+    'discovery/red-phase-pilot/evidence/',
+  ]) {
+    const record = fixture();
+    record.independentEvidence[0].reference = reference;
+    refuses(`evidence spelled ${reference}`, record, /\/independentEvidence\/0\/reference must match pattern/);
+  }
+
+  // The reproduction: a prose reference with an invented digest.
+  const invented = fixture();
+  invented.independentEvidence[0] = {
+    kind: 'reference-computation',
+    reference: 'https://invalid.example/no-evidence',
+    digest: `sha256:${'0'.repeat(64)}`,
+  };
+  refuses('an invented citation with an invented digest', rebound(invented), /\/independentEvidence\/0\/reference/);
 }
 
 /** A scratch copy of the valid evaluation fixture. */

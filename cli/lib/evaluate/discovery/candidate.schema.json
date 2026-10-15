@@ -260,10 +260,12 @@
             "enum": ["domain-invariant", "separate-specification", "historical-defect", "reference-computation", "blinded-human-annotation"]
           },
           "reference": {
+            "description": "A snapshot of the material the reviewer saw, kept in the campaign's evidence directory: discovery/<campaignId>/evidence/<file>. A source outside the folder is archived there, and a human annotation is recorded there as written.",
             "type": "string",
-            "minLength": 1
+            "pattern": "^discovery/[a-z0-9]+(-[a-z0-9]+)*/evidence/(?!.*\\.candidate\\.json$)[A-Za-z0-9][A-Za-z0-9._-]*$"
           },
           "digest": {
+            "description": "eval-quality's digestBytes over the snapshot file.",
             "$ref": "#/$defs/digest"
           }
         }
@@ -358,9 +360,9 @@
                   "required": ["path", "digest"],
                   "properties": {
                     "path": {
-                      "description": "A committed qualification receipt of the evaluation folder, named for the probe it qualifies: baseline/qualification/<probeId>.<kind>.json.",
+                      "description": "The mutated arm's evidence of the native qualification of the draft mutation, as a qualification writes it: baseline/qualification/<probeId>/mutated-fail.json. The reader holds it, with the baseline-pass and rollback evidence beside it, to the draft mutation, the probe and the target.",
                       "type": "string",
-                      "pattern": "^baseline/qualification/P-[0-9]{3,}\\.[a-z0-9-]+\\.json$"
+                      "pattern": "^baseline/qualification/P-[0-9]{3,}/mutated-fail\\.json$"
                     },
                     "digest": {
                       "description": "eval-quality's digestBytes over the receipt file.",

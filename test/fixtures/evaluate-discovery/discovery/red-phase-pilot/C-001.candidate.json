@@ -17,9 +17,9 @@
   "identity": "sha256:2bcf4c7dc9957732f23ebead8c09a2088db9291c3365dbec2f94fbaa22ca8a96",
   "independentEvidence": [
     {
-      "digest": "sha256:c79bd3fb088d6c08a779fcbc1c5fa7c8be40e35daeb2de7e044d4fd7410a5936",
+      "digest": "sha256:26d0d4f1eb1afff11cd9d5b986d6ae17cab7702e91ea39a2a6a054e7a7f1b61c",
       "kind": "separate-specification",
-      "reference": "the Playwright test annotations reference: test.fixme marks a test as failing and to be fixed, test.skip marks it as not to run"
+      "reference": "discovery/red-phase-pilot/evidence/playwright-test-annotations.md"
     }
   ],
   "intent": "regression",
@@ -51,8 +51,8 @@
   "promotion": {
     "draftMutationId": "M-002",
     "qualificationReceipt": {
-      "digest": "sha256:781449732f17792e3c207db382785b55594477bf81dbb5133e4e592234907d0a",
-      "path": "baseline/qualification/P-003.mutated-fail.json"
+      "digest": "sha256:282721eb1f57e84b88fbc54c82a21d6137239094fddf4f0957aae0833aea91bb",
+      "path": "baseline/qualification/P-003/mutated-fail.json"
     }
   },
   "recordKind": "exploratory-candidate",
@@ -65,7 +65,7 @@
     "rationale": "The edit changes how the scaffold is annotated, the annotations reference says the two markers differ, and the evaluated suite stayed green.",
     "reviewer": "maintainer",
     "scope": {
-      "determination": "sha256:377c99c662e285d95d6619ecf4162263679a2dfeae729932485588a730049ba3",
+      "determination": "sha256:cd19232674552bce8cbddeb6b80e4784d0476810be020fb2e05943fabda99385",
       "identity": "sha256:2bcf4c7dc9957732f23ebead8c09a2088db9291c3365dbec2f94fbaa22ca8a96",
       "observations": [
         {

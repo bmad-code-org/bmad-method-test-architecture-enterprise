@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "skill/steps-c/step-04-generate-tests.md",
+  "targetArtifact": "skill/steps-c/step-04-generate-tests.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "test.skip(",
+    "replace": "test.fixme(",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "Marking the generated tests fixme instead of skip leaves the scaffold failing for the wrong reason, which the red-phase gate must still report."
+}

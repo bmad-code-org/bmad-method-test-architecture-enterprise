@@ -1,0 +1,21 @@
+{
+  "probeId": "P-003",
+  "mutationId": "M-002",
+  "phase": "mutated-fail",
+  "workspace": "qualification",
+  "targetArtifact": "skill/steps-c/step-04-generate-tests.md",
+  "targetArtifactDigest": "sha256:36b4686e69a884762e06bd396b3e7cc40289a356b164926536d2fd662ac3823a",
+  "verdict": "violated",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "mutated-red-phase"
+      ]
+    }
+  ],
+  "steps": []
+}
