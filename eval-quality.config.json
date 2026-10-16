@@ -606,23 +606,6 @@
         "rendering": "digits"
       },
       {
-        "file": "docs/reference/configuration.md",
-        "claim": "how many module settings the migration keeps",
-        "pattern": {
-          "match": "The migration keeps the (\\w+) current module settings"
-        },
-        "counts": ["setupKeyCount"]
-      },
-      {
-        "file": "docs/explanation/verification-architecture.md",
-        "claim": "the knowledge-fragment total in the self-audit",
-        "pattern": {
-          "match": "Most of TEA's (\\d+) knowledge fragments name"
-        },
-        "counts": ["knowledgeFragmentTotal"],
-        "rendering": "digits"
-      },
-      {
         "file": "docs/reference/knowledge-base.md",
         "claim": "the knowledge-fragment tier breakdown",
         "pattern": {
@@ -896,6 +879,23 @@
           "match": "Its ([a-z-]+) skills cover"
         },
         "counts": ["canonicalWorkflowCount"]
+      },
+      {
+        "file": "docs/reference/configuration.md",
+        "claim": "how many module settings the migration keeps",
+        "pattern": {
+          "match": "The migration keeps the (\\w+) current module settings"
+        },
+        "counts": ["setupKeyCount"]
+      },
+      {
+        "file": "docs/explanation/verification-architecture.md",
+        "claim": "the knowledge-fragment total in the self-audit",
+        "pattern": {
+          "match": "Most of TEA's (\\d+) knowledge fragments name"
+        },
+        "counts": ["knowledgeFragmentTotal"],
+        "rendering": "digits"
       }
     ]
   },
