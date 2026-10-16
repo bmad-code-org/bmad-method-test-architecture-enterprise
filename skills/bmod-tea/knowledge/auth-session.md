@@ -90,39 +90,44 @@ test('authenticated request', async ({ authToken, request }) => {
 **Implementation**:
 
 ```typescript
+import { expect } from '@playwright/test';
 import { test } from '../support/auth/auth-fixture';
 
-// Option 1: Per-test user override
-test('admin actions', async ({ authToken, authOptions }) => {
-  // Override default user
-  authOptions.userIdentifier = 'admin';
+// The user is chosen before the test body runs: `authToken`, `context` and `page`
+// resolve from `authOptions` during fixture setup, so assigning
+// `authOptions.userIdentifier` inside a test changes nothing.
 
-  const { authToken: adminToken } = await test.step('Get admin token', async () => {
-    return { authToken }; // Re-fetches with new identifier
-  });
+// Option 1: Override the user for a group of tests
+test.describe('admin actions', () => {
+  test.use({ authOptions: { userIdentifier: 'admin' } });
 
-  // Use admin token
-  const response = await request.get('/api/admin/users', {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  test('lists users', async ({ authToken, request }) => {
+    const response = await request.get('/api/admin/users', {
+      headers: { Authorization: `Bearer ${authToken}` }, // admin token
+    });
+    expect(response.ok()).toBe(true);
   });
 });
 
-// Option 2: Parallel execution with different users
-test.describe.parallel('multi-user tests', () => {
-  test('user 1 actions', async ({ authToken }) => {
-    // Uses default user (e.g., 'user1')
-  });
+// Option 2: Parallel execution with different users, one describe block per user
+test.describe('multi-user tests', () => {
+  test.describe.configure({ mode: 'parallel' });
 
-  test('user 2 actions', async ({ authToken, authOptions }) => {
-    authOptions.userIdentifier = 'user2';
-    // Uses different token for user2
-  });
+  for (const userIdentifier of ['user1', 'user2']) {
+    test.describe(`as ${userIdentifier}`, () => {
+      test.use({ authOptions: { userIdentifier } });
+
+      test('sees own profile', async ({ page }) => {
+        await page.goto('/profile'); // signed in as this user
+      });
+    });
+  }
 });
 ```
 
 **Key Points**:
 
-- Override `authOptions.userIdentifier` per test
+- Override `authOptions.userIdentifier` with `test.use()` inside a `test.describe()` block; the test body runs after the token resolves
 - Tokens cached separately per user identifier
 - Parallel tests isolated with different users
 - Worker-specific accounts possible

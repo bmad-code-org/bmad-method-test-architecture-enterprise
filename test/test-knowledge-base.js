@@ -425,6 +425,41 @@ function runTests() {
   console.log('');
 
   // ============================================================
+  // Test 7: Auth-session options are fixed before the test body
+  // ============================================================
+  // `authToken`, `context` and `page` resolve from the `authOptions` option
+  // fixture during fixture setup, so assigning one of its fields inside a test
+  // body changes nothing: the test keeps the default user's token.
+  // auth-session.md once taught exactly that as its multi-user example. A fragment
+  // overrides these options with `test.use()`.
+  console.log(`${colors.yellow}Test Suite 7: Auth-Session Options${colors.reset}\n`);
+  const optionAssignment = /\bauthOptions\.\w+\s*=(?!=)/;
+  const assignmentsIn = (text) =>
+    text
+      .split('\n')
+      .map((line, index) => ({ line: index + 1, text: line }))
+      .filter((entry) => optionAssignment.test(entry.text));
+  assert(
+    assignmentsIn("test('admin', async ({ authToken, authOptions }) => {\n  authOptions.userIdentifier = 'admin';\n});").length === 1,
+    'the check catches an authOptions field assignment in a test body',
+  );
+  assert(
+    assignmentsIn(
+      "test.use({ authOptions: { userIdentifier: 'admin' } });\nif (authOptions.userIdentifier === 'admin') {}\nconst authSessionEnabled = false;\ntest.use({ authSessionEnabled });",
+    ).length === 0,
+    'the check passes test.use(), a comparison and a local option value',
+  );
+  const optionMutations = fs
+    .readdirSync(knowledgeDir)
+    .filter((name) => name.endsWith('.md'))
+    .flatMap((name) =>
+      assignmentsIn(fs.readFileSync(path.join(knowledgeDir, name), 'utf8')).map((entry) => `${name}:${entry.line}: ${entry.text.trim()}`),
+    );
+  assert(optionMutations.length === 0, 'no knowledge fragment assigns an authOptions field inside a test', optionMutations.join('; '));
+
+  console.log('');
+
+  // ============================================================
   // Summary
   // ============================================================
   console.log(`${colors.cyan}========================================`);

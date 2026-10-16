@@ -1354,6 +1354,20 @@ async function runTests() {
         );
       }
 
+      // The summary step 3f shows the user has to report the mode step 3 resolved.
+      // It printed "(Parallel Execution)" and "~60% faster than sequential" whatever
+      // ran, after execution_mode itself had been fixed to carry resolvedMode.
+      {
+        const aggregateText = fs.readFileSync(path.join(skillRootSource, 'steps-c', 'step-03f-aggregate-scores.md'), 'utf8');
+        const summary = aggregateText.split('### 6. Display Summary to User')[1]?.split('### 7.')[0] ?? '';
+        assert(summary.includes('{execution_mode}'), 'step 3f summary prints the resolved {execution_mode}');
+        assert(
+          !/parallel execution|faster than sequential/i.test(summary),
+          'step 3f summary claims no parallel run or speed-up whatever mode ran',
+          summary.match(/.*(parallel execution|faster than sequential).*/i)?.[0],
+        );
+      }
+
       // parse-report: convention-baseline grounding (couture-cast PR #106's actual
       // defect — a fabricated "Convention: priorityMarkers (18 of 40 sampled)" against
       // a repo with zero real instances of that convention). See

@@ -374,7 +374,9 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${runKey}-${timestamp}.json`, JSO
 ### 6. Display Summary to User
 
 ```text
-✅ Quality Evaluation Complete (Parallel Execution)
+✅ Quality Evaluation Complete
+
+⚙️ Execution Mode: {execution_mode}
 
 📊 Overall Quality Score: {roundedScore}/100 (Grade: {overallGrade})
 
@@ -392,8 +394,6 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${runKey}-${timestamp}.json`, JSO
 - MEDIUM:   {medium_count} violations
 - LOW:      {low_count} violations
 - TOTAL:    {total_count} violations
-
-🚀 Performance: Parallel execution ~60% faster than sequential
 
 ✅ Ready for report generation (Step 4)
 ```
