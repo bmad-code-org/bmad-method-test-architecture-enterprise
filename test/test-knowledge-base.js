@@ -456,6 +456,22 @@ function runTests() {
       assignmentsIn(fs.readFileSync(path.join(knowledgeDir, name), 'utf8')).map((entry) => `${name}:${entry.line}: ${entry.text.trim()}`),
     );
   assert(optionMutations.length === 0, 'no knowledge fragment assigns an authOptions field inside a test', optionMutations.join('; '));
+  // The public docs copy these examples, and the enterprise guide once taught the same assignment.
+  const docsDir = path.join(__dirname, '..', 'docs');
+  const docMutations = fs
+    .readdirSync(docsDir, { recursive: true })
+    .filter((name) => name.endsWith('.md'))
+    .flatMap((name) =>
+      assignmentsIn(fs.readFileSync(path.join(docsDir, name), 'utf8')).map((entry) => `docs/${name}:${entry.line}: ${entry.text.trim()}`),
+    );
+  assert(docMutations.length === 0, 'no docs page assigns an authOptions field inside a test', docMutations.join('; '));
+  const enterpriseGuide = fs.readFileSync(path.join(docsDir, 'how-to', 'brownfield', 'use-tea-for-enterprise.md'), 'utf8');
+  const fixedExample = "  test.use({ authOptions: { userIdentifier: 'admin' } });";
+  assert(
+    enterpriseGuide.includes(fixedExample) &&
+      assignmentsIn(enterpriseGuide.replace(fixedExample, "  authOptions.userIdentifier = 'admin';")).length === 1,
+    "the docs check catches the enterprise guide's old in-test authOptions assignment",
+  );
 
   console.log('');
 
