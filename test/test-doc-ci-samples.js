@@ -22,6 +22,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('js-yaml');
+const { closesFence } = require('./lib/docs-pages');
 
 const PAGE = path.join(__dirname, '..', 'docs', 'how-to', 'workflows', 'setup-test-framework.md');
 const CONFIG = '--config tests/playwright.config.ts';
@@ -42,7 +43,7 @@ function fencedBlocks(text) {
     const open = lines[index].match(/^(\s*)(`{3,})\s*([\w-]*)/);
     if (!open) continue;
     let end = index + 1;
-    while (end < lines.length && !lines[end].trimStart().startsWith(open[2])) end += 1;
+    while (end < lines.length && !closesFence(lines[end], open[2], open[1])) end += 1;
     const body = lines
       .slice(index + 1, end)
       .map((line) => (line.startsWith(open[1]) ? line.slice(open[1].length) : line))
@@ -179,7 +180,15 @@ function checkReverts(text) {
   return reverts.length;
 }
 
+/** A marker line with an info string inside a block is content: the block runs to the bare closing fence. */
+function checkFenceClosing() {
+  const [block, ...rest] = fencedBlocks('```markdown\n```bash\nnpm test\n```\n');
+  assert.equal(block?.body, '```bash\nnpm test', 'a marker line with an info string closed the block');
+  assert.equal(rest.length, 0, 'the scanner opened a second block at the bare closing fence');
+}
+
 try {
+  checkFenceClosing();
   const text = fs.readFileSync(PAGE, 'utf8');
   const problems = pageProblems(text);
   assert.deepEqual(problems, [], `Framework guide CI samples a reader cannot copy:\n${problems.join('\n')}`);

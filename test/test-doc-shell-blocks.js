@@ -33,6 +33,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { closesFence } = require('./lib/docs-pages');
 
 const DOCS_ROOT = path.join(__dirname, '..', 'docs');
 
@@ -63,7 +64,7 @@ function fencedBlocks(text) {
     if (!open) continue;
     const fence = open[2];
     let end = index + 1;
-    while (end < lines.length && !lines[end].trimStart().startsWith(fence)) end += 1;
+    while (end < lines.length && !closesFence(lines[end], fence, open[1])) end += 1;
     let before = index - 1;
     while (before >= 0 && lines[before].trim() === '') before -= 1;
     blocks.push({
@@ -288,7 +289,15 @@ function checkReviewGate() {
   return GATE_CASES.length;
 }
 
+/** A marker line with an info string inside a block is content: the block runs to the bare closing fence. */
+function checkFenceClosing() {
+  const [block, ...rest] = fencedBlocks('```markdown\n```bash\nnpm test\n```\n');
+  assert.equal(block?.body, '```bash\nnpm test', 'a marker line with an info string closed the block');
+  assert.equal(rest.length, 0, 'the scanner opened a second block at the bare closing fence');
+}
+
 try {
+  checkFenceClosing();
   const rules = checkRules();
   const blocks = checkPages();
   const gateCases = checkReviewGate();

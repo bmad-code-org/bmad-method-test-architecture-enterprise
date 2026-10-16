@@ -116,8 +116,8 @@ Run the BMM `research` workflow on industry compliance (SOC 2, HIPAA, GDPR), sec
    System-level test design needs the finished architecture, so run `/bmad-tea-test-design` at system-level scope after it, focused on NFR thresholds and planned evidence, security architecture testability, performance testing strategy, and compliance requirement mapping.
 2. **Test infrastructure.** Run `/bmad-tea-framework`.
    Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
-   To set up CI in the same run, ask for the framework and CI together and give it the step 3 requirements.
-3. **CI/CD with compliance.** Run `/bmad-tea-framework` and ask for CI.
+   To set up CI in the same run, ask for the framework and CI together and give it the step 3 requirements; that run covers step 3, so skip it.
+3. **CI/CD with compliance.** If step 2 set up the framework alone, run `/bmad-tea-framework` again and ask for CI.
    Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
 
 ### Phase 4: Implementation (Required)

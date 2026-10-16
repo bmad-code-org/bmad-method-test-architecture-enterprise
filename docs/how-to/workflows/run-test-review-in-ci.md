@@ -43,7 +43,7 @@ exit "$status"
 
 ## Jenkins, Buildkite and other CIs
 
-Run the same command, then publish `tea-comment.md` wherever the pull request lives. A GitHub repository on Jenkins or Buildkite passes `--github` and a `GITHUB_TOKEN`, plus `--pr <number>` and `--repo <owner/name>` when the job has no `GITHUB_*` variables. `--head-sha`, `--run-url` and `--check-name` fill in what a non-Actions run does not carry.
+Run the GitLab command above with your CI's own base branch and job URL, then publish the `tea-comment.md` that `--comment-out` writes wherever the pull request lives. A GitHub repository on Jenkins or Buildkite passes `--github` and a `GITHUB_TOKEN`, plus `--pr <number>` and `--repo <owner/name>` when the job has no `GITHUB_*` variables. `--head-sha`, `--run-url` and `--check-name` fill in what a non-Actions run does not carry.
 
 ## Read the result
 

@@ -491,14 +491,15 @@ Selective testing runs only the tests a change affects. It needs a `test:changed
 ```json
 {
   "scripts": {
-    "test:changed": "playwright test --config tests/playwright.config.ts --only-changed=origin/main"
+    "test:changed": "playwright test --config tests/playwright.config.ts --only-changed=origin/main --pass-with-no-tests"
   }
 }
 ```
 
 The CI phase can also write a `git diff` based selection script when your project needs one.
 On a branch that edits one spec, run `npm run test:changed` and confirm it selects that spec before you wire it in.
-Then add a PR job and change the `test` job's condition to `if: github.event_name != 'pull_request'`, so pushes and the schedule keep the full suite:
+Then add a PR job beside the full `test` job as fast feedback, and keep the `test` job on pull requests.
+`--only-changed` follows imports from the test files, so a source change that no spec imports selects no test, and only the full suite covers it:
 
 ```yaml
 jobs:
@@ -519,7 +520,7 @@ jobs:
       - run: npm run test:changed
 ```
 
-A change that touches no test or tested source, such as a docs-only edit, can select no tests.
+A change that touches no test or tested source, such as a docs-only edit, selects no tests; `--pass-with-no-tests` lets the selective job pass then, and the full `test` job still runs.
 
 <a id="ci-burn-in-testing"></a>
 

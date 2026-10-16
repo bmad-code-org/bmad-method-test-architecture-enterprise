@@ -72,7 +72,7 @@ GitLab has no `--github` equivalent. The CLI writes the comment text with `--com
 
 ### Jenkins, Buildkite and other CIs
 
-Run the same command and publish `tea-comment.md` wherever the pull request lives, or pass `--github` and a `GITHUB_TOKEN`. Recipe: [Jenkins, Buildkite and other CIs](/docs/how-to/workflows/run-test-review-in-ci.md#jenkins-buildkite-and-other-cis).
+To publish the comment yourself, replace `--github` with `--comment-out tea-comment.md` and post that file wherever the pull request lives. For a pull request on GitHub, keep `--github` and supply a `GITHUB_TOKEN`, and the CLI posts it. Recipe: [Jenkins, Buildkite and other CIs](/docs/how-to/workflows/run-test-review-in-ci.md#jenkins-buildkite-and-other-cis).
 
 ## Flags
 

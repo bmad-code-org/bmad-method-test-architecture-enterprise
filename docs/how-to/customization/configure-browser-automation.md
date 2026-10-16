@@ -183,8 +183,10 @@ playwright-cli --version
 # Install if missing
 npm install -g @playwright/cli@latest
 
-# Install skills: Claude Code layout, or --skills=agents for Codex
+# Install skills: Claude Code layout
 playwright-cli install --skills
+# Install skills: Codex layout
+playwright-cli install --skills=agents
 ```
 
 ### MCP Not Working

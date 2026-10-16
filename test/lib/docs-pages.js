@@ -83,8 +83,25 @@ function sectionOf(text, heading) {
   return start === -1 ? null : lines.slice(start + 1).join('\n');
 }
 
+/**
+ * Whether a line closes a fenced block opened by `fence` at `indent`, by the CommonMark rule: after the opener's
+ * indentation, at most three spaces, the opener's character repeated at least as many times, then only whitespace.
+ * A marker line with text after it (```` ```bash ````) is block content and closes nothing.
+ *
+ * @param {string} line the candidate line
+ * @param {string} fence the opening run of backticks or tildes
+ * @param {string} [indent] the whitespace before the opening fence
+ * @returns {boolean}
+ */
+function closesFence(line, fence, indent = '') {
+  const rest = line.startsWith(indent) ? line.slice(indent.length) : line.trimStart();
+  const match = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(rest);
+  return match !== null && match[1][0] === fence[0] && match[1].length >= fence.length;
+}
+
 module.exports = {
   CONFINEMENT_PAGE,
+  closesFence,
   DOCS_DIRECTORY,
   REFERENCE_CONFINEMENT_PAGE,
   REFERENCE_EVALUATORS_PAGE,
