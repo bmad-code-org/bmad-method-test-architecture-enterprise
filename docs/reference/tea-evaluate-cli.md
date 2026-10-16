@@ -21,15 +21,7 @@ TEA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 | [`compare`](#compare)     | Sets a scored run beside `baseline/`, and with `--accept` replaces the baseline   | 0, 10, 12, 64                        |
 | [`ci`](#ci)               | Runs the checks the CI plan places on one tier                                    | 0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 64 |
 
-:::caution[Exit 0 does not always mean the target passed]
-
-- `score` exits 0 for PASS, WAIVED and CONCERNS alike, and its summary names only the exit; each probe's evidence artifact under `scores/` says which, in `contractVerdict`, or in `productionVerdict` for the production-mode records a `records` evaluator imports.
-- `compare` exits 0 for every comparison outcome: `compared` (whatever the relation, a run weaker than the baseline included), `first-run` and `refused`. Read its lines for the outcome.
-- `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL), and after an exit 3 (Invalid) whenever every probe still has its evidence artifact. Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
-- Exits 2 to 5 carry eval-quality's verdicts and faults, apart from `ci`'s 2 for a breached strength floor on `release`; `ci` adds 1 for a gate's policy violation, and 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.
-- `ci` is where enforcement lives: the CI plan places each check on a tier, and one fixed table of exits and actions decides what blocks, what warns and what passes. [Exits and the evidence](#exits-and-the-evidence) gives that table's order, and [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md) wires it into a pipeline.
-
-:::
+Exit 0 does not always mean the target passed: [Exit codes](#exit-codes) says what each exit means for each command.
 
 [How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains why these pieces exist, and [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md) explains the confinement.
 Four companion reference pages hold the detail behind the commands, and a link to a section that moved to one of them lands on its entry here:
@@ -66,28 +58,6 @@ Check the host before the first live command:
 `check`, `digest`, `status`, `score` and `compare` launch no target and need none of these.
 `ci` needs them for the checks that run `preflight` or `run` (`preflight-live` and the live tiers); the checks of its `pr` tier launch no confined target.
 [File-system confinement](/docs/reference/tea-evaluate-confinement.md#file-system-confinement) gives the full requirements, including the observer versions and the paths a host may not hold.
-
-### File-system confinement
-
-Confinement limits what a target can do on your host, and the two platforms limit reads differently:
-
-- On both platforms a confined target writes only its workspace and the private directories the runtime hands it, cannot read or write the evaluation folder (the contract, the probes and which defect a mutation plants), cannot read or write your git directory and cannot reach the evaluation layer's private files.
-- macOS blocks reads: Seatbelt refuses file data outside the target's grants with `EPERM` before the read happens.
-  A macOS target keeps the host's network.
-- Linux detects reads afterwards: Bubblewrap gives the target a read-only view of `/`, so a file outside its grants that Bubblewrap does not hide can be read.
-  `strace` records each such read, and `run` and `score` refuse the trial that made it (exit 3, `mount outside allowlist`), after the read happened.
-  Keep files a target must not read off a Linux evaluation host, or run in a container that does not hold them.
-  The network is closed apart from a loopback and the hosts `egress` lists.
-
-:::danger[`"confinement": false` removes these limits]
-Setting `"confinement": false` in `evaluation.json` runs every target with your user's file system, network, home directory and credentials, with no audit.
-A target can read any file you can read and write outside its workspace; the run notices a change to your project or its git state afterwards and exits 12, and a write anywhere else goes unnoticed.
-No read outside the workspace is observed, so `score` cannot refuse a trial for one.
-`run.json` records `"confinement": "opt-out"` and `score` says so in its summary line.
-Opt out only for a target that cannot run confined (one that must commit, read the project's git directory or open a network route that is no HTTPS `CONNECT` tunnel), and state the reason in the change that sets the field.
-:::
-
-[tea-evaluate Confinement](/docs/reference/tea-evaluate-confinement.md) describes what a confined process can read, write and reach, the audit, egress and subscription logins in full.
 
 ## A typical sequence
 
@@ -527,6 +497,28 @@ Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditi
 A run that uses no model leaves the file out and records `modelSnapshot: "none"` and the digest of the empty byte string, since the published schema requires both.
 
 Each probe is written to `probes/` with these digests: `commitDigest` is the evaluated commit (`sha256:` and the SHA-256 of its identifier; a copy's tree digest), `artifactDigest` the `targetArtifact` bytes (a clean control's and a gameability probe's is its `implementationDigest`, a historical probe's the tracked tree at its pre-fix revision, or, against deployments, `sha256:` and the SHA-256 of its pre-fix release identifier), and `implementationDigest` the tracked tree of `launch.skillRoot`, or `launch.root`, at that commit, the SHA-256 of `git ls-tree -r -z <commit>:<directory>` with the evaluation folder's entries left out (for a copy, the tree digest of that directory without its provisioned directories).
+
+### File-system confinement
+
+`run` and `preflight` confine every target they start. Confinement limits what a target can do on your host, and the two platforms limit reads differently:
+
+- On both platforms a confined target writes only its workspace and the private directories the runtime hands it, cannot read or write the evaluation folder (the contract, the probes and which defect a mutation plants), cannot read or write your git directory and cannot reach the evaluation layer's private files.
+- macOS blocks reads: Seatbelt refuses file data outside the target's grants with `EPERM` before the read happens.
+  A macOS target keeps the host's network.
+- Linux detects reads afterwards: Bubblewrap gives the target a read-only view of `/`, so a file outside its grants that Bubblewrap does not hide can be read.
+  `strace` records each such read, and `run` and `score` refuse the trial that made it (exit 3, `mount outside allowlist`), after the read happened.
+  Keep files a target must not read off a Linux evaluation host, or run in a container that does not hold them.
+  The network is closed apart from a loopback and the hosts `egress` lists.
+
+:::danger[`"confinement": false` removes these limits]
+Setting `"confinement": false` in `evaluation.json` runs every target with your user's file system, network, home directory and credentials, with no audit.
+A target can read any file you can read and write outside its workspace; the run notices a change to your project or its git state afterwards and exits 12, and a write anywhere else goes unnoticed.
+No read outside the workspace is observed, so `score` cannot refuse a trial for one.
+`run.json` records `"confinement": "opt-out"` and `score` says so in its summary line.
+Opt out only for a target that cannot run confined (one that must commit, read the project's git directory or open a network route that is no HTTPS `CONNECT` tunnel), and state the reason in the change that sets the field.
+:::
+
+[tea-evaluate Confinement](/docs/reference/tea-evaluate-confinement.md) describes what a confined process can read, write and reach, the audit, egress and subscription logins in full.
 
 ### Record a before state
 
@@ -1100,6 +1092,16 @@ Two setups work.
 ```
 
 ## Exit codes
+
+:::caution[Exit 0 does not always mean the target passed]
+
+- `score` exits 0 for PASS, WAIVED and CONCERNS alike, and its summary names only the exit; each probe's evidence artifact under `scores/` says which, in `contractVerdict`, or in `productionVerdict` for the production-mode records a `records` evaluator imports.
+- `compare` exits 0 for every comparison outcome: `compared` (whatever the relation, a run weaker than the baseline included), `first-run` and `refused`. Read its lines for the outcome.
+- `compare --accept` exits 0 and records the run as the baseline even when `score` exited 2 (FAIL), and after an exit 3 (Invalid) whenever every probe still has its evidence artifact. Accepting records a reference point for later comparisons; it certifies nothing about quality, so review the scored evidence before you accept.
+- Exits 2 to 5 carry eval-quality's verdicts and faults, apart from `ci`'s 2 for a breached strength floor on `release`; `ci` adds 1 for a gate's policy violation, and 10, 11, 12, 13 and 64 are TEA's own validation, weakness, infrastructure, drift and usage exits. [Exit codes](#exit-codes) lists them all.
+- `ci` is where enforcement lives: the CI plan places each check on a tier, and one fixed table of exits and actions decides what blocks, what warns and what passes. [Exits and the evidence](#exits-and-the-evidence) gives that table's order, and [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md) wires it into a pipeline.
+
+:::
 
 Each command section above lists its causes and options.
 For `ci`, the final exit is the most severe blocking result in the order given by [Exits and the evidence](#exits-and-the-evidence).

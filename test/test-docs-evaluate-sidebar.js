@@ -73,6 +73,29 @@ function withoutComments(configText) {
     .join('\n');
 }
 
+/**
+ * The Evaluate how-to guides in reading order: the main flow from a first evaluation to CI, then the optional advanced paths.
+ */
+const EVALUATE_HOW_TO_ORDER = [
+  'how-to/evaluate/evaluate-a-skill-or-agent',
+  'how-to/evaluate/evaluate-an-mcp-tool-server',
+  'how-to/evaluate/evaluate-an-http-api',
+  'how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge',
+  'how-to/evaluate/read-the-gaps-and-fix-them',
+  'how-to/evaluate/compare-runs-and-accept-a-baseline',
+  'how-to/evaluate/put-an-evaluation-in-ci',
+  'how-to/evaluate/measure-repeatability-and-compare-a-configuration',
+  'how-to/evaluate/bring-an-existing-suite',
+];
+
+/** One problem when the sidebar lists the Evaluate how-to guides out of reading order or misses one of the ordered set. */
+function orderProblems(configText) {
+  const listed = explicitSlugs(configText).filter((slug) => slug.startsWith('how-to/evaluate/'));
+  return JSON.stringify(listed) === JSON.stringify(EVALUATE_HOW_TO_ORDER)
+    ? []
+    : [`the sidebar lists the Evaluate how-to guides as ${listed.join(', ')}; expected ${EVALUATE_HOW_TO_ORDER.join(', ')}`];
+}
+
 /** The explicit `slug:` entries, in the order the config lists them. */
 function explicitSlugs(configText) {
   return [...withoutComments(configText).matchAll(/\bslug:\s*(['"])([^'"]+)\1/g)].map((match) => match[2]);
@@ -212,6 +235,14 @@ function revertCaseProblems(configText, overviewText, pages) {
   if (!sidebarProblems(deadEntry, [], allSlugs).some((problem) => problem.includes('explanation/no-such-page'))) {
     failures.push('a sidebar entry that names no page passed the sidebar check');
   }
+  const ciLine = /^.*\bslug:\s*'how-to\/evaluate\/put-an-evaluation-in-ci'.*\n/m;
+  const ciEntry = configText.match(ciLine)?.[0];
+  const ciLast =
+    ciEntry === undefined
+      ? configText
+      : configText.replace(ciEntry, '').replace(/^(.*\bslug:\s*'how-to\/evaluate\/bring-an-existing-suite'.*\n)/m, `$1${ciEntry}`);
+  if (ciLast === configText || orderProblems(ciLast).length === 0)
+    failures.push('the order check passed with CI moved after the advanced paths');
   const unlinkedNewPage = [...owned, 'how-to/evaluate/a-page-nobody-listed'];
   if (!overviewProblems(overviewText, unlinkedNewPage).some((problem) => problem.endsWith(' how-to/evaluate/a-page-nobody-listed'))) {
     failures.push('a new owned Evaluate page the overview does not link passed the overview check');
@@ -245,14 +276,14 @@ function main() {
     failures.push(...revertCaseProblems(configText, overview.text, pages), ...overviewProblems(overview.text, owned));
   }
   const allSlugs = pages.map(({ slug }) => slug);
-  failures.push(...cliSidebarProblems(configText, allSlugs), ...sidebarProblems(configText, slugs, allSlugs));
+  failures.push(...cliSidebarProblems(configText, allSlugs), ...sidebarProblems(configText, slugs, allSlugs), ...orderProblems(configText));
   if (failures.length > 0) {
     console.error(`docs-evaluate-sidebar: ${failures.length} problem(s)`);
     for (const failure of failures) console.error(`  - ${failure}`);
     process.exit(1);
   }
   console.log(
-    `docs-evaluate-sidebar: ${slugs.length} Evaluate pages sit in the sidebar, the overview links ${owned.length} of them, and each rule fails on its revert case`,
+    `docs-evaluate-sidebar: ${slugs.length} Evaluate pages sit in the sidebar with the how-to guides in reading order, the overview links ${owned.length} of them, and each rule fails on its revert case`,
   );
 }
 

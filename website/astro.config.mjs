@@ -159,11 +159,12 @@ export default defineConfig({
                 { label: 'Choose an Evaluator and Calibrate a Judge', slug: 'how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge' },
                 { label: 'Read the Gaps and Fix Them', slug: 'how-to/evaluate/read-the-gaps-and-fix-them' },
                 { label: 'Compare Runs and Accept a Baseline', slug: 'how-to/evaluate/compare-runs-and-accept-a-baseline' },
+                { label: 'Put an Evaluation in CI', slug: 'how-to/evaluate/put-an-evaluation-in-ci' },
+                // Optional advanced paths, after the main flow.
                 {
                   label: 'Measure Repeatability and Compare a Configuration',
                   slug: 'how-to/evaluate/measure-repeatability-and-compare-a-configuration',
                 },
-                { label: 'Put an Evaluation in CI', slug: 'how-to/evaluate/put-an-evaluation-in-ci' },
                 { label: 'Bring an Existing Suite', slug: 'how-to/evaluate/bring-an-existing-suite' },
               ],
             },

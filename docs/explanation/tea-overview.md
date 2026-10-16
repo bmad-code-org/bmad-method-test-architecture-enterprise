@@ -114,9 +114,11 @@ graph TB
         TestDesign --> CreateStory
         CreateStory --> ATDD
         ATDD --> DevImpl
+        CreateStory -.->|skip red| DevImpl
         DevImpl --> Automate
         Automate --> TestReview1
         TestReview1 --> Trace1
+        Automate -.->|skip review| Trace1
         Trace1 -.->|next story| CreateStory
         TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design/test-design-epic-N.md per epic"]
         TestDesign -.-> TestDesignNote
@@ -130,6 +132,7 @@ graph TB
 
         NFR --> TestReview2
         TestReview2 --> TraceGate
+        NFR -.->|skip review| TraceGate
         TraceGate --> GateDecision
         GateDecision -->|PASS| Pass["<b>PASS ✅</b>"]
         GateDecision -->|CONCERNS| Concerns["<b>CONCERNS ⚠️</b>"]
@@ -149,12 +152,15 @@ graph TB
     style Fail fill:#f44336,stroke:#b71c1c,stroke-width:3px,color:#000
 ```
 
+Solid arrows show the recommended order. Few are hard prerequisites: system-level `test-design` needs the PRD and architecture, and `automate` red mode needs a story with acceptance criteria and a configured framework. `trace` reads an NFR audit when one exists and never needs `test-review`.
+
 TEA's Phase 2 work is the Brownfield baseline: run `trace` Phase 1 during planning to record existing coverage.
 Greenfield projects start TEA in Phase 3.
 The Phase 3 skills run once per project, the Phase 4 skills run per epic and per story, and the gate skills run per epic or per release.
 `teach-me-testing` sits outside the lifecycle entirely and runs once per learner.
+Evaluate sits outside it too: `bmad-tea-evaluate` needs only the target and the requirements you confirm, so it runs at any point.
 
-Phase 3 order matters: run `test-design` first so NFR evidence needs can influence infrastructure, then `framework` once architecture and test design have established the stack. Request both setup phases to agree the stack, framework, and test commands, then it can generate the scaffold and pipeline in parallel before validating them together. A CI-only request with no framework offers the framework phase first.
+In Phase 3, run `test-design` before `framework` so you can carry its NFR evidence needs into the framework request; `framework` itself needs only the project's stack. Request both setup phases to agree the stack, framework, and test commands, then it can generate the scaffold and pipeline in parallel before validating them together. A CI-only request with no framework offers the framework phase first.
 
 ### `test-design` is dual-mode
 
@@ -186,7 +192,7 @@ Codex users run `$bmad-tea-test-design` with the same scope-setting prompt.
 
 ## Why TEA Is Different from Other BMM Agents
 
-TEA spans Phase 3, Phase 4, and the release gate.
+TEA spans the brownfield baseline in Phase 2, Phases 3 and 4, and the release gate.
 Its skills share testing, fixture, and CI patterns through the [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
 
 ## Optional Integrations
@@ -219,4 +225,4 @@ See [Configuration](/docs/reference/configuration.md) for every setting.
 - [How Evaluate Works](/docs/explanation/how-evaluate-works.md): the stack, the rules, and the reasons behind an evaluation
 - [Why Evaluate Confines the Target](/docs/explanation/why-evaluate-confines-the-target.md): why the target of an evaluation runs under file-system confinement
 - [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md): every `tea-evaluate` command, option, and exit code; companions: [tea-evaluate Manifest](/docs/reference/tea-evaluate-manifest.md), [tea-evaluate Confinement](/docs/reference/tea-evaluate-confinement.md), [tea-evaluate Evaluators](/docs/reference/tea-evaluate-evaluators.md) and [tea-evaluate Evidence](/docs/reference/tea-evaluate-evidence.md)
-- Evaluate how-to guides: [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md), [Evaluate an MCP Tool Server](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md), [Evaluate an HTTP API](/docs/how-to/evaluate/evaluate-an-http-api.md), [Choose an Evaluator and Calibrate a Judge](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md), [Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md), [Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md), [Measure Repeatability and Compare a Configuration](/docs/how-to/evaluate/measure-repeatability-and-compare-a-configuration.md), [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md), [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md)
+- Evaluate how-to guides: [Evaluate a Skill or Agent](/docs/how-to/evaluate/evaluate-a-skill-or-agent.md), [Evaluate an MCP Tool Server](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md), [Evaluate an HTTP API](/docs/how-to/evaluate/evaluate-an-http-api.md), [Choose an Evaluator and Calibrate a Judge](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md), [Read the Gaps and Fix Them](/docs/how-to/evaluate/read-the-gaps-and-fix-them.md), [Compare Runs and Accept a Baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md), [Put an Evaluation in CI](/docs/how-to/evaluate/put-an-evaluation-in-ci.md); optional advanced paths: [Measure Repeatability and Compare a Configuration](/docs/how-to/evaluate/measure-repeatability-and-compare-a-configuration.md), [Bring an Existing Suite](/docs/how-to/evaluate/bring-an-existing-suite.md)
