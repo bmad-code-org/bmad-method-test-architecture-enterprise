@@ -104,7 +104,7 @@ graph TB
         SprintPlan["<b>SM: sprint-planning</b>"]
         TestDesign["<b>TEA: test-design (per epic)</b>"]
         ATDD["<b>TEA: automate red (optional, before build)</b>"]
-        Build["<b>DEV: bmad-build (plans and implements story)</b>"]
+        Build["<b>DEV: bmad-build (plans and implements story)</b><br/>before BMAD 6.12:<br/>SM create-story, then<br/>DEV dev-story"]
         Automate["<b>TEA: automate expand</b>"]
         TestReview1["<b>TEA: test-review (optional)</b>"]
         Trace1["<b>TEA: trace (refresh coverage)</b>"]
