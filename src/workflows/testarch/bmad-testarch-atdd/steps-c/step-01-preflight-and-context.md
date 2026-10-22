@@ -88,7 +88,7 @@ If any are missing: **HALT** and notify the user.
   - truncate to a safe max length (64 chars)
 - Use that slug as `story_key` and for `{outputFile}` basename so all checklist and handoff paths stay consistent
 - If `story_id` is still unavailable after metadata/H1/filename parsing, set it to the final `story_key` so `story_id` is never empty
-- Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `dev-story`
+- Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `bmad-build` (`dev-story` before BMAD 6.12)
 
 ---
 
