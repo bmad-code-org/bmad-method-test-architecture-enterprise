@@ -210,7 +210,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 - Red-phase test scaffolds (`tests/api/`, `tests/e2e/`) marked with `test.skip()`
 - Implementation checklist keyed to `story_key`
-- Story metadata / handoff paths for downstream `dev-story` consumption
+- Story metadata / handoff paths for downstream `bmad-build` consumption (`dev-story` before BMAD 6.12)
 
 **Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only; rare)
 

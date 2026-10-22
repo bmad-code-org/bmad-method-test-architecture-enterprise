@@ -78,7 +78,7 @@ Report:
 - Checklist output path
 - Story key / story file handoff path
 - Key risks or assumptions
-- Next recommended workflow (usually `dev-story`; `automate` comes after implementation)
+- Next recommended workflow (usually BMM `bmad-build`, or `dev-story` before BMAD 6.12; `automate` comes after implementation)
 
 ---
 
