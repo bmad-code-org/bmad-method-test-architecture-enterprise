@@ -262,7 +262,8 @@
 - [ ] Thresholds, units, comparison operators, timeouts, retry counts, quantifiers, and negations are exact
 - [ ] Literal commands, paths, code, regular expressions, payloads, Unicode test data, and expected strings are exact
 - [ ] Priority headings open with `P0`, `P1`, `P2`, or `P3`, and every risk-band heading states its score range
-- [ ] No scored risk table or coverage table sits under a heading ending in Example, Illustration, or Reference, or after a paragraph opening `Example:`
+- [ ] No scored risk table or coverage table sits under a heading that opens or ends with Example or Illustration, a heading that ends with Reference, or a paragraph opening `Example:`, `Worked example:`, or `Illustration:`
+- [ ] No scored risk table or coverage table sits inside a blockquote or callout
 - [ ] Validation ran on the saved files after the last edit, and every check affected by a later fix was rerun
 
 ## System-Level Mode: Two-Document Validation

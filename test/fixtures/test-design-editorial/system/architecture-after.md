@@ -10,7 +10,7 @@ The Ledger Export Service writes signed ledger exports for finance teams. Source
 
 ### 🚨 BLOCKERS - Team Must Decide (Can't Proceed Without)
 
-1. **Export signing key access** - Platform provides a non-production signing key in the test environment. Without it, no end-to-end export test can run. (recommended owner: Platform)
+1. **Export signing key access** - Platform must provide a non-production signing key in the test environment. Without it, no end-to-end export test can run. (recommended owner: Platform)
 
 ## For Architects and Devs - Open Topics 👷
 

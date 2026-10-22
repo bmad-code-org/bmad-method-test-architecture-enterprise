@@ -16,7 +16,7 @@ Each `after` file is the same plan edited under the contract.
 | epic | Unknown threshold | "the latency target for p95 is UNKNOWN at this time" | "The p95 latency target ... is UNKNOWN; the PRD states no number." |
 | epic | Planned test | "this test is planned, not runnable" | "Planned. The threshold is UNKNOWN, so this test cannot run until the PM sets one" |
 | architecture | Unconfirmed shared key | "as far as anyone knows, is shared across all tenants" | "appear to share one signing key ... The shared key is unconfirmed." |
-| architecture | Blocker | "It would be really great if, at some point, the platform team could perhaps think about" | "Platform provides a non-production signing key in the test environment." |
+| architecture | Blocker | "It would be really great if, at some point, the platform team could perhaps think about" | "Platform must provide a non-production signing key in the test environment." |
 | qa | Overclaimed check | "We have verified that the worker can be killed" | "Planned: kill the worker ... then assert that `ls /exports/*.csv` returns nothing." |
 | handoff | Risk references | "really need to be front and center" | "are the P0 risks. Every epic that touches exports carries them." |
 

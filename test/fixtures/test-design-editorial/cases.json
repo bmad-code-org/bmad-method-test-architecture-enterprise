@@ -20,10 +20,25 @@
         "P0 pass rate = 100%",
         "P1 pass rate ≥ 95%",
         "`refund.amount <= payment.captured_amount`",
-        "Partial refunds are out of scope for Epic 4"
+        "Partial refunds are out of scope for Epic 4",
+        "(Stories 4.1 to 4.3)",
+        "\"Not in Scope\"",
+        "English only"
       ],
-      "afterContains": ["exactly one refund", "expect no refund row", "Planned. The threshold is UNKNOWN", "has not confirmed"],
-      "removed": ["absolutely", "industry best practice says", "world-class", "It goes without saying", "Basically"]
+      "afterContains": [
+        "exactly one refund",
+        "expect no refund row",
+        "Planned. The threshold is UNKNOWN",
+        "has not confirmed",
+        "does not check ownership"
+      ],
+      "removed": [
+        "absolutely",
+        "industry best practice says",
+        "world-class",
+        "It goes without saying",
+        "Basically"
+      ]
     },
     {
       "id": "architecture",
@@ -39,8 +54,17 @@
         "UNKNOWN",
         "(recommended owner: Platform)"
       ],
-      "afterContains": ["The shared key is unconfirmed", "no source states it", "Without it, no end-to-end export test can run"],
-      "removed": ["game-changing", "seamlessly", "It would be really great", "honestly"]
+      "afterContains": [
+        "The shared key is unconfirmed",
+        "no source states it",
+        "Without it, no end-to-end export test can run"
+      ],
+      "removed": [
+        "game-changing",
+        "seamlessly",
+        "It would be really great",
+        "honestly"
+      ]
     },
     {
       "id": "qa",
@@ -52,19 +76,41 @@
         "`401`",
         "`{\"error\":\"signature_tenant_mismatch\"}`",
         "< 15 minutes for 1,000,000 rows",
-        "Manual check for now."
+        "Manual check for now.",
+        "is rejected for tenant B"
       ],
-      "afterContains": ["Planned: kill the worker"],
-      "removed": ["amazing", "We have verified", "Basically"]
+      "afterContains": [
+        "Planned: kill the worker"
+      ],
+      "removed": [
+        "amazing",
+        "We have verified",
+        "Basically"
+      ]
     },
     {
       "id": "handoff",
       "before": "system/handoff-before.md",
       "after": "system/handoff-after.md",
-      "protected": ["R-001 (score 9)", "R-002 (score 6)", "Epic 2: Atomic export writes", "Epic 3: Per-tenant signing"],
-      "afterContains": ["Every epic that touches exports carries them"],
-      "removed": ["super helpful", "really need to be front and center"]
+      "protected": [
+        "R-001 (score 9)",
+        "R-002 (score 6)",
+        "Epic 2: Atomic export writes",
+        "Epic 3: Per-tenant signing",
+        "are the P0 risks"
+      ],
+      "afterContains": [
+        "Every epic that touches exports carries them"
+      ],
+      "removed": [
+        "super helpful",
+        "really need to be front and center"
+      ]
     }
   ],
-  "system": { "architecture": "architecture", "qa": "qa", "handoff": "handoff" }
+  "system": {
+    "architecture": "architecture",
+    "qa": "qa",
+    "handoff": "handoff"
+  }
 }

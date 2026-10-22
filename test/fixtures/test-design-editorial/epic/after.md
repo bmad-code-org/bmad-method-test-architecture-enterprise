@@ -25,7 +25,7 @@ Sources: `docs/epics/epic-4-refunds.md` (Stories 4.1 to 4.3) and `docs/architect
 
 | Risk ID | Category | Description                                                                                                 | Probability | Impact | Score | Action  |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------- | ----------- | ------ | ----- | ------- |
-| R-004   | BUS      | The German refund reason label `Rückerstattung abgelehnt` is missing from the translation file.              | 1           | 2      | 2     | Monitor |
+| R-004   | BUS      | Refund reason labels render in English only; the German label `Rückerstattung abgelehnt` is missing from the translation file.              | 1           | 2      | 2     | Monitor |
 
 ## Test Coverage Plan
 

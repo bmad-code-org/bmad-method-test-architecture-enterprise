@@ -170,7 +170,8 @@ Downstream scoring reads the documents by structure, so structure is protected t
 
 - Priority section headings open with `P0`, `P1`, `P2`, or `P3`. Keep that opening when rewording a heading.
 - Risk-band headings state their score range, for example `(Score ≥6)`. Keep the range.
-- A heading that ends in Example, Illustration, or Reference, or a paragraph that opens `Example:`, marks the tables after it as reference material, and scoring skips them. Never place a scored risk table or coverage table under such a label, and never add such a label above one.
+- A heading that opens or ends with Example or Illustration, a heading that ends with Reference, and a paragraph that opens `Example:`, `Worked example:`, or `Illustration:` mark the tables after them as reference material, and scoring skips them. Never place a scored risk table or coverage table under such a label, and never add such a label above one.
+- Scoring also skips every table inside a blockquote. Keep scored risk and coverage tables out of blockquotes and callouts.
 - Keep the canonical risk and coverage column names from the templates.
 
 This contract sets no banned-word or punctuation list. Terms such as test harness and test vector can be exact technical language. A reusable safety requirement stays even when it also applies to other projects. Keep uncertainty wherever the sources are uncertain. Keep every required document; the system-level pair stays two documents.

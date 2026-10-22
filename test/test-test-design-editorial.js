@@ -8,14 +8,16 @@
  *   wording alone.
  * - The fixtures: each hand-written before and after pair in
  *   `test/fixtures/test-design-editorial/` parses to the same risks, bands,
- *   coverage priorities, levels and risk links, keeps every protected literal,
- *   adds the wording its edit claims and drops the filler it names. The
- *   system-level after files agree on risk IDs and scores across the
- *   architecture document, the QA document and the handoff.
+ *   coverage priorities, levels and risk links, keeps every non-prose table
+ *   cell (IDs, owners, counts, mitigations, timelines), keeps every protected
+ *   literal, adds the wording its edit claims and drops the filler it names.
+ *   The system-level after files agree on risk IDs, categories and scores
+ *   across the architecture document, the QA document and the handoff.
  * - The negative controls: broken edits of the epic pair (a renamed priority
  *   heading, an `Example:` label over the register, a dropped score band, a
  *   changed score, a weakened operator, an invented threshold, a planned test
- *   reported as passed, a dropped negative case) each produce a problem.
+ *   reported as passed, a changed owner, a changed test count, an inverted
+ *   negation, a dropped negative case) each produce the problem that names it.
  *
  * The pairs are hand-written, so they validate the contract's checks and say
  * nothing about how well a model follows it.
@@ -108,7 +110,10 @@ assert.match(checklist, /Final validation ran after the last edit to every outpu
 assert.match(validateStep, /Report Document Quality findings without rewriting any validated output/);
 assert.match(editStep, /Leave text the user did not ask to change exactly as it is; the Create-mode editorial polish does not run here/);
 
-/** What the scorer reads from one document, plus every risk ID the text mentions. */
+/** Columns whose wording the contract may edit; every other cell is a decision and stays exact. */
+const PROSE_COLUMNS = new Set(['Description', 'Notes', 'QA Test Coverage']);
+
+/** What the scorer reads from one document, every non-prose table cell, and every risk ID the text mentions. */
 function structure(text) {
   const tables = parseTables(text);
   const risks = readRisks(tables);
@@ -124,6 +129,10 @@ function structure(text) {
     unscoredTables: risks.unscoredTables.length,
     coverage: readCoverage(tables).map((row) => ({ level: row.level, priority: row.priority, riskIds: row.riskIds })),
     referenceTables: tables.filter((table) => table.reference).length,
+    cells: tables.map((table) => ({
+      header: table.header,
+      rows: table.rows.map((row) => row.filter((_, column) => !PROSE_COLUMNS.has(table.header[column]))),
+    })),
     mentionedRiskIds: [...new Set(text.match(/R-\d{3}/g) ?? [])].toSorted(),
   };
 }
@@ -164,6 +173,7 @@ for (const { spec, before, after } of cases.values()) {
 const system = Object.fromEntries(Object.entries(manifest.system).map(([role, id]) => [role, cases.get(id).after]));
 const architectureRisks = structure(system.architecture).risks;
 const scores = new Map(architectureRisks.map((risk) => [risk.id, risk.score]));
+const categories = new Map(architectureRisks.map((risk) => [risk.id, risk.category]));
 const qa = structure(system.qa);
 assert.deepEqual(
   qa.risks.map((risk) => [risk.id, risk.score]),
@@ -173,7 +183,17 @@ assert.deepEqual(
 for (const row of qa.coverage) for (const id of row.riskIds) assert.ok(scores.has(id), `QA coverage links unknown risk ${id}`);
 const mapping = parseTables(system.handoff).find((table) => table.headings.at(-1) === 'Risk-to-Story Mapping');
 assert.ok(mapping, 'the handoff has no Risk-to-Story Mapping table');
-for (const [id, , product] of mapping.rows) assert.equal(Number(product), scores.get(id), `the handoff scores ${id} differently`);
+const column = (name) => {
+  const index = mapping.header.indexOf(name);
+  assert.notEqual(index, -1, `the handoff mapping has no ${name} column`);
+  return index;
+};
+const [idColumn, categoryColumn, productColumn] = ['Risk ID', 'Category', 'P×I'].map(column);
+for (const row of mapping.rows) {
+  const id = row[idColumn];
+  assert.equal(Number(row[productColumn]), scores.get(id), `the handoff scores ${id} differently`);
+  assert.equal(row[categoryColumn], categories.get(id), `the handoff categorizes ${id} differently`);
+}
 for (const id of structure(system.handoff).mentionedRiskIds) assert.ok(scores.has(id), `the handoff names unknown risk ${id}`);
 
 const epic = cases.get('epic');
@@ -192,6 +212,9 @@ const breaks = {
     (text) => text.replace('Planned. The threshold is UNKNOWN', 'Passed. The threshold is UNKNOWN'),
     'lacks Planned. The threshold is UNKNOWN',
   ],
+  'changed owner': [(text) => text.replace(/(\| R-001 .*?\| )Payments( \|)/, '$1Platform$2'), 'parsed cells changed'],
+  'changed test count': [(text) => text.replace(/(\| P0-001 .*?\| +)3( \|)/, '$11$2'), 'parsed cells changed'],
+  'inverted negation': [(text) => text.replace('does not check ownership', 'checks ownership'), 'lacks does not check ownership'],
   'dropped negative case': [(text) => text.replace(' Expect `403`, and expect no refund row.', ''), 'lost protected `403`'],
 };
 for (const [name, [mutate, expected]] of Object.entries(breaks)) {

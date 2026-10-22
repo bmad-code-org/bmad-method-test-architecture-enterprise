@@ -115,7 +115,7 @@ test('example test @p0', async ({ apiRequest }) => {
 | ---------- | -------- | ------------------- | ----------- | ---------------------------- |
 | **{R-ID}** | {CAT}    | {Brief description} | **{Score}** | {How QA validates this risk} |
 
-### Medium/Low-Priority Risks
+### Medium/Low-Priority Risks (Score 1-5)
 
 | Risk ID | Category | Description         | Score   | QA Test Coverage             |
 | ------- | -------- | ------------------- | ------- | ---------------------------- |
