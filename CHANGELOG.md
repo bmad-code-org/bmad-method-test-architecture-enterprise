@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.3] - 2026-10-22
+
 ### Fixed
 
 - ATDD now hands off to the BMAD 6.12 story flow. Its `module-help.csv` row follows `bmad-sprint-planning` and precedes `bmad-build`, so `bmad-help` no longer places ATDD between `bmad-create-story` and `bmad-dev-story`, which BMAD 6.12 ships only as deprecated shims and omits under `--no-shims`. The ATDD checklist, its example, the preflight and completion steps, the README workflow order, and the command reference name `bmad-build` and keep the `create-story` and `dev-story` path for earlier BMAD releases.
