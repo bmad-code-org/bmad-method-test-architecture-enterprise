@@ -25,7 +25,7 @@ Apply the requested edits to the selected output and confirm changes.
 - 🎯 Only apply edits explicitly requested by the user
 - 🚫 Leave text the user did not ask to change exactly as it is; the Create-mode editorial polish does not run here
 - ✅ Write new or changed text under the Writing Rules of the Editorial Contract in `{skill-root}/steps-c/step-05-generate-output.md`
-- ✅ Change a protected value (an ID, score, priority, threshold, or heading) when the user asks for that change; keep Score = Probability × Impact, the canonical columns, and the parser-sensitive heading rules intact
+- ✅ Change a protected value (an ID, score, priority, threshold, or heading) when the user asks for that change, and update every value and reference that depends on it: Score = Probability × Impact, the risk's score band, its coverage links, and its rows in the other system-level document and the handoff. Keep the canonical columns and the parser-sensitive heading rules intact, and leave protected content outside the requested change exactly as it is
 
 ## EXECUTION PROTOCOLS:
 
