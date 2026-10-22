@@ -55,7 +55,7 @@ inputDocuments: []
 - **Checklist Path:** `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
 - **Generated Test Files:** `{e2e_test_file_path}`, `{api_test_file_path}`, `{component_test_file_path}`
 
-If this story came from BMM `create-story`, mirror these artifact paths into the story's `Dev Notes` so `dev-story` can discover and activate the red-phase scaffolds.
+If this story is implemented with BMM `bmad-build`, list these artifact paths in its spec (Code Map and the tasks that turn them green) so the implementation agent discovers and activates the red-phase scaffolds. On BMAD releases before 6.12, mirror them into the `create-story` story's `Dev Notes` for `dev-story` instead.
 
 ---
 
