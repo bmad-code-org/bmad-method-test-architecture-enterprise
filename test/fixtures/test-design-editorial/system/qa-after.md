@@ -15,7 +15,7 @@ Risks: 2 high (R-001, R-002), 1 medium (R-003), 1 low (R-004).
 | R-001   | DATA     | Partial file after a failed batch | 9     | Kill the worker mid-batch, then check that no partial file appears            |
 | R-002   | SEC      | Shared signing key across tenants | 6     | Check that a file signed for tenant A is rejected for tenant B                |
 
-### Medium/Low-Priority Risks
+### Medium/Low-Priority Risks (Score 1-5)
 
 | Risk ID | Category | Description               | Score | QA Test Coverage                    |
 | ------- | -------- | ------------------------- | ----- | ----------------------------------- |

@@ -169,32 +169,49 @@ for (const { spec, before, after } of cases.values()) {
   assert.ok(structure(after).risks.length > 0 || spec.id === 'handoff', `${spec.id} parses to no scored risk`);
 }
 
-// The system-level outputs agree with each other after the edit.
-const system = Object.fromEntries(Object.entries(manifest.system).map(([role, id]) => [role, cases.get(id).after]));
-const architectureRisks = structure(system.architecture).risks;
-const scores = new Map(architectureRisks.map((risk) => [risk.id, risk.score]));
-const categories = new Map(architectureRisks.map((risk) => [risk.id, risk.category]));
-const qa = structure(system.qa);
-assert.deepEqual(
-  qa.risks.map((risk) => [risk.id, risk.score]),
-  architectureRisks.map((risk) => [risk.id, risk.score]),
-  'the QA document and the architecture document disagree on risk IDs or scores',
-);
-for (const row of qa.coverage) for (const id of row.riskIds) assert.ok(scores.has(id), `QA coverage links unknown risk ${id}`);
-const mapping = parseTables(system.handoff).find((table) => table.headings.at(-1) === 'Risk-to-Story Mapping');
-assert.ok(mapping, 'the handoff has no Risk-to-Story Mapping table');
-const column = (name) => {
-  const index = mapping.header.indexOf(name);
-  assert.notEqual(index, -1, `the handoff mapping has no ${name} column`);
-  return index;
-};
-const [idColumn, categoryColumn, productColumn] = ['Risk ID', 'Category', 'P×I'].map(column);
-for (const row of mapping.rows) {
-  const id = row[idColumn];
-  assert.equal(Number(row[productColumn]), scores.get(id), `the handoff scores ${id} differently`);
-  assert.equal(row[categoryColumn], categories.get(id), `the handoff categorizes ${id} differently`);
+/** Every way the architecture document, the QA document and the handoff disagree on a risk. */
+function systemProblems({ architecture, qa, handoff }) {
+  const found = [];
+  const architectureRisks = structure(architecture).risks;
+  const risks = new Map(architectureRisks.map((risk) => [risk.id, risk]));
+  const qaDesign = structure(qa);
+  const key = (risk) => `${risk.id} ${risk.category} ${risk.score}`;
+  if (JSON.stringify(qaDesign.risks.map(key)) !== JSON.stringify(architectureRisks.map(key))) {
+    found.push('the QA document and the architecture document disagree on risk IDs, categories or scores');
+  }
+  for (const row of qaDesign.coverage) for (const id of row.riskIds) if (!risks.has(id)) found.push(`QA coverage links unknown risk ${id}`);
+  const mapping = parseTables(handoff).find((table) => table.headings.at(-1) === 'Risk-to-Story Mapping');
+  if (!mapping) return [...found, 'the handoff has no Risk-to-Story Mapping table'];
+  const [idColumn, categoryColumn, productColumn] = ['Risk ID', 'Category', 'P×I'].map((name) => mapping.header.indexOf(name));
+  if ([idColumn, categoryColumn, productColumn].includes(-1))
+    return [...found, 'the handoff mapping lacks a Risk ID, Category or P×I column'];
+  for (const row of mapping.rows) {
+    const risk = risks.get(row[idColumn]);
+    if (Number(row[productColumn]) !== risk?.score) found.push(`the handoff scores ${row[idColumn]} differently`);
+    if (row[categoryColumn] !== risk?.category) found.push(`the handoff categorizes ${row[idColumn]} differently`);
+  }
+  for (const id of structure(handoff).mentionedRiskIds) if (!risks.has(id)) found.push(`the handoff names unknown risk ${id}`);
+  return found;
 }
-for (const id of structure(system.handoff).mentionedRiskIds) assert.ok(scores.has(id), `the handoff names unknown risk ${id}`);
+
+// The system-level outputs agree with each other after the edit, and a QA category that
+// drifted in both of its files is still caught against the architecture register.
+const system = Object.fromEntries(Object.entries(manifest.system).map(([role, id]) => [role, cases.get(id).after]));
+assert.deepEqual(systemProblems(system), [], 'the system-level outputs disagree');
+const driftedQa = system.qa.replace(/(\| R-003 +\| )PERF( )/, '$1OPS$2');
+assert.notEqual(driftedQa, system.qa, 'the QA category mutation did not apply');
+assert.ok(
+  systemProblems({ ...system, qa: driftedQa }).some((problem) => problem.includes('categories')),
+  'a QA category that disagrees with the architecture register was not caught',
+);
+
+// Every scored risk in a successful fixture sits under a heading whose range holds its score.
+for (const { spec, after } of cases.values()) {
+  for (const risk of structure(after).risks) {
+    assert.ok(risk.band, `${spec.id}: ${risk.id} sits under no score-band heading`);
+    assert.ok(risk.score >= risk.band.min && risk.score <= risk.band.max, `${spec.id}: ${risk.id} scores outside its band`);
+  }
+}
 
 const epic = cases.get('epic');
 // Broken edits of the epic pair are caught, each by the check that owns it.
