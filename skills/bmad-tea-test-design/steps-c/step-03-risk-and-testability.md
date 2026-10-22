@@ -72,7 +72,7 @@ Using `risk-governance.md` and `probability-impact.md` (if loaded):
 - Preserve the risk table columns `Risk ID`, `Category`, `Description`, `Probability`, `Impact`, and `Score`. Add a separate source-evidence column when useful. State the failure consequence in `Description` and cite the supporting input.
 - Open each `Description` with the source statement's own key words for the gap, such as the verbs and nouns the epic uses for the missing control, the unsafe behavior, or the unmet target, then state the consequence. A reader searching the epic for those words finds the row.
 - Give every risk table the header its band has in the template. The delimiter row and every body row carry exactly as many cells as that header. Put owner and timeline text inside the `Mitigation` or `Action` cell when the band's header has no column for them.
-- Assign unique canonical IDs `R-001`, `R-002`, and so on. Preserve those IDs in coverage, mitigations, summaries, and handoffs. Keep epic or story identity in the document run key.
+- Assign unique canonical IDs `R-001`, `R-002`, and so on, numbered in the order the risks' gap statements first appear in the supplied sources, read from top to bottom. A merged risk takes the position of its earliest statement. Within each band table, list rows in ID order. Preserve those IDs in coverage, mitigations, summaries, and handoffs. Keep epic or story identity in the document run key.
 - Preserve explicit score ranges in risk-band headings: high score 6 or greater, medium score 3 to 4, and low score 1 to 2. For a band with no identified risk, state that absence outside the table and leave its table body empty.
 - Classify by category: TECH / SEC / PERF / DATA / BUS / OPS
 - Score Probability (1–3) and Impact (1–3)
