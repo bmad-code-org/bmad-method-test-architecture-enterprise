@@ -57,13 +57,15 @@ Phase 3, solutioning, once per project
   TD  test-design (system-level)  →  TF  framework  →  CI  ci
 
 Phase 4, implementation, per story
-  create-story  →  AT  atdd  →  dev implements  →  TA  automate
+  sprint-planning  →  AT  atdd  →  bmad-build  →  TA  automate
 
 Epic or release gate
   TA  automate  →  RV  test-review
   TA  automate  →  NR  nfr
   RV  test-review  →  TR  trace (Phase 2 gate decision)
 ```
+
+Phase 4 follows the BMAD 6.12 story flow, where `bmad-build` plans and implements each story. On earlier BMAD releases, `create-story` comes before `atdd` and `dev-story` implements.
 
 Phase 3 order matters and is deliberate: run `test-design` first so NFR evidence needs can shape the infrastructure, then `framework` once the architecture and the test design have settled the stack, then `ci` once the framework exists so the pipeline wires to real commands.
 
