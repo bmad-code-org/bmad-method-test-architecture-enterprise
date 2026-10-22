@@ -31,7 +31,7 @@
       "name": "bmad-method-test-architecture-enterprise",
       "source": "./",
       "description": "Master Test Architect module for quality strategy, test generation in red and expand modes with automatic run-and-heal, combined framework and CI setup, CI/CD quality gates, and structured testing education. Existing CI and ATDD customizations can be migrated to the new skill names. Part of the BMad Method ecosystem.",
-      "version": "3.3.0",
+      "version": "3.4.0",
       "author": {
         "name": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison"
       },
