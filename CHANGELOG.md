@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Test Design varies less between runs of the same epic. In two-run live evaluations of the seeded and clean epic fixtures on the Claude runner, one pair of runs numbered the same risks differently, and another gave one risk two different test levels and priorities; with the rules below, the evaluated runs produced identical scored output. Risks are now numbered in the order their gap statements appear in the sources. A mechanism that fits two boundary descriptions takes the level of the component that lacks the control. P0 requires both a critical consequence and no safe workaround, so a missing workaround alone keeps a risk at P1 or lower.
+- Test Design varies less between runs of the same epic. In two-run live evaluations of the seeded and clean epic fixtures on the Claude runner, one pair of runs numbered the same risks differently, and another gave one risk two different test levels and priorities; with the rules below, the evaluated runs produced identical scored output. Risks are now numbered in the order their gap statements appear in the sources. A mechanism that fits two boundary descriptions takes the level of the component that lacks the control, as the sources describe it today; a mitigation the sources do not name does not set the level, an absent control takes the level of the behavior it would govern, and a missing release, rollout or disable control is E2E. P0 requires both a critical consequence and no safe workaround, so a missing workaround alone keeps a risk at P1 or lower, and a risk whose harm is prolonging or widening another risk's harm takes P1 or lower.
 
 ## [3.3.0] - 2026-10-20
 
