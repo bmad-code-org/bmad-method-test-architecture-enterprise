@@ -132,12 +132,12 @@ Profile editing at 2 × 3 = 6 sits between: E2E for the happy path, API tests fo
 
 Risk scores, usage frequency, revenue exposure, and regulatory obligations inform priority.
 
-| Priority | Typical score | Other factors                                                            | Coverage target  | Starting test levels | Example                            |
-| -------- | ------------- | ------------------------------------------------------------------------ | ---------------- | -------------------- | ---------------------------------- |
-| **P0**   | 6-9           | Revenue impact, security-critical, regulatory compliance, frequent usage | 100%             | E2E + API            | Login, checkout, payment           |
-| **P1**   | 4-6           | Core user journeys, complex logic, integration points                    | 90%              | API + selective E2E  | Profile editing, search, filters   |
-| **P2**   | 2-4           | Secondary features, admin functionality, reporting                       | 50%              | API happy path only  | Export features, advanced settings |
-| **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                      | 20% (smoke test) | E2E smoke test only  | Theme customization, experiments   |
+| Priority | Typical score | Other factors                                                                                | Coverage target  | Starting test levels | Example                            |
+| -------- | ------------- | -------------------------------------------------------------------------------------------- | ---------------- | -------------------- | ---------------------------------- |
+| **P0**   | 6-9           | Critical revenue, security, data-integrity or compliance consequence with no safe workaround | 100%             | E2E + API            | Login, checkout, payment           |
+| **P1**   | 4-6           | Core user journeys, complex logic, integration points                                        | 90%              | API + selective E2E  | Profile editing, search, filters   |
+| **P2**   | 2-4           | Secondary features, admin functionality, reporting                                           | 50%              | API happy path only  | Export features, advanced settings |
+| **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                                          | 20% (smoke test) | E2E smoke test only  | Theme customization, experiments   |
 
 The test levels are a starting point; `test-design` picks the cheapest level that can carry each risk.
 See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality--standards) for the complete criteria.

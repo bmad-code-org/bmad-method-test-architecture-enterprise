@@ -56,7 +56,7 @@
 - [ ] Test levels selected (E2E/API/Component/Unit)
 - [ ] No duplicate coverage across levels
 - [ ] Priority levels assigned (P0/P1/P2/P3)
-- [ ] P0 scenarios meet strict criteria (blocks core + high risk + no workaround)
+- [ ] P0 scenarios meet strict criteria (critical business, security, data-integrity, or compliance consequence + no safe workaround)
 - [ ] NFR-derived risks mapped to planned validation scenarios
 - [ ] Planned NFR evidence artifacts documented without final PASS/CONCERNS/FAIL decisions
 - [ ] Data prerequisites identified
@@ -472,7 +472,7 @@ If workflow fails:
 
 **Issue**: Too many P0 tests
 
-- **Solution**: Apply strict P0 criteria - must block core AND high risk AND no workaround
+- **Solution**: Apply strict P0 criteria - must have a critical business, security, data-integrity, or compliance consequence AND no safe workaround
 
 **Issue**: Risk scores all high
 
