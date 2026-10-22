@@ -86,7 +86,7 @@ If any are missing: **HALT** and notify the user.
   - With neither, use a slug of the story title: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters
 - Use that `story_key` for the `{outputFile}` basename so all checklist and handoff paths stay consistent
 - If `story_id` is still unavailable after metadata/H1/filename parsing, set it to the final `story_key` so `story_id` is never empty
-- Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `dev-story`
+- Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `bmad-build` (`dev-story` before BMAD 6.12)
 - If a test design covers this story, read it for P0-P3 priorities and risks. Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` for the story's epic, then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
 
 ---

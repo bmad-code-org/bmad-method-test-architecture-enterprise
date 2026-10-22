@@ -103,23 +103,21 @@ graph TB
     subgraph Phase4["<b>Phase 4: IMPLEMENTATION: Per Epic Cycle</b>"]
         SprintPlan["<b>SM: sprint-planning</b>"]
         TestDesign["<b>TEA: test-design (per epic)</b>"]
-        CreateStory["<b>SM: create-story</b>"]
-        ATDD["<b>TEA: automate red (optional, before dev)</b>"]
-        DevImpl["<b>DEV: implements story</b>"]
+        ATDD["<b>TEA: automate red (optional, before build)</b>"]
+        Build["<b>DEV: bmad-build (plans and implements story)</b>"]
         Automate["<b>TEA: automate expand</b>"]
         TestReview1["<b>TEA: test-review (optional)</b>"]
         Trace1["<b>TEA: trace (refresh coverage)</b>"]
 
         SprintPlan --> TestDesign
-        TestDesign --> CreateStory
-        CreateStory --> ATDD
-        ATDD --> DevImpl
-        CreateStory -.->|skip red| DevImpl
-        DevImpl --> Automate
+        TestDesign --> ATDD
+        ATDD --> Build
+        TestDesign -.->|skip red| Build
+        Build --> Automate
         Automate --> TestReview1
         TestReview1 --> Trace1
         Automate -.->|skip review| Trace1
-        Trace1 -.->|next story| CreateStory
+        Trace1 -.->|next story| ATDD
         TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design/test-design-epic-N.md per epic"]
         TestDesign -.-> TestDesignNote
     end

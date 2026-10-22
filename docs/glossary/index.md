@@ -96,7 +96,7 @@ These terms come from the wider BMad Method and apply when TEA runs inside its p
 | **Phase 1: Analysis**       | Discovery phase including brainstorming, research, and product brief creation. Optional for Quick Flow, recommended for BMad Method.           |
 | **Phase 2: Planning**       | Required phase creating formal requirements. Routes to tech-spec (Quick Flow) or PRD (BMad Method/Enterprise).                                 |
 | **Phase 3: Solutioning**    | _BMad Method/Enterprise._ Architecture design phase including creation, validation, and gate checks.                                           |
-| **Phase 4: Implementation** | Required sprint-based development through story-by-story iteration using sprint-planning, create-story, dev-story, and code-review workflows.  |
+| **Phase 4: Implementation** | Required sprint-based development through story-by-story iteration using sprint-planning, bmad-build, and code-review workflows.               |
 | **Quick Spec Flow**         | Fast-track workflow for Quick Flow projects going straight from idea to tech-spec to implementation.                                           |
 | **Workflow Init**           | Initialization workflow creating bmm-workflow-status.yaml, detecting project type, and determining planning track.                             |
 | **Workflow Status**         | Universal entry point checking for existing status file, displaying progress, and recommending next action.                                    |
@@ -149,7 +149,7 @@ These terms come from the wider BMad Method and apply when TEA runs inside its p
 | **Sprint**              | Time-boxed period of development work, typically 1-2 weeks.                                                                    |
 | **Sprint Planning**     | Workflow initializing Phase 4 by creating sprint-status.yaml and extracting epics/stories from planning docs.                  |
 | **Story**               | A unit of implementable work with acceptance criteria. Related stories form an epic.                                           |
-| **Story Context**       | Implementation guidance embedded in story files during create-story, referencing existing patterns and approaches.             |
+| **Story Context**       | Implementation guidance embedded in the story spec that bmad-build plans, referencing existing patterns and approaches.        |
 | **Story File**          | Markdown file containing story description, acceptance criteria, technical notes, and testing requirements.                    |
 | **Track Selection**     | Automatic analysis by `bmad` suggesting appropriate track based on complexity indicators. User can override.                   |
 

@@ -63,7 +63,7 @@ Shoppers currently must create an account before they can pay, and cart abandonm
 - **Checklist Path:** `docs/test-artifacts/atdd/atdd-checklist-2-4-guest-checkout.md`
 - **Generated Test Files:** `tests/e2e/guest-checkout.spec.ts`, `tests/api/guest-checkout.spec.ts`
 
-If this story came from BMM `create-story`, mirror these artifact paths into the story's `Dev Notes` so `dev-story` can discover and activate the red-phase scaffolds.
+If this story is implemented with BMM `bmad-build`, list these artifact paths in its spec (Code Map and the tasks that turn them green) so the implementation agent discovers and activates the red-phase scaffolds. On BMAD releases before 6.12, mirror them into the `create-story` story's `Dev Notes` for `dev-story` instead.
 
 ---
 

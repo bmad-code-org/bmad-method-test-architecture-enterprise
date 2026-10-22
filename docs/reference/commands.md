@@ -85,7 +85,7 @@ Create executes the generated tests and repairs selector, timing, data, network,
 
 **Red Mode Inputs:** Story with acceptance criteria, test design, and test levels. TEA builds a criterion registry, preserves supplied `AC-<n>` IDs, and emits one leaf scaffold per criterion with one criterion ID in each title.
 
-**Red Mode Outputs:** Deliberately skipped acceptance scaffolds (`tests/api/`, `tests/e2e/`), `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`, and story metadata / handoff paths for downstream `dev-story` consumption. Create verifies an activated disposable copy with `tea-atdd-red-check` for compatible browserless loopback Playwright tests, `tea-unit-check` for Vitest and Jest scaffolds, or the native project runner with its original configuration and environment. It confirms the exact missing behavior and repairs generation or setup errors for up to three rounds. Saved scaffolds retain their skips for implementation.
+**Red Mode Outputs:** Deliberately skipped acceptance scaffolds (`tests/api/`, `tests/e2e/`), `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`, and story metadata / handoff paths for downstream `bmad-build` consumption (`dev-story` before BMAD 6.12). Create verifies an activated disposable copy with `tea-atdd-red-check` for compatible browserless loopback Playwright tests, `tea-unit-check` for Vitest and Jest scaffolds, or the native project runner with its original configuration and environment. It confirms the exact missing behavior and repairs generation or setup errors for up to three rounds. Saved scaffolds retain their skips for implementation.
 
 **Expand Mode Outputs:**
 
