@@ -233,6 +233,38 @@
 - [ ] Regression scope defined per impacted service
 - [ ] Cross-team coordination noted where needed
 
+## Document Quality (All Outputs)
+
+**Applies to every output: the epic document in epic-level mode, and both documents plus the handoff in system-level mode.** These items check the Editorial Contract in `steps-c/step-05-generate-output.md`.
+
+### Clear Instructions
+
+- [ ] Each instruction names the actor, action, condition, and expected result wherever the sources provide them
+- [ ] Prerequisites, conditions, and warnings appear before the action they govern
+- [ ] Instructions that combine several actions or conditions are split into separate steps, and no condition was lost in the split
+- [ ] One name per concept; repository names and domain terms match the sources exactly
+- [ ] No filler sentences, promotional claims, or vague attribution; citations are kept
+- [ ] Emojis appear only where the template uses them as markers, such as the Quick Guide tiers
+- [ ] No banned-word list was applied: exact technical terms such as test harness and test vector remain
+
+### Evidence and Uncertainty
+
+- [ ] Missing details remain visible as `UNKNOWN`, open assumptions, or clarification items; none was invented to complete a sentence
+- [ ] Observed facts, planned checks, assumptions, and unknowns read as what they are
+- [ ] Planned tests read as planned; no planned test is described as run, verified, or passing
+- [ ] Confidence statements and unverified behavior from the sources are still stated
+
+### Protected Content
+
+- [ ] Requirement, risk, and test IDs, requirement-to-test mappings, source links, evidence references, and exclusions match the decisions of steps 3 and 4
+- [ ] Risk categories, probabilities, impacts, scores, owners, mitigations, and timelines match the decisions of steps 3 and 4
+- [ ] Test levels, priorities, preconditions, test data, sequences, assertions, negative cases, cleanup, and dependencies are intact
+- [ ] Thresholds, units, comparison operators, timeouts, retry counts, quantifiers, and negations are exact
+- [ ] Literal commands, paths, code, regular expressions, payloads, Unicode test data, and expected strings are exact
+- [ ] Priority headings open with `P0`, `P1`, `P2`, or `P3`, and every risk-band heading states its score range
+- [ ] No scored risk table or coverage table sits under a heading ending in Example, Illustration, or Reference, or after a paragraph opening `Example:`
+- [ ] Validation ran on the saved files after the last edit, and every check affected by a later fix was rerun
+
 ## System-Level Mode: Two-Document Validation
 
 **When in system-level mode (PRD + ADR input), validate BOTH documents:**
@@ -349,9 +381,9 @@
 - [ ] Dates and authors match across documents
 - [ ] ADR and PRD references consistent
 
-### Document Quality (Anti-Bloat Check)
+### System-Level Anti-Bloat Check
 
-**CRITICAL: Check for bloat and repetition across BOTH documents.**
+**CRITICAL: Check for bloat and repetition across BOTH documents.** Document Quality (All Outputs) covers wording and tone.
 
 - [ ] **No repeated notes 10+ times** (e.g., "Timing is pessimistic until R-005 fixed" on every section)
 - [ ] **Repeated information consolidated** (write once at top, reference briefly if needed)
@@ -360,10 +392,6 @@
 - [ ] **Architecture doc**: Concerns-focused, NOT implementation-focused
 - [ ] **QA doc**: Implementation-focused, NOT theory-focused
 - [ ] **Clear separation**: Architecture = WHAT and WHY, QA = HOW
-- [ ] **Professional tone**: No AI slop markers
-  - [ ] Avoid excessive ✅/❌ emojis (use sparingly, only when adding clarity)
-  - [ ] Avoid "absolutely", "excellent", "fantastic", overly enthusiastic language
-  - [ ] Write professionally and directly
 - [ ] **Architecture doc length**: Target ~150-200 lines max (focus on actionable concerns only)
 - [ ] **QA doc length**: Keep concise, remove bloat sections
 
@@ -406,6 +434,8 @@
 - [ ] **System-level mode:** Both documents validated (if applicable)
 - [ ] **System-level mode:** Handoff document validated (if applicable)
 - [ ] **Epic-level mode:** Single document validated (if applicable)
+- [ ] Document Quality (All Outputs) passed for every output
+- [ ] Final validation ran after the last edit to every output
 - [ ] Team review scheduled (if required)
 
 ## Post-Workflow Actions

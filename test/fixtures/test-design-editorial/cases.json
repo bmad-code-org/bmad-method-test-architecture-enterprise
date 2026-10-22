@@ -1,0 +1,70 @@
+{
+  "cases": [
+    {
+      "id": "epic",
+      "before": "epic/before.md",
+      "after": "epic/after.md",
+      "protected": [
+        "`docs/epics/epic-4-refunds.md`",
+        "AC 4.2.3",
+        "payments.md, \"Refund API\"",
+        "`Idempotency-Key`",
+        "`{\"orderId\": \"ord_123\", \"amount\": 4999}`",
+        "`409`",
+        "`403`",
+        "UNKNOWN",
+        "`de-DE`",
+        "`Rückerstattung abgelehnt`",
+        "≤ 10 minutes",
+        "`retries: 1`",
+        "P0 pass rate = 100%",
+        "P1 pass rate ≥ 95%",
+        "`refund.amount <= payment.captured_amount`",
+        "Partial refunds are out of scope for Epic 4"
+      ],
+      "afterContains": ["exactly one refund", "expect no refund row", "Planned. The threshold is UNKNOWN", "has not confirmed"],
+      "removed": ["absolutely", "industry best practice says", "world-class", "It goes without saying", "Basically"]
+    },
+    {
+      "id": "architecture",
+      "before": "system/architecture-before.md",
+      "after": "system/architecture-after.md",
+      "protected": [
+        "`docs/prd.md#ledger-export`",
+        "`docs/adr/ADR-012-export-batching.md`",
+        "(ADR-012)",
+        "< 15 minutes",
+        "1,000,000-row",
+        "≤ 200",
+        "UNKNOWN",
+        "(recommended owner: Platform)"
+      ],
+      "afterContains": ["The shared key is unconfirmed", "no source states it", "Without it, no end-to-end export test can run"],
+      "removed": ["game-changing", "seamlessly", "It would be really great", "honestly"]
+    },
+    {
+      "id": "qa",
+      "before": "system/qa-before.md",
+      "after": "system/qa-after.md",
+      "protected": [
+        "`kill -9 $(pgrep export-worker)`",
+        "`ls /exports/*.csv`",
+        "`401`",
+        "`{\"error\":\"signature_tenant_mismatch\"}`",
+        "< 15 minutes for 1,000,000 rows",
+        "Manual check for now."
+      ],
+      "afterContains": ["Planned: kill the worker"],
+      "removed": ["amazing", "We have verified", "Basically"]
+    },
+    {
+      "id": "handoff",
+      "before": "system/handoff-before.md",
+      "after": "system/handoff-after.md",
+      "protected": ["R-001 (score 9)", "R-002 (score 6)", "Epic 2: Atomic export writes", "Epic 3: Per-tenant signing"],
+      "afterContains": ["Every epic that touches exports carries them"],
+      "removed": ["super helpful", "really need to be front and center"]
+    }
+  ],
+  "system": { "architecture": "architecture", "qa": "qa", "handoff": "handoff" }
+}

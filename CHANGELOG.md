@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Test Design edits its own output for review. A built-in editorial contract has Create mode name the actor, action, condition and expected result, remove filler and promotional wording, keep unknowns visible and describe planned tests as planned, while risk IDs, scores, priorities, test levels, thresholds, literal test data and parser-sensitive headings stay exact. The handoff is now written and polished before validation, and validation reads the saved epic document, or both system-level documents and the handoff, after the last edit, rerunning any check a fix touches. The checklist's new Document Quality section applies to epic and system outputs alike. Validate mode reports wording findings without changing files, and Edit mode changes only the requested text. Hand-written before and after fixtures in `test:eval-test-design-data` check that an edit keeps every parsed risk, band, coverage priority and protected literal, and that eight kinds of broken edit are caught.
+
 ## [3.3.0] - 2026-10-20
 
 ### Added

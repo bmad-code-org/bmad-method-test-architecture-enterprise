@@ -23,6 +23,8 @@ Apply the requested edits to the selected output and confirm changes.
 ### Step-Specific Rules:
 
 - 🎯 Only apply edits explicitly requested by the user
+- 🚫 Leave text the user did not ask to change exactly as it is; the Create-mode editorial polish does not run here
+- ✅ Keep requested edits within the Editorial Contract in `{skill-root}/steps-c/step-05-generate-output.md`, including its Protected Content
 
 ## EXECUTION PROTOCOLS:
 
