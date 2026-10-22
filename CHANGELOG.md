@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Test Design edits its own output for review. A built-in editorial contract has Create mode name the actor, action, condition and expected result, remove filler and promotional wording, keep unknowns visible and describe planned tests as planned, while risk IDs, scores, priorities, test levels, thresholds, literal test data and parser-sensitive headings stay exact. The handoff is now written and polished before validation, and validation reads the saved epic document, or both system-level documents and the handoff, after the last edit, rerunning any check a fix touches. The checklist's new Document Quality section applies to epic and system outputs alike. Validate mode reports wording findings without changing files, and Edit mode changes only the requested text. Hand-written before and after fixtures in `test:eval-test-design-data` check that an edit keeps every parsed risk, band, coverage priority, non-prose table cell and protected literal, and that eleven kinds of broken edit are caught. The QA template's medium and low risk heading now states its range, `(Score 1-5)`, so a document copied from it passes the band check.
+
+### Fixed
+
+- Test Design varies less between runs of the same epic. In two-run live evaluations of the seeded and clean epic fixtures on the Claude runner, one pair of runs numbered the same risks differently, and another gave one risk two different test levels and priorities; with the rules below, the evaluated runs produced identical scored output. Risks are now numbered in the order their gap statements appear in the sources. A mechanism that fits two boundary descriptions takes the level of the component that lacks the control, as the sources describe it today; a mitigation the sources do not name does not set the level, an absent control takes the level of the behavior it would govern, and a missing release, rollout or disable control is E2E for an installed build and takes the service's boundary when the switch lives inside one service. P0 requires both a critical consequence and no safe workaround, so a missing workaround alone keeps a risk at P1 or lower, and a risk whose harm is prolonging or widening another registered risk's harm takes P1 or lower unless the sources mandate that control.
+
 ## [3.3.0] - 2026-10-20
 
 ### Added

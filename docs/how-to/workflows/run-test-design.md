@@ -65,6 +65,13 @@ For epic-level:
 
 TEA generates test design document(s) based on mode.
 
+Before it finishes, TEA edits the documents for review.
+Where your sources state them, it names who acts, what they do, under which condition and with which expected result; a missing detail stays marked as unknown.
+It removes filler and promotional wording.
+Risk IDs, scores, priorities, test levels, thresholds, literal test data and stated unknowns stay exactly as planned, and a planned test never reads as one that already passed.
+TEA validates the saved documents and the handoff after that last edit.
+Validate mode reports wording findings without changing your files, and Edit mode changes only the text you ask it to change.
+
 ## Interrupting and Resuming a Run
 
 Each run saves its progress to its own checkpoint under `{test_artifacts}/test-design/`:

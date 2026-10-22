@@ -27,6 +27,7 @@ Validate outputs using the workflow checklist and record findings.
 - 🎯 Validate against `{validationChecklist}`
 - 🚫 Do not skip checks
 - 🚫 Never overwrite an existing validation report
+- 🚫 Report Document Quality findings without rewriting any validated output
 
 ## EXECUTION PROTOCOLS:
 

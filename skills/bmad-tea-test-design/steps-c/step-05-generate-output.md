@@ -9,7 +9,7 @@ progressFile: '{test_artifacts}/test-design/test-design-progress-{run_key}.md'
 
 ## STEP GOAL
 
-Write the final test-design document(s) using the correct template(s), then validate against the checklist.
+Write the final test-design document(s) using the correct template(s), polish them under the Editorial Contract, then validate the saved outputs against the checklist.
 
 ## MANDATORY EXECUTION RULES
 
@@ -135,7 +135,52 @@ Epic-level mode remains single-worker by default (one output artifact).
 
 ---
 
+## Editorial Contract
+
+This contract governs the wording of every Create-mode output: the epic document, both system-level documents, and the handoff. Apply it while populating templates in section 2, and again as the final cleanup in section 4. It needs no separate prompt or extra pass from the user.
+
+It edits prose only. Scope, risk scores, priorities, coverage, risk acceptance, and release criteria keep the values steps 3 and 4 decided. When editing exposes a substantive defect, such as a missing scenario, a wrong score, or an unmapped risk, return to the step that owns that decision, fix it there, and carry the fix forward. Never repair it as a wording change.
+
+When rules conflict, resolve them in this order: technical correctness and evidence, then the template and parser contracts, then reviewer comprehension, then style.
+
+### Writing Rules
+
+- Replace filler with a concrete statement, or delete it when no information is lost.
+- State the actor, action, condition, and expected result whenever the sources provide them. When a needed detail is missing, keep the gap visible as `UNKNOWN`, an open assumption, or a clarification item, and leave it unfilled.
+- Use one name per concept. Keep the exact repository names and domain terms the sources use.
+- Put prerequisites, conditions, and warnings before the action they govern.
+- Split an instruction that combines several actions or conditions into separate steps. Keep complete sentences and the context a reader needs; a shorter sentence that loses a condition is a defect.
+- Keep rationale, scenario references, and execution instructions in the template sections that already hold them.
+- Remove promotional claims and vague attribution such as "industry best practice says". Keep citations, and make clear which statements are observed facts, planned checks, assumptions, or unknowns.
+- Write planned verification as planned. A test that has not run never reads as run, verified, or passing.
+
+### Protected Content
+
+Keep these exact, in meaning and in text, through every edit:
+
+- Requirement, risk, and test IDs; requirement-to-test mappings; source links and evidence references; explicit exclusions.
+- Risk category, probability, impact, score, owner, mitigation, and timeline decisions.
+- Test levels and priorities; preconditions, test data, sequence, assertions, negative cases, cleanup, and dependencies.
+- Thresholds, units, comparison operators, timeouts, retry counts, quantifiers, and negations.
+- Assumptions, unknowns, confidence statements, unverified behavior, unresolved owners, and missing acceptance criteria.
+- Literal commands, paths, symbols, code, regular expressions, payloads, Unicode test data, and expected strings.
+- Required filenames, headings, table headers, status values, and handoff keys.
+
+Downstream scoring reads the documents by structure, so structure is protected too:
+
+- Priority section headings open with `P0`, `P1`, `P2`, or `P3`. Keep that opening when rewording a heading.
+- Risk-band headings state their score range, for example `(Score ≥6)`. Keep the range.
+- A heading that opens or ends with Example or Illustration, a heading that ends with Reference, and a paragraph that opens `Example:`, `Worked example:`, or `Illustration:` mark the tables after them as reference material, and scoring skips them. Never place a scored risk table or coverage table under such a label, and never add such a label above one.
+- Scoring also skips every table inside a blockquote. Keep scored risk and coverage tables out of blockquotes and callouts.
+- Keep the canonical risk and coverage column names from the templates.
+
+This contract sets no banned-word or punctuation list. Terms such as test harness and test vector can be exact technical language. A reusable safety requirement stays even when it also applies to other projects. Keep uncertainty wherever the sources are uncertain. Keep every required document; the system-level pair stays two documents.
+
+---
+
 ## 2. Populate Templates
+
+Write each output with the Editorial Contract applied from the start.
 
 Ensure the outputs include:
 
@@ -150,19 +195,7 @@ Ensure the outputs include:
 
 ---
 
-## 3. Validation
-
-Validate the output(s) against:
-
-- `checklist.md` in this workflow folder
-- [ ] CLI sessions cleaned up (no orphaned browsers)
-- [ ] Temp artifacts stored under `{test_artifacts}/test-design/`
-
-If any checklist criteria are missing, fix before completion.
-
----
-
-## 4. Generate BMAD Handoff Document (System-Level Mode Only)
+## 3. Generate BMAD Handoff Document (System-Level Mode Only)
 
 **If this is a system-level test design** (not component/feature level):
 
@@ -178,15 +211,30 @@ If any checklist criteria are missing, fix before completion.
 
 ---
 
-## 5. Polish Output
+## 4. Polish Output
 
-Before finalizing, review the complete output document for quality:
+Review every output saved so far, including the handoff in system-level mode, and finish all edits before section 5:
 
-1. **Remove duplication**: Progressive-append workflow may have created repeated sections — consolidate
-2. **Verify consistency**: Ensure terminology, risk scores, and references are consistent throughout
-3. **Check completeness**: All template sections should be populated or explicitly marked N/A
-4. **Table schema**: Preserve the canonical risk and coverage column names from the templates. Verify every scored risk has one unique `R-<three digits>` ID, every coverage link preserves that exact ID, and every risk-band heading states its score range. Probability, Impact, and Score cells contain only bare integers; explain each judgment in prose and verify Score equals Probability × Impact. Empty bands contain no risk rows; describe the absence in prose outside the table. Keep each risk description readable and traceable to its source.
-5. **Format cleanup**: Ensure markdown formatting is clean (tables aligned, headers consistent, no orphaned references)
+1. **Apply the Editorial Contract**: Make the final wording pass. Compare each edited passage with its draft and confirm the Protected Content is unchanged.
+2. **Remove duplication**: Progressive-append workflow may have created repeated sections — consolidate
+3. **Verify consistency**: Ensure terminology, risk scores, and references are consistent throughout, and that the handoff carries the same risk IDs, scores, and priorities as the test design
+4. **Check completeness**: All template sections should be populated or explicitly marked N/A
+5. **Table schema**: Preserve the canonical risk and coverage column names from the templates. Verify every scored risk has one unique `R-<three digits>` ID, every coverage link preserves that exact ID, and every risk-band heading states its score range. Probability, Impact, and Score cells contain only bare integers; explain each judgment in prose and verify Score equals Probability × Impact. Empty bands contain no risk rows; describe the absence in prose outside the table. Keep each risk description readable and traceable to its source.
+6. **Format cleanup**: Ensure markdown formatting is clean (tables aligned, headers consistent, no orphaned references)
+
+---
+
+## 5. Validate Final Outputs
+
+Validate after the last edit to every output. Read the saved files from disk: the epic document in epic-level mode, or both system-level documents and the handoff in system-level mode.
+
+Validate the output(s) against:
+
+- `checklist.md` in this workflow folder
+- [ ] CLI sessions cleaned up (no orphaned browsers)
+- [ ] Temp artifacts stored under `{test_artifacts}/test-design/`
+
+If any checklist criteria are missing, fix before completion. A fix that changes a saved output reopens validation for the content it touched: rerun the risk, coverage, and cross-document checks after a risk or coverage change, the handoff checks after a handoff change, and the Document Quality checks after any wording change. Completion waits until the last rerun passes with no further edits.
 
 ---
 

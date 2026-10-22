@@ -101,8 +101,9 @@ function scoreRun(set, design, categories) {
     // Every row is checked, and a row under a heading that declares no range is a
     // band failure. Counting only the rows that sat under a declared range let a
     // single rangeless heading exempt them: `### Medium/Low-Priority Risks`, the
-    // literal heading test-design-qa-template.md ships, took the denominator to
-    // zero and a score-9 risk filed beneath it scored a clean 100%. `banded` is
+    // heading test-design-qa-template.md shipped before it declared `(Score 1-5)`,
+    // took the denominator to zero and a score-9 risk filed beneath it scored a
+    // clean 100%. `banded` is
     // therefore `rows` and the question is how many of them were placed correctly.
     shape.banded += 1;
     const placed = bandFor(risk.headings);
