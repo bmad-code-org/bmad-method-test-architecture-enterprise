@@ -8,7 +8,7 @@ description: Generate red acceptance scaffolds or expand test coverage through a
 `tea-automate` runs the merged Automate skill shipped in the npm package.
 It supplies project configuration and mode customizations, runs the agent, and validates the generated manifest and summary.
 
-Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+Needs Node.js 22.20.0+ and an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom`. The run uses that CLI's existing session, so there is no separate login step; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 A live run writes tests and runs the project's tests.
 

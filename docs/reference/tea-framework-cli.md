@@ -9,7 +9,7 @@ description: Run test framework and CI setup without an interactive chat
 Choose framework setup, CI setup, or both, then select Create, Resume, Validate, or Edit.
 It keeps the prompt and agent output for each attempt and checks the skill's saved journal before reporting completion.
 
-Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+Needs Node.js 22.20.0+ and an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom`. The run uses that CLI's existing session, so there is no separate login step; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 ```bash
 npm install -g bmad-method-test-architecture-enterprise

@@ -11,7 +11,7 @@ Before the agent starts, the CLI freezes the target criteria and priorities from
 It checks the saved oracle ledger, matrix, coverage arithmetic, decision, and live evidence before publishing reports.
 Each attempt retains its prompt, agent output, and generated files.
 
-Install TEA with Node.js 22.20.0 or later, then install and authenticate an agent.
+Needs Node.js 22.20.0+ and an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom`. The run uses that CLI's existing session, so there is no separate login step; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 The package includes the Trace skill and knowledge base.
 A consuming project can provide `_bmad/config.toml` and workflow customizations.
 
@@ -53,7 +53,7 @@ Existing Test Design and NFR documents are read from the same artifact root.
 
 `--agent` is required.
 Choose `codex`, `claude`, `agy`, `custom`, or `none`.
-Use the agent CLI's existing login; [Test Review CLI prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) describe agent setup.
+The run uses the agent CLI's existing session; [Test Review CLI prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) describe agent setup.
 
 | Option                | Meaning                                                                  |
 | --------------------- | ------------------------------------------------------------------------ |

@@ -7,12 +7,13 @@ description: 'Generate verified test plans from project requirements with a head
 
 Before writing, it checks that the current run produced both, that the checkpoint reports completion, and that risk arithmetic, declared score bands and coverage references are valid. It requires populated mandatory sections for the selected full-plan template and a P0/P1/P2/P3 priority on each coverage row.
 
-Needs Node.js 22.20.0+ and an installed, authenticated agent CLI. This example uses Codex ([other agents](/docs/reference/tea-test-review-cli.md#prerequisites)):
+Needs Node.js 22.20.0+ and an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom`. The run uses that CLI's existing session, so there is no separate login step; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 ```bash
 npm install --save-dev bmad-method-test-architecture-enterprise
-codex login
 ```
+
+The examples below use `--agent codex`; swap in the agent you use.
 
 ## Examples
 
