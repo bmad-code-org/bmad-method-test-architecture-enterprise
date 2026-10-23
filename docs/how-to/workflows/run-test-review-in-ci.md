@@ -5,7 +5,7 @@ description: 'Gate pull requests on a headless Test Review with GitHub Actions, 
 
 # Run Test Review in CI
 
-Make Test Review a required check on every pull request. The job installs `tea-test-review` and an agent CLI, logs the agent in, and runs one command. The job's exit code is the verdict.
+Make Test Review a required check on every pull request. The job installs `tea-test-review` and an agent CLI, supplies the agent's credentials from a CI secret, and runs one command. The job's exit code is the verdict.
 
 You choose the agent and the gate policy. The [tea-test-review CLI reference](/docs/reference/tea-test-review-cli.md) lists the flags, exit codes and verdict schema.
 

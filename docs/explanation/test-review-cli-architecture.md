@@ -143,7 +143,7 @@ node cli/test-review.js --agent none --files test/test-test-review-cli.js
 
 It exits 0 and prints a prompt naming the file. Add a second file and `review_scope` flips from `single` to `directory`.
 
-With a real agent, install and authenticate its CLI first (an existing login works as well as an API key; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)), then replace `--agent none` with `--agent claude` and add `--output test-review.md`.
+With a real agent, replace `--agent none` with the agent CLI you already use (`claude`, `codex`, `agy`, or `custom` with `--agent-cmd`) and add `--output test-review.md`. The run uses that CLI's existing session or an API key; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 Installed in a consuming repo, the bare `tea-test-review` binary does the same. `--project-skill` reviews with a copy the project vendored, and `--skill-root` names an exact skill directory.
 

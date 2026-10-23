@@ -54,7 +54,7 @@ Authentication is whatever your agent CLI already uses. The agent runs with your
 
 ## Run it in CI
 
-The CLI is the whole integration: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher are in it. A CI job installs the CLI and an agent, logs the agent in, and runs one command. The job's exit code is the verdict.
+The CLI is the whole integration: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher are in it. A CI job installs the CLI and an agent, supplies the agent's credentials from a CI secret, and runs one command. The job's exit code is the verdict.
 
 ```bash
 tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
