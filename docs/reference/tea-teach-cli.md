@@ -7,7 +7,7 @@ description: 'Learn testing one caller-owned message at a time with durable teac
 It saves the tutor's next question or menu, the conversation, and the skill's progress YAML.
 Run the command again with your answer to continue.
 
-Needs Node.js 22.20.0+ and an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom`. The run uses that CLI's existing session, so there is no separate login step; [prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
+Needs Node.js 22.20.0+. A live run also needs an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom` with `--agent-cmd`. It uses that CLI's existing session, so there is no separate login step. `--agent none` saves the prompt without calling an agent and needs neither. [Prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 ```bash
 npm install --save-dev bmad-method-test-architecture-enterprise
