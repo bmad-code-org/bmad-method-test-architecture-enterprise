@@ -17,13 +17,15 @@ Before you start:
 
 ## GitHub Actions
 
-[`cli/examples/pr-test-review.yml`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is the tested template, with the gate-policy flags annotated. It is one job with `contents: read`, `pull-requests: write` and `checks: write`, a full-history checkout, a skip for fork pull requests (forks receive no secrets), the pinned installs, and an artifact upload for the report and the verdict. Its review step is:
+The [`tea-test-review` GitHub Action](https://github.com/muratkeremozcan/tea-test-review) is the shortest route. One `uses: muratkeremozcan/tea-test-review@v3` step checks out the pull request, installs TEA and the agent CLI, runs the review, posts the comment and check run, and uploads the report. It also adds `@mention` triggers behind a trusted-author gate. Its README has workflows proven with Claude and Codex, ready to copy.
+
+To own the job yourself, start from the template. [`cli/examples/pr-test-review.yml`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is the tested template, with the gate-policy flags annotated. It is one job with `contents: read`, `pull-requests: write` and `checks: write`, a full-history checkout, a skip for fork pull requests (forks receive no secrets), the pinned installs, and an artifact upload for the report and the verdict. Its review step is:
 
 ```bash
 tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
 ```
 
-`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. Make the job a required status check to gate merges. The standalone [`tea-test-review` action](https://github.com/muratkeremozcan/tea-test-review) wraps a CLI run for GitHub with `@mention` triggers, a trusted-author gate, agent login and artifact upload.
+`--github` opens a check run before the review starts, closes it with the verdict, and keeps one comment on the pull request up to date. Make the job a required status check to gate merges.
 
 ## GitLab
 
