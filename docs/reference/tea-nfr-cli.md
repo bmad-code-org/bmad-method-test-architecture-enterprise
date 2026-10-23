@@ -8,7 +8,7 @@ description: Audit supplied NFR implementation evidence and publish a verified r
 `tea-nfr` runs the packaged `bmad-tea-nfr` Create workflow against existing project evidence.
 It supplies resolved TEA configuration and NFR customizations, runs the workflow, validates the report and its canonical context, and publishes both files together.
 
-Needs Node.js 22.20.0+ and an installed, authenticated agent CLI ([prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites)).
+Needs Node.js 22.20.0+. A live run also needs an agent CLI you already use: Claude Code (`--agent claude`), Codex (`--agent codex`), Antigravity (`--agent agy`), or any other runner through `--agent custom` with `--agent-cmd`. It uses that CLI's existing session, so there is no separate login step. `--agent none` saves the prompt without calling an agent and needs neither. [Prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) cover each agent.
 
 Run it from a project that contains the example input paths:
 

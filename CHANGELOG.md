@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The CLI reference pages name every supported agent the same way. Each one lists Claude Code, Codex, Antigravity and `--agent custom` up front and says the run uses the session that agent CLI already holds, so there is no login step before a run. The Test Design CLI quickstart no longer tells readers to run `codex login`, and the Test Review prerequisites describe signing in to an agent as one-time setup done with its vendor.
+
 ## [3.4.0] - 2026-10-22
 
 ### Changed

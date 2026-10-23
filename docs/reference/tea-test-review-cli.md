@@ -18,15 +18,15 @@ The TEA package includes the skill and knowledge base. It does not install or au
   - **`--project-skill`** reviews with the copy the project vendored instead, probed at `.claude/skills/bmad-tea-test-review`, `.agents/skills/bmad-tea-test-review`, `skills/bmad-tea-test-review`, and last the classic installer's `_bmad/tea/workflows/testarch/bmad-tea-test-review`, which a project upgraded from v6 can still hold. The control-plane guard applies to it: a PR diff that edits the vendored skill or its `bmod-tea` knowledge base exits 2.
     A vendored copy must declare the rubric the CLI scores (`rubric_version: "5.0"` in its `workflow.yaml`). A copy from an older release declares another version or none, and the CLI exits 2 before any agent call naming the path and both versions. Upgrade the vendored skill, or drop `--project-skill` to use the packaged one. The same check applies to `--skill-root`.
   - **`--skill-root <path>`** names an exact skill directory, for example one unpacked from a tarball you vetted. Copy `bmod-tea` beside it: the skill reads its knowledge base from the folder beside it, and the CLI exits 2 before any agent call when `bmod-tea/knowledge/tea-index.csv` is missing.
-- The agent CLI is the caller's to install and log in. When the selected CLI is missing, or its login status command (asked only when the CLI's own help lists it, and not when a credential variable the CLI reads itself is set) reports a logged-out session, the run exits 2 with the install or login command before any agent call, and `--retries` never repeats it. A custom `--agent-cmd` is not the vendor CLI, so only its presence is checked.
+- An agent CLI you already use: Claude Code, Codex, Antigravity, or any runner through `--agent custom`. TEA uses the session that CLI already holds; installing and signing in to the agent is a one-time setup done with its vendor, outside TEA. When the selected CLI is missing, or its login status command (asked only when the CLI's own help lists it, and not when a credential variable the CLI reads itself is set) reports a logged-out session, the run exits 2 with the install or login command before any agent call, and `--retries` never repeats it. A custom `--agent-cmd` is not the vendor CLI, so only its presence is checked.
 - For `--agent claude` (default): the `claude` CLI on `PATH`, authenticated via subscription/keychain login or `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` in the environment.
-- For `--agent codex`: the `codex` CLI on `PATH`, authenticated via `codex login`, which stores credentials in `$HOME/.codex/auth.json`. **`OPENAI_API_KEY` in the environment is not enough**: codex 0.146.0 never reads it, and a run with only that variable set sends no credential at all and fails with `401 ... Missing bearer or basic authentication in header`. On a machine with no interactive login, such as any CI runner, write the auth file first with `printenv OPENAI_API_KEY | codex login --with-api-key`, or pass `CODEX_API_KEY` through with `--env-pass CODEX_API_KEY`.
+- For `--agent codex`: the `codex` CLI on `PATH` with the sign-in it keeps in `$HOME/.codex/auth.json`. **`OPENAI_API_KEY` in the environment is not enough**: codex 0.146.0 never reads it, and a run with only that variable set sends no credential at all and fails with `401 ... Missing bearer or basic authentication in header`. On a machine with no interactive login, such as any CI runner, write the auth file first with `printenv OPENAI_API_KEY | codex login --with-api-key`, or pass `CODEX_API_KEY` through with `--env-pass CODEX_API_KEY`.
 - For `--agent agy`: the `agy` CLI on `PATH` with its Antigravity session ready. It accepts `--model`; without an override it uses the session's model. This adapter sends the complete prompt through the `--print` process argument because `agy` does not consume the prompt from stdin.
 - For `--agent custom`: an explicit `--agent-cmd` executable that reads the prompt from stdin, runs non-interactively in the project directory, writes the report path named in the prompt, and exits nonzero on failure. Supply every runner argument with `--agent-arg` and allow required credential variables through with `--env-pass`.
 
 ## Run it locally
 
-Install the CLI once. This adds the `tea-test-review` command to your `PATH`; it does not install the TEA module into any project, and it leaves an existing `claude` or `codex` install alone.
+Install the CLI once. This adds the `tea-test-review` command to your `PATH`; it does not install the TEA module into any project, and it leaves any agent CLI you already have alone.
 
 ```bash
 npm install --global bmad-method-test-architecture-enterprise@latest
@@ -50,11 +50,11 @@ Three things worth knowing before the first run:
 - **Progress goes to stderr while the agent works,** normally every 15 seconds, and the agent's full output is not streamed. A review can take several minutes. Redirect stderr with `2>tea-progress.log` to keep the progress lines, and use `--json` for the result.
 - **`--agent none` costs nothing.** It prints the prompt bundle and exits without spawning an agent, which is the fastest way to confirm the right files are in the review set.
 
-Authentication is whatever your agent CLI already uses. A `claude` or `codex` subscription login stored under `$HOME` is passed through and needs no API key. For claude, the key variables in Prerequisites work as a fallback; for codex they do not, so see the `--agent codex` note above before running anywhere without an interactive login.
+Authentication is whatever your agent CLI already uses. The agent runs with your `HOME`, so a subscription sign-in its CLI keeps there works with no API key. For claude, the key variables in Prerequisites work as a fallback; for codex they do not, so see the `--agent codex` note above before running anywhere without an interactive login.
 
 ## Run it in CI
 
-The CLI is the whole integration: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher are in it. A CI job installs the CLI and an agent, logs the agent in, and runs one command. The job's exit code is the verdict.
+The CLI is the whole integration: the skill, the retry, the pull-request base lookup, the comment text and the GitHub publisher are in it. A CI job installs the CLI and an agent, supplies the agent's credentials from a CI secret, and runs one command. The job's exit code is the verdict.
 
 ```bash
 tea-test-review --github --pr "$PR_NUMBER" --artifact-name tea-test-review --output test-review.md --json test-review.json
