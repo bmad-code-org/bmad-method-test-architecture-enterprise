@@ -5,17 +5,17 @@ description: Evaluate a stdio MCP tool server through its tool calls, from the E
 
 # How to Evaluate an MCP Tool Server with TEA
 
-Start Evaluate in your coding agent and point it at a stdio MCP server.
-You confirm which tools it may call and what results count as correct.
-The skill builds the evaluation, runs the server in a disposable copy, and checks whether a planted defect changes its answers.
-The result shows what passed, which defect the evaluation caught, and where coverage is thin.
-In normal use, that one request starts the workflow: your agent asks you to confirm the requirements, then handles the files and commands below.
-They are here so you can inspect or repeat the run.
-A server reached over HTTP follows [How to Evaluate an HTTP API with TEA](/docs/how-to/evaluate/evaluate-an-http-api.md).
+**Bottom line:** Use Evaluate to check the permitted tools of a stdio MCP server against the requirements you confirm, and test whether the evaluation detects a planted defect. Start Evaluate in your coding agent and point it at the server. An HTTP server follows the [HTTP API guide](/docs/how-to/evaluate/evaluate-an-http-api.md).
 
-The skill writes the probes and contract.
-`tea-evaluate` calls the MCP tools in a disposable project copy and records their results; `eval-quality` scores the evidence.
-[How Evaluate Works](/docs/explanation/how-evaluate-works.md) explains these parts.
+Your coding agent handles this sequence:
+
+1. **Confirm requirements.** Agree on behavior, boundaries, evidence, and important failures in `requirements.md`.
+2. **Author, then check.** The skill writes the contract, probes, oracles (evidence checks), and any mutations. `check` validates these files; it does not author them.
+3. **Preflight.** In a confined disposable project copy, each seeded mutation being qualified must show: clean pass → expected failure with the planted defect → original bytes and mode restored → clean pass again.
+4. **Run.** `run` repeats preflight, executes the required clean and defective trials at the configured count, and seals evidence. An uncaught qualified defect exposes a detection gap.
+5. **Score.** `score` uses `eval-quality` to assess that evidence: clean controls, catches or misses, and coverage gaps. Catching a broken target is a success for the evaluation, not a pass for the defective target.
+
+The commands below let you inspect or repeat this work.
 
 ## When to Use This
 

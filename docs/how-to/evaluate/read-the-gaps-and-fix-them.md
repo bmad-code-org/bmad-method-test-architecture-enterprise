@@ -5,7 +5,7 @@ description: Distinguish evaluation weaknesses from target defects and invalid m
 
 # How to Read the Gaps and Fix Them with TEA
 
-**Bottom line:** Use this guide when a run stops, a score reports concerns, or a declared strength floor is not met. Ask the Evaluate skill to trace one problem to its evidence, propose a small repair and rerun development. First decide whether the problem is in the target, the evaluation or the measurement. You approve what correct behavior means and any change to that standard; a greener result alone is not a repair.
+**Bottom line:** Use this guide to investigate a stopped run, weak score, or unmet strength floor. Ask Evaluate to trace the problem to evidence and distinguish a target defect, an evaluation weakness, or an invalid measurement. Repair the identified cause in development without weakening confirmed requirements; target changes require separate agreement. Then validate, requalify, rerun, and score the changed setup. Review held-out results only after development review; a greener result alone is not a repair.
 
 ## Start with the Evaluate Skill
 

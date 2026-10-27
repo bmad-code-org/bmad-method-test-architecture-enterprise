@@ -5,7 +5,7 @@ description: Compare compatible scored runs, review changes and limitations, and
 
 # How to Compare Runs and Accept a Baseline with TEA
 
-**Bottom line:** Use this guide after scoring a run, either to compare it with an existing baseline or to preserve the first one. Ask the Evaluate skill to explain the evidence and any limits on comparison. You decide whether to retain the result, then accept and commit it through review. **Accepting a baseline preserves a measurement; it does not approve the target's quality or certify that the evaluation is strong.**
+**Bottom line:** Use this guide after scoring a run to compare compatible evidence or retain the first baseline. Ask Evaluate to explain verdicts, changes, and unresolved limits before you decide what to keep. Acceptance preserves the selected measurement for future comparison; it does not certify target quality, strong coverage, or release readiness. Accept only after your review, then commit the retained baseline through the repository's review process.
 
 ## Start with the Evaluate Skill
 
