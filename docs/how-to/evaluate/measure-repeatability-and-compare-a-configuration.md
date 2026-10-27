@@ -5,6 +5,8 @@ description: Ask Evaluate to analyze saved Test Design records offline or prepar
 
 # How to Measure Repeatability and Compare One Configuration with TEA
 
+**Bottom line:** Use this guide to analyze supported saved Test Design records without rerunning the target or making model or judge calls. Ask Evaluate to report what the existing evidence establishes and what remains unknown. Fresh repeatability or a one-configuration comparison is a separate opt-in request with capability, approval, and budget gates. It does not automatically change defaults or accept a baseline.
+
 > TEA, use Evaluate to check how consistent the saved results from my latest Test Design evaluation are. Use only existing records. Do not rerun anything or make model calls. Tell me what the evidence can and cannot establish.
 
 Give Evaluate the saved-run path or the folder to search when it cannot infer one from your evaluation. Evaluate finds the latest compatible Test Design records, names the selected files, prepares the reader inputs and writes a report. You do not need to prepare JSON or copy provenance fields.

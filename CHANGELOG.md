@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Evaluate how-to guides state each guide's purpose up front before explaining mechanics. The three first-run guides (skill or agent, stdio MCP server, and HTTP API) open with explicit bottom lines and the core workflow sequence (confirming requirements, authoring, validating with `check`, qualifying mutations with `preflight`, executing trials with `run`, and interpreting evidence with `score`). Task-specific guides open with their focused responsibilities and retain their narrower approval boundaries, while the repeatability guide preserves its offline-first saved-records scope.
 - The Run Test Review in CI guide opens its GitHub Actions section with the `tea-test-review` GitHub Action, the one-step route, before the self-managed workflow template.
 - The CLI reference pages name every supported agent the same way. Each one lists Claude Code, Codex, Antigravity and `--agent custom` up front and says the run uses the session that agent CLI already holds, so there is no login step before a run. The Test Design CLI quickstart no longer tells readers to run `codex login`, and the Test Review prerequisites describe signing in to an agent as one-time setup done with its vendor.
 

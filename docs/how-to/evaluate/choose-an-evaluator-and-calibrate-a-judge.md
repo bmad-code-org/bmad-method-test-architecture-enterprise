@@ -5,12 +5,7 @@ description: Pick the evaluation layer that reads your target's output and prove
 
 # How to Choose an Evaluator and Calibrate a Judge with TEA
 
-Ask Evaluate in your coding agent how to judge the target's output: built-in checks, your own command, an agent, or records from your harness.
-Confirm the evaluator choice and label example answers if the contract uses a rubric.
-The skill sets up the evaluator and checks the judge's scores against those labels before a run can proceed.
-The files and commands below show what your agent normally handles and let you repeat its work.
-
-The evaluator reads what the target produced; eval-quality turns its judgments into a verdict.
+**Bottom line:** Use this guide to choose how an existing evaluation judges the target's evidence, and to calibrate its scorer when the contract uses a rubric. You confirm the evaluator choice and example labels; the Evaluate skill prepares the files, and `check` validates them. Follow the selected evaluator's verification route before trusting its results. Rubric calibration and sealed-brief-agent qualification are separate gates; `eval-quality` produces the formal verdict.
 
 ## When to Use This
 

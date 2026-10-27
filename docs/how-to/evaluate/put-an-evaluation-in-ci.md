@@ -5,7 +5,7 @@ description: Let Evaluate write the CI plan, run its pull request tier, read the
 
 # How to Put an Evaluation in CI with TEA
 
-**Bottom line:** Put fast, model-free evidence checks on pull requests and live target checks on the trusted events that can afford them. Ask the Evaluate skill to design and test the plan, then use the Framework skill's CI phase to apply it. You approve the schedule, cost, credentials, shipping gates and baseline changes. A green pull request confirms that the accepted evidence still reproduces; it does not show that the changed target has passed a new live evaluation.
+**Bottom line:** Use this guide to place an evaluation with an accepted baseline into CI. Ask Evaluate to design and test the tiers, then use the Framework skill's CI phase to apply the approved plan. You approve schedule, cost, credentials, and shipping gates. Model-free pull-request checks reproduce accepted evidence; they do not freshly evaluate the changed target. Live checks belong on suitable trusted events.
 
 ## Start with the Evaluate Skill
 

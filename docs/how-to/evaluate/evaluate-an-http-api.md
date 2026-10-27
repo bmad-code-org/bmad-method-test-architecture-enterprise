@@ -5,15 +5,19 @@ description: Evaluate a web application, an AI feature or an HTTP tool server th
 
 # How to Evaluate an HTTP API with TEA
 
-Start Evaluate in your coding agent and point it at an HTTP service.
-Confirm which requests it may send and which parts of the response count as correct.
-Evaluate starts the service in a disposable project copy, sends the approved requests, and checks whether planted defects change the answers.
-The scored run shows what passed, which defects the checks caught, and where coverage is weak.
-Your coding agent handles the files and commands below after you confirm the requirements; they are here so you can inspect or repeat the run.
+**Bottom line:** Use Evaluate to check approved requests to a locally launched HTTP service against the requirements you confirm, and test whether the evaluation detects planted defects. Start Evaluate in your coding agent and point it at the service. Review the permitted requests and credential requirements, and verify the HTTP port with its conformance check before live evaluation.
+
+Your coding agent handles this sequence:
+
+1. **Confirm requirements.** Agree on behavior, boundaries, evidence, and important failures in `requirements.md`.
+2. **Author, then check.** The skill writes the contract, probes, oracles (evidence checks), and any mutations. `check` validates these files; it does not author them.
+3. **Preflight.** In a confined disposable project copy, each seeded mutation being qualified must show: clean pass → expected failure with the planted defect → original bytes and mode restored → clean pass again.
+4. **Run.** `run` repeats preflight, executes the required clean and defective trials at the configured count, and seals evidence. An uncaught qualified defect exposes a detection gap.
+5. **Score.** `score` uses `eval-quality` to assess that evidence: clean controls, catches or misses, and coverage gaps. Catching a broken target is a success for the evaluation, not a pass for the defective target.
+
+The commands below let you inspect or repeat this work.
 
 A web application or an AI feature behind an HTTP endpoint follows this guide.
-The requests pass through a port governed by eval-quality.
-
 A stdio tool server follows [How to Evaluate an MCP Tool Server with TEA](/docs/how-to/evaluate/evaluate-an-mcp-tool-server.md).
 
 ## When to Use This

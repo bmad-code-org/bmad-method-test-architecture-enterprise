@@ -5,14 +5,19 @@ description: Check a skill or an agent against requirements you confirm, from th
 
 # How to Evaluate a Skill or Agent with TEA
 
-Start Evaluate in your coding agent and point it at a skill or an agent.
-Confirm the behavior you need to prove, the outputs that count as evidence, and the boundaries it may cross.
-Evaluate builds the checks, runs the target in disposable copies of your project, and plants known defects to see whether the checks catch them.
-You get a scored run that shows what passed and where coverage is weak.
-Your coding agent handles the files and commands below after you confirm the requirements; they are here so you can inspect or repeat the run.
+**Bottom line:** Use Evaluate to check whether your skill or agent follows the requirements you confirm, and whether the evaluation can detect known defects. Start Evaluate in your coding agent and point it at the target.
 
-The tutorial [Evaluate Your First Skill](/docs/tutorials/evaluate-your-first-skill.md) walks through a prepared example by hand.
-This guide applies that process to your own target.
+Your coding agent handles this sequence:
+
+1. **Confirm requirements.** Agree on behavior, boundaries, evidence, and important failures in `requirements.md`.
+2. **Author, then check.** The skill writes the contract, probes, oracles (evidence checks), and any mutations. `check` validates these files; it does not author them.
+3. **Preflight.** In a confined disposable project copy, each seeded mutation being qualified must show: clean pass → expected failure with the planted defect → original bytes and mode restored → clean pass again.
+4. **Run.** `run` repeats preflight, executes the required clean and defective trials at the configured count, and seals evidence. An uncaught qualified defect exposes a detection gap.
+5. **Score.** `score` uses `eval-quality` to assess that evidence: clean controls, catches or misses, and coverage gaps. Catching a broken target is a success for the evaluation, not a pass for the defective target.
+
+The commands below let you inspect or repeat this work.
+
+This guide's minimal smoke example has one clean control, one trial, and no seeded defect. It checks runner behavior, not defect detection. Use the [first-skill tutorial](/docs/tutorials/evaluate-your-first-skill.md) for a clean-and-mutated example.
 
 ## When to Use This
 
