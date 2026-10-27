@@ -5,7 +5,7 @@ description: Use an AgentEvals or promptfoo suite as the evaluation layer, or le
 
 # How to Bring an Existing Suite into Evaluate with TEA
 
-**Bottom line:** Use this guide to reuse grading checks that match your evaluation's contract. Ask Evaluate to map the evidence and verify an adapter with a known pass, known fail, and evaluator error. With a command evaluator, TEA runs the target and your wrapper grades its observations; with records, your harness supplies compatible sealed evidence. Follow the chosen route's checks before relying on clean-control and defect-detection results. Naming a framework does not install or qualify it.
+**Bottom line:** Use this guide to reuse grading checks that match your evaluation's contract. For a command evaluator, ask Evaluate to map the evidence and verify an adapter with a known pass, known fail, and evaluator error. With a command evaluator, TEA runs the target and your wrapper grades its observations; with records, your harness supplies compatible sealed evidence. Follow the chosen route's checks before relying on clean-control and defect-detection results. Naming a framework does not install or qualify it.
 
 ## Start with the Evaluate Skill
 
