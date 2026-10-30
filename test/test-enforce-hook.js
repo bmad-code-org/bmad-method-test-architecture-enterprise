@@ -147,6 +147,20 @@ function run() {
     ['tests/test_login.py', 'assert total == total\n', 'C3', 'python self-comparison'],
     ['src/LoginTest.java', 'Thread.sleep(1000);\n', 'H1', 'JUnit hard wait'],
     ['src/LoginTest.java', 'assertEquals(actual, actual);\n', 'C3', 'JUnit self-comparison'],
+    // Formatters split chains across lines, and a per-line scan never saw these.
+    ['tests/a.spec.ts', 'expect(actual)\n  .toBe(actual);\n', 'C3', 'self-comparison split across lines'],
+    ['tests/a.spec.ts', 'test.only\n("x", async () => {});\n', 'C2', '.only split from its call'],
+    ['tests/a.spec.ts', 'test\n  .only("x", async () => {});\n', 'C2', '.only on a continuation line'],
+    ['src/LoginTest.java', 'assertEquals(\n    actual,\n    actual);\n', 'C3', 'JUnit self-comparison split across lines'],
+    ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["a"])\n', 'C3', 'Go self-comparison'],
+    ['pkg/login_test.go', 'assert.EqualValues(t,\n    m["a"],\n    m["a"])\n', 'C3', 'Go self-comparison split across lines'],
+    ['tests/a.spec.ts', 'expect(`a\nb`).toBe(`a\nb`);\n', 'C3', 'identical multiline template literals'],
+    // `${` is only interpolation at the start of a JavaScript template.
+    ['pkg/login_test.go', 'assert.Equal(t, `${HOME}`, `${HOME}`)\n', 'C3', 'Go raw strings never interpolate'],
+    ['src/LoginTest.java', 'assertEquals("`${value}", "`${value}");\n', 'C3', 'a backtick inside a Java string is data'],
+    ['tests/a.spec.ts', 'expect("`${value}").toBe("`${value}");\n', 'C3', 'a backtick inside a quoted JS string is data'],
+    // Operands are read with their string literals intact, so equal literals are equal.
+    ['tests/a.spec.ts', "expect(result['actual']).toEqual(result['actual']);\n", 'C3', 'same bracket key on both sides'],
     ['pkg/login_test.go', 'time.Sleep(2 * time.Second)\n', 'H1', 'Go hard wait'],
     ['.maestro/login.yaml', 'appId: com.example\n---\n- launchApp\n- sleep: 3000\n- assertVisible: "Home"\n', 'H1', 'Maestro sleep step'],
     ['.maestro/login.yaml', 'appId: com.example\n---\n- launchApp\n- tapOn: "Login"\n', 'C4', 'Maestro flow that asserts nothing'],
@@ -216,6 +230,30 @@ function run() {
     ['tests/a.spec.ts', 'cy.wait("@getUser");\n', 'aliased cy.wait is not a hard wait'],
     ['tests/a.spec.ts', 'expect(response.status()).toBe(200);\n', 'a real assertion is not tautological'],
     ['tests/a.spec.ts', 'expect(value).not.toBe(value);\n', '.not self-comparison always fails, so it is not C3'],
+    ['tests/a.spec.ts', 'expect(value)\n  .not\n  .toBe(value);\n', 'a multiline .not self-comparison is not C3 either'],
+    // Operands that differ only inside a string literal are different operands.
+    ['tests/a.spec.ts', "expect(result['actual']).toEqual(result['expected']);\n", 'bracket keys differ'],
+    ['tests/a.spec.ts', "expect(store.get('a')).toBe(store.get('b'));\n", 'call arguments differ'],
+    ['tests/a.spec.ts', 'expect(`${id}-a`).toBe(`${id}-b`);\n', 'template literals differ'],
+    ['tests/a.spec.ts', "expect(prefix + 'a').toBe(prefix + 'b');\n", 'a trailing literal is part of the operand'],
+    ['tests/a.spec.ts', "expect(result['a b']).toEqual(result['ab']);\n", 'whitespace inside a string literal is part of the value'],
+    ['tests/a.spec.ts', 'expect(/a b/).toEqual(/ab/);\n', 'whitespace inside a regex literal is part of the value'],
+    ['tests/a.spec.ts', 'expect(`a\nb`).toBe(`ab`);\n', 'a newline inside a template literal is part of the value'],
+    ['pkg/login_test.go', 'assert.Equal(t, `a\nb`, `ab`)\n', 'a newline inside a Go raw string is part of the value'],
+    [
+      'tests/a.spec.ts',
+      'let i = 0;\nexpect(`${i++}`).toBe(`${i++}`);\n',
+      'textually equal interpolated templates can evaluate differently',
+    ],
+    [
+      'tests/a.spec.ts',
+      'const x = (_strings, value) => value;\nlet i = 0;\nexpect(x`${i++}`).toBe(x`${i++}`);\n',
+      'a tagged template interpolates even when the tag name ends in x',
+    ],
+    ['tests/test_login.py', 'assert d["a b"] == d["ab"]\n', 'python operands are not changed by the kept view'],
+    ['src/LoginTest.java', 'assertEquals("a", "b");\n', 'JUnit string literals differ'],
+    ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["b"])\n', 'Go map keys differ'],
+    ['tests/a.spec.ts', '/**\n * Never use test.only( in committed tests.\n */\ntest("x", async () => {});\n', 'C2 inside a doc comment'],
     [
       'tests/a.spec.ts',
       'test.skip("checkout", async () => {}); // FIXME: API returns 500, see TEA-412\n',
@@ -363,6 +401,115 @@ function run() {
   assert(multi.length === 2 && multi.every((fragment) => fragment.fragmentOnly), 'MultiEdit contributes every edit as a fragment');
 
   assert(hook.main(['--pre']) === 0, 'an empty payload fails open');
+
+  console.log('');
+
+  // ==========================================================================
+  console.log(`${colors.yellow}Test Suite 6b: Pre-Write Edits In Context${colors.reset}\n`);
+  // ==========================================================================
+
+  // An Edit's new_string read on its own is read out of context. These run the
+  // hook as Claude Code does: a payload on stdin, the project on disk, the exit code.
+  const editProject = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-enforce-edit-'));
+  try {
+    fs.mkdirSync(path.join(editProject, 'tests'), { recursive: true });
+    const spec = path.join(editProject, 'tests', 'a.spec.ts');
+    const docBlock = '/**\n * Rules for this suite.\n * Keep it fast.\n */\n';
+    const body = 'test("x", async () => {\n  expect(1).toBe(2);\n});\n';
+    const runPre = (payload) => {
+      const { spawnSync } = require('node:child_process');
+      const hookFile = path.join(__dirname, '..', 'skills', 'bmad-tea-framework', 'resources', 'hooks', 'tea-enforce.cjs');
+      const result = spawnSync(process.execPath, [hookFile, '--pre'], {
+        cwd: editProject,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: editProject },
+        input: JSON.stringify(payload),
+        encoding: 'utf8',
+      });
+      return { status: result.status, stderr: result.stderr };
+    };
+    const edit = (old_string, new_string, extra = {}) => ({
+      tool_name: 'Edit',
+      tool_input: { file_path: spec, old_string, new_string, ...extra },
+    });
+
+    fs.writeFileSync(spec, docBlock + body);
+    assert(
+      runPre(edit(' * Keep it fast.', ' * Never use test.only( in committed tests.')).status === 0,
+      'an edit inside an existing block comment is read as a comment',
+    );
+    const split = runPre(edit('test("x"', 'test.only\n("x"'));
+    assert(
+      split.status === 2 && split.stderr.includes('tests/a.spec.ts:5') && !split.stderr.includes('edited fragment'),
+      'a violation the edit completes across lines is blocked at its line in the proposed file',
+      split.stderr,
+    );
+    assert(
+      runPre({
+        tool_name: 'MultiEdit',
+        tool_input: {
+          file_path: spec,
+          edits: [
+            { old_string: 'expect(1).toBe(2)', new_string: 'expect(v).toBe(w)' },
+            { old_string: 'toBe(w)', new_string: 'toBe(v)' },
+          ],
+        },
+      }).status === 2,
+      'MultiEdit steps apply in order, so a tautology only the second step completes is blocked',
+    );
+    assert(
+      runPre(edit('expect(1).toBe(2)', 'expect(text).toBe(`$&${x}`)')).status === 0,
+      'a replacement containing $& is spliced literally, not read as a replace pattern',
+    );
+
+    // A violation already in the file is --post's to report. Blocking an unrelated
+    // edit on it would stop the agent fixing the file one edit at a time.
+    fs.writeFileSync(spec, 'test.only("a", async () => {});\ntest.only("b", async () => {});\n');
+    assert(runPre(edit('test.only("a"', 'test("a"')).status === 0, 'an edit that removes one of two existing violations is allowed');
+    assert(
+      runPre(edit('test.only("b", async () => {});\n', 'test.only("b", async () => {});\ntest.only("b", async () => {});\n')).status === 2,
+      'an edit that duplicates an existing violating line still adds one',
+    );
+
+    fs.writeFileSync(spec, 'test.only("x", () => {}); // old note\n');
+    assert(runPre(edit('old note', 'new note')).status === 0, 'rewording a comment beside an existing violation is not a new violation');
+    assert(
+      runPre(edit('test.only("x", () => {}); // old note', 'test.only("x", () => {}); // new note')).status === 0,
+      'an edit spanning the whole line keeps the existing violation it rewrites',
+    );
+    fs.writeFileSync(spec, `/*${'x'.repeat(120)}*/ expect(x).toBe(x);\n`);
+    assert(
+      runPre(edit('expect(x).toBe(x);', 'expect(x).toBe(x); expect(y).toBe(y);')).status === 2,
+      'a second violation added to a line that already has one is blocked',
+    );
+
+    // H5 now runs on edits, judged against the file as it was.
+    fs.writeFileSync(spec, 'const x = 1;\n'.repeat(999));
+    assert(
+      runPre(edit('const x = 1;\n', 'const x = 1;\nconst y = 2;\nconst z = 3;\n')).status === 2,
+      'an edit that pushes the file past the line limit is blocked',
+    );
+    fs.writeFileSync(spec, 'const x = 1;\n'.repeat(1100));
+    assert(
+      runPre(edit('const x = 1;\nconst x = 1;\n', 'const x = 1;\n')).status === 0,
+      'an edit to a file already over the limit is not blocked for the size it already had',
+    );
+
+    const missing = path.join(editProject, 'tests', 'new.spec.ts');
+    assert(
+      runPre({ tool_name: 'Edit', tool_input: { file_path: missing, old_string: '', new_string: 'test.only("x", () => {});\n' } })
+        .status === 2,
+      'an Edit that creates a file from an empty old_string is scanned as that file',
+    );
+    fs.writeFileSync(spec, body);
+    const fallback = runPre(edit('not in the file', 'test.only("x", () => {});'));
+    assert(
+      fallback.status === 2 && fallback.stderr.includes('edited fragment'),
+      'an old_string the Edit tool would reject falls back to scanning the fragment',
+      fallback.stderr,
+    );
+  } finally {
+    fs.rmSync(editProject, { recursive: true, force: true });
+  }
 
   console.log('');
 
