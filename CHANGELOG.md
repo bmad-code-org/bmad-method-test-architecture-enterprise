@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Run Test Review in CI guide opens its GitHub Actions section with the `tea-test-review` GitHub Action, the one-step route, before the self-managed workflow template.
 - The CLI reference pages name every supported agent the same way. Each one lists Claude Code, Codex, Antigravity and `--agent custom` up front and says the run uses the session that agent CLI already holds, so there is no login step before a run. The Test Design CLI quickstart no longer tells readers to run `codex login`, and the Test Review prerequisites describe signing in to an agent as one-time setup done with its vendor.
 
+### Fixed
+
+- The write-time enforcement hook that `bmad-tea-framework` installs no longer blocks two kinds of valid write, and catches two violations it missed. C3 reads assertion operands with their string literals intact, so `expect(result['actual']).toEqual(result['expected'])` and other operands that differ only inside a string are no longer reported as tautologies. The pre-write check applies an Edit or MultiEdit to the file on disk and scans the result, so editing text inside an existing comment is no longer blocked, and it blocks only on violations the edit introduces. The file-wide rules, the line limit and the Maestro no-assertion check, now also run on edits. C2 and C3 match across line breaks, so a formatter-split `test.only\n(...)` or `expect(actual)\n  .toBe(actual)` is now caught. Projects that already installed the hook pick up the fix by re-copying `.claude/hooks/tea-enforce.cjs` and updating `hookSha256` in `.tea/enforce-config.json` ([#449](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/449)).
+
 ## [3.4.0] - 2026-10-22
 
 ### Changed

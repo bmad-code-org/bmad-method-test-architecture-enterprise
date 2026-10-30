@@ -162,8 +162,8 @@ Merge into `{project-root}/.claude/settings.json`. If the file already exists, *
 
 All three are required, and each one covers a hole the others cannot:
 
-- `--pre` blocks the write before it lands. It sees only what the tool is about to write, which is why it is not sufficient on its own.
-- `--post` re-reads the affected file from disk in full. This is what catches a write made through Bash (`cat > x.spec.ts`, `sed -i`, `tee`), a violation split across two edits, and a violation sitting in the part of the file the edit never touched.
+- `--pre` blocks the write before it lands. For an Edit or MultiEdit it applies the edit to the file on disk and scans the result, so text inside an existing comment reads as a comment and a violation the edit completes is seen; it blocks only on violations the edit introduces. It sees only Write, Edit and MultiEdit, which is why it is not sufficient on its own.
+- `--post` re-reads the affected file from disk in full. This is what catches a write made through Bash (`cat > x.spec.ts`, `sed -i`, `tee`) and a violation sitting in the part of the file the edit never touched.
 - `--stop` sweeps test files modified during the turn. This is what catches a codegen script that wrote files it never named on its command line.
 
 The hook fails open: a malformed payload, an unreadable config, or an internal error exits 0 and allows the write. A broken enforcement hook must never become an agent that cannot write files.

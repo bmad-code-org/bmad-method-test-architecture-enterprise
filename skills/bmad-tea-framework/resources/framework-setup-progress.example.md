@@ -157,7 +157,7 @@ This project runs on Claude Code, which supports tool hooks, so the hook was ins
     "maxFileLines": 1000,
     "stopScanWindowSeconds": 900,
     "maxScannedFiles": 5000,
-    "hookSha256": "f2ede9d399358d8810c660a29590f0c1683f7164bb3199038d26787f8324491c"
+    "hookSha256": "0ab92ec5c43b6a115f3dd189478400743c042bbee8a69fd31d13d1f1f78b32aa"
   }
   ```
 

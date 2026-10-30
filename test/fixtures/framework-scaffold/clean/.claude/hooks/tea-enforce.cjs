@@ -32,19 +32,24 @@
  *   3. A whole-file rule (H5's 1000-line ceiling, C4's "this flow asserts nothing
  *      anywhere") cannot be decided from a fragment at all.
  *
- * So: `--pre` is the fast block on the fragment about to be written; `--post`
+ * So: `--pre` is the fast block on the write about to land. For an Edit or
+ * MultiEdit it applies the edit to the file on disk and scans the result whole,
+ * reporting only what the edit introduced, so a fragment inside an existing
+ * comment is read as a comment and a violation spanning the fragment's edge is
+ * seen; it scans the bare fragment only when the file cannot be read. `--post`
  * re-reads the affected file(s) from disk in full and applies the same rules,
- * which is what catches Bash writes and split edits; `--stop` sweeps recently
- * modified test files at the end of a turn, which is what catches a codegen script
- * that wrote files it never named. File-scope rules (H5, C4) run in `--pre` only
- * for `Write`, where the whole content is genuinely present.
+ * which is what catches Bash writes; `--stop` sweeps recently modified test files
+ * at the end of a turn, which is what catches a codegen script that wrote files it
+ * never named. File-scope rules (H5, C4) skip only that bare-fragment fallback.
  *
  * FALSE POSITIVES
  *
  * Comments and string literals are stripped, per language, before any pattern runs.
  * A doc example that writes `await page.waitForTimeout(500)` inside a fenced block
  * in a `.md` is not a violation and this hook does not claim it is. Line numbers
- * survive stripping because stripped characters are replaced by spaces.
+ * survive stripping because stripped characters are replaced by spaces. Rules
+ * whose construct a formatter splits across lines (C2, C3) match the whole
+ * stripped source and map each match back to the line it starts on.
  *
  * GATES
  *
@@ -282,7 +287,7 @@ function blank(length) {
   return ' '.repeat(length);
 }
 
-function stripCLike(source) {
+function stripCLike(source, keepStrings) {
   let out = '';
   let index = 0;
   // Whether a `/` at this position could open a regex literal rather than divide.
@@ -329,7 +334,7 @@ function stripCLike(source) {
         scan += 1;
       }
       if (closed) {
-        out += blank(scan - index);
+        out += keepStrings ? source.slice(index, scan) : blank(scan - index);
         index = scan;
         regexAllowed = false;
         continue;
@@ -351,7 +356,8 @@ function stripCLike(source) {
         if (quote !== '`' && source[scan] === '\n') break;
         scan += 1;
       }
-      for (let position = index; position < scan; position += 1) out += source[position] === '\n' ? '\n' : ' ';
+      if (keepStrings) out += source.slice(index, scan);
+      else for (let position = index; position < scan; position += 1) out += source[position] === '\n' ? '\n' : ' ';
       index = scan;
       regexAllowed = true;
       continue;
@@ -364,7 +370,7 @@ function stripCLike(source) {
   return out;
 }
 
-function stripPython(source) {
+function stripPython(source, keepStrings) {
   let out = '';
   let index = 0;
   while (index < source.length) {
@@ -382,7 +388,8 @@ function stripPython(source) {
     if (triple === '"""' || triple === "'''") {
       const end = source.indexOf(triple, index + 3);
       const stop = end === -1 ? source.length : end + 3;
-      for (let scan = index; scan < stop; scan += 1) out += source[scan] === '\n' ? '\n' : ' ';
+      if (keepStrings) out += source.slice(index, stop);
+      else for (let scan = index; scan < stop; scan += 1) out += source[scan] === '\n' ? '\n' : ' ';
       index = stop;
       continue;
     }
@@ -401,7 +408,7 @@ function stripPython(source) {
         }
         scan += 1;
       }
-      out += blank(scan - index);
+      out += keepStrings ? source.slice(index, scan) : blank(scan - index);
       index = scan;
       continue;
     }
@@ -461,20 +468,90 @@ function stripNoise(source, kind) {
   }
 }
 
+/**
+ * Comments blanked, string literals kept, same length as the input.
+ *
+ * `stripNoise` is right for deciding WHERE a pattern matches, and wrong for
+ * deciding what an operand IS: once string contents are blanked,
+ * `result['actual']` and `result['expected']` are both `result[          ]`.
+ * C3 finds its match on the stripped text and reads the operands from this one,
+ * at the same offsets.
+ */
+function stripComments(source, kind) {
+  switch (kind) {
+    case 'js':
+    case 'java':
+    case 'go':
+    case 'pactconfig': {
+      return stripCLike(source, true);
+    }
+    case 'py': {
+      return stripPython(source, true);
+    }
+    default: {
+      return source;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers shared by the rule predicates
 // ---------------------------------------------------------------------------
 
-const normalizeOperand = (value) => String(value).replaceAll(/\s+/g, '').replace(/;$/, '');
+/**
+ * An operand with the whitespace outside its string literals removed.
+ *
+ * Whitespace inside a literal is part of the value: `'a b'` and `'ab'` differ, and
+ * collapsing them would turn a comparison that can fail into a reported tautology.
+ */
+function normalizeOperand(value) {
+  let out = '';
+  let quote = null;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote) {
+      out += character;
+      if (character === '\\') {
+        out += text[index + 1] ?? '';
+        index += 1;
+      } else if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'" || character === '`') quote = character;
+    if (!/\s/.test(character)) out += character;
+  }
+  return out.replace(/;$/, '');
+}
 
-/** A pair of equal operands is the mechanical core of C3. */
-function selfComparison(line, pattern) {
-  const matches = [...line.matchAll(pattern)];
-  return matches.some((match) => {
-    const left = normalizeOperand(match[1] ?? '');
-    const right = normalizeOperand(match[2] ?? '');
-    return left.length > 0 && left === right;
-  });
+/**
+ * Offsets of every match whose two operands are the same expression: the
+ * mechanical core of C3.
+ *
+ * The pattern runs on the stripped source, so a quote or comment cannot fake a
+ * match. The operands are read from `code` (comments blanked, strings kept) at the
+ * match's group offsets, so two operands that differ only inside a string literal
+ * still compare different. Each operand group must span everything between its
+ * delimiters, surrounding whitespace included: a group that stops at the last
+ * non-blank stripped character would cut `x + 'a'` down to `x +`.
+ */
+function selfComparisons(stripped, code, pattern) {
+  const offsets = [];
+  for (const match of stripped.matchAll(pattern)) {
+    const [left, right] = [1, 2].map((group) => {
+      const span = match.indices[group];
+      return span ? normalizeOperand(code.slice(span[0], span[1])) : '';
+    });
+    if (left.length > 0 && left === right) offsets.push(match.index);
+  }
+  return offsets;
+}
+
+/** Offsets of every match of `pattern` (which must carry the `g` flag). */
+function matchOffsets(source, pattern) {
+  return [...source.matchAll(pattern)].map((match) => match.index);
 }
 
 const SKIP_TOKEN = /\.skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
@@ -578,11 +655,13 @@ const RULES = [
     severity: 'CRITICAL',
     gate: 'Absolute',
     action: 'block',
-    scope: 'line',
+    // Source scope because formatters split chains: `test.only\n("x", ...)` is as
+    // focused as the one-line form, and a per-line scan never sees it.
+    scope: 'source',
     kinds: ['js'],
     fix: 'Remove `.only` / `fdescribe` / `fit`. A committed focus silently disables every sibling test in the file.',
-    match(line) {
-      return /(?:^|[^\w.])(?:fdescribe|fit|ftest)\s*\(/.test(line) || /\.only\s*[(.]/.test(line);
+    matchSource(stripped) {
+      return [...matchOffsets(stripped, /(?<![\w.])(?:fdescribe|fit|ftest)\s*\(/g), ...matchOffsets(stripped, /\.only\s*[(.]/g)];
     },
   },
   {
@@ -591,33 +670,40 @@ const RULES = [
     severity: 'CRITICAL',
     gate: 'Absolute',
     action: 'block',
-    scope: 'line',
+    // Source scope because formatters split chains: `expect(actual)\n  .toBe(actual)`
+    // is the same tautology as the one-line form.
+    scope: 'source',
     kinds: ['js', 'py', 'java', 'go'],
     fix: 'Assert the value the system under test produced against an expectation that could differ from it.',
-    match(line, context) {
+    matchSource(stripped, context) {
+      const { code } = context;
       if (context.kind === 'js') {
         // `.not.` is excluded on purpose: `expect(x).not.toBe(x)` is a defect too,
         // but it always FAILS, so it is not the "test cannot fail" failure this row
         // is about, and blocking it would be this hook overreaching its row.
-        return selfComparison(
-          line,
-          /expect\s*\(\s*([^(),]+?)\s*\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(\s*([^(),]+?)\s*\)/g,
+        return selfComparisons(
+          stripped,
+          code,
+          /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
         );
       }
       if (context.kind === 'py') {
-        return selfComparison(line, /assert\s+([^=<>!\s]+)\s*==\s*([^=<>!\s#]+)/g);
+        // Horizontal whitespace only: a Python statement does not continue onto the
+        // next line without a bracket or a backslash, so `\s` here would pair an
+        // `assert` with a `==` on a later, unrelated line.
+        return selfComparisons(stripped, code, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg);
       }
       if (context.kind === 'java') {
-        return (
-          /assertTrue\s*\(\s*true\s*\)/.test(line) ||
-          /assertFalse\s*\(\s*false\s*\)/.test(line) ||
-          selfComparison(line, /assertEquals\s*\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g)
-        );
+        return [
+          ...matchOffsets(stripped, /assertTrue\s*\(\s*true\s*\)/g),
+          ...matchOffsets(stripped, /assertFalse\s*\(\s*false\s*\)/g),
+          ...selfComparisons(stripped, code, /assertEquals\s*\(([^,()]+?),([^,()]+?)\)/dg),
+        ];
       }
       if (context.kind === 'go') {
-        return selfComparison(line, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/g);
+        return selfComparisons(stripped, code, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
       }
-      return false;
+      return [];
     },
   },
   {
@@ -746,6 +832,24 @@ function activeRules(config) {
   return RULES.filter((rule) => !disabled.has(rule.id));
 }
 
+function lineStartOffsets(source) {
+  const starts = [0];
+  for (let index = source.indexOf('\n'); index !== -1; index = source.indexOf('\n', index + 1)) starts.push(index + 1);
+  return starts;
+}
+
+/** Zero-based line holding `offset`, by binary search over line starts. */
+function lineAt(lineStarts, offset) {
+  let low = 0;
+  let high = lineStarts.length - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (lineStarts[middle] <= offset) low = middle;
+    else high = middle - 1;
+  }
+  return low;
+}
+
 /**
  * Apply every open-gated rule to one file's content.
  *
@@ -769,6 +873,8 @@ function scanContent(relativePath, source, config, options) {
   const strippedLines = stripped.split('\n');
   const rawLines = source.split('\n');
   const lineCount = source.replace(/\n$/, '').split('\n').length;
+  const lineStarts = lineStartOffsets(stripped);
+  let code = null;
   const findings = [];
 
   for (const rule of activeRules(settings)) {
@@ -783,6 +889,24 @@ function scanContent(relativePath, source, config, options) {
           line: 1,
           detail: rule.describe ? rule.describe(context) : '',
           text: '',
+        });
+      }
+      continue;
+    }
+
+    if (rule.scope === 'source') {
+      // Every offset maps back to the line it starts on. Stripping preserves
+      // newlines, so offsets into the stripped text are offsets into the source.
+      // One finding per line, as the line rules report.
+      code ??= stripComments(source, kind);
+      const context = { kind, config: settings, code, relativePath };
+      const lines = new Set(rule.matchSource(stripped, context).map((offset) => lineAt(lineStarts, offset)));
+      for (const index of [...lines].sort((a, b) => a - b)) {
+        findings.push({
+          rule,
+          line: index + 1,
+          detail: '',
+          text: (rawLines[index] || '').trim().slice(0, 120),
         });
       }
       continue;
@@ -897,6 +1021,78 @@ function fragmentsFromPayload(payload) {
       .map((edit) => ({ text: edit.new_string, fragmentOnly: true }));
   }
   return [];
+}
+
+/**
+ * One Edit step applied to `content` the way the Edit tool applies it, or null
+ * when it cannot be (the tool would reject it too).
+ *
+ * Index splicing on purpose: `String.prototype.replace` reads `$&` and `$1` in the
+ * replacement as patterns, and test code is full of template literals.
+ */
+function applyEdit(content, edit) {
+  if (!edit || typeof edit.old_string !== 'string' || typeof edit.new_string !== 'string') return null;
+  if (edit.old_string === '') return content === '' ? edit.new_string : null;
+  if (edit.replace_all === true) {
+    return content.includes(edit.old_string) ? content.split(edit.old_string).join(edit.new_string) : null;
+  }
+  const at = content.indexOf(edit.old_string);
+  if (at === -1) return null;
+  return content.slice(0, at) + edit.new_string + content.slice(at + edit.old_string.length);
+}
+
+/**
+ * The file as it is now and as it will be once this Edit or MultiEdit lands, or
+ * null when that cannot be built.
+ *
+ * An Edit's `new_string` scanned on its own is scanned out of context: a fragment
+ * that sits inside an existing block comment or template literal looks like code,
+ * and a rule that spans the fragment's boundary is invisible. Building the
+ * proposed file gives `--pre` the same view `--post` will have, and lets the
+ * file-scope rules run on edits too. A missing file is an empty one, which is how
+ * the Edit tool creates a file from an empty `old_string`.
+ */
+function proposedEdit(payload, absolutePath) {
+  const input = payload.tool_input || {};
+  let edits = null;
+  if (payload.tool_name === 'Edit') edits = [input];
+  if (payload.tool_name === 'MultiEdit' && Array.isArray(input.edits)) edits = input.edits;
+  if (!edits) return null;
+
+  let before = '';
+  try {
+    before = fs.readFileSync(absolutePath, 'utf8');
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') return null;
+  }
+
+  let after = before;
+  for (const edit of edits) {
+    after = applyEdit(after, edit);
+    if (after === null) return null;
+  }
+  return { before, after };
+}
+
+/**
+ * Findings in `after` that `before` does not already have.
+ *
+ * `--pre` judges the write in front of it. A violation already sitting in the
+ * untouched part of the file is `--post`'s to report, and blocking an unrelated
+ * edit on it would stop the agent fixing a file one edit at a time. Line numbers
+ * move under an edit, so findings are matched by rule and line text, as a
+ * multiset: an edit that duplicates a violating line still adds one.
+ */
+function introducedFindings(before, after) {
+  const key = (finding) => `${finding.rule.id}\u0000${finding.text}`;
+  const existing = new Map();
+  for (const finding of before) existing.set(key(finding), (existing.get(key(finding)) || 0) + 1);
+  return after.filter((finding) => {
+    const remaining = existing.get(key(finding)) || 0;
+    if (remaining === 0) return true;
+    existing.set(key(finding), remaining - 1);
+    return false;
+  });
 }
 
 function scanRoots(globs) {
@@ -1060,6 +1256,15 @@ function main(argv) {
   const relative = path.relative(projectRoot, absolute);
   if (relative.startsWith('..')) return 0;
 
+  const proposed = proposedEdit(payload, absolute);
+  if (proposed) {
+    const scan = (source) => scanContent(relative, source, config, { fragmentOnly: false });
+    const findings = introducedFindings(scan(proposed.before), scan(proposed.after)).map((finding) => ({ ...finding, file: relative }));
+    return report(findings, 'TEA enforcement blocked this write:');
+  }
+
+  // The proposed file could not be built (unreadable file, or an old_string the
+  // Edit tool will reject anyway), so fall back to the fragments on their own.
   const findings = fragmentsFromPayload(payload).flatMap((fragment) =>
     scanContent(relative, fragment.text, config, { fragmentOnly: fragment.fragmentOnly }).map((finding) => ({
       ...finding,
@@ -1091,11 +1296,14 @@ module.exports = {
   matchesAnyGlob,
   kindForPath,
   stripNoise,
+  stripComments,
   commentIndex,
   integrityWarning,
   scanContent,
   scanFile,
   targetsFromPayload,
   fragmentsFromPayload,
+  proposedEdit,
+  introducedFindings,
   main,
 };
