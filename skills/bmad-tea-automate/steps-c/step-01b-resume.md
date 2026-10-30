@@ -82,6 +82,8 @@ If `workflowStatus` is missing (legacy summary), infer it from `lastStep`: `'ste
 
 ---
 
+For a story run, read `{tea-contracts}/story-identity.md` before continuing: a named story is resolved by its sections 1 and 4 for the identity check, `ticketRef` locates the story when `storyFile` is empty or gone, and section 5 governs every citation the checkpoint carries (read through `resolvedSources`; report, never follow, an `unresolved` one). This holds on every resume path, named or not.
+
 ### 3. Display Progress Dashboard
 
 Display:

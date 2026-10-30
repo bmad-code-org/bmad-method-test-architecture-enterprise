@@ -276,7 +276,8 @@ UI components to implement:
 `{outputFile}` already holds this run's frontmatter and working notes from Steps 1-3. The checklist becomes the document body: replace everything below the frontmatter with `checklistContent`, and keep the frontmatter block (`runScope`, `runKey`, `workflowStatus`, `stepsCompleted`, and the story fields) exactly as this run wrote it. Save Progress below then updates the frontmatter for this step.
 
 ```javascript
-const outputFile = `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`;
+// The checklist this run is bound to: Step 1's path, or the exact path Resume selected.
+const outputFile = `{atddChecklistPath}`;
 const existing = fs.readFileSync(outputFile, 'utf8');
 const frontmatter = existing.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0];
 if (!frontmatter) {
@@ -287,13 +288,13 @@ if (!frontmatter) {
 fs.writeFileSync(outputFile, `${frontmatter}\n${checklistContent}`, 'utf8');
 ```
 
-The file only ever holds this run's work: Step 1 replaced any earlier checklist for this story, and checklists for other stories live under their own filenames.
+The file only ever holds this run's work: Step 1 replaced any earlier checklist for this story, and checklists for other stories live under their own filenames. Write only to the bound `{atddChecklistPath}`; never rebuild the path from `story_key`, so a resumed checklist at another path is the one updated.
 
-**If `{story_file}` exists and is writable, attempt to link artifacts back into the story:**
+**If the story is a v6 story file and `{story_file}` exists and is writable, attempt to link artifacts back into the story.** Never write to a v7 leaf file, plan or `tickets.toml`; for a v7 ticket the completion summary hands these paths to the builder instead:
 
 - Add or update a `### ATDD Artifacts` subsection under `## Dev Notes`
 - Record:
-  - `Checklist: {test_artifacts}/atdd/atdd-checklist-{story_key}.md`
+  - `Checklist: {atddChecklistPath}`
   - `API tests: {api_test_file_path}` when present
   - `E2E tests: {e2e_test_file_path}` when present
   - `Component tests: {component_test_file_path}` when present
@@ -375,7 +376,7 @@ Display to user:
 - tests/api/[feature].spec.ts (with test.skip())
 - tests/e2e/[feature].spec.ts (with test.skip())
 - tests/fixtures/test-data.ts
-- {test_artifacts}/atdd/atdd-checklist-{story_key}.md
+- {atddChecklistPath}
 
 📝 Next Steps:
 1. Link ATDD artifacts into the story file if available
@@ -416,6 +417,7 @@ Proceed to Step 5 when:
 - Set `storyId` to `{story_id}`
 - Set `storyKey` to `{story_key}`
 - Set `storyFile` to `{story_file}`
+- Set `ticketRef` to `{ticket_ref}`
 - Set `atddChecklistPath` to `{outputFile}`
 - Set `generatedTestFiles` deterministically to the list of present test paths in this order: API, E2E, Component (omit blanks / N/A values)
 

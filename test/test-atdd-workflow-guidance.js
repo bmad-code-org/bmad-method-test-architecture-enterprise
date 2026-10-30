@@ -125,6 +125,8 @@ function main() {
   const required = [
     ['preflight', 'Preserve every supplied criterion id'],
     ['template', 'This checklist changes no ticket, plan or story status.'],
+    ['preflight', 'before any system-level file. Only when neither exists, look for the system-level'],
+    ['preflight', 'never derive an epic number from a bare entry id'],
     ['template', "**v7 ticket:** the builder records the work in the story's plan, and you or your orchestrator mark the ticket done."],
     ['template', 'she runs `tickets.py mark` on a repo store, or the tracker transition on a Jira, Linear or GitHub store.'],
     ['template', '**v6 story:** update the story file and `sprint-status.yaml` as your sprint process does.'],

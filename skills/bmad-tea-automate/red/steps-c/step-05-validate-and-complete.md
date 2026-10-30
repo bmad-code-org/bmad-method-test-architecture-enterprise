@@ -87,9 +87,10 @@ Report:
 
 - Test files created
 - Checklist output path
-- Story key / story file handoff path
+- Story key, and the handoff: for a v7 ticket, its `ticketRef` and the `plan` path `find` returned, saying whether that plan exists yet, so the builder lists these red tests in it; for a v6 story, the story file
 - Key risks or assumptions
-- Next recommended workflow (usually BMM `bmad-build`, or `dev-story` before BMAD 6.12; `automate` comes after implementation)
+- Next recommended workflow: `bmad-build` when the method module is installed (`dev-story` before BMAD 6.12), otherwise the team's own implementation process; `automate` comes after implementation
+- Red mode changed no ticket, plan or story status
 
 ---
 
@@ -111,6 +112,7 @@ Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test
   storyId: '{story_id}'
   storyKey: '{story_key}'
   storyFile: '{story_file}'
+  ticketRef: '{ticket_ref}'
   atddChecklistPath: '{outputFile}'
   generatedTestFiles: []
   ---
@@ -124,7 +126,7 @@ Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test
   - Add `'step-05-validate-and-complete'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-validate-and-complete'`
   - Set `lastSaved: '{date}'`
-  - Ensure `storyId`, `storyKey`, `storyFile`, and `atddChecklistPath` are present and populated
+  - Ensure `storyId`, `storyKey`, `atddChecklistPath`, and `storyFile` or `ticketRef` are present and populated
   - Ensure `generatedTestFiles` remains populated with the deterministic list of present generated test paths
   - Retain the resolved frontmatter settings and `healing_rounds_used` saved by the loop; completion never resets the budget.
   - Append this step's output to the appropriate section.

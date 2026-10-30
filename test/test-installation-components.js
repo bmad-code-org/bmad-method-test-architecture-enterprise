@@ -1272,8 +1272,7 @@ async function runTests() {
       'say which TEA skill would fill it once installed',
       '`bmad-tea-test-design` at epic level',
       '`bmad-tea-automate` in red mode, then `bmad-build`',
-      "Red mode reads a story file: a v6 story, or a v7 story's leaf file once Sofia the Product Owner has pulled its entry.",
-      'For an entry that is not pulled, have Sofia pull it first: red mode records the story file in its checklist for the builder.',
+      "Red mode takes the story's ref (`1.2`), its title, or its leaf file, and reads the ticket through the method's ticket tools; on v6 it takes the story file.",
       '`bmad-qa-generate-e2e-tests` remains the fit for a quick, one-off set of end-to-end tests',
       "The story's status is never TEA's to change.",
       '--key modules.tea.test_artifacts',
@@ -1314,6 +1313,145 @@ async function runTests() {
     assert(!/solutioning/i.test(helpContent), 'skills/bmod-tea/help/help.md speaks v7, not v6 phase names');
   } catch (error) {
     assert(false, 'skills/bmod-tea/help/help.md method-flow routing validates', error.message);
+  }
+
+  // One story identity for every story-scoped workflow, read from the module
+  // record, and a migration that carries pre-v7 story outputs onto tickets.
+  try {
+    const contract = await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/contracts/story-identity.md'), 'utf8');
+    for (const marker of [
+      'uv run "{project-root}/_bmad/method/scripts/tickets.py" --project-root "{project-root}" find ["<dir>"] "<ref>"',
+      'Quote each argument, so a title phrase such as `guest checkout` reaches `find` as one reference.',
+      'A v7 error never falls back to the v6 route.',
+      'epic entry: `<initiative>--e<epic id>-s<entry id>`',
+      'initiative entry: `<initiative>--s<entry id>`',
+      'backlog leaf: `backlog--<leaf file stem>`',
+      'Folder names never contain `--`, so keys of different shapes and initiatives never collide.',
+      'Its `## Prior builds` section is history, never criteria.',
+      'Only an epic entry has epic context',
+      "A check that requires the story's location accepts `storyFile` or `ticketRef`.",
+      '`bmad migrate tea` carries them onto their tickets',
+    ]) {
+      assert(contract.includes(marker), `skills/bmod-tea/contracts/story-identity.md states: ${marker}`);
+    }
+    const workflows = {
+      'skills/bmad-tea-automate/red/steps-c/step-01-preflight-and-context.md': 'red mode',
+      'skills/bmad-tea-automate/steps-c/step-01-preflight-and-context.md': 'expand mode',
+      'skills/bmad-tea-trace/steps-c/step-01-load-context.md': 'trace',
+      'skills/bmad-tea-nfr/steps-c/step-01-load-context.md': 'nfr',
+      'skills/bmad-tea-test-review/steps-c/step-01-load-context.md': 'test review',
+    };
+    for (const [file, label] of Object.entries(workflows)) {
+      const content = await fs.readFile(path.join(projectRoot, file), 'utf8');
+      assert(content.includes('{tea-contracts}/story-identity.md'), `${label} resolves stories by the shared contract`);
+      assert(
+        !content.includes('`story_key` is the BMM story file basename without `.md`'),
+        `${label} no longer carries its own copy of the v6 story_key rule`,
+      );
+    }
+    for (const skill of ['bmad-tea-automate', 'bmad-tea-trace', 'bmad-tea-nfr', 'bmad-tea-test-review']) {
+      const skillMd = await fs.readFile(path.join(projectRoot, 'skills', skill, 'SKILL.md'), 'utf8');
+      assert(
+        skillMd.includes('`{tea-contracts}` is the `contracts/` folder of the `bmod-tea` skill'),
+        `${skill}/SKILL.md defines {tea-contracts}`,
+      );
+    }
+    const aggregate = await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-automate/red/steps-c/step-04c-aggregate.md'), 'utf8');
+    assert(
+      aggregate.includes('Never write to a v7 leaf file, plan or `tickets.toml`'),
+      'red mode links artifacts back only into a v6 story file',
+    );
+    // Mirror core's knowledge.py check: a [migration] table with every field a
+    // non-empty string, module equal to the record's code, and a non-empty
+    // checklist of non-empty strings. Anything less and `bmad migrate` never lists it.
+    const { parse: parseToml } = require('smol-toml');
+    const migrationProblems = (source) => {
+      const table = parseToml(source).migration;
+      if (!table || typeof table !== 'object') return ['no [migration] table'];
+      const problems = ['module', 'from', 'to', 'title', 'summary', 'detect', 'guide']
+        .filter((name) => typeof table[name] !== 'string' || table[name].trim() === '')
+        .map((name) => `empty ${name}`);
+      const { checklist } = table;
+      if (!Array.isArray(checklist) || checklist.length === 0 || !checklist.every((item) => typeof item === 'string' && item.trim())) {
+        problems.push('empty checklist');
+      }
+      if (table.module !== 'tea') problems.push(`module ${table.module} is not tea`);
+      return problems;
+    };
+    const migration = await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/migration-2.toml'), 'utf8');
+    assert(
+      migrationProblems(migration).length === 0,
+      `skills/bmod-tea/migration-2.toml passes core's migration check: ${migrationProblems(migration).join(', ')}`,
+    );
+    assert(
+      migrationProblems(migration.replace(/^title = ".*"$/m, 'title = ""')).includes('empty title') &&
+        migrationProblems(migration.replace(/^checklist = \[[\s\S]*\]\s*$/m, 'checklist = []')).includes('empty checklist'),
+      'the migration check rejects an empty title and an empty checklist',
+    );
+    for (const marker of [
+      'A key prefix or a similar title is never evidence.',
+      'never leave two files with one story key in a workflow folder',
+      '<test_artifacts>/migration-tea-v7-preserved/<its path relative to the test artifacts folder>',
+      'its unresolved list names every pre-v7 story output still present: the project is already migrated',
+      '`adopted` (`pending`, `moved`, `rewritten`), `preserved` (`pending`, `moved`)',
+      'Ticket files, plans, stories and the method record are read only.',
+      '## Resume',
+      'never write a new plan over it',
+      'passing the folder works with no active initiative',
+      'the story id its H1 heading states',
+      'A v7 key contains `--`',
+      'pieces of evidence that name different tickets, leave the set unresolved',
+      'commit the moves alone, so git records each as a rename',
+    ]) {
+      assert(migration.includes(marker), `skills/bmod-tea/migration-2.toml holds: ${marker}`);
+    }
+    for (const marker of [
+      'its `epic` field holds the same name for every shape, so it does not tell them apart',
+      '**Backlog leaf:** `folder` is `backlog`.',
+      'a v6 or no-method run never mentions it',
+      'Never read the entry id as an epic id',
+      'Every resume of a story run loads this section too.',
+    ]) {
+      assert(contract.includes(marker), `skills/bmod-tea/contracts/story-identity.md states: ${marker}`);
+    }
+    assert(
+      aggregate.includes('const outputFile = `{atddChecklistPath}`;') &&
+        !aggregate.includes('const outputFile = `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`;'),
+      'red mode aggregation writes the bound checklist path, never a path rebuilt from story_key',
+    );
+    for (const file of [
+      'skills/bmad-tea-automate/steps-c/step-01-preflight-and-context.md',
+      'skills/bmad-tea-trace/steps-c/step-01-load-context.md',
+      'skills/bmad-tea-nfr/steps-c/step-01-load-context.md',
+      'skills/bmad-tea-test-review/steps-c/step-01-load-context.md',
+    ]) {
+      const content = await fs.readFile(path.join(projectRoot, file), 'utf8');
+      assert(
+        content.includes('also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter'),
+        `${file} saves the story fields`,
+      );
+    }
+    for (const file of [
+      'skills/bmad-tea-automate/red/steps-c/step-01b-resume.md',
+      'skills/bmad-tea-automate/steps-c/step-01b-resume.md',
+      'skills/bmad-tea-trace/steps-c/step-01b-resume.md',
+      'skills/bmad-tea-nfr/steps-c/step-01b-resume.md',
+      'skills/bmad-tea-test-review/steps-c/step-01b-resume.md',
+    ]) {
+      const content = await fs.readFile(path.join(projectRoot, file), 'utf8');
+      assert(content.includes('This holds on every resume path, named or not.'), `${file} loads the story contract on resume`);
+    }
+    const reviewContext = await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-test-review/steps-c/step-01-load-context.md'), 'utf8');
+    const contextSection = reviewContext.slice(
+      reviewContext.indexOf('## 3. Resolve Context Artifacts'),
+      reviewContext.indexOf('Record `{context_basis}`'),
+    );
+    assert(
+      contextSection.includes('0. **The invocation names a story**'),
+      'test review resolves a named story while building its context set, before context_basis is recorded',
+    );
+  } catch (error) {
+    assert(false, 'story identity contract and TEA migration-2 validate', error.message);
   }
 
   // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside

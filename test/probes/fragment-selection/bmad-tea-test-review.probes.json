@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-tea-test-review",
-    "implementationDigest": "sha256:57a25f93b4cf63d49984d66269b989842332d5ad73cbb243cdc5d3e04b4f76b5",
+    "implementationDigest": "sha256:781da493b1e2e185fb468a98e3eca7d57e86ab860abdbd6a84d50182305509e1",
     "artifactDigest": "sha256:fb2d01c1d6bcb04c0be24ba7beccc32d5504c0dd5f5c5ecb5d7e0b7d7f799c06",
-    "commitDigest": "sha256:57a25f93b4cf63d49984d66269b989842332d5ad73cbb243cdc5d3e04b4f76b5",
+    "commitDigest": "sha256:781da493b1e2e185fb468a98e3eca7d57e86ab860abdbd6a84d50182305509e1",
     "rationale": "A run that names every fragment in the index satisfies O-001 for test-review-maestro-flow-set, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -86,9 +86,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-tea-test-review",
-    "implementationDigest": "sha256:57a25f93b4cf63d49984d66269b989842332d5ad73cbb243cdc5d3e04b4f76b5",
+    "implementationDigest": "sha256:781da493b1e2e185fb468a98e3eca7d57e86ab860abdbd6a84d50182305509e1",
     "artifactDigest": "sha256:fb2d01c1d6bcb04c0be24ba7beccc32d5504c0dd5f5c5ecb5d7e0b7d7f799c06",
-    "commitDigest": "sha256:57a25f93b4cf63d49984d66269b989842332d5ad73cbb243cdc5d3e04b4f76b5",
+    "commitDigest": "sha256:781da493b1e2e185fb468a98e3eca7d57e86ab860abdbd6a84d50182305509e1",
     "rationale": "test-review-maestro-flow-set declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -98,7 +98,7 @@
         "privateRef": null,
         "digest": "sha256:fb2d01c1d6bcb04c0be24ba7beccc32d5504c0dd5f5c5ecb5d7e0b7d7f799c06"
       },
-      "revisionCommitDigest": "sha256:57a25f93b4cf63d49984d66269b989842332d5ad73cbb243cdc5d3e04b4f76b5",
+      "revisionCommitDigest": "sha256:781da493b1e2e185fb468a98e3eca7d57e86ab860abdbd6a84d50182305509e1",
       "noKnownDefectStatement": "test-review-maestro-flow-set's expected selection is derived from the bmad-tea-test-review step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

@@ -139,6 +139,7 @@ Context is what the tests are judged _against_: the story or acceptance criteria
 
 **Resolution order:**
 
+0. **The invocation names a story** (a ticket ref, title or leaf file, or a v6 story file) → resolve and read it by `{tea-contracts}/story-identity.md` sections 1 to 3. The story and the files that contract reads for it join the context set, alongside any `context_files`. This is the only way a story the caller did not list enters a review, and it works headless too.
 1. **`context_files` is non-empty** → it IS the complete context set. Read every entry. Validate each path exists and report a missing one in the review report rather than dropping it silently.
 2. **Empty and `headless: false`** → ask the user which story, test design, or changed source applies, and offer to proceed without it.
 3. **Empty and `headless: true`** → proceed with no context. Never ask, never go hunting for a story on your own; an unrequested artifact you happened to find is exactly the nondeterminism this resolution order exists to prevent.
@@ -146,7 +147,7 @@ Context is what the tests are judged _against_: the story or acceptance criteria
 Record `{context_basis}` from what you actually read, never from what was requested:
 
 - `none` — nothing was supplied or found
-- `pr_diff` — the supplied context set
+- `pr_diff` — the supplied context set, including a named story and what it brought in
 - `pr_diff_truncated` — the caller states the set was trimmed to a size limit
 
 Step 4 must publish this value, so persist it.
@@ -167,8 +168,8 @@ Every run writes its report to a file whose name carries the run's identity, so 
 
 Apply the first rule that matches:
 
-1. **The user named a story or epic in this invocation.** Use it.
-2. **The context set read in section 3 carries exactly one story or epic.** A story comes from a BMM story file (a basename such as `1-2-user-authentication.md`, or an H1 such as `Story 1.2: User Authentication`). An epic comes from an epic document's metadata, H1 heading, or filename. Use only artifacts section 3 actually read. Never go looking for a story or epic to name the run.
+1. **The user named a story or epic in this invocation.** Use it. A named story was already resolved and read in section 3.
+2. **The context set read in section 3 carries exactly one story or epic.** A story comes from a v7 ticket leaf or a BMM story file (a basename such as `1-2-user-authentication.md`, or an H1 such as `Story 1.2: User Authentication`). An epic comes from an epic document's metadata, H1 heading, or filename. Use only artifacts section 3 actually read. Never go looking for a story or epic to name the run.
 3. **The context set carries several stories or epics.** Interactive runs list the candidates and ask which one this review covers. **Halt** until the user answers. Headless runs never ask: they fall through to rule 4, and step 4 states in the report that the context named several scopes, so the run was keyed to its reviewed target.
 4. **No story or epic applies.** When `review_scope` is `suite`, the scope is the whole system. Otherwise the scope is the reviewed target: the project-relative path of the reviewed file (`single`) or directory (`directory`). When `review_files` sets the review set, the target is the one file it names, or the deepest directory that contains every file it names.
 
@@ -181,7 +182,7 @@ Then set the identity from the resolved scope:
 | Whole system    | `system`    | `system`            |
 | Reviewed target | `target`    | `target-{slug}`     |
 
-- `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, use the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- Resolve, read and name the story by `{tea-contracts}/story-identity.md`: `story_key` is `shop--e1-s2` for a v7 epic entry and the v6 story file basename (`1-2-user-authentication`) for a v6 story.
 - `epic_num` is the epic's number. An epic with no number uses the slug of its title.
 - `{slug}` is the slug of the target path. If the slug comes out empty (the target is the project root), the scope is the whole system: `system`.
 
@@ -243,6 +244,8 @@ lastSaved: '{date}'
 ```
 
 Then write this step's output below the frontmatter.
+
+For a story run (`run_scope` is `story`), also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter, as `{tea-contracts}/story-identity.md` section 4 defines them. Other scopes leave them out.
 
 `runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged, and Resume mode refuses to continue a report whose `runKey` does not match the run being resumed.
 

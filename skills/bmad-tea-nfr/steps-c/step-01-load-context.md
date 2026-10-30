@@ -103,14 +103,14 @@ Every run writes its audit to a file whose name carries the run's scope, so an a
 
 - `system`: the whole project or system, or no narrower scope could be resolved.
 - `epic-{epic_num}`: one epic.
-- `story-{story_key}`: one story. `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, use the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- `story-{story_key}`: one story. Resolve, read and name the story by `{tea-contracts}/story-identity.md`: `story_key` is `shop--e1-s2` for a v7 epic entry and the v6 story file basename (`1-2-user-authentication`) for a v6 story.
 
 Slug rule (used for an epic title with no number): lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
 
 Resolve the scope in this order:
 
 1. Use the scope the user named in this invocation (a story, an epic, or the whole system).
-2. Otherwise take the scope carried by the artifacts loaded above: the story file name for a story, or the epic number from the epic document's metadata, H1 heading, or filename for an epic. An epic with no number uses the slug of its title in place of `epic_num`.
+2. Otherwise take the scope carried by the artifacts loaded above: the story (a v7 ticket or a v6 story file) for a story, or the epic number from the epic document's metadata, H1 heading, or filename for an epic. An epic with no number uses the slug of its title in place of `epic_num`.
 3. If several candidate scopes remain in an interactive run, list them and ask the user which one this audit covers. **Halt** until they answer. A headless or autonomous run that cannot resolve a single scope uses `system` and states that choice in the audit's output.
 
 Set `run_scope` to `story`, `epic`, or `system` to match the resolved form, and set `run_key` accordingly.
@@ -154,6 +154,8 @@ lastSaved: '{date}'
 ```
 
 Then write this step's output below the frontmatter.
+
+For a story run (`run_scope` is `story`), also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter, as `{tea-contracts}/story-identity.md` section 4 defines them. Other scopes leave them out.
 
 `runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged, and Resume mode refuses to continue a file whose `runKey` does not match the run being resumed.
 

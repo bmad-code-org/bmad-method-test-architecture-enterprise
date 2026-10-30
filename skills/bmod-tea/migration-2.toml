@@ -1,0 +1,100 @@
+# TEA's second migration: story outputs written under v6 story keys move onto v7 ticket keys. `bmad migrate` runs a module's `migration-<n>.toml` files in `<n>` order.
+
+[migration]
+module = "tea"
+from = "3 with v6 story keys"
+to = "3 with v7 story keys"
+title = "Move TEA story outputs onto their v7 tickets"
+summary = "Finds checklists, summaries, matrices and reports keyed by a v6 story file or a v7 leaf file name, maps each to its v7 ticket from exact evidence, and, once the user approves the plan, renames each to the ticket's key and rewrites its identity fields. Historical citations stay as written; a resolved-source list beside them names where each source lives now. Nothing outside the test artifacts folder changes."
+
+# Read-only signals. An unfinished plan, or all three of the rest.
+detect = """
+- `{test_artifacts}/migration-tea-v7.md` exists with a `status` other than `done`: an earlier run stopped part way; resume it ("Resume") before anything else.
+- That plan exists with `status: done` and its unresolved list names every pre-v7 story output still present: the project is already migrated. Report the plan's results and stop, writing nothing. A pre-v7 output the plan does not list is new work: run again with a new dated run section appended to the same plan, keeping its history and the first backup, and a new backup of the files that run touches.
+- `{project-root}/_bmad/method/scripts/tickets.py` exists, and the ticket tree is current v7: `uv run {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} status <folder>` succeeds for each `initiative-*/` folder and `backlog/` under the output folder (passing the folder works with no active initiative). When one errors with the earlier layout, or `{output_folder}/migration-v6-v7/migration-v6-v7.md` exists without `status: done`, the method migration comes first; say so and stop.
+- The test artifacts folder (`modules.tea.test_artifacts`) holds a story output whose key is not a v7 key. Story outputs are `atdd/atdd-checklist-<key>.md`, `automate/automation-summary-story-<key>.md`, `trace/traceability-matrix-story-<key>.md` with Trace's summary and gate files of the same run key, `nfr/nfr-assessment-story-<key>.md` and `test-review/test-review-story-<key>.md`, the same names at the folder's root, and the fixed root names `automation-summary.md`, `traceability-matrix.md`, `nfr-assessment.md` and `test-review.md` when their content names one story.
+- A v7 key contains `--`: every shape in `bmod-tea/contracts/story-identity.md` section 4 does (`shop--e1-s2`, `shop--epic-loyalty-s2`, `shop--s6a`, `backlog--story-x`), and no pre-v7 key can, since v6 basenames and leaf stems are slugs. A key without `--`, such as `1-2-user-authentication` or `story-guest-checkout`, is a pre-v7 key.
+"""
+
+target = """
+<test_artifacts>/
+  atdd/atdd-checklist-<v7 key>.md
+  automate/automation-summary-story-<v7 key>.md
+  trace/traceability-matrix-story-<v7 key>.md   # with its summary and gate files, renamed together
+  nfr/nfr-assessment-story-<v7 key>.md
+  test-review/test-review-story-<v7 key>.md
+  migration-tea-v7.md                           # the plan, applied moves, and unresolved list
+<project-root>/.tea-v7-migration-backup-<datetime>/   # a copy of the test artifacts folder, made first
+Each moved file keeps its status, steps, evidence and gate decision. Its identity fields name the ticket: `storyId`, `storyKey`, `runKey = story-<v7 key>`, `ticketRef`, target id and label, its own path fields, and links between the files of one Trace run. `migratedFrom` holds the old values. Its citations (`inputDocuments`, `oracleSources`, `oracleLedger` sources) stay verbatim, and `resolvedSources` lists, per citation, `original`, `current` and `status: resolved | unresolved`.
+"""
+
+precautions = """
+- Nothing changes before the user approves the plan. The only writes before approval are the backup and the plan file.
+- Never overwrite a file, and never leave two files with one story key in a workflow folder. An occupied destination, or two sources for one destination, is a conflict the user decides: keep the existing destination, or promote one source to it. Every file not kept at the destination moves unchanged to `<test_artifacts>/migration-tea-v7-preserved/<its path relative to the test artifacts folder>`, outside every workflow's lookups; a root-level file and a folder file with one name therefore land apart. Every preserved destination is in the approved plan and is checked for an existing file before anything moves.
+- Never write outside the test artifacts folder and the backup. Ticket files, plans, stories and the method record are read only.
+- A key prefix or a similar title is never evidence. A file with no exact evidence stays where it is and is listed as unresolved.
+- When the files are under git, every move is a `git mv`, so history follows the file; an untracked file moves with `mv` and no overwrite.
+"""
+
+guide = """
+## Sequence
+
+1. Check the signals in `detect`. An unfinished plan goes to "Resume"; otherwise stop when one fails.
+2. Backup ("Backup").
+3. Inventory ("Inventory").
+4. Map each set to a ticket ("Map").
+5. Write the plan and wait for approval ("Plan").
+6. Apply the approved moves ("Apply").
+7. Run every `checklist` item and record its result in the plan. Fix and recheck a failure, or report it; never skip one.
+8. Report ("Report").
+
+Under git, commit before step 6 and after it, the message naming the step; never stage the backup. Never push.
+
+## Resume
+
+Read the unfinished plan. Its approved sets, mappings and conflict decisions stand; never write a new plan over it, and keep the first backup. The plan journals each file with its disposition and state: `adopted` (`pending`, `moved`, `rewritten`), `preserved` (`pending`, `moved`), `unresolved` or `left` (no operation). Resume only pending work: an `adopted` file still at its old path is moved, one at its new path but not `rewritten` gets its identity fields; a `preserved` file still at its old path moves unchanged and is never rewritten. When a file is at neither its old nor its planned path, or a source and its destination both exist, stop and report it. Then continue at step 7.
+
+## Backup
+
+Read `core.output_folder` and `modules.tea.test_artifacts` with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key modules.tea.test_artifacts`. Copy the whole test artifacts folder to `{project-root}/.tea-v7-migration-backup-<datetime>/` (`YYYYMMDD-HHMM`), write a `.gitignore` there holding `*`, and confirm the copy holds every file. On a rerun whose plan already exists, keep the first backup.
+
+## Inventory
+
+List every story output `detect` names that carries a pre-v7 key. Group the files of one run into a set: a Trace matrix with the summary and gate files of its run key; any other output alone. Read each set's frontmatter for `storyId`, `storyKey`, `storyFile`, `runKey` and its citations. A fixed root name whose content names no single story is listed as unresolved, not guessed.
+
+## Map
+
+Map each set to one ticket from every exact evidence that holds, checked in this order:
+
+1. Its `storyFile`. When the file still exists inside the ticket tree, pass its container folder and basename to `tickets.py find`. When it no longer exists, look the path up in the method record `{output_folder}/migration-v6-v7/migration-v6-v7.md`, which states what moved where and each story's v7 entry in prose; read the entry it names.
+2. An `[[entry]]` in any `tickets/tickets.toml` under the output folder whose `v6_key` equals the set's key exactly.
+3. The method record's statement of the story's v7 entry, for the set's `storyId`, the story id its H1 heading states (`Story 1.1: ...`), or its key read as a v6 story file name (for a spec-folder story, its original `stories/<id>-<slug>.md`). A title alone is never evidence.
+
+Confirm every mapped ticket with `uv run "{project-root}/_bmad/method/scripts/tickets.py" --project-root "{project-root}" find "<container>" "<ref>"`, always naming the container, so no active initiative is needed, and compute its key from the result by `bmod-tea/contracts/story-identity.md` section 4. Evidence that names no ticket, or pieces of evidence that name different tickets, leave the set unresolved, with each conflicting piece listed in the plan.
+
+For each citation in a mapped set, resolve where its source lives now the same way: the record's moves, then `find`. A cited line number is kept as history; never claim it still points at the same text.
+
+## Plan
+
+Write `{test_artifacts}/migration-tea-v7.md` with frontmatter `type: migration`, `status: draft`, `created`. It lists, per set: the old and new path of every file (a root-level file moves into its workflow's folder), the ticket `ref` and container, the evidence used, the identity fields that change with old and new values, and each citation's resolution. Then every conflict with its options, and every unresolved set with the reason. Show it and wait for approval and a disposition for each conflict.
+
+## Apply
+
+Under git, make every approved move first and commit the moves alone, so git records each as a rename; then rewrite content in a second commit. Work through the approved sets in plan order. For each: move its files, rewrite the identity fields and `migratedFrom` as `target` says, add `resolvedSources`, and record each file's state in the plan's journal as it changes (`moved`, then `rewritten` for adopted files; `moved` is terminal for preserved ones). A restart goes through "Resume". Leave unresolved sets in place; move each file a conflict decision did not keep to the preserved folder unchanged.
+
+## Report
+
+Set the plan's `status` to `done`. Report the sets moved, the conflicts and how each was decided, the unresolved sets with their reasons, and the backup folder, which is the user's to delete once satisfied. Say that the workflows now name story outputs by ticket key, and that an unresolved file stays readable at its old path.
+"""
+
+checklist = [
+  "Every approved set's files are at their planned paths, and no source file was overwritten: each destination that existed before the run still holds its original content or the user's chosen disposition.",
+  "Under git, each moved tracked file keeps its history (`git log --follow` reaches its commits from before the move), and no commit includes the backup.",
+  "No workflow folder holds two files with one story key; each file a conflict decision did not keep is unchanged under `migration-tea-v7-preserved/`. One story may have one set per workflow.",
+  "Each adopted checkpoint's `runKey` is `story-<its new key>`, its `storyKey`, `ticketRef` and path fields match its new location, and its status, steps, evidence and gate decision equal the backup copy's.",
+  "Each adopted in-progress checkpoint resumes in its workflow by the ticket's ref and, with no story named, as the only candidate, under its new `runKey`.",
+  "Every citation in a moved set is verbatim against the backup copy, and has a `resolvedSources` row marked `resolved` with a location that exists, or `unresolved`.",
+  "Every preserved file is byte-identical to its backup copy and sits at `migration-tea-v7-preserved/<its original relative path>`.",
+  "Running this migration again changes no file, leaves the plan byte-identical, and reports the same unresolved sets; a run stopped after the moves and resumed finishes every file's pending operation without a new plan.",
+  "`.tea-v7-migration-backup-<datetime>/` holds every file the test artifacts folder held before the first run.",
+]
