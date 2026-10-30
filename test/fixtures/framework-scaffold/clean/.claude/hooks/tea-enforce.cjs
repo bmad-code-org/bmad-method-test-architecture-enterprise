@@ -290,14 +290,16 @@ function blank(length) {
 /**
  * A string or regex literal, rendered for the requested view: blanked (the
  * default, for matching), kept (for reading operands), or masked with `x` (for
- * knowing which characters of a kept operand are inside a literal). Newlines
- * survive in every view so offsets and line numbers line up across all three.
+ * knowing which characters of a kept operand are inside a literal). Every view
+ * is the same length, so offsets line up across all three. The blanked view keeps
+ * newlines so line numbers survive; the mask marks them too, because a newline
+ * inside a literal is part of its value.
  */
 function literal(source, start, end, mode) {
   const text = source.slice(start, end);
   if (mode === 'keep') return text;
-  const fill = mode === 'mask' ? 'x' : ' ';
-  return text.replaceAll(/[^\n]/g, fill);
+  if (mode === 'mask') return 'x'.repeat(text.length);
+  return text.replaceAll(/[^\n]/g, ' ');
 }
 
 function stripCLike(source, literals) {
@@ -525,12 +527,23 @@ function normalizeOperand(value, mask) {
 }
 
 /**
- * Whether an operand interpolates into a template literal. Stripping blanks the
- * whole template, `${...}` included, so the operand pattern cannot see a call or
- * an `i++` inside it, and two textually equal templates can still evaluate to
- * different values. Such operands are never reported.
+ * Whether a JavaScript operand contains a template literal that interpolates.
+ * Stripping blanks the whole template, `${...}` included, so the operand pattern
+ * cannot see a call or an `i++` inside it, and two textually equal templates can
+ * still evaluate to different values. Such operands are never reported.
+ *
+ * Only a literal that OPENS with a backtick is a template. A backtick inside a
+ * quoted string is data, and Go's backtick raw strings never interpolate, so
+ * `${` in either is a constant.
  */
-const interpolates = (operand) => operand.includes('`') && operand.includes('${');
+function interpolates(text, mask, kind) {
+  if (kind !== 'js') return false;
+  for (const run of mask.matchAll(/x+/g)) {
+    const body = text.slice(run.index, run.index + run[0].length);
+    if (body.startsWith('`') && body.includes('${')) return true;
+  }
+  return false;
+}
 
 /**
  * `[start, end]` of every match whose two operands are the same expression: the
@@ -550,7 +563,7 @@ function selfComparisons(stripped, views, pattern) {
       const [start, end] = match.indices[group] ?? [0, 0];
       return { text: views.code.slice(start, end), mask: views.mask.slice(start, end) };
     });
-    if (operands.some(({ text }) => interpolates(text))) continue;
+    if (operands.some(({ text, mask }) => interpolates(text, mask, views.kind))) continue;
     const [left, right] = operands.map(({ text, mask }) => normalizeOperand(text, mask));
     if (left.length > 0 && left === right) spans.push([match.index, match.index + match[0].length]);
   }

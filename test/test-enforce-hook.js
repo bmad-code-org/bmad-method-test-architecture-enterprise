@@ -154,6 +154,11 @@ function run() {
     ['src/LoginTest.java', 'assertEquals(\n    actual,\n    actual);\n', 'C3', 'JUnit self-comparison split across lines'],
     ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["a"])\n', 'C3', 'Go self-comparison'],
     ['pkg/login_test.go', 'assert.EqualValues(t,\n    m["a"],\n    m["a"])\n', 'C3', 'Go self-comparison split across lines'],
+    ['tests/a.spec.ts', 'expect(`a\nb`).toBe(`a\nb`);\n', 'C3', 'identical multiline template literals'],
+    // `${` is only interpolation at the start of a JavaScript template.
+    ['pkg/login_test.go', 'assert.Equal(t, `${HOME}`, `${HOME}`)\n', 'C3', 'Go raw strings never interpolate'],
+    ['src/LoginTest.java', 'assertEquals("`${value}", "`${value}");\n', 'C3', 'a backtick inside a Java string is data'],
+    ['tests/a.spec.ts', 'expect("`${value}").toBe("`${value}");\n', 'C3', 'a backtick inside a quoted JS string is data'],
     // Operands are read with their string literals intact, so equal literals are equal.
     ['tests/a.spec.ts', "expect(result['actual']).toEqual(result['actual']);\n", 'C3', 'same bracket key on both sides'],
     ['pkg/login_test.go', 'time.Sleep(2 * time.Second)\n', 'H1', 'Go hard wait'],
@@ -233,6 +238,8 @@ function run() {
     ['tests/a.spec.ts', "expect(prefix + 'a').toBe(prefix + 'b');\n", 'a trailing literal is part of the operand'],
     ['tests/a.spec.ts', "expect(result['a b']).toEqual(result['ab']);\n", 'whitespace inside a string literal is part of the value'],
     ['tests/a.spec.ts', 'expect(/a b/).toEqual(/ab/);\n', 'whitespace inside a regex literal is part of the value'],
+    ['tests/a.spec.ts', 'expect(`a\nb`).toBe(`ab`);\n', 'a newline inside a template literal is part of the value'],
+    ['pkg/login_test.go', 'assert.Equal(t, `a\nb`, `ab`)\n', 'a newline inside a Go raw string is part of the value'],
     [
       'tests/a.spec.ts',
       'let i = 0;\nexpect(`${i++}`).toBe(`${i++}`);\n',
