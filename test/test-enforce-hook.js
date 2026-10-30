@@ -152,6 +152,8 @@ function run() {
     ['tests/a.spec.ts', 'test.only\n("x", async () => {});\n', 'C2', '.only split from its call'],
     ['tests/a.spec.ts', 'test\n  .only("x", async () => {});\n', 'C2', '.only on a continuation line'],
     ['src/LoginTest.java', 'assertEquals(\n    actual,\n    actual);\n', 'C3', 'JUnit self-comparison split across lines'],
+    ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["a"])\n', 'C3', 'Go self-comparison'],
+    ['pkg/login_test.go', 'assert.EqualValues(t,\n    m["a"],\n    m["a"])\n', 'C3', 'Go self-comparison split across lines'],
     // Operands are read with their string literals intact, so equal literals are equal.
     ['tests/a.spec.ts', "expect(result['actual']).toEqual(result['actual']);\n", 'C3', 'same bracket key on both sides'],
     ['pkg/login_test.go', 'time.Sleep(2 * time.Second)\n', 'H1', 'Go hard wait'],
@@ -229,7 +231,14 @@ function run() {
     ['tests/a.spec.ts', "expect(store.get('a')).toBe(store.get('b'));\n", 'call arguments differ'],
     ['tests/a.spec.ts', 'expect(`${id}-a`).toBe(`${id}-b`);\n', 'template literals differ'],
     ['tests/a.spec.ts', "expect(prefix + 'a').toBe(prefix + 'b');\n", 'a trailing literal is part of the operand'],
-    ['tests/a.spec.ts', "expect(format('a b')).toBe(format('ab'));\n", 'whitespace inside a literal is part of the value'],
+    ['tests/a.spec.ts', "expect(result['a b']).toEqual(result['ab']);\n", 'whitespace inside a string literal is part of the value'],
+    ['tests/a.spec.ts', 'expect(/a b/).toEqual(/ab/);\n', 'whitespace inside a regex literal is part of the value'],
+    [
+      'tests/a.spec.ts',
+      'let i = 0;\nexpect(`${i++}`).toBe(`${i++}`);\n',
+      'textually equal interpolated templates can evaluate differently',
+    ],
+    ['tests/test_login.py', 'assert d["a b"] == d["ab"]\n', 'python operands are not changed by the kept view'],
     ['src/LoginTest.java', 'assertEquals("a", "b");\n', 'JUnit string literals differ'],
     ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["b"])\n', 'Go map keys differ'],
     ['tests/a.spec.ts', '/**\n * Never use test.only( in committed tests.\n */\ntest("x", async () => {});\n', 'C2 inside a doc comment'],
@@ -447,6 +456,18 @@ function run() {
     assert(
       runPre(edit('test.only("b", async () => {});\n', 'test.only("b", async () => {});\ntest.only("b", async () => {});\n')).status === 2,
       'an edit that duplicates an existing violating line still adds one',
+    );
+
+    fs.writeFileSync(spec, 'test.only("x", () => {}); // old note\n');
+    assert(runPre(edit('old note', 'new note')).status === 0, 'rewording a comment beside an existing violation is not a new violation');
+    assert(
+      runPre(edit('test.only("x", () => {}); // old note', 'test.only("x", () => {}); // new note')).status === 0,
+      'an edit spanning the whole line keeps the existing violation it rewrites',
+    );
+    fs.writeFileSync(spec, `/*${'x'.repeat(120)}*/ expect(x).toBe(x);\n`);
+    assert(
+      runPre(edit('expect(x).toBe(x);', 'expect(x).toBe(x); expect(y).toBe(y);')).status === 2,
+      'a second violation added to a line that already has one is blocked',
     );
 
     // H5 now runs on edits, judged against the file as it was.

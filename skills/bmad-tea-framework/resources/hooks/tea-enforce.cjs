@@ -287,7 +287,20 @@ function blank(length) {
   return ' '.repeat(length);
 }
 
-function stripCLike(source, keepStrings) {
+/**
+ * A string or regex literal, rendered for the requested view: blanked (the
+ * default, for matching), kept (for reading operands), or masked with `x` (for
+ * knowing which characters of a kept operand are inside a literal). Newlines
+ * survive in every view so offsets and line numbers line up across all three.
+ */
+function literal(source, start, end, mode) {
+  const text = source.slice(start, end);
+  if (mode === 'keep') return text;
+  const fill = mode === 'mask' ? 'x' : ' ';
+  return text.replaceAll(/[^\n]/g, fill);
+}
+
+function stripCLike(source, literals) {
   let out = '';
   let index = 0;
   // Whether a `/` at this position could open a regex literal rather than divide.
@@ -334,7 +347,7 @@ function stripCLike(source, keepStrings) {
         scan += 1;
       }
       if (closed) {
-        out += keepStrings ? source.slice(index, scan) : blank(scan - index);
+        out += literal(source, index, scan, literals);
         index = scan;
         regexAllowed = false;
         continue;
@@ -356,8 +369,7 @@ function stripCLike(source, keepStrings) {
         if (quote !== '`' && source[scan] === '\n') break;
         scan += 1;
       }
-      if (keepStrings) out += source.slice(index, scan);
-      else for (let position = index; position < scan; position += 1) out += source[position] === '\n' ? '\n' : ' ';
+      out += literal(source, index, scan, literals);
       index = scan;
       regexAllowed = true;
       continue;
@@ -370,7 +382,7 @@ function stripCLike(source, keepStrings) {
   return out;
 }
 
-function stripPython(source, keepStrings) {
+function stripPython(source, literals) {
   let out = '';
   let index = 0;
   while (index < source.length) {
@@ -388,8 +400,7 @@ function stripPython(source, keepStrings) {
     if (triple === '"""' || triple === "'''") {
       const end = source.indexOf(triple, index + 3);
       const stop = end === -1 ? source.length : end + 3;
-      if (keepStrings) out += source.slice(index, stop);
-      else for (let scan = index; scan < stop; scan += 1) out += source[scan] === '\n' ? '\n' : ' ';
+      out += literal(source, index, stop, literals);
       index = stop;
       continue;
     }
@@ -408,7 +419,7 @@ function stripPython(source, keepStrings) {
         }
         scan += 1;
       }
-      out += keepStrings ? source.slice(index, scan) : blank(scan - index);
+      out += literal(source, index, scan, literals);
       index = scan;
       continue;
     }
@@ -469,27 +480,30 @@ function stripNoise(source, kind) {
 }
 
 /**
- * Comments blanked, string literals kept, same length as the input.
+ * Comments blanked, string and regex literals kept (`mode: 'keep'`) or masked
+ * (`mode: 'mask'`), same length as the input.
  *
  * `stripNoise` is right for deciding WHERE a pattern matches, and wrong for
- * deciding what an operand IS: once string contents are blanked,
+ * deciding what an operand IS: once literal contents are blanked,
  * `result['actual']` and `result['expected']` are both `result[          ]`.
- * C3 finds its match on the stripped text and reads the operands from this one,
- * at the same offsets.
+ * C3 finds its match on the stripped text and reads the operands from the kept
+ * view, at the same offsets; the masked view says which of those characters sit
+ * inside a literal, where whitespace is part of the value.
  */
-function stripComments(source, kind) {
+function stripComments(source, kind, mode) {
   switch (kind) {
     case 'js':
     case 'java':
     case 'go':
     case 'pactconfig': {
-      return stripCLike(source, true);
+      return stripCLike(source, mode);
     }
     case 'py': {
-      return stripPython(source, true);
+      return stripPython(source, mode);
     }
     default: {
-      return source;
+      // Maestro YAML has no C3 and no kept view; callers use the stripped text.
+      return null;
     }
   }
 }
@@ -499,59 +513,53 @@ function stripComments(source, kind) {
 // ---------------------------------------------------------------------------
 
 /**
- * An operand with the whitespace outside its string literals removed.
+ * An operand with the whitespace outside its literals removed.
  *
- * Whitespace inside a literal is part of the value: `'a b'` and `'ab'` differ, and
- * collapsing them would turn a comparison that can fail into a reported tautology.
+ * Whitespace inside a string or regex literal is part of the value: `'a b'` and
+ * `'ab'` differ, as do `/a b/` and `/ab/`, and collapsing them would turn a
+ * comparison that can fail into a reported tautology. `mask` is the same slice of
+ * the masked view, `x` wherever the character is inside a literal.
  */
-function normalizeOperand(value) {
-  let out = '';
-  let quote = null;
-  const text = String(value);
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (quote) {
-      out += character;
-      if (character === '\\') {
-        out += text[index + 1] ?? '';
-        index += 1;
-      } else if (character === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (character === '"' || character === "'" || character === '`') quote = character;
-    if (!/\s/.test(character)) out += character;
-  }
-  return out.replace(/;$/, '');
+function normalizeOperand(value, mask) {
+  return value.replaceAll(/\s/g, (character, offset) => (mask[offset] === 'x' ? character : '')).replace(/;$/, '');
 }
 
 /**
- * Offsets of every match whose two operands are the same expression: the
+ * Whether an operand interpolates into a template literal. Stripping blanks the
+ * whole template, `${...}` included, so the operand pattern cannot see a call or
+ * an `i++` inside it, and two textually equal templates can still evaluate to
+ * different values. Such operands are never reported.
+ */
+const interpolates = (operand) => operand.includes('`') && operand.includes('${');
+
+/**
+ * `[start, end]` of every match whose two operands are the same expression: the
  * mechanical core of C3.
  *
  * The pattern runs on the stripped source, so a quote or comment cannot fake a
- * match. The operands are read from `code` (comments blanked, strings kept) at the
- * match's group offsets, so two operands that differ only inside a string literal
- * still compare different. Each operand group must span everything between its
- * delimiters, surrounding whitespace included: a group that stops at the last
- * non-blank stripped character would cut `x + 'a'` down to `x +`.
+ * match. The operands are read from the kept view (comments blanked, literals
+ * intact) at the match's group offsets, so two operands that differ only inside
+ * a literal still compare different. Each operand group must span everything
+ * between its delimiters, surrounding whitespace included: a group that stops at
+ * the last non-blank stripped character would cut `x + 'a'` down to `x +`.
  */
-function selfComparisons(stripped, code, pattern) {
-  const offsets = [];
+function selfComparisons(stripped, views, pattern) {
+  const spans = [];
   for (const match of stripped.matchAll(pattern)) {
-    const [left, right] = [1, 2].map((group) => {
-      const span = match.indices[group];
-      return span ? normalizeOperand(code.slice(span[0], span[1])) : '';
+    const operands = [1, 2].map((group) => {
+      const [start, end] = match.indices[group] ?? [0, 0];
+      return { text: views.code.slice(start, end), mask: views.mask.slice(start, end) };
     });
-    if (left.length > 0 && left === right) offsets.push(match.index);
+    if (operands.some(({ text }) => interpolates(text))) continue;
+    const [left, right] = operands.map(({ text, mask }) => normalizeOperand(text, mask));
+    if (left.length > 0 && left === right) spans.push([match.index, match.index + match[0].length]);
   }
-  return offsets;
+  return spans;
 }
 
-/** Offsets of every match of `pattern` (which must carry the `g` flag). */
-function matchOffsets(source, pattern) {
-  return [...source.matchAll(pattern)].map((match) => match.index);
+/** `[start, end]` of every match of `pattern` (which must carry the `g` flag). */
+function matchSpans(source, pattern) {
+  return [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]);
 }
 
 const SKIP_TOKEN = /\.skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
@@ -661,7 +669,7 @@ const RULES = [
     kinds: ['js'],
     fix: 'Remove `.only` / `fdescribe` / `fit`. A committed focus silently disables every sibling test in the file.',
     matchSource(stripped) {
-      return [...matchOffsets(stripped, /(?<![\w.])(?:fdescribe|fit|ftest)\s*\(/g), ...matchOffsets(stripped, /\.only\s*[(.]/g)];
+      return [...matchSpans(stripped, /(?<![\w.])(?:fdescribe|fit|ftest)\s*\(/g), ...matchSpans(stripped, /\.only\s*[(.]/g)];
     },
   },
   {
@@ -676,14 +684,13 @@ const RULES = [
     kinds: ['js', 'py', 'java', 'go'],
     fix: 'Assert the value the system under test produced against an expectation that could differ from it.',
     matchSource(stripped, context) {
-      const { code } = context;
       if (context.kind === 'js') {
         // `.not.` is excluded on purpose: `expect(x).not.toBe(x)` is a defect too,
         // but it always FAILS, so it is not the "test cannot fail" failure this row
         // is about, and blocking it would be this hook overreaching its row.
         return selfComparisons(
           stripped,
-          code,
+          context,
           /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
         );
       }
@@ -691,17 +698,17 @@ const RULES = [
         // Horizontal whitespace only: a Python statement does not continue onto the
         // next line without a bracket or a backslash, so `\s` here would pair an
         // `assert` with a `==` on a later, unrelated line.
-        return selfComparisons(stripped, code, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg);
+        return selfComparisons(stripped, context, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg);
       }
       if (context.kind === 'java') {
         return [
-          ...matchOffsets(stripped, /assertTrue\s*\(\s*true\s*\)/g),
-          ...matchOffsets(stripped, /assertFalse\s*\(\s*false\s*\)/g),
-          ...selfComparisons(stripped, code, /assertEquals\s*\(([^,()]+?),([^,()]+?)\)/dg),
+          ...matchSpans(stripped, /assertTrue\s*\(\s*true\s*\)/g),
+          ...matchSpans(stripped, /assertFalse\s*\(\s*false\s*\)/g),
+          ...selfComparisons(stripped, context, /assertEquals\s*\(([^,()]+?),([^,()]+?)\)/dg),
         ];
       }
       if (context.kind === 'go') {
-        return selfComparisons(stripped, code, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
+        return selfComparisons(stripped, context, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
       }
       return [];
     },
@@ -874,7 +881,7 @@ function scanContent(relativePath, source, config, options) {
   const rawLines = source.split('\n');
   const lineCount = source.replace(/\n$/, '').split('\n').length;
   const lineStarts = lineStartOffsets(stripped);
-  let code = null;
+  let views = null;
   const findings = [];
 
   for (const rule of activeRules(settings)) {
@@ -889,24 +896,34 @@ function scanContent(relativePath, source, config, options) {
           line: 1,
           detail: rule.describe ? rule.describe(context) : '',
           text: '',
+          occurrences: [''],
         });
       }
       continue;
     }
 
+    views ??= { code: stripComments(source, kind, 'keep') ?? stripped, mask: stripComments(source, kind, 'mask') ?? '' };
+    // What a violation IS, independent of where it sits and of the comments and
+    // layout around it: the code it spans, literals intact, whitespace outside
+    // literals dropped. `introducedFindings` compares these.
+    const identity = (start, end) => normalizeOperand(views.code.slice(start, end), views.mask.slice(start, end));
+
     if (rule.scope === 'source') {
-      // Every offset maps back to the line it starts on. Stripping preserves
+      // Every match maps back to the line it starts on. Stripping preserves
       // newlines, so offsets into the stripped text are offsets into the source.
-      // One finding per line, as the line rules report.
-      code ??= stripComments(source, kind);
-      const context = { kind, config: settings, code, relativePath };
-      const lines = new Set(rule.matchSource(stripped, context).map((offset) => lineAt(lineStarts, offset)));
-      for (const index of [...lines].sort((a, b) => a - b)) {
+      // One finding per line, as the line rules report, carrying every match on it.
+      const byLine = new Map();
+      for (const [start, end] of rule.matchSource(stripped, { kind, config: settings, ...views, relativePath })) {
+        const index = lineAt(lineStarts, start);
+        byLine.set(index, [...(byLine.get(index) || []), identity(start, end)]);
+      }
+      for (const index of [...byLine.keys()].sort((a, b) => a - b)) {
         findings.push({
           rule,
           line: index + 1,
           detail: '',
           text: (rawLines[index] || '').trim().slice(0, 120),
+          occurrences: byLine.get(index),
         });
       }
       continue;
@@ -920,6 +937,7 @@ function scanContent(relativePath, source, config, options) {
           line: index + 1,
           detail: '',
           text: (rawLines[index] || '').trim().slice(0, 120),
+          occurrences: [identity(lineStarts[index], lineStarts[index] + line.length)],
         });
       }
     }
@@ -1080,18 +1098,26 @@ function proposedEdit(payload, absolutePath) {
  * `--pre` judges the write in front of it. A violation already sitting in the
  * untouched part of the file is `--post`'s to report, and blocking an unrelated
  * edit on it would stop the agent fixing a file one edit at a time. Line numbers
- * move under an edit, so findings are matched by rule and line text, as a
- * multiset: an edit that duplicates a violating line still adds one.
+ * move under an edit, so each occurrence is matched by rule and identity (the
+ * code it spans, comments out, literals in), as a multiset: rewording a comment
+ * beside a violation adds nothing, and a second copy of an existing violation on
+ * the same line still adds one. The one trade this makes is an edit that removes
+ * a violation and writes an identical one elsewhere, which `--post` reports.
  */
 function introducedFindings(before, after) {
-  const key = (finding) => `${finding.rule.id}\u0000${finding.text}`;
+  const key = (finding, occurrence) => `${finding.rule.id}\u0000${occurrence}`;
   const existing = new Map();
-  for (const finding of before) existing.set(key(finding), (existing.get(key(finding)) || 0) + 1);
+  for (const finding of before) {
+    for (const occurrence of finding.occurrences) existing.set(key(finding, occurrence), (existing.get(key(finding, occurrence)) || 0) + 1);
+  }
   return after.filter((finding) => {
-    const remaining = existing.get(key(finding)) || 0;
-    if (remaining === 0) return true;
-    existing.set(key(finding), remaining - 1);
-    return false;
+    let introduced = false;
+    for (const occurrence of finding.occurrences) {
+      const remaining = existing.get(key(finding, occurrence)) || 0;
+      if (remaining === 0) introduced = true;
+      else existing.set(key(finding, occurrence), remaining - 1);
+    }
+    return introduced;
   });
 }
 
