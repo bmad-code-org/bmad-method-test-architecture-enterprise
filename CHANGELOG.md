@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-30
+
 ### Added
 
 - Story-scoped workflows take a v7 ticket directly. Automate red and expand mode, Trace, NFR and Test Review accept a story the way the method names it (`1.2`, a title, a leaf file), read it through the method's `tickets.py find` without needing the entry pulled, and fall back to the v6 story file only for v6 input. One shared contract, `bmod-tea/contracts/story-identity.md`, names every story output by its ticket (`shop--e1-s2`), so a story's checklist, summary, NFR report, review and matrix share one key that never collides across initiatives and never changes on a retitle. Red mode halts on criteria it cannot turn into failing tests, hands the builder the story's plan path, and links artifacts back only into a v6 story file, never a ticket.
