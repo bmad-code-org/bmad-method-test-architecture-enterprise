@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-tea-trace",
-    "implementationDigest": "sha256:bb2b7f9ef760dae923c156a78dd0521b4653d9a1dcad9d3b0bee9b2f20393f71",
+    "implementationDigest": "sha256:9c26fb34d449869a54a369ab6d7d0291dd5c8d9c330a19f70f02c5a528f6d808",
     "artifactDigest": "sha256:772cefeb5389affc437f2f36b3a073252fccdf4f0e2e7edaff946db1407382b9",
-    "commitDigest": "sha256:bb2b7f9ef760dae923c156a78dd0521b4653d9a1dcad9d3b0bee9b2f20393f71",
+    "commitDigest": "sha256:9c26fb34d449869a54a369ab6d7d0291dd5c8d9c330a19f70f02c5a528f6d808",
     "rationale": "A run that names every fragment in the index satisfies O-001 for trace-go-service-no-js, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -93,9 +93,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-tea-trace",
-    "implementationDigest": "sha256:bb2b7f9ef760dae923c156a78dd0521b4653d9a1dcad9d3b0bee9b2f20393f71",
+    "implementationDigest": "sha256:9c26fb34d449869a54a369ab6d7d0291dd5c8d9c330a19f70f02c5a528f6d808",
     "artifactDigest": "sha256:772cefeb5389affc437f2f36b3a073252fccdf4f0e2e7edaff946db1407382b9",
-    "commitDigest": "sha256:bb2b7f9ef760dae923c156a78dd0521b4653d9a1dcad9d3b0bee9b2f20393f71",
+    "commitDigest": "sha256:9c26fb34d449869a54a369ab6d7d0291dd5c8d9c330a19f70f02c5a528f6d808",
     "rationale": "trace-go-service-no-js declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -105,7 +105,7 @@
         "privateRef": null,
         "digest": "sha256:772cefeb5389affc437f2f36b3a073252fccdf4f0e2e7edaff946db1407382b9"
       },
-      "revisionCommitDigest": "sha256:bb2b7f9ef760dae923c156a78dd0521b4653d9a1dcad9d3b0bee9b2f20393f71",
+      "revisionCommitDigest": "sha256:9c26fb34d449869a54a369ab6d7d0291dd5c8d9c330a19f70f02c5a528f6d808",
       "noKnownDefectStatement": "trace-go-service-no-js's expected selection is derived from the bmad-tea-trace step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

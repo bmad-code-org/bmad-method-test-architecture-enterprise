@@ -1320,7 +1320,8 @@ async function runTests() {
   try {
     const contract = await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/contracts/story-identity.md'), 'utf8');
     for (const marker of [
-      'uv run {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} find [<dir>] <ref>',
+      'uv run "{project-root}/_bmad/method/scripts/tickets.py" --project-root "{project-root}" find ["<dir>"] "<ref>"',
+      'Quote each argument, so a title phrase such as `guest checkout` reaches `find` as one reference.',
       'A v7 error never falls back to the v6 route.',
       'epic entry: `<initiative>--e<epic id>-s<entry id>`',
       'initiative entry: `<initiative>--s<entry id>`',
@@ -1398,6 +1399,8 @@ async function runTests() {
       'never write a new plan over it',
       'passing the folder works with no active initiative',
       'the story id its H1 heading states',
+      'A v7 key contains `--`',
+      'pieces of evidence that name different tickets, leave the set unresolved',
       'commit the moves alone, so git records each as a rename',
     ]) {
       assert(migration.includes(marker), `skills/bmod-tea/migration-2.toml holds: ${marker}`);

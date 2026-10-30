@@ -13,7 +13,7 @@ detect = """
 - That plan exists with `status: done` and its unresolved list names every pre-v7 story output still present: the project is already migrated. Report the plan's results and stop, writing nothing. A pre-v7 output the plan does not list is new work: run again with a new dated run section appended to the same plan, keeping its history and the first backup, and a new backup of the files that run touches.
 - `{project-root}/_bmad/method/scripts/tickets.py` exists, and the ticket tree is current v7: `uv run {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} status <folder>` succeeds for each `initiative-*/` folder and `backlog/` under the output folder (passing the folder works with no active initiative). When one errors with the earlier layout, or `{output_folder}/migration-v6-v7/migration-v6-v7.md` exists without `status: done`, the method migration comes first; say so and stop.
 - The test artifacts folder (`modules.tea.test_artifacts`) holds a story output whose key is not a v7 key. Story outputs are `atdd/atdd-checklist-<key>.md`, `automate/automation-summary-story-<key>.md`, `trace/traceability-matrix-story-<key>.md` with Trace's summary and gate files of the same run key, `nfr/nfr-assessment-story-<key>.md` and `test-review/test-review-story-<key>.md`, the same names at the folder's root, and the fixed root names `automation-summary.md`, `traceability-matrix.md`, `nfr-assessment.md` and `test-review.md` when their content names one story.
-- A v7 key is `<initiative>--e<n>-s<n>`, `<initiative>--s<n>` or `backlog--<stem>` (`bmod-tea/contracts/story-identity.md` section 4). Anything else, such as `1-2-user-authentication` or `story-guest-checkout`, is a pre-v7 key.
+- A v7 key contains `--`: every shape in `bmod-tea/contracts/story-identity.md` section 4 does (`shop--e1-s2`, `shop--epic-loyalty-s2`, `shop--s6a`, `backlog--story-x`), and no pre-v7 key can, since v6 basenames and leaf stems are slugs. A key without `--`, such as `1-2-user-authentication` or `story-guest-checkout`, is a pre-v7 key.
 """
 
 target = """
@@ -64,13 +64,13 @@ List every story output `detect` names that carries a pre-v7 key. Group the file
 
 ## Map
 
-Map each set to one ticket by the first exact evidence that holds:
+Map each set to one ticket from every exact evidence that holds, checked in this order:
 
 1. Its `storyFile`. When the file still exists inside the ticket tree, pass its container folder and basename to `tickets.py find`. When it no longer exists, look the path up in the method record `{output_folder}/migration-v6-v7/migration-v6-v7.md`, which states what moved where and each story's v7 entry in prose; read the entry it names.
 2. An `[[entry]]` in any `tickets/tickets.toml` under the output folder whose `v6_key` equals the set's key exactly.
 3. The method record's statement of the story's v7 entry, for the set's `storyId`, the story id its H1 heading states (`Story 1.1: ...`), or its key read as a v6 story file name (for a spec-folder story, its original `stories/<id>-<slug>.md`). A title alone is never evidence.
 
-Confirm every mapped ticket with `uv run {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} find <container> <ref>`, always naming the container, so no active initiative is needed, and compute its key from the result by `bmod-tea/contracts/story-identity.md` section 4. Evidence that names no ticket, or several, leaves the set unresolved.
+Confirm every mapped ticket with `uv run "{project-root}/_bmad/method/scripts/tickets.py" --project-root "{project-root}" find "<container>" "<ref>"`, always naming the container, so no active initiative is needed, and compute its key from the result by `bmod-tea/contracts/story-identity.md` section 4. Evidence that names no ticket, or pieces of evidence that name different tickets, leave the set unresolved, with each conflicting piece listed in the plan.
 
 For each citation in a mapped set, resolve where its source lives now the same way: the record's moves, then `find`. A cited line number is kept as history; never claim it still points at the same text.
 

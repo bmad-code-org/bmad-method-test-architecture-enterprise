@@ -84,7 +84,7 @@ If any are missing: **HALT** and notify the user.
 - Use that `story_key` for the `{outputFile}` basename so all checklist and handoff paths stay consistent
 - If `story_id` is still unavailable, set it to the final `story_key` so `story_id` is never empty
 - Preserve `{story_file}` and `{ticket_ref}` for the handoff to the builder. For a v7 ticket, also keep the `plan` path `find` returned, and whether that file exists yet
-- If a test design covers this story, read it for P0-P3 priorities and risks. Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` when the story has a parent epic, by section 3 of the contract; then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
+- If a test design covers this story, read it for P0-P3 priorities and risks. When the story belongs to a numbered epic (section 3 of the contract; a v6 story's epic number), look for `test-design-epic-{epic_num}.md` in `{test_artifacts}/test-design/` and then at the legacy root `{test_artifacts}/`, before any system-level file. Only when neither exists, look for the system-level `test-design-qa.md` and `test-design-architecture.md` in the same two places. A story with no numbered epic skips the epic lookup; never derive an epic number from a bare entry id. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
 
 ---
 

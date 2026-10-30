@@ -10,10 +10,10 @@ Decide the route once, from the reference the user gave or the artifacts already
 - **v7 ticket.** Anything else: `<epic id>.<entry id>` (`1.2`), an entry id, a tracker id, a leaf file name or path, or a title phrase. Run:
 
   ```bash
-  uv run {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} find [<dir>] <ref>
+  uv run "{project-root}/_bmad/method/scripts/tickets.py" --project-root "{project-root}" find ["<dir>"] "<ref>"
   ```
 
-  For a leaf file path, pass its container folder as `<dir>` and its basename as `<ref>`. Otherwise leave `<dir>` out unless the user named an initiative, epic or `backlog/` folder.
+  Quote each argument, so a title phrase such as `guest checkout` reaches `find` as one reference. For a leaf file path, pass its container folder as `<dir>` and its basename as `<ref>`. Otherwise leave `<dir>` out unless the user named an initiative, epic or `backlog/` folder.
 
 The output is one JSON object. A result with `error`:
 
@@ -72,6 +72,6 @@ Every story output of every workflow uses `story-<story_key>` as its run key, so
 
 ## 5. Artifacts from before v7 keys
 
-This applies only to a story resolved through the v7 route; a v6 or no-method run never mentions it. When no output exists under the new key but the test artifacts folder holds story outputs whose key is not one of the shapes above (a v6 basename such as `1-2-user-authentication`, or a leaf stem such as `story-guest-checkout`), tell the user that `bmad migrate tea` carries them onto their tickets, and ask whether to run it first. Continue as a fresh run only if they decline. A headless run continues and says so in its output.
+This applies only to a story resolved through the v7 route; a v6 or no-method run never mentions it. When no output exists under the new key but the test artifacts folder holds story outputs whose key has no `--`, unlike every shape above (a v6 basename such as `1-2-user-authentication`, or a leaf stem such as `story-guest-checkout`), tell the user that `bmad migrate tea` carries them onto their tickets, and ask whether to run it first. Continue as a fresh run only if they decline. A headless run continues and says so in its output.
 
 Every resume of a story run loads this section too. A migrated artifact carries `resolvedSources`: per citation, the original reference, its current location, and `resolved` or `unresolved`. Read a citation through its `resolved` entry. Report an `unresolved` citation; never follow it. Leave the original citation as written.
