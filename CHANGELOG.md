@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `bmad` skill can now route to TEA inside the BMad v7 method flow. TEA's module help says where each workflow fits around `bmad-build`: epic Test Design and red mode before a story is built, expand mode after it for a maintained suite (with `bmad-qa-generate-e2e-tests` still the fit for a quick one-off), and Test Review, NFR and Trace before a release. Method skills are named only when installed, so the routes read correctly with TEA alone. The help also tells `bmad` how to see what TEA has run: it resolves `modules.tea.test_artifacts`, lists the per-workflow folders and the older root-level file names, and treats an in-progress checkpoint as a started run.
+
+### Fixed
+
+- Test Design reads the v7 ticket tree where `bmad migrate` leaves it, in the initiative's `tickets/` folder. An initiative still in the preview layout, with `tickets.toml` or epic folders directly inside it, now stops automatic mode selection and points the user at `bmad migrate`; an explicit system- or epic-level request still proceeds.
+- The red-mode ATDD checklist no longer tells users to mark a story done in its `tickets.toml` entry, which holds no status. It now covers a v7 ticket (the builder records the work in the story's plan, and the user or orchestrator has the Product Owner mark it done, through `tickets.py mark` on a repo store or a transition on a tracker store), a v6 story, and projects without the BMad method module, and states that red mode changes no status.
+- Evaluate hands its CI plan to `bmad-tea-framework` without naming files inside that skill, so it no longer breaks if Framework's internals move.
+
 ### Changed
 
 - The Evaluate how-to guides state each guide's purpose up front before explaining mechanics. The three first-run guides (skill or agent, stdio MCP server, and HTTP API) open with explicit bottom lines and the core workflow sequence (confirming requirements, authoring, validating with `check`, qualifying mutations with `preflight`, executing trials with `run`, and interpreting evidence with `score`). Task-specific guides open with their focused responsibilities and retain their narrower approval boundaries, while the repeatability guide preserves its offline-first saved-records scope.

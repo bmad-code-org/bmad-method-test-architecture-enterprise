@@ -510,7 +510,10 @@ npx c8 --reporter=text npx playwright test tests/api/guest-checkout.spec.ts
 6. **Work one activated test at a time** (red → green for each)
 7. **Share progress** in daily standup
 8. **When all activated tests pass**, refactor code for quality
-9. **When refactoring complete**, manually mark the story done where your project tracks it (the story's ticket entry in `tickets.toml`, or `sprint-status.yaml` on a v6 project)
+9. **When refactoring complete**, close the story where your project tracks it. This checklist changes no ticket, plan or story status.
+   - **v7 ticket:** the builder records the work in the story's plan, and you or your orchestrator mark the ticket done. Ask Sofia the Product Owner (`bmad-agent-po`): she runs `tickets.py mark` on a repo store, or the tracker transition on a Jira, Linear or GitHub store.
+   - **v6 story:** update the story file and `sprint-status.yaml` as your sprint process does.
+   - **No BMad method module:** hand this checklist and the tests to your team's own process.
 
 ---
 
