@@ -25,7 +25,7 @@ assert.match(detectStep, /on a v6 project, if `\{implementation_artifacts\}\/spr
 assert.match(detectStep, /Otherwise → \*\*System-Level Mode\*\*/);
 assert.match(
   detectStep,
-  /in the preview layout when a `tickets\.toml` or an `epic-\*\/` folder sits directly in the initiative folder, with or without a `tickets\/` folder beside it/,
+  /in the preview layout when a `tickets\.toml`, an `epic-\*\/` folder, a `story-\*\.md`, `spike-\*\.md` or `bug-\*\.md` leaf file, or a `\*-plan\.md` plan sits directly in the initiative folder, with or without a `tickets\/` folder beside it/,
 );
 assert.match(detectStep, /preview layout \(below\) → tell the user to run `bmad migrate`[^\n]*\*\*Halt\*\* without choosing a mode/);
 assert.match(

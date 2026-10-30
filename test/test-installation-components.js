@@ -1273,7 +1273,7 @@ async function runTests() {
       '`bmad-tea-test-design` at epic level',
       '`bmad-tea-automate` in red mode, then `bmad-build`',
       "Red mode reads a story file: a v6 story, or a v7 story's leaf file once Sofia the Product Owner has pulled its entry.",
-      "For an entry that is not pulled, give red mode the story's criteria directly.",
+      'For an entry that is not pulled, have Sofia pull it first: red mode records the story file in its checklist for the builder.',
       '`bmad-qa-generate-e2e-tests` remains the fit for a quick, one-off set of end-to-end tests',
       "The story's status is never TEA's to change.",
       '--key modules.tea.test_artifacts',

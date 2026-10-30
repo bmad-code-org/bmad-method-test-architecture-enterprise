@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Test Design reads the v7 ticket tree where `bmad migrate` leaves it, in the initiative's `tickets/` folder. An initiative still in the preview layout, with `tickets.toml` or epic folders directly inside it, now stops automatic mode selection and points the user at `bmad migrate`; an explicit system- or epic-level request still proceeds.
+- Test Design reads the v7 ticket tree where `bmad migrate` leaves it, in the initiative's `tickets/` folder. An initiative still in the preview layout, with `tickets.toml`, epic folders, leaf files or plans directly inside it, now stops automatic mode selection and points the user at `bmad migrate`; an explicit system- or epic-level request still proceeds.
 - The red-mode ATDD checklist no longer tells users to mark a story done in its `tickets.toml` entry, which holds no status. It now covers a v7 ticket (the builder records the work in the story's plan, and the user or orchestrator has the Product Owner mark it done, through `tickets.py mark` on a repo store or a transition on a tracker store), a v6 story, and projects without the BMad method module, and states that red mode changes no status.
 - Evaluate hands its CI plan to `bmad-tea-framework` without naming files inside that skill, so it no longer breaks if Framework's internals move.
 
