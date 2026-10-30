@@ -72,22 +72,19 @@ If any are missing: **HALT** and notify the user.
 
 ## 3. Load Story Context
 
-- Read story markdown from `{story_file}` (or ask user if not provided)
-- Extract acceptance criteria and constraints into a criterion registry in source order
+- Resolve and read the story by `{tea-contracts}/story-identity.md` sections 1 to 3: a v7 ticket through `tickets.py find`, or a v6 story file at `{story_file}`. Ask the user for the story when none was given.
+- Extract the criteria that contract selects, and the constraints, into a criterion registry in source order. Keep the `R` ids each v7 criterion names in its row's text.
+- Check every selected criterion for an observable outcome a failing test can assert. In an interactive run, name each criterion that has none and ask the user to refine it with Sofia the Product Owner (`bmad-agent-po`) or rewrite it; **halt** until answered. A headless run halts with "Story `{story_id}` has criteria red mode cannot turn into failing tests: {unusable criteria}; refine them first."
 - Preserve every supplied criterion id that matches `AC-<positive integer>` exactly
 - Reject duplicate supplied ids
 - Assign ids to unnamed criteria deterministically. Reserve all supplied ids first, then visit unnamed criteria in source order and assign the lowest unused `AC-<positive integer>` id
 - Persist each registry row as `{ id, idSource: supplied | generated, text }` and persist the exact ordered id set as `{criterion_ids}`. The same story content must always produce the same registry
 - Identify affected components and integrations
-- Derive and store `story_id` from story metadata, the H1 heading, or the filename when available (for BMM stories, this is typically `{epic_num}.{story_num}`)
-- Derive and store `story_key`:
-  - With a story file, `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`)
-  - Without a story file, use `story_id` with `.` replaced by `-` (`1.2` becomes `1-2`)
-  - With neither, use a slug of the story title: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters
+- Derive and store `story_id`, `story_key`, `ticket_ref` and `story_file` by `{tea-contracts}/story-identity.md` section 4. For a v6 story file, `story_id` comes from story metadata, the H1 heading, or the filename (typically `{epic_num}.{story_num}`); with neither a file nor an id, `story_key` is a slug of the story title: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters
 - Use that `story_key` for the `{outputFile}` basename so all checklist and handoff paths stay consistent
-- If `story_id` is still unavailable after metadata/H1/filename parsing, set it to the final `story_key` so `story_id` is never empty
-- Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `bmad-build` (`dev-story` before BMAD 6.12)
-- If a test design covers this story, read it for P0-P3 priorities and risks. Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` for the story's epic, then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
+- If `story_id` is still unavailable, set it to the final `story_key` so `story_id` is never empty
+- Preserve `{story_file}` and `{ticket_ref}` for the handoff to the builder. For a v7 ticket, also keep the `plan` path `find` returned, and whether that file exists yet
+- If a test design covers this story, read it for P0-P3 priorities and risks. Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` when the story has a parent epic, by section 3 of the contract; then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
 
 ---
 
@@ -183,7 +180,7 @@ An ATDD run always covers exactly one story, so its checklist filename carries t
 Resolve the story in this order:
 
 1. Use the story the user named in this invocation.
-2. Otherwise use the story carried by the loaded artifacts: the story file name, or the story id from its metadata or H1 heading.
+2. Otherwise use the story carried by the loaded artifacts: the v7 ticket resolved in section 3, or the v6 story file name, or the story id from its metadata or H1 heading.
 3. If several stories are candidates and the run is interactive, list them and ask which one this run covers. **Halt** until the user answers. A headless or autonomous run with no resolvable story halts with "A story with acceptance criteria is required for ATDD." ATDD has no `system` fallback because a story is a hard prerequisite.
 
 Derive `story_key` from the resolved story as described in section 3, then set:
@@ -191,7 +188,7 @@ Derive `story_key` from the resolved story as described in section 3, then set:
 - `run_scope` to `story`
 - `run_key` to `story-{story_key}`
 
-`story-{story_key}` follows the shared run_key grammar: `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`); without a story file, it is the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+`story-{story_key}` follows the shared run_key grammar in `{tea-contracts}/story-identity.md` section 4: `shop--e1-s2` for a v7 epic entry, the BMM story file basename such as `1-2-user-authentication` for a v6 story.
 
 Carry `story_key`, `run_scope`, and `run_key` forward through every remaining step. `{outputFile}` is `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`.
 
@@ -201,7 +198,7 @@ Carry `story_key`, `run_scope`, and `run_key` forward through every remaining st
 
 Check whether `{outputFile}` already exists. A checklist at this path belongs to a previous run for the **same** story; checklists for other stories live under their own filenames and are never read or written here.
 
-- **Does not exist:** this is a fresh run. Proceed to Save Progress.
+- **Does not exist:** this is a fresh run. For a story resolved through the v7 route, when the test artifacts folder holds story checklists with a pre-v7 key, follow section 5 of the contract before continuing. Proceed to Save Progress.
 - **Exists with `workflowStatus: 'in-progress'`:** a previous run for this story was interrupted. Display its `lastStep` and `lastSaved`, then ask:
 
   > "An unfinished ATDD run for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the checklist."
@@ -241,7 +238,8 @@ Then write this step's output below the frontmatter.
 
 - Set `storyId` to `{story_id}`
 - Set `storyKey` to `{story_key}`
-- Set `storyFile` to `{story_file}`
+- Set `storyFile` to `{story_file}` (empty for a v7 entry that is not pulled)
+- Set `ticketRef` to `{ticket_ref}` (empty for a v6 story)
 - Set `atddChecklistPath` to `{outputFile}`
 - Initialize `generatedTestFiles` to `[]`
 - Set `inputDocuments` to the list of artifact paths loaded in this step (e.g., knowledge fragments, test design documents, configuration files)

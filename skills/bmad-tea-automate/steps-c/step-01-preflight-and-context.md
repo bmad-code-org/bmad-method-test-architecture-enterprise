@@ -193,7 +193,7 @@ Every run writes an automation summary whose filename carries the run's scope, s
 
 - `system`: the whole project or system, or no narrower scope could be resolved.
 - `epic-{epic_num}`: one epic.
-- `story-{story_key}`: one story. `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, use the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- `story-{story_key}`: one story. Resolve, read and name the story by `{tea-contracts}/story-identity.md`: `story_key` is `shop--e1-s2` for a v7 epic entry and the v6 story file basename (`1-2-user-authentication`) for a v6 story.
 - `target-{slug}`: when no story or epic applies, the slug of the automated path or feature name. Use `target_feature` when it is set. For `target_files`, use the single file path, or the deepest directory the files share.
 
 Slug rule (used for every `{slug}` and for an epic title with no number): lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
@@ -201,7 +201,7 @@ Slug rule (used for every `{slug}` and for an epic title with no number): lowerc
 ### Resolution order
 
 1. Use the scope the user named in this invocation (a story, an epic, a feature or path, or the whole system).
-2. Otherwise use the scope carried by the loaded artifacts: a story file gives `story-{story_key}`; an epic document gives `epic-{epic_num}` from its metadata, H1 heading, or filename; a `target_feature` or `target_files` value with no story or epic gives `target-{slug}`. When a story and its epic are both loaded, the story is the scope.
+2. Otherwise use the scope carried by the loaded artifacts: a story (a v7 ticket or a v6 story file) gives `story-{story_key}`; an epic document gives `epic-{epic_num}` from its metadata, H1 heading, or filename; a `target_feature` or `target_files` value with no story or epic gives `target-{slug}`. When a story and its epic are both loaded, the story is the scope.
 3. If several candidates of the same kind remain (for example two stories) and the run is interactive, list them and ask which one this run covers. **Halt** until the user answers. A headless or autonomous run with no resolvable scope uses `system` and says so in the summary.
 
 Auto-discovery across the whole codebase with no story, epic, or target is `system`.
@@ -247,6 +247,8 @@ lastSaved: '{date}'
 ```
 
 Then write this step's output below the frontmatter.
+
+For a story run (`run_scope` is `story`), also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter, as `{tea-contracts}/story-identity.md` section 4 defines them. Other scopes leave them out.
 
 `runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged and never re-derive them, and Resume mode refuses to continue a summary whose `runKey` does not match the run being resumed.
 

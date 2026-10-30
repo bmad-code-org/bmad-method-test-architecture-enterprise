@@ -69,7 +69,7 @@ Read the selected checklist and parse YAML frontmatter for:
 - `stepsCompleted` — array of completed step names
 - `lastStep` — last completed step name
 - `lastSaved` — timestamp of last save
-- `storyId`, `storyKey`, `storyFile` — the story this checklist covers
+- `storyId`, `storyKey`, `storyFile`, `ticketRef` — the story this checklist covers (`ticketRef` is absent on checklists written before v7 keys)
 
 **Run identity check.** Check only identity fields first, before reading progress or rendering the dashboard. A mismatch response names the conflicting identities only and omits all saved status/step details. When the user named a story in this invocation, `runKey` must equal the `run_key` resolved for it, and `storyKey` must equal the resolved `story_key`. If either differs, display "⚠️ **Checklist belongs to a different story** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no story, adopt the checklist's own `storyKey`, `runScope`, and `runKey` as this run's identity.
 
@@ -87,6 +87,8 @@ If `workflowStatus` is missing (legacy checklist), infer it from `lastStep`: `'s
 
 ---
 
+For a story run, read `{tea-contracts}/story-identity.md` before continuing: a named story is resolved by its sections 1 and 4 for the identity check, `ticketRef` locates the story when `storyFile` is empty or gone, and section 5 governs every citation the checkpoint carries (read through `resolvedSources`; report, never follow, an `unresolved` one). This holds on every resume path, named or not.
+
 ### 3. Display Progress Dashboard
 
 Display:
@@ -94,7 +96,7 @@ Display:
 "📋 **Workflow Resume — Acceptance Test-Driven Development**
 
 **Run:** {runKey} ({runScope})
-**Story:** {storyId} (`{storyFile}`)
+**Story:** {storyId} (`{storyFile}` or `{ticketRef}`)
 **Workflow status:** {workflowStatus}
 **Last saved:** {lastSaved}"
 

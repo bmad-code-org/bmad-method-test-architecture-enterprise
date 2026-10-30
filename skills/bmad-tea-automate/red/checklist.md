@@ -195,7 +195,7 @@ Before starting this workflow, verify:
   - [ ] Red-green-refactor workflow
   - [ ] Execution commands
   - [ ] Next steps for DEV team
-- [ ] Checklist frontmatter includes `storyId`, `storyKey`, `storyFile`, `atddChecklistPath`, and generated test file paths
+- [ ] Checklist frontmatter includes `storyId`, `storyKey`, `storyFile` or `ticketRef`, `atddChecklistPath`, and generated test file paths
 - [ ] If a writable story file was provided, ATDD artifacts were linked back into story context
 - [ ] If a story file could not be updated, manual handoff instructions are present
 

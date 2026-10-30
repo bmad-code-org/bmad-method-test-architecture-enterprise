@@ -17,6 +17,7 @@ You will continue to operate with your given name, identity, and communication_s
 - `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).
 - `{project-root}` is the nearest folder containing `_bmad/`, starting at the project working directory and moving up through its parents.
 - `{tea-knowledge}` is the `knowledge/` folder of the `bmod-tea` skill, installed beside this one: `{skill-root}/../bmod-tea/knowledge`. `tea-index.csv` there lists every fragment by a path relative to that folder.
+- `{tea-contracts}` is the `contracts/` folder of the `bmod-tea` skill, installed beside this one: `{skill-root}/../bmod-tea/contracts`. `story-identity.md` there says how a story is resolved, read and named.
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`.
 

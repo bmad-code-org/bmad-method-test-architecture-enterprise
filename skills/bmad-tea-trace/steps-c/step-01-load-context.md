@@ -119,8 +119,8 @@ The fragment list for this step is a closed set. Start empty and add every fragm
 If available:
 
 - Story file and acceptance criteria
-- Test design doc (priorities) from `{test_artifacts}/test-design/`, chosen by the target this invocation or the loaded artifacts name (the same target section 4 resolves): `test-design-epic-{epic_num}.md` for an epic; for a story, its epic's plan `test-design-epic-{epic_num}.md`, with the epic number taken from the story id (story `1.2` belongs to epic `1`); `test-design-architecture.md` and `test-design-qa.md` at system level. Fall back to the same names at the legacy root `{test_artifacts}/`, where runs before the `test-design/` folder wrote them.
-- NFR evidence audit, chosen by the same target. Use the first file that exists: `{test_artifacts}/nfr/nfr-assessment-{run_key}.md` for the target's own scope (`story-{story_key}` or `epic-{epic_num}`, keyed as section 4 describes); for a story, its epic's audit `{test_artifacts}/nfr/nfr-assessment-epic-{epic_num}.md`; `{test_artifacts}/nfr/nfr-assessment-system.md`; then the legacy root `{test_artifacts}/nfr-assessment.md`. Name the file used.
+- Test design doc (priorities) from `{test_artifacts}/test-design/`, chosen by the target this invocation or the loaded artifacts name (the same target section 4 resolves): `test-design-epic-{epic_num}.md` for an epic; for a story with a parent epic (section 3 of the contract), its epic's plan `test-design-epic-{epic_num}.md`, with the epic number taken from the story id (story `1.2` belongs to epic `1`); a story with no parent epic skips this; `test-design-architecture.md` and `test-design-qa.md` at system level. Fall back to the same names at the legacy root `{test_artifacts}/`, where runs before the `test-design/` folder wrote them.
+- NFR evidence audit, chosen by the same target. Use the first file that exists: `{test_artifacts}/nfr/nfr-assessment-{run_key}.md` for the target's own scope (`story-{story_key}` or `epic-{epic_num}`, keyed as section 4 describes); for a story with a parent epic, its epic's audit `{test_artifacts}/nfr/nfr-assessment-epic-{epic_num}.md`; `{test_artifacts}/nfr/nfr-assessment-system.md`; then the legacy root `{test_artifacts}/nfr-assessment.md`. Name the file used.
 - Tech spec / PRD
 - OpenAPI or similar contract/spec files
 - Placeholder files that reference external requirements systems
@@ -140,14 +140,14 @@ Resolve the gate target, `run_scope`, and `run_key` **now**, before anything is 
 Resolve the gate type in this order:
 
 1. The gate type the user named in this invocation (for example "trace epic 16" is `epic`, "release gate for 2.4.0" is `release`).
-2. The kind of target the loaded artifacts identify: a story file is `story`, an epic document is `epic`.
+2. The kind of target the loaded artifacts identify: a story (a v7 ticket or a v6 story file) is `story`, an epic document is `epic`.
 3. The configured `{gate_type}`.
 
 ### B) Target ID and Label
 
 Resolve the target for that gate type in the same order: the target the user named in this invocation first, then the target the loaded artifacts carry.
 
-- **story:** the story id as the story states it (for example `1.2`), and `story_key`, the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, `story_key` is the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- **story:** `story_id` and `story_key` by `{tea-contracts}/story-identity.md`, which also resolves and reads the story: `1.2` and `shop--e1-s2` for a v7 epic entry, the story's own id and its file basename (`1-2-user-authentication`) for a v6 story.
 - **epic:** `epic_num`, read from the epic document metadata, its H1 heading, or its filename. If the epic carries no number, use the slug of its title (slug rule below) in place of the number.
 - **release:** the release version, from this invocation or from the release notes or version the loaded artifacts name.
 - **hotfix:** the hotfix id, from this invocation or from the loaded artifacts.
@@ -227,6 +227,8 @@ oracleLedger: [{ id: '{oracle item id}', requirement: '{requirement text}', prio
 ```
 
 Then write this step's output below the frontmatter.
+
+For a story run (`run_scope` is `story`), also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter, as `{tea-contracts}/story-identity.md` section 4 defines them. Other scopes leave them out.
 
 `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` are this run's identity. Later steps carry them forward unchanged and never re-derive them: Step 4 reads the target from this frontmatter, and Resume mode refuses to continue a file whose `runKey` does not match the run being resumed.
 
