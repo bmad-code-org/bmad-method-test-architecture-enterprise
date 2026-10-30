@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-tea-automate",
-    "implementationDigest": "sha256:c9d74a24487e424c07fd80ba15a923a8dd47a6160bc35451a0c41a8d5dae31eb",
+    "implementationDigest": "sha256:b274274b5683e33a0825639dd13ce8ac6ae836729678f72d0ba2d49444ca620c",
     "artifactDigest": "sha256:4f23705ae643783a5af0cbdaecd20aebe4598bc26318a5d5149427d7e6bbec4a",
-    "commitDigest": "sha256:c9d74a24487e424c07fd80ba15a923a8dd47a6160bc35451a0c41a8d5dae31eb",
+    "commitDigest": "sha256:b274274b5683e33a0825639dd13ce8ac6ae836729678f72d0ba2d49444ca620c",
     "rationale": "A run that names every fragment in the index satisfies O-001 for automate-playwright-ui-utils-on, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -86,9 +86,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-tea-automate",
-    "implementationDigest": "sha256:c9d74a24487e424c07fd80ba15a923a8dd47a6160bc35451a0c41a8d5dae31eb",
+    "implementationDigest": "sha256:b274274b5683e33a0825639dd13ce8ac6ae836729678f72d0ba2d49444ca620c",
     "artifactDigest": "sha256:4f23705ae643783a5af0cbdaecd20aebe4598bc26318a5d5149427d7e6bbec4a",
-    "commitDigest": "sha256:c9d74a24487e424c07fd80ba15a923a8dd47a6160bc35451a0c41a8d5dae31eb",
+    "commitDigest": "sha256:b274274b5683e33a0825639dd13ce8ac6ae836729678f72d0ba2d49444ca620c",
     "rationale": "automate-playwright-ui-utils-on declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -98,7 +98,7 @@
         "privateRef": null,
         "digest": "sha256:4f23705ae643783a5af0cbdaecd20aebe4598bc26318a5d5149427d7e6bbec4a"
       },
-      "revisionCommitDigest": "sha256:c9d74a24487e424c07fd80ba15a923a8dd47a6160bc35451a0c41a8d5dae31eb",
+      "revisionCommitDigest": "sha256:b274274b5683e33a0825639dd13ce8ac6ae836729678f72d0ba2d49444ca620c",
       "noKnownDefectStatement": "automate-playwright-ui-utils-on's expected selection is derived from the bmad-tea-automate step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,
