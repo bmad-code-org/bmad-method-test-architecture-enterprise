@@ -4220,10 +4220,10 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
   for (const marker of [
     'Invoke `bmad-tea-framework` with explicit CI setup scope and Edit operation',
     'or Create when the inspection found no pipeline file',
-    'the rendering rules belong to `skills/bmad-tea-framework/ci/steps-c/step-03b-render-evaluation-plans.md`',
-    '`{skill-root}/../bmad-tea-framework/ci/steps-c/step-03b-render-evaluation-plans.md`',
+    'Its CI phase detects `ci/evaluation-ci-plan.json`, validates it and renders it',
+    'the rendering rules belong to `bmad-tea-framework`, so never read or apply its files from here',
     'Name in the request the concrete event of this repository for each tier it should render',
-    'That step renders each `gates` entry as a wait of the named job on the evaluation job of the tier',
+    "Framework's CI phase renders each `gates` entry as a wait of the named job on the evaluation job of the tier",
     'its summary reports the edit to the job, a name that matches no job and a conflicting gate',
     'so relay that report to the adopter',
     'When the plan gates a job, invoke it on the workflow file that holds that job.',
@@ -4235,6 +4235,8 @@ function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = 
     'each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason',
   ])
     requireText(handoff, marker, 'ci.md hand-off', failures);
+  if (guide.includes('bmad-tea-framework/'))
+    failures.push('ci.md names a file inside bmad-tea-framework; invoke the skill instead of reaching into it');
   for (const marker of [
     "Write the findings of every inspection as a `## CI` section of the run's inspection record at `{test_artifacts}/evaluate/<evaluationId>/inspection-record.md`",
     'end the section with the hand-off status',

@@ -55,6 +55,8 @@ Use explicit intent if the user already indicates scope:
 - **Epic + Stories (no PRD/ADR)** → **Epic-Level Mode**
 - **Both PRD/ADR + Epic/Stories** → Prefer **System-Level Mode** first
 
+An explicit system- or epic-level request decides the mode here, and section B does not run, so its preview-layout halt does not apply. When the active initiative is in the preview layout (defined in section B), mention that `bmad migrate` moves its breakdown into `tickets/`, and continue in the requested mode.
+
 If intent is unclear, ask:
 
 > "Should I create (A) **System-level** test design (PRD + ADR → Architecture + QA docs), or (B) **Epic-level** test design (Epic → single test plan)?"
@@ -63,11 +65,12 @@ If intent is unclear, ask:
 
 If user intent is unclear:
 
+- If an initiative is active and its folder is in the preview layout (below) → tell the user to run `bmad migrate`, which moves the breakdown into `tickets/`, and to rerun Test Design afterwards. **Halt** without choosing a mode.
 - If an initiative is active and its ticket tree holds an epic → **Epic-Level Mode**
 - Otherwise, on a v6 project, if `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode**
 - Otherwise → **System-Level Mode**
 
-The active initiative and the output folder belong to BMad core, not TEA's config. Read them with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. When `core.active_initiative` is set, the initiative folder is `{output_folder}/{active_initiative}/`; it holds an epic when its `tickets.toml` has an `[[epic]]` table or an `epic-*/` folder sits inside it.
+The active initiative and the output folder belong to BMad core, not TEA's config. Read them with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. When `core.active_initiative` is set, the initiative folder is `{output_folder}/{active_initiative}/`. It holds an epic when `tickets/tickets.toml` inside it has an `[[epic]]` table or a `tickets/epic-*/` folder exists. It is in the preview layout when a `tickets.toml`, an `epic-*/` folder, a `story-*.md`, `spike-*.md` or `bug-*.md` leaf file, or a `*-plan.md` plan sits directly in the initiative folder, with or without a `tickets/` folder beside it; BMad's ticket tools refuse that layout until it is migrated.
 
 `{implementation_artifacts}` exists only on a v6 project and is a BMM setting that TEA's config does not define. Read `modules.bmm.implementation_artifacts` with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.bmm.implementation_artifacts`. When it is not set, use `{output_folder}/implementation-artifacts`; a v7 project has no such key, so a missing sprint-status file there means System-Level Mode.
 

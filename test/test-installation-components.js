@@ -1262,6 +1262,60 @@ async function runTests() {
     assert(false, 'skills/bmod-tea/help/help.md bmad-tea-evaluate entry validates', error.message);
   }
 
+  // bmad follows every installed module's help, so this file is how the method
+  // flow finds TEA. Hold the routes, the install conditions and the artifact map.
+  try {
+    const helpContent = await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/help/help.md'), 'utf8');
+    for (const marker of [
+      "## Where TEA fits in the method's flow",
+      'Name a method skill only when it is installed, and a TEA skill only when it is installed',
+      'say which TEA skill would fill it once installed',
+      '`bmad-tea-test-design` at epic level',
+      '`bmad-tea-automate` in red mode, then `bmad-build`',
+      "Red mode reads a story file: a v6 story, or a v7 story's leaf file once Sofia the Product Owner has pulled its entry.",
+      'For an entry that is not pulled, have Sofia pull it first: red mode records the story file in its checklist for the builder.',
+      '`bmad-qa-generate-e2e-tests` remains the fit for a quick, one-off set of end-to-end tests',
+      "The story's status is never TEA's to change.",
+      '--key modules.tea.test_artifacts',
+      "a file whose frontmatter says `workflowStatus: 'in-progress'` is a started run the user can resume",
+      'When a root file and a folder file cover the same scope, say both exist and let the user pick.',
+    ]) {
+      assert(helpContent.includes(marker), `skills/bmod-tea/help/help.md routes the method flow: ${marker}`);
+    }
+    for (const folder of ['test-design', 'framework', 'ci', 'atdd', 'automate', 'test-review', 'nfr', 'trace', 'evaluate']) {
+      assert(helpContent.includes(`\`${folder}/\``), `skills/bmod-tea/help/help.md names the ${folder}/ artifact folder`);
+    }
+    const legacyRoot = helpContent.split('\n').find((line) => line.startsWith('Runs before these folders existed')) ?? '';
+    assert(
+      /only a checkpoint, the report's own status, its content or the user settles whether that run finished/.test(helpContent),
+      'skills/bmod-tea/help/help.md never infers a finished run from a missing checkpoint',
+    );
+    for (const legacy of [
+      'test-design-epic-<n>.md',
+      'test-design-architecture.md',
+      'test-design-qa.md',
+      'test-design-progress.md',
+      'framework-setup-progress.md',
+      'ci-pipeline-progress.md',
+      'atdd-checklist-<story>.md',
+      'automation-summary.md',
+      'test-review.md',
+      'nfr-assessment.md',
+      'traceability-matrix.md',
+    ]) {
+      assert(legacyRoot.includes(`\`${legacy}\``), `skills/bmod-tea/help/help.md names the legacy root file ${legacy}`);
+    }
+    assert(
+      /\| Done with `bmad-build` and wants a maintained test suite for the work +\| `bmad-tea-automate` in expand mode +\|/.test(
+        helpContent,
+      ),
+      'skills/bmod-tea/help/help.md routes the method flow: expand mode after bmad-build',
+    );
+    assert(!/solutioning/i.test(helpContent), 'skills/bmod-tea/help/help.md speaks v7, not v6 phase names');
+  } catch (error) {
+    assert(false, 'skills/bmod-tea/help/help.md method-flow routing validates', error.message);
+  }
+
   // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside
   // the skill directory it is working on; neither belongs in a published
   // package. `package.json`'s `files` array lists `skills` as a directory entry,

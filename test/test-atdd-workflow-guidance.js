@@ -124,6 +124,11 @@ function main() {
   const sources = Object.fromEntries(Object.keys(FILES).map((name) => [name, read(name)]));
   const required = [
     ['preflight', 'Preserve every supplied criterion id'],
+    ['template', 'This checklist changes no ticket, plan or story status.'],
+    ['template', "**v7 ticket:** the builder records the work in the story's plan, and you or your orchestrator mark the ticket done."],
+    ['template', 'she runs `tickets.py mark` on a repo store, or the tracker transition on a Jira, Linear or GitHub store.'],
+    ['template', '**v6 story:** update the story file and `sprint-status.yaml` as your sprint process does.'],
+    ['template', "**No BMad method module:** hand this checklist and the tests to your team's own process."],
     ['preflight', 'assign the lowest unused `AC-<positive integer>` id'],
     ['preflight', '{ id, idSource: supplied | generated, text }'],
     ['strategy', 'Record the exact declared acceptance criterion id on every scenario'],
