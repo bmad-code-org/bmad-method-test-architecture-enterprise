@@ -290,7 +290,8 @@ function blank(length) {
 /**
  * A string or regex literal, rendered for the requested view: blanked (the
  * default, for matching), kept (for reading operands), or masked with `x` (for
- * knowing which characters of a kept operand are inside a literal). Every view
+ * knowing which characters of a kept operand are inside a literal; see
+ * `codeInMask` for everything else in that view). Every view
  * is the same length, so offsets line up across all three. The blanked view keeps
  * newlines so line numbers survive; the mask marks them too, because a newline
  * inside a literal is part of its value.
@@ -301,6 +302,14 @@ function literal(source, start, end, mode) {
   if (mode === 'mask') return 'x'.repeat(text.length);
   return text.replaceAll(/[^\n]/g, ' ');
 }
+
+/**
+ * Code outside a literal, in the masked view: blank, newlines kept. The mask must
+ * hold nothing but `x` for literal positions, or an identifier ending in `x`
+ * would merge with the literal after it (a template tagged `x` would read as a
+ * literal opening with `x`, not with a backtick).
+ */
+const codeInMask = (character) => (character === '\n' ? '\n' : ' ');
 
 function stripCLike(source, literals) {
   let out = '';
@@ -377,7 +386,7 @@ function stripCLike(source, literals) {
       continue;
     }
 
-    out += character;
+    out += literals === 'mask' ? codeInMask(character) : character;
     if (!/\s/.test(character)) regexAllowed = /[(,=:[!&|?{};+\-*%<>~^]/.test(character);
     index += 1;
   }
@@ -426,7 +435,7 @@ function stripPython(source, literals) {
       continue;
     }
 
-    out += character;
+    out += literals === 'mask' ? codeInMask(character) : character;
     index += 1;
   }
   return out;

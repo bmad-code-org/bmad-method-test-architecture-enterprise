@@ -245,6 +245,11 @@ function run() {
       'let i = 0;\nexpect(`${i++}`).toBe(`${i++}`);\n',
       'textually equal interpolated templates can evaluate differently',
     ],
+    [
+      'tests/a.spec.ts',
+      'const x = (_strings, value) => value;\nlet i = 0;\nexpect(x`${i++}`).toBe(x`${i++}`);\n',
+      'a tagged template interpolates even when the tag name ends in x',
+    ],
     ['tests/test_login.py', 'assert d["a b"] == d["ab"]\n', 'python operands are not changed by the kept view'],
     ['src/LoginTest.java', 'assertEquals("a", "b");\n', 'JUnit string literals differ'],
     ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["b"])\n', 'Go map keys differ'],
