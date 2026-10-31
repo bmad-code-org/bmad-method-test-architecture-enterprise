@@ -2348,6 +2348,14 @@ try {
       [proven.total, proven.covered],
       [unproven.coverage.priority_breakdown.P0.total, unproven.coverage.priority_breakdown.P0.covered + 1],
     );
+    // A pulled leaf with no criterion and no Verify is refused before any agent runs, naming the leaf.
+    const pulledText = fs.readFileSync(leaf, 'utf8');
+    fs.writeFileSync(leaf, pulledText.replace(`Verify: ${current}`, 'Draft.'));
+    assert.throws(
+      () => epicTicketSources(path.join(base, 'project'), { ...V7_TARGET, document: path.join(epicDir, 'epic-checkout.md') }),
+      (error) => error.code === 'TRACE_INPUT_INVALID' && error.message.startsWith(`${leaf} states no numbered criteria`),
+    );
+    fs.writeFileSync(leaf, pulledText);
     // The leaf's covers win over the index entry's.
     fs.writeFileSync(leaf, fs.readFileSync(leaf, 'utf8').replace('covers: []', 'covers: [R5]'));
     const recovered = epicTicketSources(path.join(base, 'project'), { ...V7_TARGET, document: path.join(epicDir, 'epic-checkout.md') });

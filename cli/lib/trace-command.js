@@ -653,6 +653,10 @@ function epicTicketSources(projectRoot, target) {
         verify.push({ text: entry.verify, file: index, line: verifyLines[position] });
       const [selection, criteria] =
         captured.criteria.length > 0 ? ['numbered', captured.criteria] : planned.length > 0 ? ['plan', planned] : ['verify', []];
+      if (selection === 'verify' && verify.length === 0)
+        throw inputError(
+          `${leaf ?? `${index} entry ${id}`} states no numbered criteria, plan acceptance criteria, or verify line; give the ticket a criterion before tracing the epic.`,
+        );
       return { id, storyKey, covers, leaf, plan, selection, criteria, verify };
     }),
   };
