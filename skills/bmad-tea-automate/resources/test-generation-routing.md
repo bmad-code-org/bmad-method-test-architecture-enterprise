@@ -46,7 +46,7 @@ Do not restart Create or execute a completed generation step on an explicit Resu
 Both modes resolve from this skill's own `customize.toml` and `_bmad/custom/bmad-tea-automate.toml` and `.user.toml`.
 For red set `workflow-key = workflow.red`. For expand set `workflow-key = workflow`.
 `workflow.red` holds the red settings (`activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, `on_complete`); expand never reads it and red never reads the top-level keys.
-Resolve only the selected key, with `resolve_customization.py --skill {skill-root} --key {workflow-key}`, and retain the returned block for its terminal hook.
+Resolve only the selected key, with `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key {workflow-key}`, and retain the returned block for its terminal hook.
 
 Run selected prepend hooks, load selected persistent facts, load config, greet, then run selected append hooks in that order.
 The selected mode's `workflow.on_complete` executes at its original terminal after outputs are saved, including Validate and Edit.

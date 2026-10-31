@@ -59,7 +59,7 @@ Run `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {proje
 
 Each `core` and `modules.tea` key is available as `{<key>}`, and as `config.<key>` in later steps. Replace `{project-root}` inside a value with the project root. Setup answers are strings: read `"true"` and `"false"` as booleans.
 
-If `{tea-knowledge}/tea-index.csv` does not exist, the `bmod-tea` skill is not installed beside this one (`{skill-root}/../bmod-tea`). Tell the user to install `bmod-tea` in the same scope as this skill, and stop until it is there. For a skill in the project's skills folder run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`; for a skill in the global skills folder add `-g`. Run the command on a yes. A `bmod-tea` installed in the other scope does not satisfy this skill.
+If `{tea-knowledge}/tea-index.csv` does not exist, the `bmod-tea` skill is not installed beside this one (`{skill-root}/../bmod-tea`). Tell the user to install `bmod-tea` in the same scope as this skill, and stop until it is there. For a skill in the project's skills folder run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`; for a skill in the global skills folder add `-g`. Run the command on a yes. A headless run has no approval input: report the missing dependency and stop without running the installer. A `bmod-tea` installed in the other scope does not satisfy this skill.
 
 ### Step 5: Greet the User
 

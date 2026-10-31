@@ -30,7 +30,7 @@ Before SKILL.md executes prepend hooks or greets, resolve settings for every req
 When scope includes CI:
 
 1. `{skill-root}/customize.toml` carries the CI defaults under `[workflow.ci]`: `ci_platform = auto`, empty `activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, and `on_complete`.
-2. The Step 1 resolver call already merged those defaults with the `[workflow.ci]` tables of `_bmad/custom/bmad-tea-framework.toml` and `.user.toml`. For a CI-only run that resolves no other key, run `resolve_customization.py --skill {skill-root} --key workflow.ci`. No other file supplies CI settings.
+2. The Step 1 resolver call already merged those defaults with the `[workflow.ci]` tables of `_bmad/custom/bmad-tea-framework.toml` and `.user.toml`. For a CI-only run that resolves no other key, run `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.ci`. No other file supplies CI settings.
 3. Store the `workflow.ci` table as `ci_workflow`. SKILL.md executes applicable prepend entries before greeting, loads applicable facts/globs in lexical order, and executes append entries after greeting through `setup-state.md` section 3's individual durable hook protocol. On Resume, resolve current settings and reload applicable facts; skip completed hook entries and halt on uncertain started entries. Save each applicable phase in `activation_completed` only after its activation succeeds. This section resolves settings; it does not replay activation at phase or worker handoffs.
 4. Framework steps use canonical `workflow`. CI steps read `ci_workflow` for their hooks/facts and the effective platform below. Keep `{skill-root}` bound to the canonical directory for every CI asset.
 
