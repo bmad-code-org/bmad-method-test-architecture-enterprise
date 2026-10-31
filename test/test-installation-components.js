@@ -222,11 +222,20 @@ async function runTests() {
     }
     const retired = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/retired.toml'), 'utf8'));
     const retiredNames = [...retired.renamed.map((entry) => entry.from), ...retired.removed];
+    const expectedRenames = [
+      ['bmad-testarch-automate', 'bmad-tea-automate'],
+      ['bmad-testarch-evaluate', 'bmad-tea-evaluate'],
+      ['bmad-testarch-framework', 'bmad-tea-framework'],
+      ['bmad-testarch-nfr', 'bmad-tea-nfr'],
+      ['bmad-testarch-test-design', 'bmad-tea-test-design'],
+      ['bmad-testarch-test-review', 'bmad-tea-test-review'],
+      ['bmad-testarch-trace', 'bmad-tea-trace'],
+      ['bmad-teach-me-testing', 'bmad-tea-teach-me-testing'],
+    ].map(([from, to]) => ({ from, to }));
     assert(
-      JSON.stringify(retired.renamed.map((entry) => entry.to).sort()) === JSON.stringify([...directSkills].sort()) &&
-        retired.renamed.length === 8 &&
-        JSON.stringify([...retired.removed].sort()) === JSON.stringify(['bmad-testarch-atdd', 'bmad-testarch-ci']),
-      'retired.toml renames every old workflow to its bmad-tea-* skill and removes atdd and ci',
+      JSON.stringify(retired.renamed) === JSON.stringify(expectedRenames) &&
+        JSON.stringify(retired.removed) === JSON.stringify(['bmad-testarch-atdd', 'bmad-testarch-ci']),
+      'retired.toml maps each old workflow to its bmad-tea-* skill exactly and removes atdd and ci',
     );
     assert(
       retiredNames.every((name) => !bmod.skills.includes(name)),

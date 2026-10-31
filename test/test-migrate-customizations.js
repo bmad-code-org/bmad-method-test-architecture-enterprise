@@ -193,9 +193,19 @@ test('restores from the newest backup that holds the file, after live files, and
       read(path.join(backupCustom(root, '.v6-v7-migration-backup-2026-10-01'), 'bmad-tea-atdd.toml')),
       '[workflow]\non_complete = "older"\n',
     );
+    assert.deepEqual(JSON.parse(read(path.join(custom, '.tea-customization-migration.json'))), {
+      version: 1,
+      restored: {
+        'bmad-tea-atdd.toml': '.v6-v7-migration-backup-2026-10-01',
+        'bmad-tea-atdd.user.toml': 'live',
+        'bmad-tea-automate.toml|red|on_complete': '.v6-v7-migration-backup-2026-10-01',
+      },
+      kept: {},
+    });
     const rerun = cli(['--project-root', root], root);
     assert.equal(rerun.status, 0, rerun.stderr);
-    assert.equal(rerun.stdout, 'No legacy TEA customizations found.\n');
+    assert.equal(rerun.stdout, 'No legacy TEA customizations found.\n', 'the backup copy of a migrated live file never resurfaces');
+    assert.deepEqual(tree(path.join(root, '.v6-v7-migration-backup-2026-09-01')), backups);
   });
 });
 
@@ -215,28 +225,139 @@ test('restores a backup into a project whose custom folder was removed', () => {
   });
 });
 
-test('keeps target values over backup values with a notice and restores only missing keys', () => {
+test('a backup value that differs from the target is a conflict until --keep-existing records the kept value', () => {
   withProject(({ root, custom }) => {
     const target = path.join(custom, 'bmad-tea-automate.toml');
+    const record = path.join(custom, '.tea-customization-migration.json');
+    const backup = path.join(backupCustom(root, '.v6-v7-migration-backup-a'), 'bmad-tea-atdd.toml');
     write(target, '[workflow.red]\non_complete = "mine"\n');
-    write(
-      path.join(backupCustom(root, '.v6-v7-migration-backup-a'), 'bmad-tea-atdd.toml'),
-      '[workflow]\non_complete = "backup"\npersistent_facts = ["restored"]\n',
-    );
-    const result = cli(['--project-root', root], root);
+    write(backup, '[workflow]\non_complete = "backup"\npersistent_facts = ["restored"]\n');
+    const before = tree(root);
+    for (const args of [['--check'], []]) {
+      const refused = cli(['--project-root', root, ...args], root);
+      assert.equal(refused.status, 2);
+      assert.ok(
+        refused.stderr.includes(
+          `Conflicting on_complete: "backup" in ${backup} (from .v6-v7-migration-backup-a) and "mine" in ${target} [workflow.red]. Make them agree, or rerun with --keep-existing to keep the existing value.`,
+        ),
+        refused.stderr,
+      );
+      assert.deepEqual(tree(root), before);
+    }
+    const preview = cli(['--project-root', root, '--check', '--keep-existing'], root);
+    assert.equal(preview.status, 0, preview.stderr);
+    assert.match(preview.stdout, /^Would keep on_complete = "mine" in bmad-tea-automate\.toml \[workflow\.red\]; ignoring "backup" /m);
+    assert.deepEqual(tree(root), before);
+    const result = cli(['--project-root', root, '--keep-existing'], root);
     assert.equal(result.status, 0, result.stderr);
     assert.match(
       result.stdout,
       /^Kept on_complete = "mine" in bmad-tea-automate\.toml \[workflow\.red\]; ignoring "backup" from bmad-tea-atdd\.toml \(from \.v6-v7-migration-backup-a\)$/m,
     );
     assert.deepEqual(TOML.parse(read(target)).workflow.red, { on_complete: 'mine', persistent_facts: ['restored'] });
-    const merged = read(target);
+    const recordText = read(record);
+    assert.deepEqual(JSON.parse(recordText), {
+      version: 1,
+      restored: {
+        'bmad-tea-atdd.toml': '.v6-v7-migration-backup-a',
+        'bmad-tea-automate.toml|red|persistent_facts': '.v6-v7-migration-backup-a',
+      },
+      kept: { 'bmad-tea-automate.toml|red|on_complete': '.v6-v7-migration-backup-a' },
+    });
+    for (const value of ['"mine"', '"backup"', '["restored"]']) assert.ok(!recordText.includes(value), 'the record holds no values');
+    for (const folder of Object.values({ ...JSON.parse(recordText).restored, ...JSON.parse(recordText).kept })) {
+      assert.equal(folder, '.v6-v7-migration-backup-a');
+    }
     const rerun = cli(['--project-root', root], root);
+    assert.equal(rerun.status, 0, rerun.stderr);
     assert.equal(rerun.stdout, 'No legacy TEA customizations found.\n');
-    write(target, merged.replace('"restored"', '"edited later"'));
+    write(target, read(target).replace('"restored"', '"edited later"').replace('"mine"', '"mine again"'));
     const afterEdit = cli(['--project-root', root], root);
     assert.equal(afterEdit.status, 0, afterEdit.stderr);
     assert.equal(afterEdit.stdout, 'No legacy TEA customizations found.\n');
+    assert.deepEqual(TOML.parse(read(target)).workflow.red, { on_complete: 'mine again', persistent_facts: ['edited later'] });
+    assert.equal(read(record), recordText);
+  });
+});
+
+test('backup keys the record lists are never restored or questioned again', () => {
+  withProject(({ root, custom }) => {
+    const target = path.join(custom, 'bmad-tea-automate.toml');
+    write(target, '[workflow.red]\non_complete = "edited after restore"\n');
+    write(
+      path.join(backupCustom(root, '.v6-v7-migration-backup-a'), 'bmad-tea-atdd.toml'),
+      '[workflow]\non_complete = "backup"\npersistent_facts = ["deleted by user"]\n',
+    );
+    write(
+      path.join(custom, '.tea-customization-migration.json'),
+      JSON.stringify({
+        version: 1,
+        restored: { 'bmad-tea-automate.toml|red|on_complete': '.v6-v7-migration-backup-a' },
+        kept: { 'bmad-tea-automate.toml|red|persistent_facts': '.v6-v7-migration-backup-a' },
+      }),
+    );
+    const result = cli(['--project-root', root], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'No legacy TEA customizations found.\n');
+    assert.equal(read(target), '[workflow.red]\non_complete = "edited after restore"\n');
+  });
+});
+
+test('a damaged migration record stops the run and names the file', () => {
+  withProject(({ root, custom }) => {
+    const record = path.join(custom, '.tea-customization-migration.json');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete = "nfr"\n');
+    for (const text of [
+      '{not json',
+      JSON.stringify({ version: 2, restored: {}, kept: {} }),
+      JSON.stringify({ version: 1, restored: { a: 1 }, kept: {} }),
+    ]) {
+      write(record, text);
+      const before = tree(root);
+      const result = cli(['--project-root', root], root);
+      assert.equal(result.status, 2);
+      assert.ok(result.stderr.includes(`Cannot read migration record ${record}`), result.stderr);
+      assert.deepEqual(tree(root), before);
+    }
+  });
+});
+
+test('a kept backup value is reported once even when nothing else changes', () => {
+  withProject(({ root, custom }) => {
+    write(path.join(custom, 'bmad-tea-framework.toml'), '[workflow.ci]\nci_platform = "github-actions"\n');
+    write(path.join(backupCustom(root, '.v6-v7-migration-backup-a'), 'bmad-tea-ci.toml'), '[workflow]\nci_platform = "gitlab-ci"\n');
+    assert.equal(cli(['--project-root', root], root).status, 2);
+    const result = cli(['--project-root', root, '--keep-existing'], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Kept ci_platform = "github-actions" in bmad-tea-framework\.toml \[workflow\.ci\]; ignoring "gitlab-ci"/);
+    assert.doesNotMatch(result.stdout, /No legacy TEA customizations found/);
+    assert.equal(read(path.join(custom, 'bmad-tea-framework.toml')), '[workflow.ci]\nci_platform = "github-actions"\n');
+    assert.equal(cli(['--project-root', root], root).stdout, 'No legacy TEA customizations found.\n');
+  });
+});
+
+test('comments of a legacy file survive when its values are already present in the target', () => {
+  withProject(({ root, custom }) => {
+    write(path.join(custom, 'bmad-tea-automate.toml'), '[workflow.red]\non_complete = "same"\n');
+    write(path.join(custom, 'bmad-tea-atdd.toml'), '# keep this note\n[workflow]\n# persistent_facts = ["x"]\non_complete = "same"\n');
+    const result = cli(['--project-root', root], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-tea-atdd.toml')), false);
+    const text = read(path.join(custom, 'bmad-tea-automate.toml'));
+    assert.match(text, /# keep this note/);
+    assert.match(text, /# persistent_facts = \["x"\]/);
+    assert.deepEqual(TOML.parse(text).workflow.red, { on_complete: 'same' });
+  });
+});
+
+test('a file restored from a backup keeps the backup file mode', () => {
+  withProject(({ root, custom }) => {
+    const backup = path.join(backupCustom(root, '.v6-v7-migration-backup-a'), 'bmad-tea-atdd.user.toml');
+    write(backup, '[workflow]\non_complete = "private"\n');
+    fs.chmodSync(backup, 0o600);
+    const result = cli(['--project-root', root], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.statSync(path.join(custom, 'bmad-tea-automate.user.toml')).mode & 0o777, 0o600);
   });
 });
 
@@ -377,23 +498,160 @@ test('rolls back target writes, creations and source removals when a later step 
   });
 });
 
-test('a target edited during migration stops the run and restores everything', () => {
+test('a target edited during migration stops the run without undoing the edit and keeps the recovery file', () => {
   withProject(({ root, custom }) => {
-    write(path.join(custom, 'bmad-tea-atdd.toml'), '[workflow]\non_complete = "red"\n');
-    write(path.join(custom, 'bmad-tea-automate.toml'), '[workflow]\non_complete = "expand"\n');
-    const before = tree(root);
-    assert.throws(
-      () =>
-        migrate(root, {
-          beforeAction: (action) => {
-            if (action.kind === 'remove') fs.appendFileSync(path.join(custom, 'bmad-tea-automate.toml'), '# concurrent\n');
-          },
-        }),
-      /changed during migration/,
+    const source = path.join(custom, 'bmad-tea-atdd.toml');
+    const target = path.join(custom, 'bmad-tea-automate.toml');
+    write(source, '[workflow]\non_complete = "red"\n');
+    write(target, '[workflow]\non_complete = "expand"\n');
+    let message = '';
+    try {
+      migrate(root, {
+        beforeAction: (action) => {
+          if (action.kind === 'remove') fs.appendFileSync(target, '# concurrent\n');
+        },
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    assert.match(message, /changed during migration/);
+    const recovery = /rollback skipped for (\S+): it changed after the migration wrote it; the previous content is in (\S+)$/.exec(message);
+    assert.ok(recovery, message);
+    assert.equal(recovery[1], target);
+    assert.equal(read(recovery[2]), '[workflow]\non_complete = "expand"\n');
+    assert.equal(read(target), '[workflow]\non_complete = "expand"\n\n[workflow.red]\non_complete = "red"\n# concurrent\n');
+    assert.equal(read(source), '[workflow]\non_complete = "red"\n');
+  });
+});
+
+test('a removed source recreated during migration survives the rollback', () => {
+  withProject(({ root, custom }) => {
+    const source = path.join(custom, 'bmad-tea-atdd.toml');
+    write(source, '[workflow]\non_complete = "red"\n');
+    write(path.join(custom, 'bmad-tea-ci.toml'), '[workflow]\nci_platform = "github-actions"\n');
+    let message = '';
+    try {
+      migrate(root, {
+        beforeAction: (action, index) => {
+          if (index !== 2) return;
+          fs.writeFileSync(source, '# recreated by the user\n');
+          throw new Error('injected failure');
+        },
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    const recovery = /rollback skipped for (\S+): it changed after the migration removed it; the previous content is in (\S+)$/.exec(
+      message,
     );
-    const after = tree(root);
-    assert.equal(after['_bmad/custom/bmad-tea-atdd.toml'], before['_bmad/custom/bmad-tea-atdd.toml']);
-    assert.equal(after['_bmad/custom/bmad-tea-automate.toml'], before['_bmad/custom/bmad-tea-automate.toml']);
+    assert.ok(recovery, message);
+    assert.equal(recovery[1], source);
+    assert.equal(read(source), '# recreated by the user\n');
+    assert.equal(read(recovery[2]), '[workflow]\non_complete = "red"\n');
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-tea-automate.toml')), false, 'unchanged writes are still undone');
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-tea-framework.toml')), false);
+  });
+});
+
+test('restores a pre-3.0 owning-skill file from a backup and moves its ci_platform in the same run', () => {
+  withProject(({ root, custom }) => {
+    const folder = '.v6-v7-migration-backup-2026-10-01';
+    const backup = path.join(backupCustom(root, folder), 'bmad-testarch-framework.toml');
+    write(backup, '# framework note\n[workflow]\nci_platform = "gitlab-ci"\non_complete = "x"\n', 0o600);
+    write(
+      path.join(backupCustom(root, '.v6-v7-migration-backup-2026-10-02'), 'bmad-tea-framework.toml'),
+      '[workflow]\non_complete = "newer name"\n',
+    );
+    const before = tree(path.join(root, folder));
+    const result = cli(['--project-root', root], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      result.stdout,
+      /^bmad-testarch-framework\.toml -> bmad-tea-framework\.toml \(from \.v6-v7-migration-backup-2026-10-01\)$/m,
+    );
+    assert.match(result.stdout, /^bmad-tea-framework\.toml \[workflow\]\.ci_platform -> bmad-tea-framework\.toml \[workflow\.ci\]$/m);
+    const target = path.join(custom, 'bmad-tea-framework.toml');
+    assert.deepEqual(TOML.parse(read(target)), { workflow: { on_complete: 'x', ci: { ci_platform: 'gitlab-ci' } } });
+    assert.match(read(target), /^# framework note\n/);
+    assert.equal(fs.statSync(target).mode & 0o777, 0o600);
+    assert.deepEqual(tree(path.join(root, folder)), before);
+    assert.equal(JSON.parse(read(path.join(custom, '.tea-customization-migration.json'))).restored['bmad-tea-framework.toml'], folder);
+    assert.equal(cli(['--project-root', root], root).stdout, 'No legacy TEA customizations found.\n');
+    fs.unlinkSync(target);
+    assert.equal(
+      cli(['--project-root', root], root).stdout,
+      'No legacy TEA customizations found.\n',
+      'a file the user deleted stays deleted',
+    );
+    assert.equal(fs.existsSync(target), false);
+  });
+});
+
+test('folds retired red-mode settings into an owning-skill file restored in the same run', () => {
+  withProject(({ root, custom }) => {
+    const folder = '.v6-v7-migration-backup-a';
+    write(path.join(backupCustom(root, folder), 'bmad-tea-automate.user.toml'), '[workflow]\non_complete = "expand"\n');
+    write(path.join(backupCustom(root, folder), 'bmad-tea-atdd.user.toml'), '[workflow]\non_complete = "red"\n');
+    const actions = migrate(root);
+    assert.deepEqual(
+      actions.map((action) => action.kind),
+      ['create'],
+    );
+    assert.equal(
+      read(path.join(custom, 'bmad-tea-automate.user.toml')),
+      '[workflow]\non_complete = "expand"\n\n[workflow.red]\non_complete = "red"\n',
+    );
+    assert.equal(migrate(root).length, 0);
+  });
+});
+
+test('rewrites quoted [workflow] headers and keeps comments when only a fresh rendering verifies', () => {
+  withProject(({ root, custom }) => {
+    write(path.join(custom, 'bmad-tea-atdd.toml'), '["workflow"]\n# quoted note\non_complete = "q"\n\n[workflow."sub"]\nx = 1\n');
+    write(path.join(custom, 'bmad-tea-atdd.user.toml'), '# top comment\nworkflow.on_complete = "dotted" # inline\n');
+    migrate(root);
+    assert.equal(
+      read(path.join(custom, 'bmad-tea-automate.toml')),
+      '["workflow".red]\n# quoted note\non_complete = "q"\n\n[workflow.red."sub"]\nx = 1\n',
+    );
+    const user = read(path.join(custom, 'bmad-tea-automate.user.toml'));
+    assert.deepEqual(TOML.parse(user), { workflow: { red: { on_complete: 'dotted' } } });
+    assert.match(user, /# Comments from bmad-tea-atdd\.user\.toml\n# top comment\n$/);
+  });
+});
+
+test('names [modules.tea] keys of a legacy personal config that TEA ignores, without touching it', () => {
+  withProject(({ root, custom }) => {
+    const legacy = path.join(root, '_bmad', 'config.user.toml');
+    const legacyText = '[modules.tea]\ntest_artifacts = "x"\ntea_use_mcp_enhancements = true\nrisk_threshold = "p1"\n';
+    write(legacy, legacyText);
+    write(path.join(root, '_bmad', 'config.toml'), '[modules.tea]\ntea_use_mcp_enhancements = false\n');
+    write(path.join(custom, 'config.user.toml'), '[modules.tea]\nrisk_threshold = "p2"\n');
+    const expected = `Not migrated by this command: ${legacy} [modules.tea] keys test_artifacts are ignored by TEA. Run \`bmad migrate tea\` to move them.\n`;
+    for (const args of [['--check'], []]) {
+      const result = cli(['--project-root', root, ...args], root);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, expected);
+    }
+    assert.equal(read(legacy), legacyText);
+    write(path.join(custom, 'config.toml'), '[modules.tea]\ntest_artifacts = "y"\n');
+    assert.equal(cli(['--project-root', root], root).stdout, 'No legacy TEA customizations found.\n');
+  });
+});
+
+test('reads the legacy personal config from the newest backup that holds it', () => {
+  withProject(({ root, custom }) => {
+    write(path.join(root, '.v6-v7-migration-backup-2', '_bmad', 'config.toml'), '[core]\n');
+    const backup = path.join(root, '.v6-v7-migration-backup-1', '_bmad', 'config.user.toml');
+    write(backup, '[modules.tea]\ntest_artifacts = "x"\n');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete = "nfr"\n');
+    const result = cli(['--project-root', root], root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /bmad-testarch-nfr\.toml -> /);
+    assert.ok(
+      result.stdout.includes(`Not migrated by this command: ${backup} [modules.tea] keys test_artifacts are ignored by TEA.`),
+      result.stdout,
+    );
   });
 });
 
@@ -538,6 +796,18 @@ test('CLI migrates a project from another working directory', () => {
   } finally {
     fs.rmSync(elsewhere, { recursive: true, force: true });
   }
+});
+
+test('CLI rejects unknown arguments before reading any project', () => {
+  withProject(({ root, custom }) => {
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete = "nfr"\n');
+    for (const args of [['--bogus'], ['--project-root', root, '--bogus'], ['--bogus', '--project-root', root]]) {
+      const result = cli(args, root);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /Usage: tea-migrate-customizations \[--project-root PATH\] \[--check\] \[--keep-existing\]/);
+    }
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-testarch-nfr.toml')), true);
+  });
 });
 
 test('concurrent destination creation stops migration without overwriting it and rolls back earlier moves', () => {

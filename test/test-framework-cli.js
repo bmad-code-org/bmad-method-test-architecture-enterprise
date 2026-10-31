@@ -461,3 +461,18 @@ test('current public completion recognizer executes real unittest successes, fai
     assert.match(fs.readFileSync(value.verification[0].stderr, 'utf8'), /Ran 1 test/);
   }
 });
+
+test('retired CI files and a top-level ci_platform stop the framework CLI with the migration command', (t) => {
+  for (const [file, text] of [
+    ['bmad-tea-ci.toml', '[workflow]\nci_platform="gitlab-ci"\n'],
+    ['bmad-tea-framework.toml', '[workflow]\nci_platform="gitlab-ci"\n'],
+  ]) {
+    const f = fixture(t);
+    fs.mkdirSync(path.join(f.root, '_bmad/custom'));
+    fs.writeFileSync(path.join(f.root, '_bmad/custom', file), text);
+    const result = f.run([...f.agent('hooks'), '--scope', 'ci']);
+    assert.notEqual(result.status, 0, file);
+    assert.match(result.stderr, /tea-migrate-customizations --project-root/, file);
+    assert.equal(fs.existsSync(path.join(f.root, 'artifacts/framework/setup-run-progress.md')), false, `${file} wrote no journal`);
+  }
+});

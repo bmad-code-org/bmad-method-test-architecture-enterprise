@@ -17,11 +17,26 @@ const repoRoot = path.resolve(__dirname, '..');
 const teaSkills = path.join(repoRoot, 'skills');
 const coreDir = process.env.BMAD_CORE_DIR ? path.resolve(process.env.BMAD_CORE_DIR) : null;
 
-if (!coreDir || !fs.existsSync(path.join(coreDir, 'skills', 'bmad', 'scripts', 'setup.py'))) {
+if (!coreDir) {
   console.log('skip: set BMAD_CORE_DIR to a BMAD core checkout to run the customization surface suite');
   process.exit(0);
 }
+if (!fs.existsSync(path.join(coreDir, 'skills', 'bmad', 'scripts', 'setup.py'))) {
+  console.error(`BMAD_CORE_DIR=${coreDir} has no skills/bmad/scripts/setup.py; a set variable must point at a BMAD core checkout`);
+  process.exit(1);
+}
 const coreSkills = path.join(coreDir, 'skills');
+
+const tempRoots = [];
+process.on('exit', () => {
+  for (const root of tempRoots) fs.rmSync(root, { recursive: true, force: true });
+});
+
+function tempDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  tempRoots.push(dir);
+  return dir;
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -47,7 +62,7 @@ function resolve(project, skill, key) {
 }
 
 function setupProject() {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-surfaces-'));
+  const project = tempDir('tea-surfaces-');
   run('git', ['init', '-q', project]);
   const base = [
     path.join(coreSkills, 'bmad', 'scripts', 'setup.py'),
@@ -95,7 +110,7 @@ function check(name, fn) {
 }
 
 check('setup status on a TEA 2.x upgrade lists the retired skills and offers no install of a missing skill', () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-upgrade-'));
+  const project = tempDir('tea-upgrade-');
   run('git', ['init', '-q', project]);
   const skills = path.join(project, '.claude', 'skills');
   fs.mkdirSync(skills, { recursive: true });
@@ -162,9 +177,11 @@ check('cleanup deletes the old stems, then the migration restores them from the 
   assert.ok(JSON.stringify(report.unused_customizations).includes('bmad-tea-atdd.toml'), 'cleanup lists the atdd stem as unused');
   py(migrate[0], [...migrate.slice(1), '--clean']);
   assert.equal(fs.existsSync(path.join(custom, 'bmad-tea-atdd.toml')), false, 'cleanup removed the atdd stem');
+  assert.equal(fs.existsSync(path.join(custom, 'bmad-tea-ci.toml')), false, 'cleanup removed the ci stem');
   const cli = path.join(repoRoot, 'cli', 'migrate-customizations.js');
   const out = run('node', [cli, '--project-root', project]).stdout;
   assert.match(out, /bmad-tea-automate\.toml \[workflow\.red\]/);
+  assert.match(out, /bmad-tea-ci\.toml \[workflow\] -> bmad-tea-framework\.toml \[workflow\.ci\] \(from \.v6-v7-migration-backup-/);
   assert.equal(fs.readFileSync(path.join(custom, 'bmad-tea-automate.toml'), 'utf8'), ATDD_TEAM.replace('[workflow]', '[workflow.red]'));
   assert.equal(fs.readFileSync(path.join(custom, 'bmad-tea-framework.toml'), 'utf8'), CI_TEAM.replace('[workflow]', '[workflow.ci]'));
   assert.deepEqual(resolve(project, 'bmad-tea-automate', 'workflow.red').activation_steps_prepend, [

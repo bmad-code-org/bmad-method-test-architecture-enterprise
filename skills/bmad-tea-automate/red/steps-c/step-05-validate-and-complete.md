@@ -149,7 +149,7 @@ If it was not retained, resolve it from the selected key:
 
 Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key {workflow-key}.on_complete`
 
-If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
+If the resolver succeeds and returns a non-empty value for `{workflow-key}.on_complete`, execute that value as the final terminal instruction before exiting.
 
 If the resolver fails or returns no output, use the selected `workflow.on_complete` block already resolved during activation (or resolve the selected defaults/team/user files with the same structural merge rules).
 Execute its non-empty value as the final terminal instruction.

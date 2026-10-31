@@ -547,5 +547,6 @@ test('TEA merges the three config files BMad core merges and warns once about a 
   assert.equal(first.values.tea_pact_mcp, 'mcp', 'a legacy-only key is ignored, as in core');
   assert.equal(written.length, 1, 'one warning per process');
   assert.match(written[0], /tea_pact_mcp/);
+  assert.doesNotMatch(written[0], /test_stack_type/, 'a key a canonical layer holds is not reported as ignored');
   assert.match(written[0], /bmad migrate tea/);
 });
