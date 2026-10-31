@@ -416,6 +416,48 @@ jobs:
   # trees against dev-only path references. field-ownership holds schemaVersion
   # to the two generators that stamp it. test:guard-publish seeds a token-present,
   # workflow-absent environment and watches the publish guard refuse it.
+  # TEA skills install beside BMAD core skills, so they hold to core's rules.
+  # Core's deterministic skill validator (tools/validate_skills.py) and its real
+  # setup, resolver and cleanup scripts run against TEA at BMAD `dev`'s floating
+  # head, so a rule or behavior core changes fails here the day it lands.
+  bmad-core-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Checkout the BMAD validator
+        uses: actions/checkout@v5
+        with:
+          repository: bmad-code-org/BMAD-METHOD
+          ref: dev
+          path: bmad-core
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run BMAD core's setup, resolver and cleanup scripts against the TEA customization surfaces
+        run: npm run test:customization-surfaces
+        env:
+          BMAD_CORE_DIR: ${{ github.workspace }}/bmad-core
+
+      - name: Validate every TEA skill with BMAD's strict skill validator
+        run: |
+          status=0
+          for skill in skills/*/; do
+            python3 bmad-core/tools/validate_skills.py --strict "$skill" || status=1
+          done
+          exit "$status"
+
   layering-boundary-lineage:
     runs-on: ubuntu-latest
     steps:

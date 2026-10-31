@@ -202,9 +202,9 @@ async function runTests() {
       'the installed skill tree has no old public workflow roots',
     );
     for (const [name, legacyNames] of [
-      ['bmad-tea-automate', ['bmad-testarch-automate', 'bmad-testarch-atdd']],
+      ['bmad-tea-automate', ['bmad-testarch-automate', 'bmad-testarch-atdd', 'bmad-tea-atdd']],
       ['bmad-tea-evaluate', ['bmad-testarch-evaluate']],
-      ['bmad-tea-framework', ['bmad-testarch-framework', 'bmad-testarch-ci']],
+      ['bmad-tea-framework', ['bmad-testarch-framework', 'bmad-testarch-ci', 'bmad-tea-ci']],
       ['bmad-tea-nfr', ['bmad-testarch-nfr']],
       ['bmad-tea-teach-me-testing', ['bmad-teach-me-testing']],
       ['bmad-tea-test-design', ['bmad-testarch-test-design']],
@@ -220,6 +220,32 @@ async function runTests() {
         `${name} blocks activation while legacy customization files remain`,
       );
     }
+    const retired = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmod-tea/retired.toml'), 'utf8'));
+    const retiredNames = [...retired.renamed.map((entry) => entry.from), ...retired.removed];
+    const expectedRenames = [
+      ['bmad-testarch-automate', 'bmad-tea-automate'],
+      ['bmad-testarch-evaluate', 'bmad-tea-evaluate'],
+      ['bmad-testarch-framework', 'bmad-tea-framework'],
+      ['bmad-testarch-nfr', 'bmad-tea-nfr'],
+      ['bmad-testarch-test-design', 'bmad-tea-test-design'],
+      ['bmad-testarch-test-review', 'bmad-tea-test-review'],
+      ['bmad-testarch-trace', 'bmad-tea-trace'],
+      ['bmad-teach-me-testing', 'bmad-tea-teach-me-testing'],
+    ].map(([from, to]) => ({ from, to }));
+    assert(
+      JSON.stringify(retired.renamed) === JSON.stringify(expectedRenames) &&
+        JSON.stringify(retired.removed) === JSON.stringify(['bmad-testarch-atdd', 'bmad-testarch-ci']),
+      'retired.toml maps each old workflow to its bmad-tea-* skill exactly and removes atdd and ci',
+    );
+    assert(
+      retiredNames.every((name) => !bmod.skills.includes(name)),
+      'no retired skill name appears in the bmod.toml skills list',
+    );
+    assert(
+      new Set(retiredNames).size === retiredNames.length &&
+        (await Promise.all(retiredNames.map((name) => pathExists(path.join(projectRoot, 'skills', name))))).every((exists) => !exists),
+      'a retired name is listed once and no skill folder reuses it',
+    );
     const agentText = await fs.readFile(path.join(projectRoot, 'skills', 'bmad-tea', 'SKILL.md'), 'utf8');
     const agentGuard = agentText.split('## On Activation\n')[1]?.split('### Step 1:')[0] ?? '';
     assert(
@@ -299,15 +325,15 @@ async function runTests() {
     const ciCustomize = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-framework/customize.toml'), 'utf8'));
     const evaluateCustomize = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-evaluate/customize.toml'), 'utf8'));
     assert(
-      ciCustomize.workflow?.ci_platform === 'auto',
-      'bmad-tea-framework customize.toml declares ci_platform for the migrated CI setting',
+      ciCustomize.workflow?.ci?.ci_platform === 'auto' && !('ci_platform' in ciCustomize.workflow),
+      'bmad-tea-framework customize.toml declares ci_platform under [workflow.ci] for the migrated CI setting',
     );
     assert(
       typeof evaluateCustomize.workflow?.evaluations_folder === 'string' &&
         migration.guide.includes('bmad-tea-evaluate.toml') &&
-        migration.guide.includes('bmad-tea-ci.toml') &&
+        migration.guide.includes('bmad-tea-framework.toml') &&
         migration.guide.includes('`[workflow]` `evaluations_folder`') &&
-        migration.guide.includes('`[workflow]` `ci_platform`'),
+        migration.guide.includes('`[workflow.ci]` `ci_platform`'),
       'migration-1.toml writes evaluations_folder and ci_platform to the customization files of the skills that declare them',
     );
   } catch (error) {
@@ -474,8 +500,8 @@ async function runTests() {
 
   const canonicalAutomateRoot = path.join(projectRoot, 'skills/bmad-tea-automate');
   const redWorkflow = yaml.load(await fs.readFile(path.join(canonicalAutomateRoot, 'red/workflow.yaml'), 'utf8'));
+  assert(!('installed_path' in redWorkflow), 'red workflow declares no installed_path, which BMAD skill validation rejects (PATH-02)');
   for (const [component, expected] of Object.entries({
-    installed_path: 'red',
     instructions: 'red/instructions.md',
     validation: 'red/checklist.md',
     template: 'red/atdd-checklist-template.md',
@@ -503,7 +529,7 @@ async function runTests() {
           assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
           assert(
             skillContent.includes(
-              `resolve_customization.py --skill ${dirName === 'bmad-tea-automate' ? '{workflow-skill-root}' : '{skill-root}'} --project-root {project-root} --key workflow`,
+              `resolve_customization.py --skill {skill-root} --project-root {project-root} --key ${dirName === 'bmad-tea-automate' ? '{workflow-key}' : 'workflow'}`,
             ),
             `${dirName}/SKILL.md resolves the selected workflow customization block`,
           );
@@ -767,8 +793,10 @@ async function runTests() {
       'headless ambiguous requests retain framework-only setup',
     );
     assert(
-      router.includes('_bmad/custom/bmad-tea-ci.user.toml') && router.includes('ci_workflow.ci_platform'),
-      'canonical CI scope reads legacy migrated customization',
+      router.includes('`[workflow.ci]` tables of `_bmad/custom/bmad-tea-framework.toml`') &&
+        router.includes('ci_workflow.ci_platform') &&
+        !router.includes('bmad-tea-ci.toml'),
+      'CI scope reads the [workflow.ci] table of the framework customization and no separate ci stem',
     );
     for (const prefix of ['', 'ci/']) {
       for (const [operation, route] of Object.entries({
@@ -908,16 +936,17 @@ async function runTests() {
         parallel.includes('CI workers consume that decision and ask no questions'),
       'coordinator settles effective platform and pipeline update/replace before CI workers start',
     );
-    const ciDefaults = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-framework/ci/customize.toml'), 'utf8'));
+    const ciDefaults = TOML.parse(await fs.readFile(path.join(projectRoot, 'skills/bmad-tea-framework/customize.toml'), 'utf8'));
     assert(
-      router.includes('Read `{skill-root}/ci/customize.toml` for CI defaults') &&
-        router.includes('Existing CI overrides, including migrated platform settings, remain effective') &&
-        ciDefaults.workflow.ci_platform === 'auto' &&
+      !(await pathExists(path.join(projectRoot, 'skills/bmad-tea-framework/ci/customize.toml'))) &&
+        router.includes('carries the CI defaults under `[workflow.ci]`') &&
+        router.includes('No other file supplies CI settings') &&
+        ciDefaults.workflow.ci.ci_platform === 'auto' &&
         ['activation_steps_prepend', 'activation_steps_append', 'persistent_facts'].every(
-          (key) => Array.isArray(ciDefaults.workflow[key]) && ciDefaults.workflow[key].length === 0,
+          (key) => Array.isArray(ciDefaults.workflow.ci[key]) && ciDefaults.workflow.ci[key].length === 0,
         ) &&
-        ciDefaults.workflow.on_complete === '',
-      'canonical CI uses owned defaults and preserves existing settings',
+        ciDefaults.workflow.ci.on_complete === '',
+      'canonical CI owns its defaults as the [workflow.ci] table of the framework customize.toml',
     );
     assert(
       router.includes(
@@ -1093,11 +1122,12 @@ async function runTests() {
       );
     }
     assert(
-      router.includes('workflow_customization_manual = true') &&
-        router.includes('red/customize.toml') &&
-        router.includes('_bmad/custom/bmad-tea-atdd.toml') &&
-        entry.includes('skip this resolver command'),
-      'red mode retains the existing customization namespace with embedded defaults',
+      router.includes('workflow-key = workflow.red') &&
+        !router.includes('workflow_customization_manual') &&
+        !router.includes('bmad-tea-atdd.toml') &&
+        !(await pathExists(path.join(generationRoot, 'red/customize.toml'))) &&
+        entry.includes('--key {workflow-key}'),
+      'red mode resolves [workflow.red] from the automate customization files through the core resolver',
     );
   } catch (error) {
     assert(false, 'generation routing and Resume contract validates', error.message);

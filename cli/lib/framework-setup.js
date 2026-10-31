@@ -60,7 +60,6 @@ function protectResultPath(request, resultPath, state = request.before?.data) {
     'jsconfig.json',
     request.config.configPath,
     '_bmad/config.toml',
-    '_bmad/config.user.toml',
     '_bmad/custom/config.toml',
     '_bmad/custom/config.user.toml',
   ];
@@ -607,7 +606,7 @@ function prepareSetup({ projectRoot, skillRoot, config, options }) {
     throw problem('Resume has an uncertain started hook. Record explicit operator recovery in the journal before headless execution.');
   const scope = options.operation === 'resume' ? before.data.setup_scope : options.scope;
   const ciConfig = ['ci', 'both'].includes(scope)
-    ? resolveTeaConfig({ projectRoot, skillRoot: path.join(skillRoot, 'ci'), skillName: 'bmad-tea-ci' })
+    ? resolveTeaConfig({ projectRoot, skillRoot, skillName: 'bmad-tea-framework', workflowTable: 'ci' })
     : null;
   const requiredHooks = {};
   for (const [phase, settings] of [

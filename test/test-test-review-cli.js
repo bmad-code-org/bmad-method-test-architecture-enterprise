@@ -5358,9 +5358,9 @@ async function runTests() {
         basedConfig.stdout.includes('trusted-base-setting') &&
           !basedConfig.stdout.includes('head-setting') &&
           basedConfig.stdout.includes('Base owner') &&
-          basedConfig.stdout.includes('trusted-root-user') &&
+          !basedConfig.stdout.includes('trusted-root-user') &&
           !basedConfig.stdout.includes('head-root-user'),
-        'the complete resolved base configuration reaches the prompt',
+        'the complete resolved base configuration reaches the prompt without the legacy _bmad/config.user.toml layer core no longer merges',
         basedConfig.stdout,
       );
       assert(
@@ -5884,7 +5884,7 @@ async function runTests() {
       });
       const mergedSnapshot = resolveTeaConfig({ projectRoot: mergedRoot }).configSnapshot.modules.tea;
       assert(
-        JSON.stringify(mergedSnapshot.policy_tags) === JSON.stringify(['required', 'root-user', 'team', 'user']) &&
+        JSON.stringify(mergedSnapshot.policy_tags) === JSON.stringify(['required', 'team', 'user']) &&
           JSON.stringify(mergedSnapshot.policy_rules) ===
             JSON.stringify([
               { id: 'coverage', severity: 'high' },

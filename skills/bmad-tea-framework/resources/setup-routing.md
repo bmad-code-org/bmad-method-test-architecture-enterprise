@@ -25,16 +25,16 @@ Initialize or adopt the all-scope journal through `setup-state.md` section 2 aft
 
 ## 2. Scope Activation and Settings
 
-Before SKILL.md executes prepend hooks or greets, resolve settings for every requested phase. Keep canonical `workflow` separately from `ci_workflow`. Scope controls hook ownership: framework-only uses canonical hooks/facts/completion; CI-only uses CI hooks/facts/completion; both uses both. CI-only may read canonical `ci_platform` overrides for platform precedence without loading canonical persistent facts or executing canonical hooks.
+Before SKILL.md executes prepend hooks or greets, resolve settings for every requested phase. Keep canonical `workflow` separately from `ci_workflow`, its `ci` sub-table. Scope controls hook ownership: framework-only uses canonical hooks/facts/completion; CI-only uses CI hooks/facts/completion; both uses both. CI-only never loads canonical persistent facts or executes canonical hooks.
 
 When scope includes CI:
 
-1. Read `{skill-root}/ci/customize.toml` for CI defaults: `ci_platform = auto`, empty `activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, and `on_complete`.
-2. Structurally merge the CI defaults, `_bmad/custom/bmad-tea-ci.toml`, and `_bmad/custom/bmad-tea-ci.user.toml`, skipping missing override files. Existing CI overrides, including migrated platform settings, remain effective.
-3. Store the result as `ci_workflow`. SKILL.md executes applicable prepend entries before greeting, loads applicable facts/globs in lexical order, and executes append entries after greeting through `setup-state.md` section 3's individual durable hook protocol. On Resume, resolve current settings and reload applicable facts; skip completed hook entries and halt on uncertain started entries. Save each applicable phase in `activation_completed` only after its activation succeeds. This section resolves settings; it does not replay activation at phase or worker handoffs.
-4. Framework steps use canonical `workflow`. CI steps read `ci_workflow` for their legacy hooks/facts and the effective platform below. Keep `{skill-root}` bound to the canonical directory for every CI asset.
+1. `{skill-root}/customize.toml` carries the CI defaults under `[workflow.ci]`: `ci_platform = auto`, empty `activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, and `on_complete`.
+2. The Step 1 resolver call already merged those defaults with the `[workflow.ci]` tables of `_bmad/custom/bmad-tea-framework.toml` and `.user.toml`. For a CI-only run that resolves no other key, run `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.ci`. No other file supplies CI settings.
+3. Store the `workflow.ci` table as `ci_workflow`. SKILL.md executes applicable prepend entries before greeting, loads applicable facts/globs in lexical order, and executes append entries after greeting through `setup-state.md` section 3's individual durable hook protocol. On Resume, resolve current settings and reload applicable facts; skip completed hook entries and halt on uncertain started entries. Save each applicable phase in `activation_completed` only after its activation succeeds. This section resolves settings; it does not replay activation at phase or worker handoffs.
+4. Framework steps use canonical `workflow`. CI steps read `ci_workflow` for their hooks/facts and the effective platform below. Keep `{skill-root}` bound to the canonical directory for every CI asset.
 
-**Platform precedence:** An explicit `workflow.ci_platform` in canonical team/user overrides wins, including explicit `auto`. Inspect those override files to distinguish it from the shipped default. Otherwise use `ci_workflow.ci_platform`, preserving migration-1.toml's destination. If neither is present, use `auto`. Bind the result to `{workflow.ci_platform}` during CI steps without replacing the saved canonical workflow object.
+**Platform:** The effective platform is `ci_workflow.ci_platform`, `auto` when the team and user layers set nothing. Bind it to `{workflow.ci_platform}` during CI steps without replacing the saved canonical workflow object.
 
 ## 3. Shared State and Contract
 

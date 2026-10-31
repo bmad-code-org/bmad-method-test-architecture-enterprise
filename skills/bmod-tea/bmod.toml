@@ -20,7 +20,7 @@ pre_install_message = ""
 post_install_message = '''
 TEA is ready. Talk to Murat (bmad-tea) or start with Test Design (bmad-tea-test-design).
 
-Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-tea-framework) installs the utils packages and owns framework and CI setup. Test Automation (bmad-tea-automate) owns red and expand test generation with run-and-heal enabled by default. Migrate existing CI and ATDD customization filenames with tea-migrate-customizations. Ask bmad how to set up the rest.
+Playwright Utils, Pact.js Utils, the Playwright CLI or MCP servers, and the SmartBear MCP each need their own install. Test Framework (bmad-tea-framework) installs the utils packages and owns framework and CI setup. Test Automation (bmad-tea-automate) owns red and expand test generation with run-and-heal enabled by default. Move older CI and ATDD customization files into [workflow.ci] and [workflow.red] with `bmad migrate tea`, or run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .`. If `bmad setup` cleanup lists bmad-tea-ci or bmad-tea-atdd customizations as unused, run the migration first and keep the cleanup backup until it has run. Ask bmad how to set up the rest.
 '''
 
 # Asked by `bmad setup` in this order. Members read each answer as modules.tea.<key>.
