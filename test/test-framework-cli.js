@@ -324,11 +324,10 @@ test('newly generated configuration and its hard link are protected before resul
 test('configured framework and CI hook identities require exact completed lifecycles', (t) => {
   const f = fixture(t);
   fs.mkdirSync(path.join(f.root, '_bmad/custom'));
-  for (const skill of ['framework', 'ci'])
-    fs.writeFileSync(
-      path.join(f.root, `_bmad/custom/bmad-tea-${skill}.toml`),
-      '[workflow]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n',
-    );
+  fs.writeFileSync(
+    path.join(f.root, '_bmad/custom/bmad-tea-framework.toml'),
+    '[workflow]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n\n[workflow.ci]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n',
+  );
   const result = f.run([...f.agent('hooks'), '--scope', 'both']);
   assert.equal(result.status, 0, result.stderr + result.stdout);
 });

@@ -18,7 +18,7 @@ A project with none of those signals, whose merged `[modules.tea]` holds only su
 # The state every rule below moves toward.
 target = """
 - `_bmad/config.toml` `[modules.tea]` uses these supported keys: `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`. Every stored value is a string; v6 booleans (`true`, `false`) become `"true"` and `"false"`. Omitted healing options keep their runtime defaults: `auto_validate = "true"`, `auto_heal_failures = "true"`, `max_healing_iterations = "3"`, and `use_mcp_healing = "true"`.
-- A v6 `ci_platform` other than `auto` lives in `_bmad/custom/bmad-tea-ci.toml` as `ci_platform = "<value>"` under `[workflow]`.
+- A v6 `ci_platform` other than `auto` lives in `_bmad/custom/bmad-tea-framework.toml` as `ci_platform = "<value>"` under `[workflow.ci]`.
 - A v6 `tea_evaluations_folder` other than `evals` lives in `_bmad/custom/bmad-tea-evaluate.toml` as `evaluations_folder = "<folder>"` under `[workflow]`, relative to the project root.
 - `risk_threshold`, `test_design_output`, `test_review_output` and `trace_output` are gone; no skill reads them.
 - `_bmad/tea/config.yaml`, `_bmad/tea/module-help.csv` and any classic-installer copies of TEA's agents or workflows under `_bmad/tea/` are removed, so the CLI and the skills read only the v7 install.
@@ -26,9 +26,9 @@ target = """
 
 precautions = """
 - Read before writing. Show the user the plan (each key and where it goes) and wait for approval.
-- Edit only the `[modules.tea]` tables of `_bmad/config.toml`, `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, and the two customization files `_bmad/custom/bmad-tea-ci.toml` and `_bmad/custom/bmad-tea-evaluate.toml`. Keep every other table, key and comment in those files as it is, and merge into a customization file that already exists instead of replacing it.
+- Edit only the `[modules.tea]` tables of `_bmad/config.toml`, `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, and the two customization files `_bmad/custom/bmad-tea-framework.toml` and `_bmad/custom/bmad-tea-evaluate.toml`. Keep every other table, key and comment in those files as it is, and merge into a customization file that already exists instead of replacing it.
 - Never delete a file outside version control. Removing the leftovers is a commit the user chooses; offer it and stop there.
-- Preserve `_bmad/custom/bmad-testarch-atdd.toml`, `_bmad/custom/bmad-testarch-atdd.user.toml`, `_bmad/custom/bmad-testarch-automate.toml` and `_bmad/custom/bmad-testarch-automate.user.toml` until `tea-migrate-customizations` moves them. The combined skill resolves the selected mode's customizations.
+- Preserve `_bmad/custom/bmad-testarch-atdd.toml`, `_bmad/custom/bmad-testarch-atdd.user.toml`, `_bmad/custom/bmad-testarch-automate.toml` and `_bmad/custom/bmad-testarch-automate.user.toml` until `bmad migrate tea` (migration-3) or `tea-migrate-customizations` moves their settings into `[workflow.red]` of `bmad-tea-automate.toml`. The combined skill reads red settings only from that table.
 - Never run `bmad setup` from inside this migration; it owns the rest of `_bmad/`. When `[modules.tea]` is missing from every layer, stop and tell the user to run `bmad setup tea` first and to run this migration again afterwards.
 """
 
@@ -39,7 +39,7 @@ guide = """
    | v6 key | v7 destination |
    |---|---|
    | `test_artifacts`, `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, `tea_browser_automation`, `tea_execution_mode`, `tea_capability_probe`, `test_stack_type`, `test_framework`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing` | stays in `[modules.tea]` of the layer that holds it, written as strings |
-   | `ci_platform` | `_bmad/custom/bmad-tea-ci.toml`, `[workflow]` `ci_platform`, only when the effective value is not `auto`; removed from every `[modules.tea]` layer |
+   | `ci_platform` | `_bmad/custom/bmad-tea-framework.toml`, `[workflow.ci]` `ci_platform`, only when the effective value is not `auto`; removed from every `[modules.tea]` layer |
    | `tea_evaluations_folder` | `_bmad/custom/bmad-tea-evaluate.toml`, `[workflow]` `evaluations_folder`, only when the effective value is not `evals`; strip a leading `{project-root}/` when the value has one; removed from every `[modules.tea]` layer |
    | `risk_threshold`, `test_design_output`, `test_review_output`, `trace_output` | removed from every `[modules.tea]` layer |
    | any other key | ask the user; it is not a TEA setting v7 reads |
@@ -53,11 +53,11 @@ guide = """
 
 checklist = [
   "The merged `[modules.tea]` (`_bmad/config.toml` with the custom layers) holds only the thirteen supported v7 keys, each stored value a string; omitted healing options use the shipped defaults.",
-  "A non-default v6 `ci_platform` is `ci_platform` under `[workflow]` in `_bmad/custom/bmad-tea-ci.toml`.",
+  "A non-default v6 `ci_platform` is `ci_platform` under `[workflow.ci]` in `_bmad/custom/bmad-tea-framework.toml`.",
   "A non-default v6 `tea_evaluations_folder` is `evaluations_folder` under `[workflow]` in `_bmad/custom/bmad-tea-evaluate.toml`, without the `{project-root}/` prefix.",
   "`risk_threshold`, `test_design_output`, `test_review_output` and `trace_output` are in no `[modules.tea]` layer.",
   "`ci_platform` and `tea_evaluations_folder` are in no `[modules.tea]` layer.",
   "`uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea` prints only supported v7 keys; omitted healing options use the shipped defaults.",
-  "`uv run _bmad/scripts/resolve_customization.py --skill <evaluate-skill-root> --project-root . --key workflow` prints the migrated Evaluate value; Framework CI scope merges `_bmad/custom/bmad-tea-ci.toml` and its user layer to read the migrated CI value.",
+  "`uv run _bmad/scripts/resolve_customization.py --skill <evaluate-skill-root> --project-root . --key workflow` prints the migrated Evaluate value; `--skill <framework-skill-root> --key workflow.ci` prints the migrated CI value.",
   "Every file the plan listed for removal is either removed in the commit the user chose or reported as still present.",
 ]

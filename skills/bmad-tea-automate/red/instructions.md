@@ -26,7 +26,7 @@ This workflow uses **step-file architecture**:
 
 This instruction file owns red mode after canonical activation.
 Set `test_mode = red` when a direct runner loads this file without the shared router; keep `{skill-root}` canonical.
-Resolve red customization by merging `{skill-root}/red/customize.toml` with `_bmad/custom/bmad-tea-atdd.toml` and `.user.toml` manually and retain its workflow block.
+Resolve red customization with `resolve_customization.py --skill {skill-root} --key workflow.red` (set `workflow-key = workflow.red`) and retain its block.
 Entry activation and operation routing remain in `{skill-root}/SKILL.md`.
 
 ### 1. Configuration Loading

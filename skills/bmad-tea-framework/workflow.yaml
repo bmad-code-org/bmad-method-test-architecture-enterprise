@@ -7,7 +7,6 @@ description: 'Initialize test framework and CI/CD setup for browser, backend or 
 date: system-generated
 
 # Workflow components
-installed_path: "."
 instructions: "./instructions.md"
 validation: "./checklist.md"
 

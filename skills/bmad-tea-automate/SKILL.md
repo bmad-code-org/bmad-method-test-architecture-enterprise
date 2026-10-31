@@ -23,26 +23,27 @@ You will continue to operate with your given name, identity, and communication_s
 
 ## Route Before Activation
 
-Read `{skill-root}/resources/test-generation-routing.md` completely and resolve `test_mode`, `test_operation`, and `workflow-skill-root` before executing activation.
+Read `{skill-root}/resources/test-generation-routing.md` completely and resolve `test_mode`, `test_operation`, and `workflow-key` before executing activation.
 Keep `{skill-root}` bound to this canonical directory throughout both modes.
-The router selects exactly one customization surface; activation below uses that surface only.
+The router selects exactly one customization key (`workflow` for expand, `workflow.red` for red); activation below uses that key only.
 
 ## On Activation
 
-Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-automate.toml`, `bmad-testarch-automate.user.toml`, `bmad-testarch-atdd.toml`, and `bmad-testarch-atdd.user.toml`. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
+Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-automate.toml`, `bmad-testarch-automate.user.toml`, `bmad-testarch-atdd.toml`, `bmad-testarch-atdd.user.toml`, `bmad-tea-atdd.toml`, and `bmad-tea-atdd.user.toml`. Red settings live under `[workflow.red]` in `bmad-tea-automate.toml` and `.user.toml`; the atdd files are read nowhere. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
 
 ### Step 1: Resolve the Workflow Block
 
-When `workflow_customization_manual = true`, use the already resolved red workflow block and skip this resolver command.
-Otherwise run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow`
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key {workflow-key}`
 
-**If the script fails**, resolve the `workflow` block yourself by reading these three files in base → team → user order and applying the same structural merge rules as the resolver:
+The returned object is the `workflow` block for the rest of the run: `{workflow.activation_steps_prepend}`, `{workflow.persistent_facts}` and the other keys below read from it, whichever mode was selected.
 
-1. `{workflow-skill-root}/customize.toml` (or `{skill-root}/red/customize.toml` for canonical-only red) — defaults
-2. `{project-root}/_bmad/custom/{workflow-skill-name}.toml` — team overrides
-3. `{project-root}/_bmad/custom/{workflow-skill-name}.user.toml` — personal overrides
+**If the script fails**, resolve the block yourself by reading these three files in base → team → user order and applying the same structural merge rules as the resolver:
 
-Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
+1. `{skill-root}/customize.toml` — defaults
+2. `{project-root}/_bmad/custom/bmad-tea-automate.toml` — team overrides
+3. `{project-root}/_bmad/custom/bmad-tea-automate.user.toml` — personal overrides
+
+Then take the `workflow` table, or its `red` sub-table when `workflow-key` is `workflow.red`. Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
 
 ### Step 2: Execute Prepend Steps
 
@@ -58,7 +59,7 @@ Run `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {proje
 
 Each `core` and `modules.tea` key is available as `{<key>}`, and as `config.<key>` in later steps. Replace `{project-root}` inside a value with the project root. Setup answers are strings: read `"true"` and `"false"` as booleans.
 
-If `{tea-knowledge}/tea-index.csv` does not exist, the TEA knowledge base is not installed. Tell the user, offer to install it with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`, run that on a yes, and stop until it is there.
+If `{tea-knowledge}/tea-index.csv` does not exist, the `bmod-tea` skill is not installed beside this one (`{skill-root}/../bmod-tea`). Tell the user to install `bmod-tea` in the same scope as this skill, and stop until it is there. For a skill in the project's skills folder run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`; for a skill in the global skills folder add `-g`. Run the command on a yes. A `bmod-tea` installed in the other scope does not satisfy this skill.
 
 ### Step 5: Greet the User
 

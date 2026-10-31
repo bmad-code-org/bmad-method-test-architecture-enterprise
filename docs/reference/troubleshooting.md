@@ -217,7 +217,7 @@ uv run _bmad/scripts/resolve_config.py --project-root . --key modules.tea   # th
 
 TEA keys belong under `[modules.tea]`.
 `_bmad/custom/config.user.toml` wins over `_bmad/custom/config.toml`, which wins over `_bmad/config.toml`.
-`evaluations_folder` and `ci_platform` are skill keys. Put them under `[workflow]` in `_bmad/custom/bmad-tea-evaluate.toml` and `_bmad/custom/bmad-tea-framework.toml`, respectively. Existing CI platform overrides in `_bmad/custom/bmad-tea-ci.toml` remain usable unless the framework customization explicitly overrides them.
+`evaluations_folder` and `ci_platform` are skill keys. Put `evaluations_folder` under `[workflow]` in `_bmad/custom/bmad-tea-evaluate.toml` and `ci_platform` under `[workflow.ci]` in `_bmad/custom/bmad-tea-framework.toml`. Red-mode settings go under `[workflow.red]` in `_bmad/custom/bmad-tea-automate.toml`. Files named `bmad-tea-ci.toml` or `bmad-tea-atdd.toml` are not read; run `bmad migrate tea` to move them.
 A `_bmad/tea/config.yaml` from an earlier install is not read by any skill.
 
 If the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the skill.

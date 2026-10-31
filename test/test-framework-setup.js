@@ -73,13 +73,13 @@ test('fresh completed both run checks actual journal and pipeline artifacts', (t
   assert.ok(incomplete.issues.some((issue) => issue.includes('Missing pipeline')));
 });
 
-test('CI scope reads shipped CI defaults from the installed framework skill', (t) => {
+test('CI scope reads shipped [workflow.ci] defaults from the installed framework skill', (t) => {
   const f = fixture(t);
   const skillRoot = path.join(f.root, 'installed-framework');
-  fs.mkdirSync(path.join(skillRoot, 'ci'), { recursive: true });
+  fs.mkdirSync(skillRoot, { recursive: true });
   fs.writeFileSync(
-    path.join(skillRoot, 'ci', 'customize.toml'),
-    '[workflow]\nactivation_steps_prepend = ["CI default hook"]\nci_platform = "auto"\n',
+    path.join(skillRoot, 'customize.toml'),
+    '[workflow]\nactivation_steps_prepend = []\n\n[workflow.ci]\nactivation_steps_prepend = ["CI default hook"]\nci_platform = "auto"\n',
   );
   const request = prepareSetup({
     projectRoot: f.root,
@@ -462,4 +462,90 @@ test('Resume preserves completed Edit outcomes and their original artifact diges
   fs.appendFileSync(path.join(f.root, file), '\n// An unrelated change during Resume.\n');
   f.journal({ ...state, edit_applied: { framework: [{ ...outcome, status: 'applied', after_sha256: digest() }] } });
   assert.match(inspectCompletion(request).issues.join('\n'), /changed a completed Edit outcome/);
+});
+
+const { resolveTeaConfig, CONFIG_LAYER_RELATIVE_PATHS } = require('../cli/lib/resolve-tea-config');
+const { resolveGenerationConfig } = require('../cli/lib/automate-prompt');
+
+const SKILLS = path.join(__dirname, '..', 'skills');
+
+function customProject(t, files) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-surfaces-reader-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, '_bmad', 'custom'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_bmad', 'config.toml'), '[modules.tea]\ntest_artifacts = "x"\n');
+  for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(root, name), text);
+  return root;
+}
+
+test('red settings come from [workflow.red] and expand never sees them', (t) => {
+  const root = customProject(t, {
+    '_bmad/custom/bmad-tea-automate.toml':
+      '[workflow]\nactivation_steps_prepend = ["expand hook"]\n\n[workflow.red]\nactivation_steps_prepend = ["red hook"]\n',
+    '_bmad/custom/bmad-tea-automate.user.toml': '[workflow.red]\nactivation_steps_prepend = ["personal red hook"]\n',
+  });
+  const skillRoot = path.join(SKILLS, 'bmad-tea-automate');
+  const red = resolveGenerationConfig(root, null, 'create', skillRoot, 'red').workflowCustomization;
+  const expand = resolveGenerationConfig(root, null, 'create', skillRoot, 'expand').workflowCustomization;
+  assert.deepEqual(red.activation_steps_prepend, ['red hook', 'personal red hook']);
+  assert.deepEqual(expand.activation_steps_prepend, ['expand hook']);
+  assert.equal('red' in expand, false);
+});
+
+test('CI settings come from [workflow.ci] of the framework files and canonical framework settings leave them out', (t) => {
+  const root = customProject(t, {
+    '_bmad/custom/bmad-tea-framework.toml': '[workflow.ci]\nci_platform = "gitlab-ci"\n',
+    '_bmad/custom/bmad-tea-framework.user.toml': '[workflow.ci]\nci_platform = "azure-pipelines"\n',
+  });
+  const skillRoot = path.join(SKILLS, 'bmad-tea-framework');
+  const ci = resolveTeaConfig({ projectRoot: root, skillRoot, skillName: 'bmad-tea-framework', workflowTable: 'ci' });
+  assert.equal(ci.workflowCustomization.ci_platform, 'azure-pipelines');
+  const canonical = resolveTeaConfig({ projectRoot: root, skillRoot, skillName: 'bmad-tea-framework' });
+  assert.equal('ci' in canonical.workflowCustomization, false);
+  assert.equal('ci_platform' in canonical.workflowCustomization, false);
+});
+
+test('retired atdd and ci stems and a top-level framework ci_platform stop with the migration command', (t) => {
+  const cases = [
+    ['bmad-tea-atdd.toml', '[workflow]\n', 'bmad-tea-automate', undefined],
+    ['bmad-testarch-atdd.user.toml', '[workflow]\n', 'bmad-tea-automate', undefined],
+    ['bmad-tea-ci.toml', '[workflow]\nci_platform = "gitlab-ci"\n', 'bmad-tea-framework', 'ci'],
+    ['bmad-testarch-ci.toml', '[workflow]\n', 'bmad-tea-framework', 'ci'],
+    ['bmad-tea-framework.toml', '[workflow]\nci_platform = "gitlab-ci"\n', 'bmad-tea-framework', 'ci'],
+  ];
+  for (const [file, text, skill, table] of cases) {
+    const root = customProject(t, { [`_bmad/custom/${file}`]: text });
+    assert.throws(
+      () => resolveTeaConfig({ projectRoot: root, skillRoot: path.join(SKILLS, skill), skillName: skill, workflowTable: table }),
+      /tea-migrate-customizations/,
+      file,
+    );
+  }
+});
+
+test('TEA merges the three config files BMad core merges and warns once about a legacy-only key', (t) => {
+  assert.deepEqual(CONFIG_LAYER_RELATIVE_PATHS, [
+    path.join('_bmad', 'config.toml'),
+    path.join('_bmad', 'custom', 'config.toml'),
+    path.join('_bmad', 'custom', 'config.user.toml'),
+  ]);
+  const root = customProject(t, {
+    '_bmad/config.user.toml': '[modules.tea]\ntea_pact_mcp = "none"\ntest_stack_type = "backend"\n',
+    '_bmad/custom/config.user.toml': '[modules.tea]\ntest_stack_type = "frontend"\n',
+  });
+  const written = [];
+  const original = process.stderr.write;
+  process.stderr.write = (chunk) => (written.push(String(chunk)), true);
+  let first;
+  try {
+    first = resolveTeaConfig({ projectRoot: root });
+    resolveTeaConfig({ projectRoot: root });
+  } finally {
+    process.stderr.write = original;
+  }
+  assert.equal(first.values.test_stack_type, 'frontend');
+  assert.equal(first.values.tea_pact_mcp, 'mcp', 'a legacy-only key is ignored, as in core');
+  assert.equal(written.length, 1, 'one warning per process');
+  assert.match(written[0], /tea_pact_mcp/);
+  assert.match(written[0], /bmad migrate tea/);
 });

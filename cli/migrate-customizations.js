@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-/** Move pre-3.0 TEA customization files and menu references to canonical names. */
+/**
+ * Move legacy TEA customizations to their current homes: pre-3.0 files to canonical names, the retired red-mode and CI
+ * stems into [workflow.red] and [workflow.ci] of their owning skills, and agent menu references to current skill ids.
+ */
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const TOML = require('smol-toml');
 
-const NAMES = ['automate', 'evaluate', 'framework', 'nfr', 'test-design', 'test-review', 'trace', 'atdd', 'ci'];
+const NAMES = ['automate', 'evaluate', 'framework', 'nfr', 'test-design', 'test-review', 'trace'];
 const PAIRS = [
   ...NAMES.map((suffix) => [`bmad-testarch-${suffix}`, `bmad-tea-${suffix}`]),
   ['bmad-teach-me-testing', 'bmad-tea-teach-me-testing'],
@@ -13,6 +16,15 @@ const PAIRS = [
 const MENU_NAMES = new Map(PAIRS);
 MENU_NAMES.set('bmad-testarch-atdd', 'bmad-tea-automate');
 MENU_NAMES.set('bmad-testarch-ci', 'bmad-tea-framework');
+/** Retired customization stems whose [workflow] table now lives as a sub-table of the owning skill. */
+const SURFACES = [
+  { target: 'bmad-tea-automate', table: 'red', sources: ['bmad-tea-atdd', 'bmad-testarch-atdd'] },
+  { target: 'bmad-tea-framework', table: 'ci', sources: ['bmad-tea-ci', 'bmad-testarch-ci'], moveCiPlatform: true },
+];
+const LAYERS = ['.toml', '.user.toml'];
+const BACKUP_PREFIX = '.v6-v7-migration-backup-';
+const HEADER = /^\s*(\[\[?)\s*([^[\]]*?)\s*(\]\]?)\s*(?:#.*)?$/;
+const CI_PLATFORM_LINE = /^\s*(?:ci_platform|"ci_platform"|'ci_platform')\s*=/;
 
 function isTable(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
@@ -35,6 +47,14 @@ function parse(file, source) {
     return TOML.parse(source);
   } catch (error) {
     throw new Error(`Cannot parse ${file}: ${error.message}`);
+  }
+}
+
+function tryParse(source) {
+  try {
+    return TOML.parse(source);
+  } catch {
+    return null;
   }
 }
 
@@ -63,6 +83,287 @@ function checkDirectory(directory, required = false) {
   }
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Customization path must be a real directory: ${directory}`);
   return true;
+}
+
+/** Split text into lines that each keep their own line ending, so joining them restores every byte. */
+function toLines(text) {
+  const parts = text.split(/(\r?\n)/);
+  const lines = [];
+  for (let index = 0; index < parts.length; index += 2) lines.push({ text: parts[index], eol: parts[index + 1] ?? '' });
+  return lines;
+}
+
+function joinLines(lines) {
+  return lines.map((line) => line.text + line.eol).join('');
+}
+
+function lineEnding(text) {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function headerPath(line) {
+  const match = HEADER.exec(line);
+  if (!match || match[1].length !== match[3].length) return null;
+  return { array: match[1] === '[[', path: match[2].split('.').map((part) => part.trim()) };
+}
+
+/** Locate a `[a.b]` table header and the lines up to the next header. */
+function findSection(lines, tablePath) {
+  for (let start = 0; start < lines.length; start++) {
+    const header = headerPath(lines[start].text);
+    if (!header || header.array || header.path.join('.') !== tablePath) continue;
+    let end = start + 1;
+    while (end < lines.length && headerPath(lines[end].text) === null) end++;
+    return { start, end };
+  }
+  return null;
+}
+
+/** Edit only the files whose structure is provably understood; anything else needs a person. */
+function manualEdit(file, reason, table) {
+  return new Error(`Cannot safely edit ${file}: ${reason}. Add the settings under ${table} by hand, then rerun.`);
+}
+
+/** Add lines at the end of a table section, before any trailing comments that introduce the next table. */
+function insertIntoSection(file, text, tablePath, newLines) {
+  const lines = toLines(text);
+  const section = findSection(lines, tablePath);
+  if (!section) throw manualEdit(file, `no [${tablePath}] header to add keys under`, `[${tablePath}]`);
+  let at = section.start;
+  for (let index = section.start + 1; index < section.end; index++) {
+    const trimmed = lines[index].text.trim();
+    if (trimmed !== '' && !trimmed.startsWith('#')) at = index;
+  }
+  const eol = lineEnding(text);
+  const inserted = newLines.map((line) => ({ text: line, eol }));
+  if (lines[at].eol === '') {
+    lines[at].eol = eol;
+    inserted.at(-1).eol = '';
+  }
+  lines.splice(at + 1, 0, ...inserted);
+  return joinLines(lines);
+}
+
+/** Append a block after existing content, separated by one blank line, leaving every existing byte in place. */
+function appendBlock(text, block) {
+  if (text === '') return block;
+  const eol = lineEnding(text);
+  let result = text.endsWith('\n') ? text : text + eol;
+  if (result.trim() !== '' && !/\r?\n\r?\n$/.test(result)) result += eol;
+  return result + block;
+}
+
+/** Turn a legacy file's [workflow] table into [workflow.<table>], keeping its comments and layout when that is provably exact. */
+function nestedSource(candidate, table) {
+  const lines = toLines(candidate.text);
+  for (const line of lines) {
+    const match = /^(\s*\[\[?\s*workflow)(\s*(?:\.[^\]]*)?\]\]?\s*(?:#.*)?)$/.exec(line.text);
+    if (match) line.text = `${match[1]}.${table}${match[2]}`;
+  }
+  const rewritten = joinLines(lines);
+  const expected = { workflow: { [table]: candidate.table } };
+  if (isDeepStrictEqual(tryParse(rewritten), expected)) return rewritten;
+  return TOML.stringify(expected);
+}
+
+function renderKey(file, key, value, table) {
+  const rendered = TOML.stringify({ [key]: value }).trimEnd();
+  if (/^\s*\[/m.test(rendered)) throw manualEdit(file, `${key} is a table and cannot be inserted inside ${table}`, table);
+  return rendered.split(/\r?\n/);
+}
+
+function provenance(candidate) {
+  if (candidate.topLevel) return `${candidate.file} [workflow] (live)`;
+  return candidate.live ? `${candidate.file} (live)` : `${candidate.file} (from ${candidate.provenance})`;
+}
+
+/** Folders a v6 to v7 upgrade left behind, newest first by name. */
+function listBackups(root) {
+  return fs
+    .readdirSync(root)
+    .filter((name) => name.startsWith(BACKUP_PREFIX))
+    .toSorted()
+    .toReversed();
+}
+
+/** The newest backup that actually holds the file wins; a newer backup without it never hides an older one. */
+function findInBackups(root, backups, name) {
+  for (const folder of backups) {
+    const directory = path.join(root, folder);
+    if (!checkDirectory(directory)) continue;
+    const bmad = path.join(directory, '_bmad');
+    const custom = path.join(bmad, 'custom');
+    if (!checkDirectory(bmad) || !checkDirectory(custom)) continue;
+    const found = readFile(path.join(custom, name));
+    if (found) return { ...found, provenance: folder };
+  }
+  return null;
+}
+
+function collectCandidates(context, surface, suffix, targetName) {
+  const candidates = [];
+  for (const stem of surface.sources) {
+    const name = stem + suffix;
+    const live = readFile(path.join(context.customRoot, name));
+    const found = live ? { ...live, provenance: 'live' } : findInBackups(context.root, context.backups, name);
+    if (!found) continue;
+    const value = parse(found.file, found.text);
+    for (const key of Object.keys(value)) {
+      if (key !== 'workflow')
+        throw new Error(`${found.file} has ${key} outside [workflow]; move it manually into ${targetName}, then rerun.`);
+    }
+    if (value.workflow !== undefined && !isTable(value.workflow))
+      throw new Error(`Expected a [workflow] table in ${found.file}; move its settings manually into ${targetName}, then rerun.`);
+    candidates.push({ name, ...found, live: found.provenance === 'live', table: value.workflow ?? {} });
+  }
+  return candidates;
+}
+
+/** Find value conflicts and kept backup values against the target as it stands before this run. */
+function analyse(candidates, targetTable, targetFile, tableLabel) {
+  const conflicts = [];
+  const kept = [];
+  const keys = [...new Set(candidates.flatMap((candidate) => Object.keys(candidate.table)))];
+  for (const key of keys) {
+    const holders = candidates.filter((candidate) => Object.hasOwn(candidate.table, key));
+    if (Object.hasOwn(targetTable, key)) {
+      for (const candidate of holders) {
+        if (isDeepStrictEqual(candidate.table[key], targetTable[key])) continue;
+        if (candidate.live) {
+          conflicts.push(
+            `Conflicting ${key}: ${JSON.stringify(candidate.table[key])} in ${provenance(candidate)} and ${JSON.stringify(targetTable[key])} in ${targetFile} ${tableLabel}. Make them agree, then rerun.`,
+          );
+        } else kept.push({ key, candidate, value: targetTable[key] });
+      }
+      continue;
+    }
+    const [first, ...rest] = holders;
+    for (const candidate of rest) {
+      if (isDeepStrictEqual(candidate.table[key], first.table[key])) continue;
+      conflicts.push(
+        `Conflicting ${key}: ${JSON.stringify(first.table[key])} in ${provenance(first)} and ${JSON.stringify(candidate.table[key])} in ${provenance(candidate)}. Make them agree, or set ${key} under ${tableLabel} in ${targetFile} to the value you want, then rerun.`,
+      );
+    }
+  }
+  return { conflicts, kept };
+}
+
+/** Move `ci_platform` from [workflow] into [workflow.ci] of the same file, line and all. */
+function moveCiPlatform(file, text, current) {
+  const lines = toLines(text);
+  const section = findSection(lines, 'workflow');
+  const hits = [];
+  for (let index = (section?.start ?? 0) + 1; section && index < section.end; index++) {
+    if (CI_PLATFORM_LINE.test(lines[index].text)) hits.push(index);
+  }
+  if (hits.length !== 1) throw manualEdit(file, 'ci_platform is not a single line under a [workflow] header', '[workflow.ci]');
+  const [moved] = lines.splice(hits[0], 1);
+  const removed = joinLines(lines);
+  const expected = parse(file, text);
+  delete expected.workflow.ci_platform;
+  if (!isDeepStrictEqual(tryParse(removed), expected))
+    throw manualEdit(file, 'ci_platform could not be removed from [workflow] exactly', '[workflow.ci]');
+  const ci = current.workflow?.ci;
+  if (ci && Object.hasOwn(ci, 'ci_platform')) return removed;
+  const line = moved.text.trim();
+  if (ci) return insertIntoSection(file, removed, 'workflow.ci', [line]);
+  return appendBlock(removed, `[workflow.ci]${lineEnding(text)}${line}${lineEnding(text)}`);
+}
+
+/** Plan the merge of one retired surface into one layer of its owning skill. */
+function planSurface(context, surface, suffix) {
+  const targetName = surface.target + suffix;
+  const targetFile = path.join(context.customRoot, targetName);
+  const tableLabel = `[workflow.${surface.table}]`;
+  const base = context.staged.get(targetFile) ?? readFile(targetFile);
+  const baseLabel = base?.source ?? targetFile;
+  const baseValue = base ? parse(baseLabel, base.text) : {};
+  if (baseValue.workflow !== undefined && !isTable(baseValue.workflow))
+    throw manualEdit(baseLabel, '[workflow] is not a table', tableLabel);
+  const existing = baseValue.workflow?.[surface.table];
+  if (existing !== undefined && !isTable(existing)) throw manualEdit(baseLabel, `${tableLabel} is not a table`, tableLabel);
+  const candidates = collectCandidates(context, surface, suffix, targetName);
+  if (surface.moveCiPlatform && baseValue.workflow && Object.hasOwn(baseValue.workflow, 'ci_platform')) {
+    candidates.push({
+      name: targetName,
+      file: targetFile,
+      provenance: 'live',
+      live: true,
+      topLevel: true,
+      table: { ci_platform: baseValue.workflow.ci_platform },
+    });
+  }
+  if (candidates.length === 0) return;
+  const { conflicts, kept } = analyse(candidates, existing ?? {}, targetFile, tableLabel);
+  if (conflicts.length > 0) {
+    context.conflicts.push(...conflicts);
+    return;
+  }
+
+  const baseText = base?.text ?? null;
+  let text = baseText;
+  let mode;
+  const messages = [];
+  const expected = parse(baseLabel, baseText ?? '');
+  for (const candidate of candidates) {
+    const current = text === null ? {} : parse(targetFile, text);
+    const have = current.workflow?.[surface.table];
+    const missing = Object.keys(candidate.table).filter((key) => !have || !Object.hasOwn(have, key));
+    const from = candidate.live ? '' : ` (from ${candidate.provenance})`;
+    if (candidate.topLevel) {
+      text = moveCiPlatform(targetFile, text, current);
+      delete expected.workflow.ci_platform;
+      expected.workflow.ci ??= {};
+      expected.workflow.ci.ci_platform ??= candidate.table.ci_platform;
+      const move = `${targetName} [workflow].ci_platform -> ${targetName} ${tableLabel}`;
+      messages.push({ done: move, check: `Would move ${move}` });
+      continue;
+    }
+    if (missing.length > 0) {
+      mode ??= candidate.live ? candidate.stat.mode & 0o777 : 0o644;
+      const additions = Object.fromEntries(missing.map((key) => [key, candidate.table[key]]));
+      expected.workflow ??= {};
+      expected.workflow[surface.table] = { ...expected.workflow[surface.table], ...additions };
+      const next = have
+        ? insertIntoSection(
+            targetFile,
+            text,
+            `workflow.${surface.table}`,
+            missing.flatMap((key) => renderKey(targetFile, key, candidate.table[key], tableLabel)),
+          )
+        : appendBlock(text ?? '', nestedSource(candidate, surface.table));
+      if (!isDeepStrictEqual(tryParse(next), expected))
+        throw manualEdit(targetFile, `the merged ${tableLabel} could not be verified`, tableLabel);
+      text = next;
+    }
+    if (missing.length > 0 || candidate.live) {
+      const move = `${candidate.name} [workflow] -> ${targetName} ${tableLabel}${from}${missing.length === 0 ? ' (values already present)' : ''}`;
+      messages.push({ done: move, check: `Would move ${move}` });
+    }
+  }
+  for (const { key, candidate, value } of kept) {
+    const notice = `${key} = ${JSON.stringify(value)} in ${targetName} ${tableLabel}; ignoring ${JSON.stringify(candidate.table[key])} from ${candidate.name} (from ${candidate.provenance})`;
+    messages.push({ done: `Kept ${notice}`, check: `Would keep ${notice}` });
+  }
+
+  const group = [];
+  if (text !== baseText) {
+    if (!isDeepStrictEqual(tryParse(text), expected))
+      throw manualEdit(targetFile, `the merged ${tableLabel} could not be verified`, tableLabel);
+    group.push(
+      base
+        ? { kind: 'update', oldFile: targetFile, newFile: targetFile, old: base, text, expected }
+        : { kind: 'create', oldFile: null, newFile: targetFile, text, mode: mode ?? 0o644, expected },
+    );
+  }
+  for (const candidate of candidates) {
+    if (!candidate.live || candidate.topLevel) continue;
+    const old = { file: candidate.file, stat: candidate.stat, text: candidate.text };
+    group.push({ kind: 'remove', oldFile: candidate.file, newFile: targetFile, old, requires: text });
+  }
+  if (group.length === 0) return;
+  group[0].messages = messages;
+  context.actions.push(...group);
 }
 
 /** Edit only skill assignments inside agent menu entries, retaining every other byte. */
@@ -99,10 +400,12 @@ function rewriteMenu(file, source) {
   return rewritten;
 }
 
-function preflight(customRoot) {
+/** Read every input, stage every change and surface every conflict before anything is written. */
+function preflight(root, customRoot) {
   const actions = [];
+  const staged = new Map();
   for (const [oldName, newName] of PAIRS) {
-    for (const suffix of ['.toml', '.user.toml']) {
+    for (const suffix of LAYERS) {
       const oldFile = path.join(customRoot, oldName + suffix);
       const newFile = path.join(customRoot, newName + suffix);
       const old = readFile(oldFile);
@@ -118,9 +421,15 @@ function preflight(customRoot) {
         );
       }
       actions.push({ kind: 'move', oldFile, newFile, old });
+      staged.set(newFile, { file: newFile, stat: old.stat, text: old.text, source: oldFile });
     }
   }
-  for (const suffix of ['.toml', '.user.toml']) {
+  const context = { root, customRoot, backups: listBackups(root), staged, actions, conflicts: [] };
+  for (const surface of SURFACES) for (const suffix of LAYERS) planSurface(context, surface, suffix);
+  if (context.conflicts.length > 0) {
+    throw new Error(`Customization conflicts found; nothing was changed.\n${context.conflicts.map((line) => `- ${line}`).join('\n')}`);
+  }
+  for (const suffix of LAYERS) {
     const file = path.join(customRoot, 'bmad-tea' + suffix);
     const old = readFile(file);
     if (!old) continue;
@@ -141,6 +450,75 @@ function unchanged(snapshot) {
   );
 }
 
+/** Re-read a written customization and confirm both its bytes and its parsed values. */
+function verifyWrite(action) {
+  const current = readFile(action.newFile);
+  if (current?.text !== action.text || !isDeepStrictEqual(tryParse(current.text), action.expected)) {
+    throw new Error(`Could not verify ${action.newFile} after writing it`);
+  }
+}
+
+/** Perform one staged action; `completed` records it as soon as there is something to undo. */
+function applyAction(action, index, customRoot, completed) {
+  const backup = path.join(customRoot, `.tea-migration-${process.pid}-${index}.bak`);
+  switch (action.kind) {
+    case 'move': {
+      if (readFile(action.newFile) !== null) throw new Error(`Customization appeared during migration: ${action.newFile}`);
+      fs.linkSync(action.oldFile, action.newFile);
+      completed.push(action);
+      fs.unlinkSync(action.oldFile);
+      break;
+    }
+    case 'create': {
+      if (readFile(action.newFile) !== null) throw new Error(`Customization appeared during migration: ${action.newFile}`);
+      fs.linkSync(action.temp, action.newFile);
+      completed.push(action);
+      verifyWrite(action);
+      break;
+    }
+    case 'remove': {
+      if ((readFile(action.newFile)?.text ?? null) !== action.requires)
+        throw new Error(`Customization changed during migration: ${action.newFile}`);
+      fs.linkSync(action.oldFile, backup);
+      action.backup = backup;
+      completed.push(action);
+      fs.unlinkSync(action.oldFile);
+      break;
+    }
+    default: {
+      fs.linkSync(action.oldFile, backup);
+      action.backup = backup;
+      completed.push(action);
+      fs.renameSync(action.temp, action.oldFile);
+      if (action.kind === 'update') verifyWrite(action);
+    }
+  }
+}
+
+function rollbackAction(action) {
+  switch (action.kind) {
+    case 'move': {
+      if (!fs.existsSync(action.oldFile)) fs.linkSync(action.newFile, action.oldFile);
+      fs.unlinkSync(action.newFile);
+      break;
+    }
+    case 'create': {
+      if (fs.existsSync(action.newFile)) fs.unlinkSync(action.newFile);
+      break;
+    }
+    case 'remove': {
+      if (!fs.existsSync(action.oldFile)) fs.linkSync(action.backup, action.oldFile);
+      fs.unlinkSync(action.backup);
+      break;
+    }
+    default: {
+      if (fs.existsSync(action.oldFile)) fs.unlinkSync(action.oldFile);
+      fs.linkSync(action.backup, action.oldFile);
+      fs.unlinkSync(action.backup);
+    }
+  }
+}
+
 /** Apply staged changes under one exclusive lock and undo completed actions on failure. */
 function applyActions(actions, customRoot, beforeAction) {
   const completed = [];
@@ -148,43 +526,26 @@ function applyActions(actions, customRoot, beforeAction) {
   let rollbackSafe = true;
   try {
     for (const [index, action] of actions.entries()) {
-      if (action.kind !== 'rewrite') continue;
+      if (!['rewrite', 'update', 'create'].includes(action.kind)) continue;
+      const mode = action.kind === 'create' ? action.mode : action.old.stat.mode & 0o777;
       const temp = path.join(customRoot, `.tea-migration-${process.pid}-${index}.tmp`);
-      fs.writeFileSync(temp, action.text, { flag: 'wx', mode: action.old.stat.mode & 0o777 });
-      fs.chmodSync(temp, action.old.stat.mode & 0o777);
+      fs.writeFileSync(temp, action.text, { flag: 'wx', mode });
+      fs.chmodSync(temp, mode);
       action.temp = temp;
       temporary.push(temp);
     }
     for (const [index, action] of actions.entries()) {
       beforeAction?.(action, index);
-      if (!unchanged(action.old)) throw new Error(`Customization changed during migration: ${action.oldFile}`);
-      if (action.kind === 'move') {
-        if (readFile(action.newFile) !== null) throw new Error(`Customization appeared during migration: ${action.newFile}`);
-        fs.linkSync(action.oldFile, action.newFile);
-        completed.push(action);
-        fs.unlinkSync(action.oldFile);
-      } else {
-        const backup = path.join(customRoot, `.tea-migration-${process.pid}-${index}.bak`);
-        fs.linkSync(action.oldFile, backup);
-        action.backup = backup;
-        completed.push(action);
-        fs.renameSync(action.temp, action.oldFile);
-      }
+      if (action.old && !unchanged(action.old)) throw new Error(`Customization changed during migration: ${action.oldFile}`);
+      applyAction(action, index, customRoot, completed);
     }
   } catch (error) {
     const rollbackErrors = [];
     for (const action of completed.toReversed()) {
       try {
-        if (action.kind === 'move') {
-          if (!fs.existsSync(action.oldFile)) fs.linkSync(action.newFile, action.oldFile);
-          fs.unlinkSync(action.newFile);
-        } else {
-          if (fs.existsSync(action.oldFile)) fs.unlinkSync(action.oldFile);
-          fs.linkSync(action.backup, action.oldFile);
-          fs.unlinkSync(action.backup);
-        }
+        rollbackAction(action);
       } catch (rollbackError) {
-        rollbackErrors.push(`${action.oldFile}: ${rollbackError.message}`);
+        rollbackErrors.push(`${action.oldFile ?? action.newFile}: ${rollbackError.message}`);
       }
     }
     rollbackSafe = rollbackErrors.length === 0;
@@ -201,8 +562,12 @@ function migrate(projectRoot, { check = false, beforeAction } = {}) {
   const bmadRoot = path.join(root, '_bmad');
   if (!checkDirectory(bmadRoot)) return [];
   const customRoot = path.join(bmadRoot, 'custom');
-  if (!checkDirectory(customRoot)) return [];
-  if (check) return preflight(customRoot);
+  if (check) return preflight(root, customRoot);
+  if (!checkDirectory(customRoot)) {
+    // A cleanup may have removed the whole folder while a backup still holds settings to restore.
+    if (preflight(root, customRoot).length === 0) return [];
+    fs.mkdirSync(customRoot);
+  }
   const lock = path.join(customRoot, '.tea-migration.lock');
   try {
     fs.mkdirSync(lock, { mode: 0o700 });
@@ -215,12 +580,19 @@ function migrate(projectRoot, { check = false, beforeAction } = {}) {
     throw new Error(`Cannot lock ${customRoot} for migration: ${error.message}`);
   }
   try {
-    const actions = preflight(customRoot);
+    const actions = preflight(root, customRoot);
     applyActions(actions, customRoot, beforeAction);
     return actions;
   } finally {
     fs.rmdirSync(lock);
   }
+}
+
+function describe(action, check) {
+  const lines = (action.messages ?? []).map((message) => (check ? message.check : message.done));
+  if (action.kind === 'rewrite') lines.push(`${check ? 'Would update' : 'Updated'} menu references in ${action.oldFile}`);
+  if (action.kind === 'move') lines.push(`${check ? 'Would move ' : ''}${action.oldFile} -> ${action.newFile}`);
+  return lines;
 }
 
 function main(argv = process.argv.slice(2)) {
@@ -231,13 +603,7 @@ function main(argv = process.argv.slice(2)) {
   const projectRoot = rootIndex < 0 ? process.cwd() : path.resolve(argv[rootIndex + 1]);
   const check = argv.includes('--check');
   const actions = migrate(projectRoot, { check });
-  for (const action of actions) {
-    process.stdout.write(
-      action.kind === 'rewrite'
-        ? `${check ? 'Would update' : 'Updated'} menu references in ${action.oldFile}\n`
-        : `${check ? 'Would move ' : ''}${action.oldFile} -> ${action.newFile}\n`,
-    );
-  }
+  for (const action of actions) for (const line of describe(action, check)) process.stdout.write(`${line}\n`);
   if (actions.length === 0) process.stdout.write('No legacy TEA customizations found.\n');
   return 0;
 }

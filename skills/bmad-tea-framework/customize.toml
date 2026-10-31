@@ -37,6 +37,15 @@ persistent_facts = []
 
 on_complete = ""
 
-# Explicit canonical team/user override wins; otherwise CI alias ci_platform applies.
-# The default auto value does not mask a migrated bmad-tea-ci override.
+# --- CI scope ---
+# Settings for the CI phase (the pipeline written after the test framework).
+# Same keys and merge rules as [workflow], plus ci_platform. Only CI scope
+# reads this table. Override it under [workflow.ci] in
+# _bmad/custom/bmad-tea-framework.toml or bmad-tea-framework.user.toml.
+
+[workflow.ci]
+activation_steps_prepend = []
+activation_steps_append = []
+persistent_facts = []
+on_complete = ""
 ci_platform = "auto"

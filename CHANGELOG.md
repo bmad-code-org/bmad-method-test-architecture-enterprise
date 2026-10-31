@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `bmad setup` now recognizes a TEA 2.x upgrade. A `retired.toml` in `bmod-tea` renames the eight `bmad-testarch-*` and `bmad-teach-me-testing` skills to their `bmad-tea-*` names and retires `bmad-testarch-atdd` and `bmad-testarch-ci`, so setup lists them, offers to remove them and moves their customization files.
+- `bmad migrate tea` has a third migration. It moves `bmad-tea-atdd` settings into `[workflow.red]` of `bmad-tea-automate.toml` and `bmad-tea-ci` settings into `[workflow.ci]` of `bmad-tea-framework.toml`, team and user layers separately. It reads live files first and the newest `.v6-v7-migration-backup-*` folder that holds a file when `bmad setup` cleanup already deleted it, shows conflicts with both values and where each came from, and overwrites nothing without a choice. It also offers to move `[modules.tea]` keys that only the legacy `_bmad/config.user.toml` held into `_bmad/custom/config.user.toml`.
+- A CI job runs BMAD's strict skill validator from BMAD `dev` over every TEA skill.
+
+### Changed
+
+- Red-mode settings now live under `[workflow.red]` in `bmad-tea-automate.toml` and CI settings under `[workflow.ci]` in `bmad-tea-framework.toml`, including `ci_platform`. Core's customization resolver reads them directly (`--skill bmad-tea-automate --key workflow.red`), which the separate `bmad-tea-atdd` and `bmad-tea-ci` names could not do. The skills and CLIs stop with the migration command when they find the old files or a `ci_platform` placed directly under `[workflow]`. `tea-migrate-customizations` applies the same rules, including the backup search.
+- The TEA CLIs merge the three config files BMAD core merges (`_bmad/config.toml`, `_bmad/custom/config.toml`, `_bmad/custom/config.user.toml`) and no longer read `_bmad/config.user.toml`. A `[modules.tea]` key held only by that file produces one warning that names the key and the migration.
+- When `bmod-tea` is not installed beside a TEA skill, the skill stops and tells the user to install it in the same scope as the skill (project or global).
+- The post-install message gives the full `tea-migrate-customizations` command and the cleanup precaution.
+
+### Fixed
+
+- Removed `installed_path` from the seven `workflow.yaml` files; BMAD's skill validator rejects it.
+
 ## [3.6.0] - 2026-10-31
 
 ### Added

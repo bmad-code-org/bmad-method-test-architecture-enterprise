@@ -9,9 +9,9 @@
  * Precedence, highest first:
  *   1. An explicit CLI flag (--use-playwright-utils / --no-use-pactjs-utils / ...)
  *   2. The consuming project's `[modules.tea]` table, merged from
- *      _bmad/config.toml, _bmad/config.user.toml, _bmad/custom/config.toml and
- *      _bmad/custom/config.user.toml (later files win), as `bmad setup tea`
- *      writes it. Only when _bmad/config.toml does not exist is a v6
+ *      _bmad/config.toml, _bmad/custom/config.toml and
+ *      _bmad/custom/config.user.toml (later files win), the three files
+ *      BMad core merges, as `bmad setup tea` writes it. Only when _bmad/config.toml does not exist is a v6
  *      _bmad/tea/config.yaml read instead, so older installs keep working in CI.
  *   3. The module default declared in skills/bmod-tea/bmod.toml
  *
@@ -32,15 +32,38 @@ const TOML = require('smol-toml');
 const { minimatch } = require('minimatch');
 const { globSync } = require('glob');
 
-/** The central config layers, lowest precedence first. Only the first is required. */
+/** The central config layers, lowest precedence first, the three files BMad core merges. Only the first is required. */
 const CONFIG_LAYER_RELATIVE_PATHS = [
   path.join('_bmad', 'config.toml'),
-  path.join('_bmad', 'config.user.toml'),
   path.join('_bmad', 'custom', 'config.toml'),
   path.join('_bmad', 'custom', 'config.user.toml'),
 ];
 const CONFIG_RELATIVE_PATH = CONFIG_LAYER_RELATIVE_PATHS[0];
 const LEGACY_CONFIG_RELATIVE_PATH = path.join('_bmad', 'tea', 'config.yaml');
+/** A pre-v7 personal layer BMad core no longer merges. TEA warns about keys only it holds and reads none of them. */
+const LEGACY_USER_CONFIG_RELATIVE_PATH = path.join('_bmad', 'config.user.toml');
+const warnedLegacyUserConfig = new Set();
+
+/** Tell the user once per process that `[modules.tea]` keys in the legacy personal layer are ignored. */
+function warnLegacyUserConfig(source, tea) {
+  const content = source.read(LEGACY_USER_CONFIG_RELATIVE_PATH);
+  if (content === null) return;
+  const label = source.label(LEGACY_USER_CONFIG_RELATIVE_PATH);
+  if (warnedLegacyUserConfig.has(label)) return;
+  let legacyTea;
+  try {
+    legacyTea = TOML.parse(content).modules?.tea;
+  } catch {
+    return;
+  }
+  if (!isPlainObject(legacyTea)) return;
+  const ignored = Object.keys(legacyTea).filter((key) => !Object.hasOwn(tea, key));
+  if (ignored.length === 0) return;
+  warnedLegacyUserConfig.add(label);
+  process.stderr.write(
+    `Warning: ${label} is no longer merged. TEA ignores its [modules.tea] keys (${ignored.join(', ')}). Run \`bmad migrate tea\` to move them into _bmad/custom/config.user.toml.\n`,
+  );
+}
 
 const MODULE_DEFAULTS = {
   tea_use_playwright_utils: true,
@@ -284,8 +307,38 @@ function parseToml(content, label) {
   }
 }
 
-/** Resolve trusted skill defaults and project workflow overrides from the same configuration source. */
-function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-tea-test-review') {
+/** Customization surfaces that live as `[workflow.<name>]` tables of the owning skill, and the stems they used to have. */
+const SURFACE_TABLES = {
+  'bmad-tea-automate': { table: 'red', retiredStems: ['bmad-tea-atdd', 'bmad-testarch-atdd'] },
+  'bmad-tea-framework': { table: 'ci', retiredStems: ['bmad-tea-ci', 'bmad-testarch-ci'] },
+};
+
+/** Stop on settings the new layout never reads, so a migration is never skipped silently. */
+function assertNoRetiredSurface(source, skillName, workflow) {
+  const surface = SURFACE_TABLES[skillName];
+  if (!surface) return;
+  for (const stem of surface.retiredStems) {
+    for (const suffix of ['.toml', '.user.toml']) {
+      const file = path.join('_bmad', 'custom', stem + suffix);
+      if (source.read(file) !== null) {
+        throw configError(
+          `${source.label(file)} is no longer read; its settings now live under [workflow.${surface.table}] in ${skillName}.toml and ${skillName}.user.toml. Run: npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root <project>`,
+        );
+      }
+    }
+  }
+  if (skillName === 'bmad-tea-framework' && workflow && Object.hasOwn(workflow, 'ci_platform')) {
+    throw configError(
+      'workflow.ci_platform in bmad-tea-framework.toml or .user.toml is no longer read; set ci_platform under [workflow.ci]. Run: npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root <project>',
+    );
+  }
+}
+
+/**
+ * Resolve trusted skill defaults and project workflow overrides from the same configuration source.
+ * `table` selects a `[workflow.<table>]` surface of the skill (red, ci); without it the surface tables are left out.
+ */
+function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-tea-test-review', { table } = {}) {
   if (!skillRoot) return {};
   const defaultsPath = path.join(skillRoot, 'customize.toml');
   source.recordInput?.(defaultsPath);
@@ -318,7 +371,17 @@ function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = '
   if (merged.workflow !== undefined && !isPlainObject(merged.workflow)) {
     throw configError('Workflow customization must contain a [workflow] table');
   }
-  const workflow = merged.workflow || {};
+  assertNoRetiredSurface(source, skillName, merged.workflow);
+  const surfaces = new Set(Object.values(SURFACE_TABLES).map((surface) => surface.table));
+  let workflow = merged.workflow || {};
+  if (table === undefined) {
+    workflow = Object.fromEntries(Object.entries(workflow).filter(([key]) => !surfaces.has(key) || !isPlainObject(workflow[key])));
+  } else {
+    if (!surfaces.has(table)) throw configError(`Unknown workflow surface ${table}`);
+    const selected = workflow[table];
+    if (selected !== undefined && !isPlainObject(selected)) throw configError(`workflow.${table} must be a table`);
+    workflow = selected || {};
+  }
   if (workflow.persistent_facts !== undefined) {
     if (!Array.isArray(workflow.persistent_facts) || !workflow.persistent_facts.every((fact) => typeof fact === 'string')) {
       throw configError('Workflow persistent_facts must be an array of strings');
@@ -410,6 +473,7 @@ function readCentralConfig(source) {
   if (modules !== undefined && (!isPlainObject(modules) || (modules.tea !== undefined && !isPlainObject(modules.tea)))) {
     throw configError(`[modules.tea] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
   }
+  warnLegacyUserConfig(source, modules?.tea || {});
   if (merged.core !== undefined && !isPlainObject(merged.core)) {
     throw configError(`[core] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
   }
@@ -530,6 +594,7 @@ const KEY_TO_INSTALLED_FIELD = {
  * @param {string} options.projectRoot - Consuming project root.
  * @param {string} [options.baseRef] - Configuration source ref, pinned before any file read.
  * @param {string} [options.skillRoot] - Trusted skill defaults for workflow customization.
+ * @param {string} [options.workflowTable] - `[workflow.<table>]` surface to return (red, ci) in place of the skill's own workflow table.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
  * @param {Set<string>} [options.inputPaths] - Receives working-tree inputs, including missing optional layers.
@@ -539,11 +604,11 @@ const KEY_TO_INSTALLED_FIELD = {
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
-function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName, inputPaths, inputPatterns }) {
+function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName, workflowTable, inputPaths, inputPatterns }) {
   const source = configSource(projectRoot, baseRef, inputPaths, inputPatterns);
   inputPaths?.add(path.join(projectRoot, 'package.json'));
   const file = readTeaConfigFile(projectRoot, baseRef, source);
-  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName);
+  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName, { table: workflowTable });
 
   const values = {};
   const sources = {};
@@ -610,5 +675,6 @@ module.exports = {
   CONFIG_RELATIVE_PATH,
   CONFIG_LAYER_RELATIVE_PATHS,
   LEGACY_CONFIG_RELATIVE_PATH,
+  LEGACY_USER_CONFIG_RELATIVE_PATH,
   FLAG_TO_KEY,
 };

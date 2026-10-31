@@ -7,7 +7,6 @@ description: 'Create system-level or epic-level test plans. Use when the user sa
 date: system-generated
 
 # Workflow components
-installed_path: "."
 instructions: "./instructions.md"
 validation: "./checklist.md"
 # Note: Template selection is mode-based (see instructions.md Step 1.5):

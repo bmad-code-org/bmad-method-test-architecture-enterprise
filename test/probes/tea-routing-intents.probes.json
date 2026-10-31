@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-routing-intents-behavioral",
-    "implementationDigest": "sha256:0da0855bf9bd86991933ee8405f94354472f051ef4e31836e1bf91b11bf555b7",
+    "implementationDigest": "sha256:06c3edef2813e4769c476e1e4cdd453200ba75c951fff16bfcc9e50507c314d0",
     "artifactDigest": "sha256:c3ee166095b4d91a934c3e9c1e499a1dbdb0d3ec275841d9abba9207133560a0",
-    "commitDigest": "sha256:0da0855bf9bd86991933ee8405f94354472f051ef4e31836e1bf91b11bf555b7",
+    "commitDigest": "sha256:06c3edef2813e4769c476e1e4cdd453200ba75c951fff16bfcc9e50507c314d0",
     "rationale": "A reply that quotes the user's own message back as its reason satisfies O-004 for epic-risk-before-tests, because the deciding tokens are words from that message, and violates O-002, because the menu code it names is not the one the intent points at. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
     "qualification": {
       "route": "gameability",
@@ -85,9 +85,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-004",
     "systemId": "tea-routing-intents-behavioral",
-    "implementationDigest": "sha256:0da0855bf9bd86991933ee8405f94354472f051ef4e31836e1bf91b11bf555b7",
+    "implementationDigest": "sha256:06c3edef2813e4769c476e1e4cdd453200ba75c951fff16bfcc9e50507c314d0",
     "artifactDigest": "sha256:c3ee166095b4d91a934c3e9c1e499a1dbdb0d3ec275841d9abba9207133560a0",
-    "commitDigest": "sha256:0da0855bf9bd86991933ee8405f94354472f051ef4e31836e1bf91b11bf555b7",
+    "commitDigest": "sha256:06c3edef2813e4769c476e1e4cdd453200ba75c951fff16bfcc9e50507c314d0",
     "rationale": "epic-risk-before-tests declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
     "qualification": {
       "route": "clean-control",
@@ -97,7 +97,7 @@
         "privateRef": null,
         "digest": "sha256:c3ee166095b4d91a934c3e9c1e499a1dbdb0d3ec275841d9abba9207133560a0"
       },
-      "revisionCommitDigest": "sha256:0da0855bf9bd86991933ee8405f94354472f051ef4e31836e1bf91b11bf555b7",
+      "revisionCommitDigest": "sha256:06c3edef2813e4769c476e1e4cdd453200ba75c951fff16bfcc9e50507c314d0",
       "noKnownDefectStatement": "epic-risk-before-tests's expected answer is derived from skills/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
     },
     "expectedClean": true,

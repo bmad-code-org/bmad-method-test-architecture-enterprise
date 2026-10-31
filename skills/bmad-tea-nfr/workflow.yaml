@@ -7,7 +7,6 @@ description: 'Audit NFR evidence for performance, security, reliability, and mai
 date: system-generated
 
 # Workflow components
-installed_path: "."
 instructions: "./instructions.md"
 validation: "./checklist.md"
 template: "./nfr-report-template.md"

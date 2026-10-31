@@ -144,10 +144,10 @@ Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test
 
 ## On Complete
 
-When `workflow_customization_manual = true`, execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally.
-Otherwise resolve the same selected customization surface below; never run the other mode's hook.
+Execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally; never run the other mode's hook.
+If it was not retained, resolve it from the selected key:
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {workflow-skill-root} --project-root {project-root} --key workflow.on_complete`
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key {workflow-key}.on_complete`
 
 If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
 

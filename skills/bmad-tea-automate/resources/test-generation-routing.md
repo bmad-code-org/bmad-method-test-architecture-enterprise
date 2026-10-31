@@ -43,13 +43,10 @@ Do not restart Create or execute a completed generation step on an explicit Resu
 
 ## 2. Choose Exactly One Customization Surface
 
-For red set `workflow-skill-root = {skill-root}/red` and `workflow-skill-name = bmad-tea-atdd` to select the red customization namespace.
-For expand set `workflow-skill-root = {skill-root}` and `workflow-skill-name = bmad-tea-automate`.
-Resolve `{skill-root}/red/customize.toml` plus `_bmad/custom/bmad-tea-atdd.toml` and `.user.toml` manually with the activation merge rules; the resolver's directory-name inference cannot resolve this customization namespace from `red/`.
-Record `workflow_customization_manual = true` and retain the resolved workflow block for its terminal hook.
-Keep the resolver's workflow namespace and structural merge rules intact.
-Resolve only the selected surface's defaults, team file and user file.
-Red uses `_bmad/custom/bmad-tea-atdd.toml` and `.user.toml`; expand uses `_bmad/custom/bmad-tea-automate.toml` and `.user.toml`.
+Both modes resolve from this skill's own `customize.toml` and `_bmad/custom/bmad-tea-automate.toml` and `.user.toml`.
+For red set `workflow-key = workflow.red`. For expand set `workflow-key = workflow`.
+`workflow.red` holds the red settings (`activation_steps_prepend`, `activation_steps_append`, `persistent_facts`, `on_complete`); expand never reads it and red never reads the top-level keys.
+Resolve only the selected key, with `resolve_customization.py --skill {skill-root} --key {workflow-key}`, and retain the returned block for its terminal hook.
 
 Run selected prepend hooks, load selected persistent facts, load config, greet, then run selected append hooks in that order.
 The selected mode's `workflow.on_complete` executes at its original terminal after outputs are saved, including Validate and Edit.

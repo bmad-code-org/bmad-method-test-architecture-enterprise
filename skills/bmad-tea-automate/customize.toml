@@ -36,3 +36,15 @@ persistent_facts = []
 # Override wins. Leave empty for no custom post-completion behavior.
 
 on_complete = ""
+
+# --- Red mode ---
+# Settings for red mode (acceptance tests written before the implementation).
+# Same keys and merge rules as [workflow]; only red mode reads this table, and
+# expand mode never does. Override it under [workflow.red] in
+# _bmad/custom/bmad-tea-automate.toml or bmad-tea-automate.user.toml.
+
+[workflow.red]
+activation_steps_prepend = []
+activation_steps_append = []
+persistent_facts = []
+on_complete = ""
