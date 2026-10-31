@@ -82,7 +82,7 @@ Resolve the oracle in this order:
      - `P2`: secondary workflows and edge scenarios
      - `P3`: low-risk polish or optional flows
 
-Persist `oracleLedger` in this step's progress YAML frontmatter as an array of `{id, requirement, priority, source}` records: one row per item with its stable ID, requirement text, priority, and source reference. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
+Persist `oracleLedger` in this step's progress YAML frontmatter as an array of `{id, requirement, priority, source}` records: one row per item with its stable ID, requirement text, priority, and source reference. For a numbered criterion with a bold name, such as `1. **Order number shown** (R1, P0)` followed by its Given, When, and Then lines, the row's `requirement` is the bold name alone, `Order number shown`, without the parenthesised `R` ids or priority after it. For a `verify`-only story's single criterion it is the `verify` text. Every other item keeps its source text, and a criterion whose source states its id before a colon (`AC-1: Admin may export`) keeps the text after the colon. A run with `oracleGranularity: requirements` builds its ledgers by section 1b; every rule in this paragraph and the next still applies to them. An explicit priority in the selected oracle is authoritative for that item's coverage statistics. Infer a priority with `test-priorities-matrix.md` only when the oracle leaves it unspecified, and record that inference. A mapped test's own priority describes the test and never changes the oracle item's priority. Carry this ledger through mapping and gap analysis, including resumed runs.
 
 For local source files, read numbered lines before recording each ledger source reference. When the source declares an item's ID and priority, cite that line. For an inferred item, cite numbered source lines that support its requirement; the generated ID and priority stay in the ledger. Check each source line independently because headings and criteria may span different numbers of lines.
 
@@ -95,6 +95,75 @@ Record the resolved oracle metadata in step output/frontmatter using consistent 
 - `externalPointerStatus` (`not_used` | `resolved` | `skipped` | `unavailable`) — status of external pointer resolution when pointer files are present
 
 If none of the four oracle types can be resolved, **HALT** and request the smallest missing clarification needed to continue.
+
+---
+
+## 1b. Oracle Granularity and the v7 Requirement Spine
+
+Record `oracleGranularity` beside `coverageBasis` and `oracleResolutionMode`. It is `requirements` or `criteria`.
+
+### A) When the Spine Applies
+
+A fresh run uses the requirement oracle and records `oracleGranularity: requirements` only when both hold:
+
+- Its target is a v7 epic: the user names an epic, or the target reference resolves through `{tea-contracts}/story-identity.md` to a container its section 3 classifies as an epic. A v7 epic is an `epic-*` folder inside an initiative's `tickets/` folder.
+- That epic's file has at least one Requirements line of the form `R<n> (<parent or source>): <line>`, for example `R1 (parent R2): Shopper pays with a saved card`.
+
+Such a run also records `coverageBasis: acceptance_criteria` and `oracleResolutionMode: formal_requirements`.
+Every other target keeps the criterion oracle and records `oracleGranularity: criteria`: a story, a release, a hotfix, the system, a v6 epic, and a v7 epic whose file has no `R<n>` line. Section 1's ledger rules then apply unchanged, and the rest of this section does not.
+Only a fresh run decides granularity. A checkpoint with no `oracleGranularity` is a criterion-oracle run and resumes as one, with its rows and evidence unchanged; `step-01b-resume.md` never re-decides it.
+Initiative-wide tracing is out of scope: an initiative target keeps the criterion oracle, and epic rows never roll up to initiative `R` lines.
+
+### B) Duplicate Requirement IDs
+
+Read the epic file's Requirements section with numbered lines before building any ledger.
+Two `R` lines with the same local id in one epic **halt** the run before mapping. Name the id and both source `path:line` locations, and ask for the epic file to be corrected.
+Never merge, renumber, or skip either line, and save no ledger for the run. A halted run emits no matrix, summary, or gate decision.
+
+### C) `criterionLedger`
+
+For every entry in the epic's `tickets/tickets.toml`, resolve and read its story by `{tea-contracts}/story-identity.md` sections 2 and 4. Record every criterion the contract selects, in the contract's order, as one `criterionLedger` record. The ticket's numbered criteria are a story leaf's under `## Requirements` and a bug or spike leaf's under `## Acceptance Criteria`. A plan's acceptance criteria are the list under its Acceptance Criteria heading, or the list after the bold `**Acceptance Criteria:**` label in its `## Tasks & Acceptance` section. The CLI captures the same criteria from the same files before the run and rejects a ledger that omits, adds, renames, or rewrites any of them:
+
+- `id`: `<story key>--<localId>`, for example `shop--e1-s2--AC-1`.
+- `localId`: the id the source states for the criterion (`AC-1`); else `AC-<n>` from its position in the numbered list; `verify` for a `verify`-only story's single criterion.
+- `story`: the story key.
+- `name`: the criterion's name. For a numbered criterion that is its bold name alone, without the parenthesised `R` ids or priority after it: `Order number shown` for `1. **Order number shown** (R1, P0)`. For a plan criterion it is its bold label, else its first line, again without the parenthesised `R` ids or priority. For a `verify`-only story's single criterion it is the `verify` text.
+- `text`: the criterion's frozen full text as the source states it with the list marker removed. For a numbered criterion that is its name line (the bold name and the `R` ids it names) followed by every line beneath it (Given, When, Then, And, a spike's `Verify:` line, and any fenced or indented block such as a Gherkin scenario or an expected body, fences included), joined with single spaces. For a `verify`-only story's single criterion it is the `verify` text: the pulled leaf's `Verify:` line once the story has a leaf, else the entry's `verify`.
+- `source`: the `path:line` where the criterion starts: the line holding a numbered criterion's bold name, a plan criterion's first line, or the `verify` text. Never a Given, When, or Then line.
+- `priority` and `priorityBasis`: by section E. Every record carries both.
+- `declaredLinks`: the `R` ids the criterion names. For a `verify`-only story's single criterion, the story's `covers`: the pulled leaf's frontmatter `covers` once the story has a leaf, else the entry's.
+- `validLinks`: the declared ids the epic's Requirements define. `invalidLinks`: the declared ids it does not.
+- `exception`: `unlinked` when `declaredLinks` is empty; `invalid-link` when `invalidLinks` is not empty, even when `validLinks` is not; `none` otherwise.
+
+A criterion contributes to every requirement in its `validLinks`. A criterion with any `exception` other than `none` also gets its own gate row in section D, so it never leaves the gate.
+Every ledger id uses only letters, digits, `.`, `_`, and `-`. Spell a source id that holds any other character with each run of such characters replaced by `-`. A `localId` never contains `--`, so the part of a criterion id after its last `--` is always its `localId`; spell a source id that holds `--` with a single `-`.
+
+### D) `oracleLedger`
+
+The `oracleLedger` is the gate inventory, and the CLI validates it. Write one row per `R<n>` line, in the epic file's order:
+
+- `id`: `<epic key>--R<n>`, for example `shop--e1--R1`. `<epic key>` is the key section 4 B resolves.
+- `kind`: `requirement`.
+- `requirement`: the line's frozen text after its `R<n> (...):` prefix.
+- `parent`: what the line's parentheses name (`parent R2`, or the source section a split or added line names).
+- `source`: the line's `path:line`.
+- `priority` and `priorityBasis`: by section E.
+- `contributors`: the ids of every `criterionLedger` record whose `validLinks` include `R<n>`, in ledger order. Empty when no story covers the requirement.
+
+Then write one row per `criterionLedger` record whose `exception` is not `none`:
+
+- `id`: the criterion's id. `kind`: `exception`. `exception`: `unlinked` or `invalid-link`.
+- `requirement`: the criterion's `name`. A numbered criterion's row reads `Form remembers address`, its bold name alone.
+- `source`, `priority`, and `priorityBasis`: the criterion's own.
+
+### E) Priorities
+
+Assign every ledger record its priority and record `priorityBasis` now, before mapping. P0 is the highest priority.
+
+- A `criterionLedger` record takes the explicit priority its criterion states (`explicit`); else one inferred from its behavior and story risk with `test-priorities-matrix.md` (`inferred`). Its `priorityBasis` is `explicit` or `inferred`.
+- A requirement row takes the explicit priority its `R` line states (`explicit`); else the highest priority among its contributors (`contributors`); else, with no contributors, one inferred from the requirement text and epic context with `test-priorities-matrix.md` (`inferred`).
+- `contributors` means exactly this: the row's priority is the highest `priority` recorded on the `criterionLedger` records its `contributors` list, whatever each record's own `priorityBasis`. A contributor at P0 makes the row P0. A requirement row with at least one contributor and no explicit priority always records `contributors`; `inferred` is recorded only when its `contributors` list is empty.
+- An exception row copies its criterion's `priority` and `priorityBasis` unchanged. A story's risk never lowers a priority its criterion states.
 
 ---
 
@@ -148,7 +217,7 @@ Resolve the gate type in this order:
 Resolve the target for that gate type in the same order: the target the user named in this invocation first, then the target the loaded artifacts carry.
 
 - **story:** `story_id` and `story_key` by `{tea-contracts}/story-identity.md`, which also resolves and reads the story: `1.2` and `shop--e1-s2` for a v7 epic entry, the story's own id and its file basename (`1-2-user-authentication`) for a v6 story.
-- **epic:** `epic_num`, read from the epic document metadata, its H1 heading, or its filename. If the epic carries no number, use the slug of its title (slug rule below) in place of the number.
+- **epic:** for a v7 epic (section 1b A), `epic_key` by `{tea-contracts}/story-identity.md` section 4: `<initiative>--e<epic id>` (`shop--e1`), or `<initiative>--<epic folder>` (`shop--epic-loyalty`) for an epic its initiative does not number. The target id is the epic key, and `epic_num` is the epic id (empty for an unnumbered epic). For a v6 epic, `epic_num`, read from the epic document metadata, its H1 heading, or its filename. If the v6 epic carries no number, use the slug of its title (slug rule below) in place of the number.
 - **release:** the release version, from this invocation or from the release notes or version the loaded artifacts name.
 - **hotfix:** the hotfix id, from this invocation or from the loaded artifacts.
 
@@ -166,12 +235,13 @@ If no target can be resolved at all, the run covers the whole project or system:
 Set `run_key` from the gate type and target:
 
 - `story-{story_key}`: one story.
-- `epic-{epic_num}`: one epic.
+- `epic-{epic_key}`: one v7 epic, for example `epic-shop--e1`. Two initiatives with the same epic number or epic folder name get separate matrices, summaries, and gate files. The epic key is used as written; never slug it, because slugging collapses its `--`.
+- `epic-{epic_num}`: one v6 epic.
 - `release-{slug}`: one release, where `{slug}` is the slug of the release version.
 - `hotfix-{slug}`: one hotfix, where `{slug}` is the slug of the hotfix id.
 - `system`: the whole project or system, or no narrower scope could be resolved. Target id and label stay empty, the gate type stays the one resolved in A, and the output states "No story, epic, release, or hotfix target could be resolved; this run is scoped to `system`."
 
-Slug rule, used for every `{slug}` and for an epic title with no number: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
+Slug rule, used for every `{slug}` and for a v6 epic title with no number: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
 
 Set `run_scope` to the kind of key: `story`, `epic`, `release`, `hotfix`, or `system`.
 
@@ -222,11 +292,55 @@ oracleConfidence: '{resolved oracle_confidence}'
 oracleResolutionMode: '{resolved oracle_resolution_mode}'
 oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
 externalPointerStatus: '{resolved external_pointer_status}'
+oracleGranularity: '{criteria | requirements}'
 oracleLedger: [{ id: '{oracle item id}', requirement: '{requirement text}', priority: '{P0-P3}', source: '{source reference}' }]
 ---
 ```
 
 Then write this step's output below the frontmatter.
+
+For a run with `oracleGranularity: requirements`, write the ledgers section 1b defines, with every field it names:
+
+```yaml
+oracleGranularity: 'requirements'
+criterionLedger:
+  - {
+      id: '{story key}--{localId}',
+      localId: '{localId}',
+      story: '{story key}',
+      name: '{criterion name}',
+      text: '{frozen full criterion text}',
+      source: '{path:line}',
+      priority: '{P0-P3}',
+      priorityBasis: '{explicit | inferred}',
+      declaredLinks: ['{R id}'],
+      validLinks: ['{R id}'],
+      invalidLinks: ['{R id}'],
+      exception: '{none | unlinked | invalid-link}',
+    }
+oracleLedger:
+  - {
+      id: '{epic key}--R{n}',
+      kind: 'requirement',
+      requirement: '{frozen line text}',
+      parent: '{parent R<m> or source section}',
+      source: '{path:line}',
+      priority: '{P0-P3}',
+      priorityBasis: '{explicit | contributors | inferred}',
+      contributors: ['{criterion id}'],
+    }
+  - {
+      id: '{criterion id}',
+      kind: 'exception',
+      exception: '{unlinked | invalid-link}',
+      requirement: '{criterion name}',
+      source: '{path:line}',
+      priority: '{P0-P3}',
+      priorityBasis: '{explicit | inferred}',
+    }
+```
+
+Steps 3, 4, and 5 and Resume read these ledgers from the frontmatter, so a resumed run reproduces the same rows.
 
 For a story run (`run_scope` is `story`), also write `storyId`, `storyKey`, `ticketRef` and `storyFile` into this frontmatter, as `{tea-contracts}/story-identity.md` section 4 defines them. Other scopes leave them out.
 
@@ -241,10 +355,12 @@ Load next step: `{nextStepFile}`
 - Step completed in full with required outputs
 - Gate target, `run_scope`, and `run_key` resolved before the first save, persisted in the frontmatter, and the output written to the path they name
 - Any pre-existing output for this scope was reported to the user and either resumed or replaced
+- `oracleGranularity` recorded; a requirement-granularity run persisted `criterionLedger` and `oracleLedger`, every row with its `priorityBasis`, before mapping
 
 ### ❌ SYSTEM FAILURE:
 
 - Skipped sequence steps or missing outputs
+- A criterion dropped from the gate because it has no valid link, or a requirement row built from an epic with a duplicate local `R` id
 - Saving progress before run identity is resolved, or writing to an output path that carries no run identity
 - Appending this run's progress to an output left by a previous run, or reading or writing another scope's output
   **Master Rule:** Skipping steps is FORBIDDEN.

@@ -1454,6 +1454,527 @@ async function runTests() {
     assert(false, 'story identity contract and TEA migration-2 validate', error.message);
   }
 
+  // Trace measures a v7 epic against its requirement spine: one gate row per `R<n>` line, criteria
+  // aggregated beneath it, link exceptions kept in the gate, live evidence resolved through the alias
+  // map the CLI shares, and a checkpoint from before the change resumed as a criterion run.
+  try {
+    const read = (file) => fs.readFile(path.join(projectRoot, file), 'utf8');
+    const traceStep = (name) => read(`skills/bmad-tea-trace/steps-c/${name}`);
+    const contract = await read('skills/bmod-tea/contracts/story-identity.md');
+    const [load, resume, discover, map, gaps, gate, template, checklist] = await Promise.all([
+      traceStep('step-01-load-context.md'),
+      traceStep('step-01b-resume.md'),
+      traceStep('step-02-discover-tests.md'),
+      traceStep('step-03-map-criteria.md'),
+      traceStep('step-04-analyze-gaps.md'),
+      traceStep('step-05-gate-decision.md'),
+      read('skills/bmad-tea-trace/trace-template.md'),
+      read('skills/bmad-tea-trace/checklist.md'),
+    ]);
+    const holds = (label, text, markers) => {
+      for (const marker of markers) assert(text.includes(marker), `${label} states: ${marker}`);
+    };
+    // Slice from a start marker to the first `end` after it, inclusive, so a block of a step's code can run here.
+    const codeFrom = (text, start, end) => {
+      const from = text.indexOf(start);
+      const to = from === -1 ? -1 : text.indexOf(end, from);
+      if (from === -1 || to === -1) throw new Error(`step code from "${start}" to "${end}" not found`);
+      return text.slice(from, to + end.length);
+    };
+
+    // AC1: the switch, and a checkpoint with no granularity stays a criterion run.
+    holds('trace step 1', load, [
+      'A fresh run uses the requirement oracle and records `oracleGranularity: requirements` only when both hold',
+      "That epic's file has at least one Requirements line of the form `R<n> (<parent or source>): <line>`",
+      'Such a run also records `coverageBasis: acceptance_criteria` and `oracleResolutionMode: formal_requirements`.',
+      'a story, a release, a hotfix, the system, a v6 epic, and a v7 epic whose file has no `R<n>` line',
+      'A checkpoint with no `oracleGranularity` is a criterion-oracle run and resumes as one, with its rows and evidence unchanged',
+      "oracleGranularity: '{criteria | requirements}'",
+    ]);
+    holds('trace resume', resume, [
+      'A checkpoint with no `oracleGranularity` is a criterion-oracle run and resumes as one',
+      'Resume never re-decides granularity; only a fresh run adopts requirement granularity.',
+    ]);
+    // AC2: the epic key and its run key, never slugged.
+    holds('story identity contract', contract, [
+      '`epic_key`, for a workflow scoped to a whole v7 epic: `<initiative>--e<epic id>`, for example `shop--e1`',
+      '`<initiative>--<epic folder>`, for example `shop--epic-loyalty`',
+      "An epic entry's `story_key` is its epic's key followed by `-s<entry id>`.",
+    ]);
+    holds('trace step 1', load, [
+      '`epic-{epic_key}`: one v7 epic, for example `epic-shop--e1`',
+      'The epic key is used as written; never slug it, because slugging collapses its `--`.',
+      '`epic-{epic_num}`: one v6 epic.',
+    ]);
+    // AC3: two ledgers, every disposition, and the duplicate halt.
+    holds('trace step 1', load, [
+      '`id`: `<story key>--<localId>`, for example `shop--e1-s2--AC-1`.',
+      "`declaredLinks`: the `R` ids the criterion names. For a `verify`-only story's single criterion, the story's `covers`: the pulled leaf's frontmatter `covers` once the story has a leaf, else the entry's.",
+      '`exception`: `unlinked` when `declaredLinks` is empty; `invalid-link` when `invalidLinks` is not empty, even when `validLinks` is not; `none` otherwise.',
+      'A criterion contributes to every requirement in its `validLinks`.',
+      '`id`: `<epic key>--R<n>`, for example `shop--e1--R1`.',
+      'Then write one row per `criterionLedger` record whose `exception` is not `none`:',
+      'Two `R` lines with the same local id in one epic **halt** the run before mapping. Name the id and both source `path:line` locations',
+      // AC4: priorities and their basis, recorded before mapping.
+      'A requirement row takes the explicit priority its `R` line states (`explicit`); else the highest priority among its contributors (`contributors`); else, with no contributors, one inferred from the requirement text and epic context',
+      "An exception row copies its criterion's `priority` and `priorityBasis` unchanged.",
+      'A requirement row with at least one contributor and no explicit priority always records `contributors`; `inferred` is recorded only when its `contributors` list is empty.',
+      "the row's priority is the highest `priority` recorded on the `criterionLedger` records its `contributors` list",
+      // F1/F5 support: every field the CLI reconciles is persisted on each criterion.
+      "- `source`: the `path:line` where the criterion starts: the line holding a numbered criterion's bold name, a plan criterion's first line, or the `verify` text.",
+      'For a numbered criterion that is its name line (the bold name and the `R` ids it names) followed by every line beneath it',
+      '`priority` and `priorityBasis`: by section E. Every record carries both.',
+      "priorityBasis: '{explicit | inferred}'",
+      "localId: '{localId}'",
+      "story: '{story key}'",
+      "declaredLinks: ['{R id}']",
+      "exception: '{none | unlinked | invalid-link}'",
+    ]);
+    // AC5: aggregation, completeness, and evidence staying with criteria.
+    holds('trace step 3', map, [
+      "A behavior no contributor states goes into `missingBehaviors` in the requirement line's own words.",
+      'it never maps to a requirement row, and it never marks a requirement FULL on its own',
+      'A requirement row with no contributors is NONE, and its gaps read "no story covers it".',
+      'A UNIT-ONLY or INTEGRATION-ONLY contributor counts as not FULL.',
+    ]);
+    const requirementCoverage = new Function(`${codeFrom(map, 'const requirementCoverage = ', '\n};')}\nreturn requirementCoverage;`)();
+    const rows = (...statuses) => statuses.map((coverage) => ({ coverage }));
+    for (const [linked, missing, expected] of [
+      [rows(), [], 'NONE'],
+      [rows('NONE', 'NONE'), [], 'NONE'],
+      [rows('FULL', 'FULL'), [], 'FULL'],
+      [rows('FULL', 'FULL'), ['recovery after a declined payment'], 'PARTIAL'],
+      [rows('FULL', 'NONE'), [], 'PARTIAL'],
+      [rows('FULL', 'UNIT-ONLY'), [], 'PARTIAL'],
+      [rows('INTEGRATION-ONLY'), [], 'PARTIAL'],
+    ]) {
+      const actual = requirementCoverage(linked, missing);
+      assert(
+        actual === expected,
+        `trace step 3 aggregates [${linked.map((row) => row.coverage).join(', ')}] with ${missing.length} missing behavior(s) to ${expected}`,
+        `got ${actual}`,
+      );
+    }
+
+    // AC6: the alias map, run from Step 3's own code and compared with the CLI's map.
+    holds('trace step 3', map, [
+      'Normalize every record to its canonical id **before** failure grouping, contradiction checks, evidence attachment, and disposition counts',
+      'Keep the supplied id in `supplied_requirement_id` for diagnostics.',
+    ]);
+    const resolveLive = new Function(
+      'oracleGranularity',
+      'criterionRows',
+      'progressFrontmatter',
+      'liveRecords',
+      `${codeFrom(map, 'const liveAliasMap = new Map();', '  return record;\n});')}\nreturn { liveAliasMap, resolvedLiveRecords };`,
+    );
+    const criteria = ['shop--e1-s1--AC-1', 'shop--e1-s2--AC-1', 'shop--e1-s2--AC-2'].map((id) => ({ id }));
+    const frontmatter = { oracleLedger: [{ id: 'shop--e1--R1', kind: 'requirement' }] };
+    const record = (requirement_id, disposition = 'counted') => ({ id: `${requirement_id}-${disposition}`, requirement_id, disposition });
+    const live = resolveLive('requirements', criteria, frontmatter, [
+      record('shop--e1-s1--AC-1'),
+      record('AC-2'),
+      record('AC-1'),
+      record('shop--e1--R1'),
+      record('R1'),
+      record('AC-9'),
+    ]);
+    const outcome = live.resolvedLiveRecords.map((row) => `${row.supplied_requirement_id}->${row.requirement_id}:${row.disposition}`);
+    assert(
+      JSON.stringify(outcome) ===
+        JSON.stringify([
+          'shop--e1-s1--AC-1->shop--e1-s1--AC-1:counted',
+          'AC-2->shop--e1-s2--AC-2:counted',
+          'AC-1->AC-1:unmatched',
+          'shop--e1--R1->shop--e1--R1:unmatched',
+          'R1->R1:unmatched',
+          'AC-9->AC-9:unmatched',
+        ]),
+      'trace step 3 resolves qualified and unique local ids to their criterion and leaves ambiguous, requirement-row and unknown ids unmatched',
+      outcome.join(', '),
+    );
+    assert(
+      /carried by 2 criteria/.test(live.resolvedLiveRecords[2].unmatched_reason) &&
+        /names a requirement row/.test(live.resolvedLiveRecords[3].unmatched_reason) &&
+        /names a requirement row/.test(live.resolvedLiveRecords[4].unmatched_reason),
+      'trace step 3 gives each unmatched record the reason its id failed',
+    );
+    for (const [pass, fail] of [
+      ['shop--e1-s2--AC-2', 'AC-2'],
+      ['AC-2', 'shop--e1-s2--AC-2'],
+    ]) {
+      const [counted] = resolveLive('requirements', criteria, frontmatter, [record(pass), record(fail, 'fail')]).resolvedLiveRecords;
+      assert(
+        counted.disposition === 'contradicted',
+        `trace step 3 lets a fail spelled ${fail} contradict a pass spelled ${pass}`,
+        counted.disposition,
+      );
+    }
+    const criterionRun = resolveLive('criteria', [{ id: 'AC-1' }], {}, [record('AC-1'), record('AC-9')]).resolvedLiveRecords;
+    assert(
+      criterionRun[0].disposition === 'counted' && criterionRun[1].disposition === 'unmatched',
+      'trace step 3 keeps a criterion-oracle run on its row ids alone',
+    );
+    const { liveAliasMap: cliAliasMap } = require('../cli/lib/trace-live');
+    assert(typeof cliAliasMap === 'function', 'the CLI exports the live alias map Trace Step 3 shares');
+    if (typeof cliAliasMap === 'function') {
+      const cli = cliAliasMap(
+        criteria.map((row) => row.id),
+        ['shop--e1--R1'],
+      );
+      const ids = ['shop--e1-s1--AC-1', 'shop--e1-s2--AC-1', 'AC-1', 'AC-2', 'shop--e1--R1', 'R1', 'AC-9'];
+      const disagree = ids.filter((id) => (cli.get(id)?.id ?? null) !== (live.liveAliasMap.get(id)?.id ?? null));
+      assert(disagree.length === 0, 'trace step 3 and the CLI resolve every live id to the same criterion', disagree.join(', '));
+    }
+
+    // AC6: live-only, derived the same way in Step 4 and Step 5 for every non-NONE gate row.
+    const step4LiveOnlyCount = new Function(
+      'traceabilityMatrix',
+      'coverageEligibleStatuses',
+      `${codeFrom(gaps, 'const isActiveTest = (test) => {', '\n  return isLiveOnlyTestSet(req.tests);\n});')}\nreturn liveOnlyRequirements.length;`,
+    );
+    const step4LiveOnly = (gateRows) => step4LiveOnlyCount(gateRows, new Set(['FULL', 'PARTIAL', 'UNIT-ONLY', 'INTEGRATION-ONLY']));
+    const step5LiveOnlyCount = new Function(
+      'coverageMatrix',
+      `${codeFrom(gate, 'const liveCoverageEligible = new Set(', '\n}).length;')}\nreturn derivedLiveOnlyRequirements;`,
+    );
+    const step5LiveOnly = (gateRows) => step5LiveOnlyCount({ requirements: gateRows });
+    const liveTest = { id: 'L', level: 'live', status: 'active' };
+    const staticTest = { id: 'S', level: 'api', status: 'active' };
+    const seededRows = [
+      // FULL requirement with one static and one live-only contributor: capped.
+      {
+        kind: 'requirement',
+        coverage: 'FULL',
+        contributors: [
+          { coverage: 'FULL', tests: [staticTest] },
+          { coverage: 'FULL', tests: [liveTest] },
+        ],
+      },
+      // PARTIAL requirement resting on a live-only contributor: capped.
+      { kind: 'requirement', coverage: 'PARTIAL', contributors: [{ coverage: 'PARTIAL', tests: [liveTest] }] },
+      // Static contributors only: not capped.
+      { kind: 'requirement', coverage: 'FULL', contributors: [{ coverage: 'FULL', tests: [staticTest] }] },
+      // Live-only exception row: capped.
+      { kind: 'exception', coverage: 'FULL', tests: [liveTest] },
+      // NONE requirement: never live-only.
+      { kind: 'requirement', coverage: 'NONE', contributors: [] },
+      // A criterion-oracle row keeps today's rule.
+      { coverage: 'FULL', tests: [liveTest] },
+    ];
+    assert(
+      step4LiveOnly(seededRows) === 4,
+      'trace step 4 derives a live-only gate row from any live-only contributor or its own tests',
+      `got ${step4LiveOnly(seededRows)}`,
+    );
+    assert(
+      step5LiveOnly(seededRows) === 4,
+      'trace step 5 derives live-only gate rows again by the same rule',
+      `got ${step5LiveOnly(seededRows)}`,
+    );
+
+    // AC6, AC9: gate rows built by Step 3's own construction code, then run through both live-only
+    // derivations and Step 5's published `oracle.rows`, with no field seeded by hand.
+    const buildGateRows = new Function(
+      `${codeFrom(map, 'const requirementCoverage = ', 'coverage: requirementCoverage(contributors, missingBehaviors),\n    };\n  });\n};')}\nreturn buildGateRows;`,
+    )();
+    const summaryOracleRows = new Function(
+      `${codeFrom(gate, 'const summaryOracleRows = (gateRows) =>', '      })),\n    };\n  });')}\nreturn summaryOracleRows;`,
+    )();
+    const criterionRow = (id, coverage, tests) => ({ id, story: id.slice(0, id.lastIndexOf('--')), coverage, tests });
+    const flagged = (flag) => ({ id: `S-${flag}`, level: 'api', status: 'active', file: 'tests/pay.spec.ts', line: 7, [flag]: true });
+    const builtCriteria = [
+      criterionRow('shop--e1-s1--AC-1', 'FULL', [staticTest]),
+      criterionRow('shop--e1-s2--AC-1', 'FULL', [liveTest]),
+      criterionRow('shop--e1-s2--AC-2', 'FULL', [staticTest]),
+      criterionRow('shop--e1-s3--AC-1', 'FULL', [liveTest, flagged('skipped')]),
+      criterionRow('shop--e1-s3--AC-2', 'FULL', [liveTest, flagged('pending')]),
+      criterionRow('shop--e1-s3--AC-3', 'FULL', [liveTest, flagged('fixme')]),
+      criterionRow('shop--e1-s4--AC-1', 'PARTIAL', [liveTest]),
+    ];
+    const requirementLedgerRow = (n, contributors, priorityBasis = 'contributors') => ({
+      id: `shop--e1--R${n}`,
+      kind: 'requirement',
+      requirement: `Requirement ${n}`,
+      parent: n === 1 ? null : 'parent R1',
+      source: `epic.md:${10 + n}`,
+      priority: 'P1',
+      priorityBasis,
+      contributors,
+    });
+    const builtLedger = [
+      requirementLedgerRow(1, ['shop--e1-s1--AC-1', 'shop--e1-s2--AC-1']),
+      requirementLedgerRow(2, ['shop--e1-s1--AC-1']),
+      requirementLedgerRow(3, [], 'inferred'),
+      requirementLedgerRow(4, ['shop--e1-s3--AC-1']),
+      requirementLedgerRow(5, ['shop--e1-s3--AC-2']),
+      requirementLedgerRow(6, ['shop--e1-s3--AC-3']),
+      // A ledger row without `kind` still builds a requirement row.
+      { ...requirementLedgerRow(7, ['shop--e1-s1--AC-1']), kind: undefined },
+      {
+        id: 'shop--e1-s2--AC-2',
+        kind: 'exception',
+        exception: 'unlinked',
+        requirement: 'AC-2 text',
+        source: 's2.md:9',
+        priority: 'P0',
+        priorityBasis: 'explicit',
+      },
+      {
+        id: 'shop--e1-s4--AC-1',
+        kind: 'exception',
+        exception: 'invalid-link',
+        requirement: 'AC-1 text',
+        source: 's4.md:5',
+        priority: 'P2',
+        priorityBasis: 'inferred',
+      },
+    ];
+    const built = buildGateRows(builtLedger, builtCriteria, { 'shop--e1--R2': ['recovery after a declined payment'] });
+    assert(
+      JSON.stringify(built.map((row) => `${row.id}:${row.kind}:${row.coverage}`)) ===
+        JSON.stringify([
+          'shop--e1--R1:requirement:FULL',
+          'shop--e1--R2:requirement:PARTIAL',
+          'shop--e1--R3:requirement:NONE',
+          'shop--e1--R4:requirement:FULL',
+          'shop--e1--R5:requirement:FULL',
+          'shop--e1--R6:requirement:FULL',
+          'shop--e1--R7:requirement:FULL',
+          'shop--e1-s2--AC-2:exception:FULL',
+          'shop--e1-s4--AC-1:exception:PARTIAL',
+        ]),
+      'trace step 3 builds one gate row per oracleLedger row, each with its kind and aggregated coverage',
+      built.map((row) => `${row.id}:${row.kind}:${row.coverage}`).join(', '),
+    );
+    const builtTest = (requirementId, testId) =>
+      built.find((row) => row.id === requirementId).contributors[0].tests.find((test) => test.id === testId);
+    for (const [requirementId, flag] of [
+      ['shop--e1--R4', 'skipped'],
+      ['shop--e1--R5', 'pending'],
+      ['shop--e1--R6', 'fixme'],
+    ]) {
+      assert(
+        builtTest(requirementId, `S-${flag}`)?.[flag] === true,
+        `trace step 3 keeps a contributor test's ${flag} flag through row construction`,
+      );
+    }
+    // R1, R4, R5, R6, and the live-only invalid-link row; R2, R7, and the unlinked row rest on static tests.
+    assert(
+      step4LiveOnly(built) === 5,
+      'trace step 4 caps every constructed row resting on a live-only criterion',
+      `got ${step4LiveOnly(built)}`,
+    );
+    assert(
+      step5LiveOnly(built) === 5,
+      'trace step 5 caps every constructed row resting on a live-only criterion',
+      `got ${step5LiveOnly(built)}`,
+    );
+    const withoutKind = built.map(({ kind, ...row }) => (row.contributors ? row : { kind, ...row }));
+    assert(
+      step4LiveOnly(withoutKind) === 5 && step5LiveOnly(withoutKind) === 5,
+      'trace steps 4 and 5 treat a row with contributors as a requirement row when its kind is lost',
+    );
+    for (const flag of ['skipped', 'pending', 'fixme']) {
+      const flaggedCriterion = criterionRow('shop--e1-s9--AC-1', 'FULL', [liveTest, flagged(flag)]);
+      const unflagged = criterionRow('shop--e1-s9--AC-1', 'FULL', [liveTest, { ...flagged(flag), [flag]: false }]);
+      const ledger = [requirementLedgerRow(1, ['shop--e1-s9--AC-1'])];
+      const capped = buildGateRows(ledger, [flaggedCriterion]);
+      const control = buildGateRows(ledger, [unflagged]);
+      assert(
+        step4LiveOnly(capped) === 1 && step5LiveOnly(capped) === 1,
+        `trace steps 4 and 5 keep the live-only cap when the contributor's static test is ${flag}`,
+      );
+      assert(
+        step4LiveOnly(control) === 0 && step5LiveOnly(control) === 0,
+        `trace steps 4 and 5 lift the cap when the same static test is not ${flag}`,
+      );
+    }
+
+    // AC9: the published summary carries every gate row in ledger order.
+    holds('trace step 5', gate, [
+      "...(oracleGranularity === 'requirements' ? { rows: summaryOracleRows(coverageMatrix.requirements || []) } : {}),",
+    ]);
+    const published = summaryOracleRows(built);
+    assert(
+      JSON.stringify(published.map((row) => row.id)) === JSON.stringify(builtLedger.map((row) => row.id)),
+      'trace step 5 publishes one oracle row per oracleLedger row, in ledger order',
+    );
+    assert(
+      JSON.stringify(published[0]) ===
+        JSON.stringify({
+          id: 'shop--e1--R1',
+          kind: 'requirement',
+          priority: 'P1',
+          priority_basis: 'contributors',
+          coverage: 'FULL',
+          parent: null,
+          missing_behaviors: [],
+          contributors: [
+            { id: 'shop--e1-s1--AC-1', story: 'shop--e1-s1', coverage: 'FULL' },
+            { id: 'shop--e1-s2--AC-1', story: 'shop--e1-s2', coverage: 'FULL' },
+          ],
+        }),
+      'trace step 5 publishes a requirement row with its parent, missing behaviors, and contributors',
+      JSON.stringify(published[0]),
+    );
+    assert(
+      published[1].parent === 'parent R1' &&
+        JSON.stringify(published[1].missing_behaviors) === JSON.stringify(['recovery after a declined payment']) &&
+        published[1].coverage === 'PARTIAL' &&
+        published[2].priority_basis === 'inferred' &&
+        published[2].contributors.length === 0,
+      'trace step 5 publishes missing behaviors, parents, and an uncovered requirement unchanged',
+    );
+    assert(
+      JSON.stringify(published[8]) ===
+        JSON.stringify({
+          id: 'shop--e1-s4--AC-1',
+          kind: 'exception',
+          priority: 'P2',
+          priority_basis: 'inferred',
+          coverage: 'PARTIAL',
+          exception: 'invalid-link',
+        }),
+      'trace step 5 publishes an exception row with its exception and no requirement fields',
+      JSON.stringify(published[8]),
+    );
+
+    // AC7: the gate counts oracleLedger rows; test and level counts come from criterion rows.
+    holds('trace step 4', gaps, [
+      'Statistics, priority buckets, and thresholds are computed over `traceabilityMatrix`, the `oracleLedger` rows.',
+      'const totalRequirements = traceabilityMatrix.length;',
+      "const oracleGranularity = ledgerFrontmatter.oracleGranularity === 'requirements' ? 'requirements' : 'criteria';",
+      'granularity: oracleGranularity,',
+      'criteria: criterionRows,',
+    ]);
+    assert(
+      (gaps.match(/\(criterionRows \|\| \[\]\)\.forEach\(\(req\) => \{/g) || []).length === 2,
+      'trace step 4 builds unique tests and per-level criteria_covered from criterionRows',
+    );
+    holds('trace step 5', gate, [
+      'deriveActiveTestCasesFromRequirements(criterionRows)',
+      '  criterionRows.forEach((req) => {',
+      'granularity: oracleGranularity, // `requirements` for a v7 epic',
+      "const oracleGranularity = coverageMatrix.oracle?.granularity === 'requirements' ? 'requirements' : 'criteria';",
+    ]);
+
+    // AC9: the matrix lists exactly the oracleLedger rows in the CLI's format, contributors in their own table.
+    const tableHeader = (cells) => new RegExp(String.raw`^\|${cells.map((cell) => ` *${cell} *`).join(String.raw`\|`)}\|$`, 'm');
+    assert(tableHeader(['ID', 'Requirement', 'Priority', 'Coverage']).test(template), 'the trace template renders the gate table');
+    assert(
+      tableHeader(['Contributor', 'Story', 'Status', 'Tests']).test(template),
+      'the trace template heads each contributors table `| Contributor | Story | Status | Tests |`',
+    );
+    holds('the trace template', template, [
+      '### {REQUIREMENT_ROW_ID} ({PRIORITY}): {REQUIREMENT_TEXT}',
+      '### {EXCEPTION_CRITERION_ID} ({PRIORITY}): {CRITERION_NAME}',
+      '### Invalid and Unlinked Criteria',
+      "oracleGranularity: ''",
+      'criterionLedger: []',
+    ]);
+    // Live runs: a requirement no story covers has an empty contributors list, so it needs no table.
+    holds('the trace template', template, [
+      "When the row's `contributors` list is empty, write `- **Contributors:** none` and omit the table.",
+    ]);
+    holds('trace step 5', gate, ['a contributors table when it has contributors']);
+    holds('the trace checklist', checklist, [
+      'a requirement with no contributors reads `**Contributors:** none` and has no table',
+      'a contributors table headed exactly `| Contributor | Story | Status | Tests |`',
+      '`oracle.granularity` present in the summary and the Phase 1 matrix',
+    ]);
+
+    // Live runs: a gate row names a numbered criterion by its bold name alone, and every detail heading
+    // repeats the row's requirement after a lone `(P<n>)`, so the ledger, table cell and heading agree.
+    holds('trace step 1', load, [
+      "the row's `requirement` is the bold name alone, `Order number shown`, without the parenthesised `R` ids or priority after it",
+      "For a `verify`-only story's single criterion it is the `verify` text.",
+      "- `name`: the criterion's name. For a numbered criterion that is its bold name alone, without the parenthesised `R` ids or priority after it",
+      "- `text`: the criterion's frozen full text as the source states it with the list marker removed.",
+      "- `requirement`: the criterion's `name`. A numbered criterion's row reads `Form remembers address`, its bold name alone.",
+      "name: '{criterion name}'",
+      "text: '{frozen full criterion text}'",
+    ]);
+    // The exception row's YAML shape carries the name, never the full text.
+    const exceptionStart = load.indexOf("kind: 'exception'");
+    const exceptionShape = load.slice(exceptionStart, load.indexOf('\n    }', exceptionStart));
+    assert(
+      /requirement: '\{criterion name\}'/.test(exceptionShape) && !/full/.test(exceptionShape),
+      "trace step 1's exception row shape records the criterion's name as its requirement",
+    );
+    holds('trace step 2', discover, ['its `name`, and its full `text`']);
+    holds('trace step 3', map, ["copy each record's `name` and full `text`, and classify coverage against the full `text`"]);
+    holds('trace step 5', gate, [
+      "Each detail heading is `<id> (P<n>): <requirement>`, where `<requirement>` repeats the `oracleLedger` row's `requirement` exactly and `(P<n>)` is the only annotation",
+    ]);
+    holds('the trace template', template, [
+      '#### {CRITERION_ID} ({PRIORITY}): {REQUIREMENT_TEXT}',
+      "An exception row's `requirement` is its criterion's `name`, so its cell and heading read `Form remembers address`",
+    ]);
+    holds('the trace checklist', checklist, [
+      'records that bold name alone as its `requirement`, without the parenthesised `R` ids or priority (`Order number shown`)',
+      'Every detail heading reads `<id> (P<n>): <requirement>`',
+    ]);
+    // Every criterion and gate-row detail heading the template and worked example show uses the lone `(P<n>)` form.
+    const example = await read('skills/bmad-tea-trace/resources/traceability-matrix.example.md');
+    for (const [label, text] of [
+      ['the trace template', template],
+      ['the worked example matrix', example],
+    ]) {
+      const details = text.split('\n').filter((line) => /^#{3,4} (?:Example: )?(?:\{[A-Z_]*ID\}|AC-\d+)\b/.test(line));
+      assert(details.length > 0, `${label} shows criterion detail headings`);
+      for (const line of details)
+        assert(
+          /^#{3,4} (?:Example: )?(?:\{[A-Z_]*ID\}|AC-\d+) \((?:\{PRIORITY\}|P[0-3])\): [^()]+$/.test(line),
+          `${label} heading uses \`<id> (P<n>): <text>\` with no other annotation: ${line}`,
+        );
+    }
+
+    // AC10: persisted ledgers, and the pre-change checkpoint found, checked and resumed under its own identity.
+    holds('trace step 1', load, [
+      'criterionLedger:',
+      "priorityBasis: '{explicit | contributors | inferred}'",
+      "contributors: ['{criterion id}']",
+    ]);
+    holds('trace step 3', map, [
+      'fenced ` ```json ` block titled `Requirement Aggregation`',
+      'The block is required, and it stays in the final document: Step 5 carries it into the report unchanged.',
+    ]);
+    // Round 2, F2: Step 4 keeps the block and Step 5's body replacement carries it into the final report.
+    holds('trace step 4', gaps, ["keep Step 3's `Requirement Aggregation` block exactly as Step 3 saved it"]);
+    holds('trace step 5', gate, ["Step 3's `Requirement Aggregation` block is the one part of the working notes the report keeps."]);
+    holds('trace template', template, [
+      "Step 5's save appends that block, heading and ` ```json ` block unchanged, once at the end of the report",
+    ]);
+    const keptBlock = new Function(
+      'existingDoc',
+      'oracleGranularity',
+      `${codeFrom(gate, 'const aggregationBlock =', '\n    : null;')}\nreturn aggregationBlock;`,
+    );
+    const block = '### Requirement Aggregation\n\n```json\n{ "criterionMatrix": [], "traceabilityMatrix": [] }\n```';
+    const fence = '```';
+    const workingNotes = `---\nrunKey: epic-shop--e1\n---\n\n## Step 3\n\n${block}\n\n## Step 4\n\n${fence}json\n{}\n${fence}\n`;
+    assert(keptBlock(workingNotes, 'requirements') === block, 'trace step 5 carries the Step 3 Requirement Aggregation block, and only it');
+    assert(keptBlock(workingNotes, 'criteria') === null, 'trace step 5 keeps no aggregation block in a criterion-oracle run');
+    // Round 2, F5: Step 1 names the native shapes the CLI captures criteria from.
+    holds('trace step 1', load, [
+      "The ticket's numbered criteria are a story leaf's under `## Requirements` and a bug or spike leaf's under `## Acceptance Criteria`.",
+      "A plan's acceptance criteria are the list under its Acceptance Criteria heading, or the list after the bold `**Acceptance Criteria:**` label in its `## Tasks & Acceptance` section.",
+    ]);
+    holds('trace resume', resume, [
+      '`{test_artifacts}/trace/traceability-matrix-epic-<epic id>.md`',
+      "The file is accepted only when its saved target names this epic: its `oracleSources` or `inputDocuments` cite a file inside this epic's folder",
+      'An epic number or a similar title alone is never evidence.',
+      "When the file names another initiative's epic, or `{outputFile}` for the new key and an accepted pre-change file are both candidates",
+      'A selected pre-change file keeps its stored `runScope`, `runKey`, and target for the rest of the run',
+      'It has no `oracleGranularity`, so it resumes as a criterion-oracle run.',
+      'A pre-change v7 epic file that section 1 accepted passes this check through its saved target and keeps its stored `runKey`.',
+    ]);
+    holds('trace step 2', discover, ['a requirement row id is never a search target']);
+  } catch (error) {
+    assert(false, 'trace requirement oracle contract validates', error.message);
+  }
+
   // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside
   // the skill directory it is working on; neither belongs in a published
   // package. `package.json`'s `files` array lists `skills` as a directory entry,

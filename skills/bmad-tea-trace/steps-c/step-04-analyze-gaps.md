@@ -120,6 +120,23 @@ Resolution precedence:
 
 Before classifying gaps, compare every matrix item's ID and priority with Step 1's persisted oracle ledger. Require exactly one matrix item per oracle item and unchanged priorities. Correct any drift from the ledger before using the matrix in Sections 1 and 3. Repeat this check when resuming a saved mapping.
 
+In a requirement-granularity run, `traceabilityMatrix` is the gate rows Step 3 section 1c aggregated, and its oracle ledger is the `oracleLedger`: one gate row per requirement row and per exception row, so invalid-link and unlinked criteria stay in the gate. Reconcile `criterionMatrix` against the `criterionLedger` the same way, one criterion row per record. A run resumed here reads both matrices from Step 3's `Requirement Aggregation` block.
+
+```javascript
+const ledgerDoc = fs.readFileSync('{outputFile}', 'utf8');
+const ledgerFrontmatter = yaml.parse(ledgerDoc.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || '') || {};
+// A checkpoint with no `oracleGranularity` is a criterion-oracle run, with its rows unchanged.
+const oracleGranularity = ledgerFrontmatter.oracleGranularity === 'requirements' ? 'requirements' : 'criteria';
+// Gate statistics and gaps read `traceabilityMatrix`, the oracleLedger rows. Test counts and per-level
+// `criteria_covered` read `criterionRows`, so a criterion or test serving several requirements counts once.
+const criterionRows =
+  oracleGranularity === 'requirements'
+    ? runtime.getCriterionMatrix?.() || criterionMatrix || progressCriterionMatrix || []
+    : traceabilityMatrix;
+```
+
+Section 0b runs before any worker starts and hands `traceabilityMatrix`, `criterionRows`, and `oracleGranularity` to each one.
+
 ### 1. Gap Analysis
 
 **Identify uncovered requirements:**
@@ -210,9 +227,9 @@ const isActiveTest = (test) => {
   if (['skipped', 'pending', 'fixme'].includes(status)) return false;
   return test.skipped !== true && test.pending !== true && test.fixme !== true;
 };
-const liveOnlyRequirements = traceabilityMatrix.filter((req) => {
-  if (!coverageEligibleStatuses.has(req.coverage)) return false;
-  const activeTests = (req.tests || []).filter(isActiveTest);
+// A criterion is live-only when every active test mapped to it is live.
+const isLiveOnlyTestSet = (tests) => {
+  const activeTests = (tests || []).filter(isActiveTest);
   return (
     activeTests.length > 0 &&
     activeTests.every(
@@ -222,6 +239,20 @@ const liveOnlyRequirements = traceabilityMatrix.filter((req) => {
           .toLowerCase() === 'live',
     )
   );
+};
+// A gate row is live-only when its status is not NONE and it depends on a live-only criterion. A
+// criterion row and an exception row depend on their own tests. A requirement row depends on every
+// contributor whose status is not NONE, so one live-only contributor beside static ones still caps the
+// gate: checking the requirement's combined tests would find static evidence and switch the cap off.
+const liveOnlyRequirements = traceabilityMatrix.filter((req) => {
+  if (!coverageEligibleStatuses.has(req.coverage)) return false;
+  // A row with `contributors` is a requirement row even when an older or hand-edited matrix lost its `kind`.
+  if (req.kind === 'requirement' || Array.isArray(req.contributors)) {
+    return (req.contributors || []).some(
+      (contributor) => coverageEligibleStatuses.has(contributor.coverage) && isLiveOnlyTestSet(contributor.tests),
+    );
+  }
+  return isLiveOnlyTestSet(req.tests);
 });
 
 // A dropped live result is worse than a missing one: someone believes that requirement was verified.
@@ -238,7 +269,8 @@ const liveBlockers = liveRecordsForRollup
       contradicted: `Live result passed, but the same file records a failure for requirement "${record.requirement_id}". Replace the record rather than appending a retry.`,
       blocked: 'Live verification was blocked before it could reach a verdict.',
       skipped: 'Live verification was skipped.',
-      unmatched: `Live result names requirement "${record.requirement_id}", which is not in the resolved coverage oracle.`,
+      // Step 3 section 1b keeps the producer's spelling in `supplied_requirement_id` and the alias map's reason.
+      unmatched: `Live result names requirement "${record.supplied_requirement_id || record.requirement_id}": ${record.unmatched_reason || 'it is not in the resolved coverage oracle'}.`,
       invalid: `Live result is not usable: ${record.invalid_reason || 'missing id, requirement_id, source_sha, or a recognized status'}.`,
     }[record.disposition],
     test_file: '',
@@ -475,6 +507,8 @@ if (oracleResolutionMode === 'synthetic_source') {
 
 ### 4. Calculate Coverage Statistics
 
+Statistics, priority buckets, and thresholds are computed over `traceabilityMatrix`, the `oracleLedger` rows. In a requirement-granularity run that includes every invalid-link and unlinked exception row, so those criteria stay in the denominator. Thresholds and status meanings are unchanged.
+
 ```javascript
 const totalRequirements = traceabilityMatrix.length;
 const coveredRequirements = traceabilityMatrix.filter((r) => r.coverage === 'FULL' || r.coverage === 'PARTIAL').length;
@@ -505,7 +539,7 @@ const p3CoveragePercentage = safePct(p3Covered, p3Total);
 
 Persist the unique discovered tests in Phase 1 so Step 5 does not need to reconstruct counts from per-requirement mappings.
 
-Every count below is built from `req.tests`, and Step 3 section 1a admits only tests that establish part of their criterion. So `cases` and `by_level.*.tests` count the test cases this trace accepted as evidence, and a test whose name claims a criterion its assertions do not establish is absent from both. Those tests are in `rejectedEvidence`, which is carried into the matrix in section 5 and reported by Step 5.
+Every count below is built from the `tests` of `criterionRows` (section 0b), and Step 3 section 1a admits only tests that establish part of their criterion. In a requirement-granularity run those are the criterion rows, so each criterion and each test is counted once even when it serves several requirements; in a criterion-oracle run they are the matrix rows, exactly as before. So `cases` and `by_level.*.tests` count the test cases this trace accepted as evidence, and a test whose name claims a criterion its assertions do not establish is absent from both. Those tests are in `rejectedEvidence`, which is carried into the matrix in section 5 and reported by Step 5.
 
 ```javascript
 // Declared locally so this section stays self-contained when workers run in parallel.
@@ -531,7 +565,7 @@ const normalizeTestStatus = (test) => {
 };
 
 const uniqueTests = new Map();
-(traceabilityMatrix || []).forEach((req) => {
+(criterionRows || []).forEach((req) => {
   (req.tests || []).forEach((test, index) => {
     // Do NOT use the per-requirement `index` as a fallback — the same test can appear
     // at different indices across requirements, producing spurious duplicate entries.
@@ -568,7 +602,8 @@ const uniqueTests = new Map();
   byLevel[bucket].tests += 1;
 });
 
-(traceabilityMatrix || []).forEach((req) => {
+// One count per covered criterion per level, read from `criterionRows`.
+(criterionRows || []).forEach((req) => {
   if (!coverageEligibleStatuses.has(req.coverage)) return;
   const requirementLevels = new Set(
     (req.tests || []).map((test) => {
@@ -650,9 +685,15 @@ const coverageMatrix = {
     sources: oracleSources,
     external_pointer_status: externalPointerStatus,
     synthetic: oracleResolutionMode === 'synthetic_source',
+    // `requirements` for a v7 epic traced against its requirement spine, `criteria` otherwise (section 0b).
+    granularity: oracleGranularity,
   },
 
-  requirements: traceabilityMatrix, // Full matrix from Step 3
+  // Gate rows from Step 3, in oracleLedger order, each with its `kind` and `priorityBasis`. Requirement rows carry
+  // `parent`, `contributors`, and `missingBehaviors`; Step 5 publishes them as the summary's `oracle.rows`.
+  requirements: traceabilityMatrix,
+  // The criterion rows Step 5 re-derives test counts from. In a criterion-oracle run they are the gate rows.
+  criteria: criterionRows,
 
   coverage_statistics: {
     total_requirements: totalRequirements,
@@ -797,7 +838,7 @@ When `resolvedMode` is `agent-team` or `subagent`, parallelize only dependency-s
 - Worker B: heuristics gap extraction and live evidence rollup (sections 2 and 2b)
 - Worker C: coverage statistics (section 4)
 
-Each worker's sections declare their own constants, so the three are independent. Section 3 (recommendation synthesis) depends on outputs from sections 1, 2, and 2b, so run it only after Workers A and B complete. Section 5 joins section 2b's `liveBlockers` with section 4b's inventory, which is safe because section 5 is the merge point after all workers finish.
+Each worker's sections declare their own constants and read the `traceabilityMatrix`, `criterionRows`, and `oracleGranularity` section 0b handed them, so the three are independent. Section 3 (recommendation synthesis) depends on outputs from sections 1, 2, and 2b, so run it only after Workers A and B complete. Section 5 joins section 2b's `liveBlockers` with section 4b's inventory, which is safe because section 5 is the merge point after all workers finish.
 
 Section 5 remains the deterministic merge point after sections 1-4 are finished.
 
@@ -830,7 +871,8 @@ Update it in place:
 - Add `'step-04-analyze-gaps'` to `stepsCompleted` array (only if not already present)
 - Set `lastStep: 'step-04-analyze-gaps'`
 - Set `lastSaved: '{date}'`
-- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, `targetLabel`, `oracleGranularity`, `oracleLedger`, and `criterionLedger` unchanged
+- In a requirement-granularity run, keep Step 3's `Requirement Aggregation` block exactly as Step 3 saved it. Gap analysis reads the mapping and leaves every criterion status and every `missingBehaviors` list as saved.
 - Append this step's output to the appropriate section of the document. Appending is safe because the file holds only this run's work.
 
 Load next step: `{nextStepFile}`

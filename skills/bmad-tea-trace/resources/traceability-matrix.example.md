@@ -48,7 +48,7 @@ Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY, defin
 
 ### Detailed Mapping
 
-#### AC-1: Administrator schedules a weekly report for their tenant, P0
+#### AC-1 (P0): Administrator schedules a weekly report for their tenant
 
 - **Coverage:** FULL
 - **Tests:**
@@ -56,7 +56,7 @@ Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY, defin
   - `6-API-001`, `tests/api/report-schedules.spec.ts:24`: persists cadence, recipients, timezone, and report type
 - **Recommendation:** None
 
-#### AC-2: Cross-tenant schedule access is denied, P0
+#### AC-2 (P0): Cross-tenant schedule access is denied
 
 - **Coverage:** FULL
 - **Tests:**
@@ -64,21 +64,21 @@ Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY, defin
   - `6-E2E-002`, `tests/e2e/scheduled-report-permissions.spec.ts:20`: hides the schedule editor from a tenant Viewer
 - **Recommendation:** None
 
-#### AC-3: Administrator pauses and resumes a schedule, P1
+#### AC-3 (P1): Administrator pauses and resumes a schedule
 
 - **Coverage:** FULL
 - **Tests:**
   - `6-API-003`, `tests/api/report-schedules.spec.ts:79`: transitions ACTIVE to PAUSED and back without changing recipients
 - **Recommendation:** None
 
-#### AC-4: Invalid or duplicate recipients receive field-level guidance, P1
+#### AC-4 (P1): Invalid or duplicate recipients receive field-level guidance
 
 - **Coverage:** FULL
 - **Tests:**
   - `6-COMP-001`, `tests/component/report-recipient-editor.spec.tsx:42`: validates malformed and duplicate addresses through user-level interaction
 - **Recommendation:** None
 
-#### AC-5: Delivery retries after provider failure and surfaces final failure, P1
+#### AC-5 (P1): Delivery retries after provider failure and surfaces final failure
 
 - **Coverage:** PARTIAL
 - **Tests:**
@@ -86,21 +86,21 @@ Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY, defin
 - **Gap:** No test exhausts the retry budget and proves the schedule history shows a final failed delivery with an actionable reason.
 - **Recommendation:** Add `6-E2E-003` for the exhausted-retry history state and `6-API-006` for the terminal provider response.
 
-#### AC-6: Next delivery respects the selected timezone across daylight-saving changes, P1
+#### AC-6 (P1): Next delivery respects the selected timezone across daylight-saving changes
 
 - **Coverage:** FULL
 - **Tests:**
   - `6-UNIT-001`, `tests/unit/next-report-run.test.ts:15`: checks both spring-forward and fall-back boundaries with a fixed clock
 - **Recommendation:** None
 
-#### AC-7: Schedule changes emit a complete audit event, P1
+#### AC-7 (P1): Schedule changes emit a complete audit event
 
 - **Coverage:** FULL
 - **Tests:**
   - `6-INT-001`, `tests/integration/report-schedule-audit.test.ts:33`: asserts actor, tenant, prior state, new state, and schedule ID
 - **Recommendation:** None
 
-#### AC-8: Administrator can set an optional safe filename prefix, P2
+#### AC-8 (P2): Administrator can set an optional safe filename prefix
 
 - **Coverage:** FULL
 - **Tests:**

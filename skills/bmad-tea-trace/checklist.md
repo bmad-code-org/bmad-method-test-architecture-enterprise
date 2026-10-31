@@ -27,6 +27,12 @@ This checklist covers **two sequential phases**:
 
 - [ ] Story file read successfully (if applicable)
 - [ ] Oracle items extracted or inferred correctly
+- [ ] Each `oracleLedger` row built from a numbered criterion with a bold name records that bold name alone as its `requirement`, without the parenthesised `R` ids or priority (`Order number shown`); a `verify`-only criterion's row records its `verify` text. This holds for criterion-oracle rows and for exception rows alike
+- [ ] `oracleGranularity` recorded: `requirements` only for a fresh run on a v7 epic whose file has at least one `R<n>` Requirements line, `criteria` for every other target; a checkpoint with no `oracleGranularity` resumed as a criterion-oracle run
+- [ ] A v7 epic run keyed `epic-<epic key>` (`epic-shop--e1`), the key never slugged; a v6 epic keeps `epic-<epic_num>`
+- [ ] For a requirement-granularity run: `criterionLedger` holds every criterion the story contract selects for every entry in the epic's `tickets/tickets.toml`, each with `localId`, `story`, its `name` (a numbered criterion's bold name alone, a `verify`-only criterion's `verify` text), its full frozen `text`, a `source` at the line holding its bold name or `verify` text, `priority`, `priorityBasis`, `declaredLinks`, `validLinks`, `invalidLinks`, and `exception`; `oracleLedger` holds one row per `R<n>` line plus one row per criterion whose `exception` is not `none`; every row records `priorityBasis`
+- [ ] A requirement row with no explicit priority and at least one contributor records `priorityBasis: contributors` and the highest contributor priority; `inferred` only when it has no contributors
+- [ ] A duplicate local `R` id halted the run before mapping, naming both source lines
 - [ ] Story ID identified (e.g., 1.3)
 - [ ] Test design loaded (if available): `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` for an epic or for a story's epic (epic number from the story id), or `test-design-architecture.md` and `test-design-qa.md` at system level, falling back to the same names at the legacy root `{test_artifacts}/`
 - [ ] NFR evidence audit loaded (if available), first match of `nfr/nfr-assessment-{run_key}.md`, then for a story `nfr/nfr-assessment-epic-{epic_num}.md`, then `nfr/nfr-assessment-system.md`, then the legacy root `nfr-assessment.md`, with the file used named
@@ -44,6 +50,8 @@ This checklist covers **two sequential phases**:
 - [ ] Each live result classified against the commit under trace (only a fresh `pass` counts as coverage)
 - [ ] `stale`, `unverifiable`, `fail`, `contradicted`, `blocked`, `skipped`, `unmatched`, and `invalid` live results raised as blockers with reasons
 - [ ] `live_only` derived from each requirement's active mapped tests, never read from a flag an earlier step was asked to set
+- [ ] In a requirement-granularity run, a gate row whose status is not NONE is live-only when it depends on a live-only criterion: an exception row on its own criterion, a requirement row on any contributor whose status is not NONE
+- [ ] Every live record resolved through the shared alias map before failure grouping: a qualified criterion id to itself, a unique local id to its criterion, an ambiguous local id or a requirement row id `unmatched` with its reason
 - [ ] Test metadata extracted:
   - [ ] Test IDs (e.g., 1.3-E2E-001)
   - [ ] Describe/context blocks
@@ -84,6 +92,9 @@ This section is the definition of the five coverage statuses. Every other file i
 - [ ] **UNIT-ONLY** and **INTEGRATION-ONLY** applied only where the missing level is what leaves the criterion unestablished. A criterion an appropriate single level establishes in full is **FULL**, and `resources/traceability-matrix.example.md` classifies two single-level criteria that way
 - [ ] Classification justifications provided
 - [ ] Edge cases considered in FULL vs PARTIAL determination
+- [ ] In a requirement-granularity run, each requirement row is FULL only when it has at least one contributor, every contributor is FULL, and the contributors' stated behaviors together establish every behavior the requirement line states (the "every stated scenario" rule above, applied to the requirement text). A behavior no contributor states is listed in `missingBehaviors` and keeps the row below FULL
+- [ ] A requirement row is NONE when it has no contributor ("no story covers it") or every contributor is NONE, and PARTIAL otherwise; UNIT-ONLY and INTEGRATION-ONLY contributors count as not FULL and are listed in its gaps
+- [ ] Every gate row built by Step 3 section 1c records its `kind`, and every contributor test keeps its `skipped`, `pending`, and `fixme` flags
 
 ---
 
@@ -127,6 +138,7 @@ This section is the definition of the five coverage statuses. Every other file i
 ## Coverage Metrics
 
 - [ ] Overall coverage percentage calculated (FULL coverage / total criteria)
+- [ ] In a requirement-granularity run, statistics, priority buckets, and thresholds computed over the `oracleLedger` rows, invalid-link and unlinked exception rows included; unique test counts and per-level `criteria_covered` computed from the criterion rows, each criterion and test counted once
 - [ ] P0 coverage percentage calculated
 - [ ] P1 coverage percentage calculated
 - [ ] P2 coverage percentage calculated (if applicable)
@@ -176,6 +188,11 @@ Knowledge fragments referenced:
 - [ ] Gap analysis section included
 - [ ] Quality assessment section included
 - [ ] Recommendations section included
+- [ ] Every detail heading reads `<id> (P<n>): <requirement>`, its text repeating the `oracleLedger` row's `requirement` exactly and `(P<n>)` its only annotation; the priority basis and any `R` links sit in the detail body. A heading such as `AC-1: Order number shown (R1) (P0, inferred)` fails validation
+- [ ] In a requirement-granularity run, the gate table (`| ID | Requirement | Priority | Coverage |`) and the detail headings (`### <id> (P<n>): <text>`) list exactly the `oracleLedger` rows, the Requirement cell and heading text both repeating the ledger's `requirement` exactly, with its priority
+- [ ] Each requirement detail carries its parent link, `missingBehaviors`, and, when it has contributors, a contributors table headed exactly `| Contributor | Story | Status | Tests |` with one row per contributor; a requirement with no contributors reads `**Contributors:** none` and has no table; contributing criteria appear as no heading and no gate table row
+- [ ] In a requirement-granularity run, the report keeps Step 3's `Requirement Aggregation` heading and its ` ```json ` block unchanged, and every final criterion status, requirement status, and missing behavior matches it
+- [ ] The Invalid and Unlinked Criteria section names every exception row with its declared and invalid links
 
 ### Machine-Readable JSON Output
 
@@ -185,7 +202,7 @@ Knowledge fragments referenced:
 - [ ] `repo`, `collection_mode`, `collection_status`, `inventory_basis`, and `source_sha` fields populated
 - [ ] `gate_basis` populated (`priority_thresholds` when gate-eligible, `none` otherwise)
 - [ ] `snapshot_at` replaces the old `generated_at` timestamp field
-- [ ] Oracle metadata populated (`resolution_mode`, `confidence`, `sources`, `external_pointer_status`, `synthetic`)
+- [ ] Oracle metadata populated (`resolution_mode`, `confidence`, `sources`, `external_pointer_status`, `synthetic`, `granularity`)
 - [ ] `target.type` and `target.id` identify the evaluated story / epic / release / hotfix
 - [ ] `gate_status` populated only when `allow_gate: true` and `collection_status` is `COLLECTED`
 - [ ] `coverage.inventory` includes `covered`, `total`, and `pct`
@@ -200,6 +217,8 @@ Knowledge fragments referenced:
 - [ ] `recommendations` array present (may be empty)
 - [ ] `waivers` present when `{waiver_register_input}` exists, carrying `register`, `filed`, `valid`, `invalid`, and one entry per waiver with its `id`, `covers`, `valid` flag, and `failed_checks`; absent when no register was found
 - [ ] `rejected_evidence` array present (may be empty), one entry per test whose name claims a criterion its assertions do not establish
+- [ ] `oracle.granularity` present in the summary and the Phase 1 matrix (`criteria` or `requirements`); in a requirement-granularity run, each gate row of the Phase 1 matrix carries its `kind`, and each requirement row a `contributors` array and `missingBehaviors`
+- [ ] In a requirement-granularity run, the summary's `oracle.rows` lists every `oracleLedger` row in ledger order with `id`, `kind`, `priority`, `priority_basis`, and `coverage`; requirement rows add `parent`, `missing_behaviors`, and `contributors` (`id`, `story`, `coverage`), exception rows add `exception`
 - [ ] `links.trace_report_path` points to this run's `{outputFile}` (`trace/traceability-matrix-{run_key}.md`)
 - [ ] `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url` fields present (may be empty)
 - [ ] `gate-decision-{run_key}.json` written to `{gate_decision_output}` when gate-eligible
