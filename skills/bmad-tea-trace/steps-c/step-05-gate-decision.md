@@ -180,9 +180,13 @@ const isActiveTest = (test) => {
   if (['skipped', 'pending', 'fixme'].includes(status)) return false;
   return test.skipped !== true && test.pending !== true && test.fixme !== true;
 };
-const derivedLiveOnlyRequirements = (coverageMatrix.requirements || []).filter((req) => {
-  if (!liveCoverageEligible.has(req.coverage)) return false;
-  const activeTests = (req.tests || []).filter(isActiveTest);
+// Same rule as Step 4 section 2b. A criterion is live-only when every active test mapped to it is live.
+// A gate row is live-only when its status is not NONE and it depends on a live-only criterion: a
+// criterion or exception row on its own tests, a requirement row on any contributor whose status is not
+// NONE. Contributors carry their criteria's tests, so a resumed Step 5 derives this from the persisted
+// Phase 1 rows alone.
+const isLiveOnlyTestSet = (tests) => {
+  const activeTests = (tests || []).filter(isActiveTest);
   return (
     activeTests.length > 0 &&
     activeTests.every(
@@ -192,6 +196,16 @@ const derivedLiveOnlyRequirements = (coverageMatrix.requirements || []).filter((
           .toLowerCase() === 'live',
     )
   );
+};
+const derivedLiveOnlyRequirements = (coverageMatrix.requirements || []).filter((req) => {
+  if (!liveCoverageEligible.has(req.coverage)) return false;
+  // A row with `contributors` is a requirement row even when an older or hand-edited matrix lost its `kind`.
+  if (req.kind === 'requirement' || Array.isArray(req.contributors)) {
+    return (req.contributors || []).some(
+      (contributor) => liveCoverageEligible.has(contributor.coverage) && isLiveOnlyTestSet(contributor.tests),
+    );
+  }
+  return isLiveOnlyTestSet(req.tests);
 }).length;
 const reportedLiveOnly = Number(liveEvidence.requirements_live_only);
 const liveOnlyCoveredRequirements = Math.max(
@@ -232,10 +246,19 @@ const deriveActiveTestCasesFromRequirements = (requirements) => {
 
   return [...uniqueTests.values()].filter((status) => status === 'active').length;
 };
+// A Phase 1 matrix with no `oracle.granularity` comes from a criterion-oracle run.
+const oracleGranularity = coverageMatrix.oracle?.granularity === 'requirements' ? 'requirements' : 'criteria';
+// Test counts come from criterion rows, each criterion and test counted once. Requirement rows carry no
+// tests of their own, so a requirement-granularity run reads `criteria`; a criterion-oracle run's gate
+// rows are its criterion rows.
+const criterionRows =
+  oracleGranularity === 'requirements' && Array.isArray(coverageMatrix.criteria)
+    ? coverageMatrix.criteria
+    : coverageMatrix.requirements || [];
 const summarizedTestInventory = coverageMatrix.test_inventory?.summary || null;
 const activeTestCases =
   summarizedTestInventory === null
-    ? deriveActiveTestCasesFromRequirements(coverageMatrix.requirements)
+    ? deriveActiveTestCasesFromRequirements(criterionRows)
     : Math.max(
         0,
         (summarizedTestInventory.cases || 0) -
@@ -501,8 +524,12 @@ The summary metadata is a strict contract. Emit the resolved run value for every
 | `links.journey_evidence_url`                                      | `''`                                                               |
 | `tests.skipped_cases`, `tests.fixme_cases`, `tests.pending_cases` | The real inventory counts. Use `0` when no cases have that status. |
 | `heuristics.ui_journey_status`, `heuristics.ui_state_status`      | `not_applicable` for a non-synthetic formal requirements oracle    |
+| `oracle.granularity`                                              | `requirements` or `criteria`, from the Phase 1 matrix              |
+| `oracle.rows`                                                     | Every `oracleLedger` row when `requirements`; absent otherwise     |
 
 Do not shorten `{outputFile}`, invent a URL, or replace an unavailable runtime value with a guess. Use the literal string `unknown` for an unavailable runtime value.
+
+In a requirement-granularity run, `oracle.rows` is the published gate inventory: one entry per `oracleLedger` row, in ledger order, each `{ id, kind, priority, priority_basis, coverage }`. A requirement row adds `parent` (a string, or `null`), `missing_behaviors` (an array), and `contributors`, one `{ id, story, coverage }` per contributing criterion. An exception row adds `exception` (`unlinked` or `invalid-link`). `summaryOracleRows` below builds them from the Phase 1 gate rows.
 
 ```javascript
 const buildFallbackInventory = () => {
@@ -517,7 +544,7 @@ const buildFallbackInventory = () => {
   const coverageEligibleStatuses = new Set(['FULL', 'PARTIAL', 'UNIT-ONLY', 'INTEGRATION-ONLY']);
   const uniqueTests = new Map();
 
-  (coverageMatrix.requirements || []).forEach((req) => {
+  criterionRows.forEach((req) => {
     (req.tests || []).forEach((test) => {
       const stableId =
         test.id ||
@@ -637,6 +664,33 @@ const gateBasis = gateEligible ? 'priority_thresholds' : 'none';
 // which is true. Emitting the literal "{project_name}" would name a repository that does not exist.
 const repoName = isUnresolved('{project_name}') ? '' : String('{project_name}').trim();
 
+// The published gate inventory of a requirement-granularity run: one entry per `oracleLedger` row, in
+// ledger order, read from the Phase 1 gate rows Step 3 section 1c built. Requirement rows carry their
+// parent, missing behaviors, and contributors with each contributor's own status; exception rows carry
+// their exception. The CLI reconciles these rows against the ledgers, so every key is always written.
+const summaryOracleRows = (gateRows) =>
+  gateRows.map((row) => {
+    const isRequirementRow = row.kind === 'requirement' || Array.isArray(row.contributors);
+    const entry = {
+      id: row.id,
+      kind: isRequirementRow ? 'requirement' : 'exception',
+      priority: row.priority,
+      priority_basis: row.priorityBasis,
+      coverage: row.coverage,
+    };
+    if (!isRequirementRow) return { ...entry, exception: row.exception };
+    return {
+      ...entry,
+      parent: row.parent ?? null,
+      missing_behaviors: [...(row.missingBehaviors || [])],
+      contributors: (row.contributors || []).map((contributor) => ({
+        id: contributor.id,
+        story: contributor.story,
+        coverage: contributor.coverage,
+      })),
+    };
+  });
+
 const e2eTraceSummary = {
   schema_version: '0.3.0', // 0.2.0 added live_evidence and the by_level.live bucket; 0.3.0 added waivers
   snapshot_at: new Date().toISOString(),
@@ -656,6 +710,9 @@ const e2eTraceSummary = {
     sources: coverageMatrix.oracle?.sources || [],
     external_pointer_status: coverageMatrix.oracle?.external_pointer_status || 'not_used',
     synthetic: syntheticOracle,
+    granularity: oracleGranularity, // `requirements` for a v7 epic's requirement spine, `criteria` otherwise
+    // A criterion-oracle run omits `rows`; its gate rows are the matrix rows the report lists.
+    ...(oracleGranularity === 'requirements' ? { rows: summaryOracleRows(coverageMatrix.requirements || []) } : {}),
   },
 
   coverage: {
@@ -815,7 +872,9 @@ if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision
 
 ## Traceability Matrix
 
-[Full matrix with requirement → test mappings, each criterion carrying its "Considered and rejected" entries from `rejected_evidence`]
+[Full matrix with requirement → test mappings, each criterion carrying its "Considered and rejected" entries from `rejected_evidence`. Each detail heading is `<id> (P<n>): <requirement>`, where `<requirement>` repeats the `oracleLedger` row's `requirement` exactly and `(P<n>)` is the only annotation; the priority basis and any `R` links go in the detail body.]
+
+[When `oracleGranularity` is `requirements`: `trace-template.md`'s "Requirement Oracle Mapping" block. The gate table and the detail headings list exactly the `oracleLedger` rows, each repeating the row's `requirement` exactly; each requirement detail adds its parent link, `missingBehaviors`, and a contributors table when it has contributors; the invalid and unlinked criteria follow. Every status and missing behavior repeats Step 3's `Requirement Aggregation` block, which the save below keeps at the end of the report.]
 
 ## Gaps & Recommendations
 
@@ -834,7 +893,9 @@ if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision
 
 The report replaces the working notes Steps 1 to 4 of this run accumulated below the frontmatter. The frontmatter block stays as it is, because it holds this run's identity (`runScope`, `runKey`, the target) and its progress state. The file belongs to this run alone: Step 1 created it for this `run_key`, so replacing its body never discards another run's work.
 
-```javascript
+In a requirement-granularity run, Step 3's `Requirement Aggregation` block is the one part of the working notes the report keeps. Carry its heading and its ` ```json ` block into the end of the report unchanged, exactly once: the code below appends it, so `reportContent` leaves it out. The CLI checks every final criterion status, requirement status, and missing behavior against it, and rejects a matrix without it.
+
+````javascript
 // `reportContent` is the rendered report body, without a frontmatter block of its own.
 const existingDoc = fs.readFileSync('{outputFile}', 'utf8');
 const existingFrontmatter = existingDoc.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0];
@@ -843,8 +904,18 @@ if (!existingFrontmatter) {
     'TRACE ERROR: {outputFile} has no frontmatter from Step 1; re-run from Step 1 so the matrix carries runScope, runKey, and the gate target.',
   );
 }
-fs.writeFileSync('{outputFile}', `${existingFrontmatter}\n${reportContent}`, 'utf8');
-```
+// Step 3's persisted mapping survives the body replacement, heading and json block unchanged.
+const aggregationBlock =
+  oracleGranularity === 'requirements'
+    ? existingDoc.match(/^#{2,6} Requirement Aggregation\b[^\n]*\r?\n[\s\S]*?^```json[^\n]*\r?\n[\s\S]*?^```[ \t]*$/m)?.[0]
+    : null;
+if (oracleGranularity === 'requirements' && !aggregationBlock) {
+  throw new Error(
+    'TRACE ERROR: {outputFile} has no Requirement Aggregation block from Step 3; resume from Step 3 so the report keeps the criterion mapping its statuses come from.',
+  );
+}
+fs.writeFileSync('{outputFile}', `${existingFrontmatter}\n${reportContent}${aggregationBlock ? `\n\n${aggregationBlock}\n` : ''}`, 'utf8');
+````
 
 This is the only write of report content in this step. Section 6 changes the frontmatter and appends the section 5 summary; it never writes the report again.
 
@@ -910,7 +981,7 @@ Section 4 (Generate Traceability Report) already wrote the report below the fron
 - Set `lastStep: 'step-05-gate-decision'`
 - Set `lastSaved: '{date}'`
 - Set `workflowStatus: 'completed'`
-- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, `targetLabel`, `oracleGranularity`, `oracleLedger`, and `criterionLedger` unchanged
 
 Then append the gate decision summary (from section 5 above) to the end of the report section 4 wrote.
 

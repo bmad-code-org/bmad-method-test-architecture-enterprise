@@ -46,6 +46,8 @@ Search `{test_dir}` for:
 - Resolved oracle item IDs/titles
 - Spec patterns (`*.spec.*`, `*.test.*`)
 
+When `oracleGranularity` is `requirements`, the searchable items are the `criterionLedger` records: search for each record's qualified `id`, its `localId` (`AC-1`) where a test names its story or story key, its `name`, and its full `text`. A test is evidence for the criterion it maps to, so a requirement row id is never a search target.
+
 When the oracle is synthetic (`synthetic_requirements` or `user_journeys`), also search for:
 
 - route/path matches
@@ -204,6 +206,8 @@ const liveManifestHeader = {
 ```
 
 `runtime.getSourceSha()` must resolve `git rev-parse HEAD` in `{project-root}`. Run that command directly when neither helper is available, and reach `GITHUB_SHA` only when the working tree is not a git repository at all. Every live result is `unverifiable` while `currentSourceSha` stays empty, which is deliberate: an unknown current commit cannot establish that a recorded observation is still valid.
+
+Each record keeps its `requirement_id` exactly as the producer supplied it. Step 3 section 1b resolves it to a canonical oracle id through the live alias map before any failure grouping, so this step never rewrites or matches it.
 
 **Persist `liveRecords` and `liveManifestHeader` into this step's section of `{outputFile}`** as a fenced ` ```json ` block titled `Live Verification Results`. Steps 3 and 4 read them from there. A run resumed at Step 3 or Step 4 has no in-memory bindings from this step, so a value that lives only in memory is a value the resumed run silently loses.
 

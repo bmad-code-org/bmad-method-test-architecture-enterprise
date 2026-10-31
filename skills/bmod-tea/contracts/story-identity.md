@@ -63,6 +63,8 @@ Only an epic entry has epic context: its epic's Test Design (`test-design-epic-<
 
   `<initiative>` is the initiative folder name without its `initiative-` prefix. An entry id is used as written, letters included (`s6a`, `sCC2`). Folder names never contain `--`, so keys of different shapes and initiatives never collide. Entry ids and containers do not change when an entry is retitled, so neither does the key.
 
+- `epic_key`, for a workflow scoped to a whole v7 epic: `<initiative>--e<epic id>`, for example `shop--e1`; for an epic its initiative does not number, `<initiative>--<epic folder>`, for example `shop--epic-loyalty`. An epic entry's `story_key` is its epic's key followed by `-s<entry id>`. The key is used as written; a workflow never slugs it, because slugging collapses its `--`. A v6 epic keeps the key its workflow already gives it.
+
 - `ticketRef`: the `ref` plus the container folder relative to `{project-root}`, for example `1.2 @ _bmad-output/initiative-shop/tickets/epic-checkout`, `2 @ _bmad-output/initiative-shop-e1` or `story-coupon-banner.md @ _bmad-output/backlog`. Empty for a v6 story.
 - `storyFile`: the leaf or v6 story path; empty for an entry that is not pulled.
 

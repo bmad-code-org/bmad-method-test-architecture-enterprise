@@ -9,6 +9,8 @@ const { captureLiveResults, assertLiveSourceRevision } = require('./lib/trace-li
 const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
 const {
   sourceOracleLedger,
+  epicTicketSources,
+  requirementOracle,
   COLLECTION_MODES,
   GATE_TYPES,
   resolveTraceTarget,
@@ -65,7 +67,16 @@ function execute(options, registerOutputGuard = () => {}) {
   const targetFile = options.target ? readInput(projectRoot, options.target, '--target') : undefined;
   const target = resolveTraceTarget({ projectRoot, target: targetFile, targetId: options.targetId, gateType: options.gateType });
   const targetText = targetFile ? fs.readFileSync(targetFile, 'utf8') : '';
-  const oracleLedger = sourceOracleLedger(targetText, targetFile ?? 'project');
+  const oracleLedger = sourceOracleLedger(targetText, targetFile ?? 'project', target);
+  // The requirement oracle's criteria come from the epic's tickets; capture them before the agent runs.
+  const tickets = requirementOracle(target, oracleLedger) ? epicTicketSources(projectRoot, target) : undefined;
+  const requirementLines = tickets
+    ? [
+        `This is v7 epic ${target.epicKey}; the frozen ledger holds its Requirements lines. Record oracleGranularity: requirements.`,
+        'Persist Step 1 criterionLedger and the requirement and exception oracleLedger rows in matrix YAML frontmatter with every field Step 1 section 1b names.',
+        'In the summary JSON, set oracle.granularity to "requirements" and oracle.rows to one entry per oracleLedger row, in ledger order: {id, kind, priority, priority_basis, coverage}, plus parent, missing_behaviors and contributors [{id, story, coverage}] for a requirement row, or exception for an exception row.',
+      ]
+    : [];
   const liveResults = options.liveResults
     ? readInput(projectRoot, options.liveResults, '--live-results')
     : path.join(artifactRoot, 'live-verification-results.json');
@@ -83,7 +94,7 @@ function execute(options, registerOutputGuard = () => {}) {
     const rightStat = fs.statSync(right);
     return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
   };
-  const inputs = [targetFile, liveResults, waiverRegister].filter(Boolean);
+  const inputs = [...new Set([targetFile, liveResults, waiverRegister, ...(tickets?.files.keys() ?? [])].filter(Boolean))];
   const heldInputs = inputs.map((file) => {
     if (!fs.existsSync(file)) return { file, missing: true };
     const stat = fs.statSync(file);
@@ -104,7 +115,7 @@ function execute(options, registerOutputGuard = () => {}) {
     if (outputs.some((left, index) => outputs.slice(index + 1).some((right) => aliases(left, right))))
       throw new Error('Trace artifacts must use separate paths from each other.');
     if (Object.values(destinations).some((output) => inputs.some((input) => aliases(output, input))))
-      throw new Error('Trace artifacts must use separate paths from the target, live results, and waiver register.');
+      throw new Error('Trace artifacts must use separate paths from the target, its ticket sources, live results, and waiver register.');
     if (!options.json) return;
     projectPath(projectRoot, options.json, '--json');
     const protectedPaths = [...inputs, ...Object.values(destinations)];
@@ -133,6 +144,7 @@ function execute(options, registerOutputGuard = () => {}) {
           'Execute both trace phases, finishing Step 5. Use deterministic gate decisions.',
           `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
           'Persist Step 1 oracleLedger in matrix YAML frontmatter as an array of {id, requirement, priority, source} records. Assign priorities only where the source leaves them unspecified.',
+          ...requirementLines,
           `The only trace target for this run is ${target.document ? JSON.stringify(target.document) : `the project (${target.runScope})`}.`,
           `Resolved identity: ${JSON.stringify(target)}. Preserve it in every output.`,
           `Resolve {gate_type} to ${JSON.stringify(target.type)}, {run_scope} to ${JSON.stringify(target.runScope)}, and {run_key} to ${JSON.stringify(target.runKey)}.`,
@@ -179,6 +191,7 @@ function execute(options, registerOutputGuard = () => {}) {
         requireOracleLedger: true,
         liveCapture,
         requireLiveManifest: true,
+        tickets,
       });
     },
   });

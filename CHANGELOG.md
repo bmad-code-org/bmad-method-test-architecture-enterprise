@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Trace measures a v7 epic against its requirement spine. When the epic's file has numbered Requirements lines (`R1`, `R2`, ...), each line becomes a gate row, and the criteria of every story in the epic prove it through the `R` ids they name. A requirement is FULL only when every criterion linked to it is FULL and those criteria together state every behavior the line asks for; a behavior no criterion states is listed as missing, and a requirement no story covers shows up as a gap with its own inferred priority. Criteria that name no requirement or an id the epic does not define stay in the gate as their own rows. Recorded live results attach by a criterion's qualified id or a unique local id such as `AC-1`, and a requirement resting on live-only evidence keeps the CONCERNS cap. Each epic run is keyed by initiative (`epic-shop--e1`), so two initiatives with the same epic number get separate matrices, summaries and gate files. A duplicate `R` id stops the run with both source lines. The summary JSON lists every gate row with its contributors, and the trace CLI reconciles requirements, exceptions and criteria independently from the epic and ticket files. Stories, releases, hotfixes, v6 epics, epics without `R` lines and checkpoints from earlier runs keep today's criterion-level trace. Trace detail headings now read `<id> (P<n>): <text>` with the criterion's bold name as its text, so a heading always matches its gate row. For a requirement run the CLI reads the epic's tickets, leaves, bug, spike and plan criteria itself, binds each criterion to its exact source line, and holds the final statuses to the mapping Trace saved in Step 3.
+
 ## [3.5.0] - 2026-10-30
 
 ### Added

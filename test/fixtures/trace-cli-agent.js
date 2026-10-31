@@ -19,6 +19,29 @@ let ledger = (sourceLedger.length ? sourceLedger : [{id: 'AC-1', requirement: 'E
 if (mode === 'missing-source-criterion') ledger = ledger.slice(0, 1);
 if (mode === 'source-text-drift') ledger[0].requirement = 'Example';
 if (mode === 'source-binding-drift') ledger[0].source = 'caller';
+// A native v7 epic's frozen ledger holds its qualified R lines: record the requirement oracle.
+const requirementOracle = Boolean(identity.epicKey) && sourceLedger.length > 0 && sourceLedger.every(row => row.id.startsWith(`${identity.epicKey}--R`));
+// Each entry of the epic's tickets.toml is a verify-only story: one criterion, its verify line, linked to its covers.
+const criterionLedger = [];
+if (requirementOracle) {
+  const index = path.join(path.dirname(identity.document), 'tickets', 'tickets.toml');
+  const text = fs.existsSync(index) ? fs.readFileSync(index, 'utf8') : '';
+  const defined = new Set(sourceLedger.map(row => row.id.split('--').at(-1)));
+  for (const entry of text ? require('smol-toml').parse(text).entry ?? [] : []) {
+    const declaredLinks = entry.covers ?? [];
+    const validLinks = declaredLinks.filter(link => defined.has(link)), invalidLinks = declaredLinks.filter(link => !defined.has(link));
+    const story = `${identity.epicKey}-s${entry.id}`;
+    criterionLedger.push({id: `${story}--verify`, localId: 'verify', story, name: entry.verify, text: entry.verify, source: `${index}:${text.split('\n').findIndex(line => line.includes(entry.verify)) + 1}`, priority: 'P0', priorityBasis: 'inferred', declaredLinks, validLinks, invalidLinks, exception: invalidLinks.length ? 'invalid-link' : validLinks.length ? 'none' : 'unlinked'});
+  }
+  ledger = [
+    ...ledger.map(row => {
+      const contributors = criterionLedger.filter(criterion => criterion.validLinks.includes(row.id.split('--').at(-1))).map(({id}) => id);
+      const explicit = sourceLedger.find(source => source.id === row.id)?.priority;
+      return {...row, kind: 'requirement', parent: null, priorityBasis: explicit ? 'explicit' : contributors.length ? 'contributors' : 'inferred', contributors};
+    }),
+    ...criterionLedger.filter(criterion => criterion.exception !== 'none').map(({id, exception, name, source, priority, priorityBasis}) => ({id, kind: 'exception', exception, requirement: name, priority, priorityBasis, source})),
+  ];
+}
 const collection = capture(`Resolve \\{collection_mode\\} to (${quoted})`);
 const allowGate = prompt.match(/\{allow_gate\} to (true|false)/)[1] === 'true';
 if (mode === 'retry' && attempt === 1) {
@@ -49,6 +72,22 @@ const summary = {
   risk_summary: { critical_open: pct === 0 ? 1 : 0, high_open: 0, medium_open: 0, low_open: 0 }, live_evidence: { requirements_live_only: 0 },
   blockers: [], recommendations: [], rejected_evidence: [], links: { trace_report_path: matrixPath },
 };
+const coverage = pct ? 'FULL' : 'NONE';
+const storyOf = id => id.slice(0, id.lastIndexOf('--'));
+if (requirementOracle) {
+  summary.oracle.granularity = 'requirements';
+  summary.oracle.rows = ledger.map(row => row.kind === 'exception'
+    ? {id: row.id, kind: row.kind, priority: row.priority, priority_basis: row.priorityBasis, coverage, exception: row.exception}
+    : {id: row.id, kind: row.kind, priority: row.priority, priority_basis: row.priorityBasis, coverage, parent: row.parent, missing_behaviors: [], contributors: row.contributors.map(id => ({id, story: storyOf(id), coverage}))});
+}
+// Step 3's persisted mapping, which the final document keeps: every criterion and gate row at the fixture's coverage.
+const aggregationBlock = () => `\n## Requirement Aggregation\n\n\`\`\`json\n${JSON.stringify({
+  criterionMatrix: criterionLedger.map(({id, story, localId}) => ({id, story, localId, coverage, tests: []})),
+  traceabilityMatrix: ledger.map(row => row.kind === 'exception'
+    ? {id: row.id, kind: row.kind, exception: row.exception, coverage}
+    : {id: row.id, kind: row.kind, contributors: row.contributors.map(id => ({id, story: storyOf(id), coverage, tests: []})), missingBehaviors: [], tests: [], coverage: row.contributors.length ? coverage : 'NONE'}),
+}, null, 2)}\n\`\`\`\n`;
+const contributorTable = row => row.contributors?.length ? `\n| Contributor | Story | Status | Tests |\n| --- | --- | --- | --- |\n${row.contributors.map(id => `| ${id} | ${storyOf(id)} | ${coverage} | 1.1-API-001 |`).join('\n')}\n` : '';
 if (mode === 'runtime-inaccessible') {
   summary.collection_status = 'INACCESSIBLE';
   const livePath = capture(`Resolve \\{live_results_input\\} to (${quoted})`);
@@ -140,9 +179,10 @@ if (mode === 'bad-confidence') summary.confidence = 'auto';
 if (mode === 'bad-collection') summary.collection_status = 'UNKNOWN';
 if (mode === 'automated-waiver') summary.gate_status = 'WAIVED';
 if (mode === 'missing-criteria') delete summary.gate_criteria;
+if (mode === 'summary-requirements-granularity') summary.oracle.granularity = 'requirements';
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
-fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\nstepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n`).join('\n')}`);
+fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\n${requirementOracle ? `oracleGranularity: requirements\ncriterionLedger: ${JSON.stringify(criterionLedger)}\n` : ''}stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n${contributorTable(row)}`).join('\n')}${requirementOracle ? aggregationBlock() : ''}`);
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
@@ -175,6 +215,8 @@ if (mode === 'source-priority-drift') fs.writeFileSync(matrixPath, fs.readFileSy
 if (mode === 'missing-oracle-ledger') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/^oracleLedger:.*\n/m, ''));
 if (mode === 'oracle-ledger-drift') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('\"priority\":\"P0\"', '\"priority\":\"P1\"'));
 if (mode === 'mutated-source') fs.appendFileSync(identity.document, '\nChanged requirements.\n');
+if (mode === 'mutate-ticket-index') fs.appendFileSync(path.join(path.dirname(identity.document), 'tickets', 'tickets.toml'), '\n# rewritten by the agent\n');
+if (mode === 'matrix-trailing-period') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/(### AC-1: [^\n]*)\. \(P0\)/, '$1 (P0)'));
 if (mode.startsWith('attempt-')) {
   const old = mode === 'attempt-outside-link' ? `${process.cwd()}-old-matrix.md` : path.join(process.cwd(), 'old-matrix.md');
   fs.copyFileSync(matrixPath, old);

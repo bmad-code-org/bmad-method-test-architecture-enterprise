@@ -37,7 +37,7 @@ Resume an interrupted workflow by selecting the traceability matrix that belongs
 
 ### 1. Select the Run to Resume
 
-Each run writes its own matrix at `{outputFile}`, where `run_key` is `story-{story_key}`, `epic-{epic_num}`, `release-{slug}`, `hotfix-{slug}`, or `system`. Build the candidate list:
+Each run writes its own matrix at `{outputFile}`, where `run_key` is `story-{story_key}`, `epic-{epic_key}` for a v7 epic, `epic-{epic_num}` for a v6 epic, `release-{slug}`, `hotfix-{slug}`, or `system`. Build the candidate list:
 
 1. List every file matching `{progressGlob}`.
 2. Also check `{legacyOutputFile}`. Runs from before outputs carried run identity wrote to that fixed name. It is a candidate only while it is in progress: read its `workflowStatus`, or infer it from `lastStep` as section 2 describes when the field is absent. A completed legacy matrix stays where it is and is never moved or deleted.
@@ -46,11 +46,19 @@ Then select one:
 
 - **No candidates:** display "⚠️ **No previous progress found.** There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run." **Halt.**
 
-- **The user named a scope in this invocation** (a specific story, epic, release, or hotfix): resolve `run_key` exactly as `step-01-load-context.md` section 4 does, then select `{outputFile}` for that key. When it does not exist and `{legacyOutputFile}` is a candidate, offer to migrate the legacy matrix to `{run_key}` and **halt** until the user answers; if they accept, select it. If nothing was selected for that key, display "⚠️ **No progress found for `{run_key}`.** Matrices exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's matrix.
+- **The user named a scope in this invocation** (a specific story, epic, release, or hotfix): resolve `run_key` exactly as `step-01-load-context.md` section 4 does, then select `{outputFile}` for that key. For a v7 epic, also apply the pre-change epic file rule below. When nothing is selected yet and `{legacyOutputFile}` is a candidate, offer to migrate the legacy matrix to `{run_key}` and **halt** until the user answers; if they accept, select it. If nothing was selected for that key, display "⚠️ **No progress found for `{run_key}`.** Matrices exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's matrix.
 
 - **Exactly one candidate and no scope named:** select it and state which run it belongs to before continuing.
 
-- **More than one candidate and no scope named:** list each candidate with its `runKey`, `lastStep`, and `lastSaved`, and ask which run to resume. **Halt** until the user answers.
+- **More than one candidate and no scope named:** list each candidate with its `runKey`, `lastStep`, and `lastSaved`, and ask which run to resume. **Halt** until the user answers. A headless run halts with the list.
+
+**Pre-change v7 epic file.** Runs from before v7 epic keys wrote a v7 epic's matrix as `{test_artifacts}/trace/traceability-matrix-epic-<epic id>.md`. When resuming a named v7 epic, also check that file for the epic's id:
+
+1. The file is accepted only when its saved target names this epic: its `oracleSources` or `inputDocuments` cite a file inside this epic's folder (`initiative-<initiative>/tickets/<epic folder>/`). An epic number or a similar title alone is never evidence. A file that cites no file of any epic is not a candidate.
+2. When the file names another initiative's epic, or `{outputFile}` for the new key and an accepted pre-change file are both candidates, list each file with its `runKey`, saved target, `lastStep`, and `lastSaved`, and ask which run to resume. **Halt** until the user answers. A headless run halts with the list.
+3. When the accepted pre-change file is the only candidate, select it and say so.
+
+A selected pre-change file keeps its stored `runScope`, `runKey`, and target for the rest of the run, so its summary and gate decision keep its own `run_key`. It has no `oracleGranularity`, so it resumes as a criterion-oracle run. An unnamed resume finds the same file through `{progressGlob}` and adopts its stored identity the same way.
 
 ---
 
@@ -65,8 +73,10 @@ Read the selected matrix and parse YAML frontmatter for:
 - `stepsCompleted`: array of completed step names
 - `lastStep`: last completed step name
 - `lastSaved`: timestamp of last save
+- `oracleGranularity`: `requirements` or `criteria`. A checkpoint with no `oracleGranularity` is a criterion-oracle run and resumes as one, with its rows and evidence unchanged. Resume never re-decides granularity; only a fresh run adopts requirement granularity.
+- `oracleLedger`, and for a requirement-granularity run `criterionLedger`: the frozen ledgers Step 1 wrote, with parents, `priorityBasis`, and contributors. A resumed Step 3, 4, or 5 builds its rows from them and never rebuilds them from the ticket files.
 
-**Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "⚠️ **Matrix belongs to a different run** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the matrix's own `runScope`, `runKey`, and target as this run's identity.
+**Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. A pre-change v7 epic file that section 1 accepted passes this check through its saved target and keeps its stored `runKey`. If neither holds, display "⚠️ **Matrix belongs to a different run** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the matrix's own `runScope`, `runKey`, and target as this run's identity.
 
 **Legacy matrix migration.** If the selected matrix is `{legacyOutputFile}` and carries no `runKey`, it predates run identity and cannot be proven to belong to any scope, so the run identity check above does not apply to it. Migrate it before continuing:
 

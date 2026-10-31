@@ -69,15 +69,15 @@ A longer example covering a passing record, a blocked one, and one recorded agai
 
 ### Result records
 
-| Field            | Trace does                                                                                                 |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `id`             | **Enforced.** Test-case ID, format below. Must be unique in the file; a repeat is `invalid`.               |
-| `requirement_id` | **Enforced.** The oracle item this verifies. Must match an id `trace` resolved, such as `AC-1` or `J-02`.  |
-| `status`         | **Enforced.** One of `pass`, `fail`, `blocked`, `skipped`.                                                 |
-| `source_sha`     | **Enforced** when the file has no top-level `source_sha`. Overrides the file-level commit for this record. |
-| `title`          | Recorded. What was verified, in one line. Falls back to the `id` when absent.                              |
-| `evidence`       | Recorded. What was observed, or a URL to a recording, log, or screenshot.                                  |
-| `observed_at`    | Recorded. Overrides the file-level timestamp for this record.                                              |
+| Field            | Trace does                                                                                                                                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | **Enforced.** Test-case ID, format below. Must be unique in the file; a repeat is `invalid`.                                                                                                                                                                                                                                      |
+| `requirement_id` | **Enforced.** The oracle item this verifies. Must match an id `trace` resolved, such as `AC-1` or `J-02`. For a v7 epic traced against its requirements, name a criterion: its qualified id (`shop--e1-s2--AC-1`) or a local id only one criterion in the epic carries; a requirement row such as `shop--e1--R1` is not accepted. |
+| `status`         | **Enforced.** One of `pass`, `fail`, `blocked`, `skipped`.                                                                                                                                                                                                                                                                        |
+| `source_sha`     | **Enforced** when the file has no top-level `source_sha`. Overrides the file-level commit for this record.                                                                                                                                                                                                                        |
+| `title`          | Recorded. What was verified, in one line. Falls back to the `id` when absent.                                                                                                                                                                                                                                                     |
+| `evidence`       | Recorded. What was observed, or a URL to a recording, log, or screenshot.                                                                                                                                                                                                                                                         |
+| `observed_at`    | Recorded. Overrides the file-level timestamp for this record.                                                                                                                                                                                                                                                                     |
 
 ### Test-case ID format
 

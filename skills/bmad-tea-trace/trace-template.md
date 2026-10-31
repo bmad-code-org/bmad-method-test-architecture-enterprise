@@ -15,7 +15,9 @@ oracleConfidence: ''
 oracleResolutionMode: ''
 oracleSources: []
 externalPointerStatus: ''
+oracleGranularity: ''
 oracleLedger: []
+criterionLedger: []
 ---
 
 # Traceability Matrix & Gate Decision - {TRACE_TARGET_LABEL}
@@ -53,9 +55,12 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-tea-autom
 
 ### Detailed Mapping
 
-#### {CRITERION_ID}: {CRITERION_DESCRIPTION} ({PRIORITY})
+Each detail heading is `{CRITERION_ID} ({PRIORITY}): {REQUIREMENT_TEXT}`. `{REQUIREMENT_TEXT}` repeats the `oracleLedger` row's `requirement` exactly: for a numbered criterion with a bold name, the bold name alone. `({PRIORITY})` is the only annotation; write the priority basis and any `R` links in the detail body.
+
+#### {CRITERION_ID} ({PRIORITY}): {REQUIREMENT_TEXT}
 
 - **Coverage:** {COVERAGE_STATUS} {STATUS_ICON}
+- **Priority basis:** {explicit | inferred}
 - **Tests:**
   - `{TEST_ID}` - {TEST_FILE}:{LINE}
     - **Given:** {GIVEN}
@@ -77,7 +82,7 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-tea-autom
 
 ---
 
-#### Example: AC-1: User can login with email and password (P0)
+#### Example: AC-1 (P0): User can login with email and password
 
 - **Coverage:** FULL ✅
 - **Tests:**
@@ -92,7 +97,7 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-tea-autom
 
 ---
 
-#### Example: AC-3: User can reset password via email (P1)
+#### Example: AC-3 (P1): User can reset password via email
 
 - **Coverage:** PARTIAL ⚠️
 - **Tests:**
@@ -108,6 +113,48 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-tea-autom
   - Missing: Unit test for token generation logic
 
 - **Recommendation:** Add `1.3-API-001` for email service integration testing and `1.3-UNIT-003` for token generation logic. Add `1.3-E2E-004` for error path validation (expired/invalid tokens).
+
+---
+
+### Requirement Oracle Mapping
+
+Use this block in place of the criterion detail above when `oracleGranularity` is `requirements`. The gate table and the detail headings list exactly the `oracleLedger` rows, requirement rows and exception rows alike. The table's Requirement cell and the heading text both repeat the row's `requirement` exactly, and the heading carries only `({PRIORITY})`. An exception row's `requirement` is its criterion's `name`, so its cell and heading read `Form remembers address`: the bold name alone. Contributing criteria appear only in contributors tables, so the gate counts each requirement once. State each row's `**Coverage:**` exactly once, on its own detail; a contributors table states statuses in its Status column only.
+
+| ID                       | Requirement        | Priority   | Coverage          |
+| ------------------------ | ------------------ | ---------- | ----------------- |
+| {REQUIREMENT_ROW_ID}     | {REQUIREMENT_TEXT} | {PRIORITY} | {COVERAGE_STATUS} |
+| {EXCEPTION_CRITERION_ID} | {CRITERION_NAME}   | {PRIORITY} | {COVERAGE_STATUS} |
+
+### {REQUIREMENT_ROW_ID} ({PRIORITY}): {REQUIREMENT_TEXT}
+
+- **Coverage:** {COVERAGE_STATUS} {STATUS_ICON}
+- **Parent:** {PARENT_LINK}
+- **Priority basis:** {PRIORITY_BASIS}
+- **Missing behaviors:** {MISSING_BEHAVIORS, or None}
+- **Contributors:** the table below, one row per contributor. When the row's `contributors` list is empty, write `- **Contributors:** none` and omit the table.
+
+| Contributor    | Story       | Status               | Tests                            |
+| -------------- | ----------- | -------------------- | -------------------------------- |
+| {CRITERION_ID} | {STORY_KEY} | {CRITERION_COVERAGE} | `{TEST_ID}` `{TEST_FILE}:{LINE}` |
+
+- **Gaps:** (if below FULL) each contributor below FULL with its status, each missing behavior, or "no story covers it" when the requirement has no contributor
+- **Recommendation:** {RECOMMENDATION_TEXT}
+
+### {EXCEPTION_CRITERION_ID} ({PRIORITY}): {CRITERION_NAME}
+
+- **Coverage:** {COVERAGE_STATUS} {STATUS_ICON}
+- **Exception:** {unlinked | invalid-link}
+- **Priority basis:** {PRIORITY_BASIS}
+- **Tests:** mapped and cited as in the criterion detail above
+- **Recommendation:** {RECOMMENDATION_TEXT}
+
+### Invalid and Unlinked Criteria
+
+Every criterion whose `exception` is not `none`, each also a gate row above:
+
+- `{CRITERION_ID}` ({STORY_KEY}): {unlinked: names no requirement | invalid-link: names {INVALID_LINKS}, which the epic does not define}. Valid links it still contributes to: {VALID_LINKS, or none}.
+
+Every coverage status and missing behavior in this block repeats Step 3's `Requirement Aggregation` block. Step 5's save appends that block, heading and ` ```json ` block unchanged, once at the end of the report, so this block leaves it out. The CLI rejects a requirement run whose report drops the block, repeats it, or contradicts it.
 
 ---
 
