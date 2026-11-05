@@ -63,8 +63,8 @@ const href = (link: string) => (link.startsWith('/') ? `${base}${link}` : link);
         // renders inside <main>, so an <h2> here joined the page's heading
         // outline and a reader skimming by heading met "Method" and
         // "Community" among the article's own sections.
-        <nav aria-labelledby={`footer-${col.heading.toLowerCase()}`}>
-          <p class="col-title" id={`footer-${col.heading.toLowerCase()}`}>
+        <nav aria-labelledby={`footer-${col.heading.toLowerCase().replace(/\s+/g, '-')}`}>
+          <p class="col-title" id={`footer-${col.heading.toLowerCase().replace(/\s+/g, '-')}`}>
             {col.heading}
           </p>
           {col.links.map((link) => (

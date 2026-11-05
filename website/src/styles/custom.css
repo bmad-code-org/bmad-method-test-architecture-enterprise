@@ -498,7 +498,7 @@ starlight-toc h2,
 .sl-link-button.primary:hover {
   background: var(--bmad-accent);
   border-color: var(--bmad-accent);
-  color: #ffffff;
+  color: var(--sl-color-text-invert);
 }
 
 .sl-link-button.secondary,
@@ -724,7 +724,7 @@ main {
 /* the workflow map is a wide diagram; it runs the full viewport */
 .sl-markdown-content > iframe:first-child {
   width: 100vw !important;
-  margin-left: calc(50%: 50vw);
+  margin-left: calc(50% - 50vw);
   border-radius: 0 !important;
   border-left: none !important;
   border-right: none !important;
