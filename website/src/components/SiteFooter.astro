@@ -1,0 +1,176 @@
+---
+/**
+ * The BMad site footer: the dark ground and mono column headings bmadcode.com
+ * closes every page on.
+ *
+ * It is rendered inside Starlight's `.main-pane` (see TwoColumnContent.astro),
+ * not inside the content column, so the band spans the whole main column —
+ * flush to the sidebar on one side and the table of contents on the other.
+ * Its inner column reuses Starlight's own `--sl-content-margin-inline`, so the
+ * text lines up with the article above it.
+ *
+ * It cannot run the full viewport width: Starlight's sidebar is
+ * `position: fixed` and full height, so a 100vw band would sit behind it.
+ */
+const COLUMNS = [
+  {
+    heading: 'Test Architect',
+    links: [
+      { href: '/tutorials/tea-lite-quickstart/', label: 'Get started' },
+      { href: '/reference/commands/', label: 'Skills and commands' },
+      { href: '/reference/knowledge-base/', label: 'Knowledge base' },
+      { href: '/downloads/', label: 'Downloads' },
+    ],
+  },
+  {
+    heading: 'BMad',
+    links: [
+      { href: 'https://docs.bmad-method.org/', label: 'BMad Method' },
+      { href: 'https://bmad-builder-docs.bmad-method.org/', label: 'BMad Builder' },
+      { href: 'https://cis-docs.bmad-method.org/', label: 'Creative Intelligence Suite' },
+      { href: 'https://game-dev-studio-docs.bmad-method.org/', label: 'Game Dev Studio' },
+    ],
+  },
+  {
+    heading: 'Community',
+    links: [
+      { href: 'https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise', label: 'GitHub' },
+      { href: 'https://www.npmjs.com/package/bmad-method-test-architecture-enterprise', label: 'npm' },
+      { href: 'https://discord.gg/gk8jAdXWmj', label: 'Discord' },
+      { href: 'https://youtube.com/@BMadCode', label: 'YouTube' },
+    ],
+  },
+];
+
+const BOTTOM = ['© 2026 BMad Code, LLC', 'MIT licensed', 'BMad is a trademark of BMad Code, LLC'];
+
+/* An internal path is rooted at the site base. An external URL is unchanged. */
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const href = (link: string) => (link.startsWith('/') ? `${base}${link}` : link);
+---
+
+<div class="bmad-footer">
+  <div class="inner">
+  <p class="brand"><a href="https://www.bmadcode.com">BMad Code</a></p>
+  <p class="tagline">
+    Risk-based test strategy, automation guidance, and release gate decisions.
+  </p>
+
+  <div class="cols">
+    {
+      COLUMNS.map((col) => (
+        // A nav labelled by its own visible text, not a heading. This footer
+        // renders inside <main>, so an <h2> here joined the page's heading
+        // outline and a reader skimming by heading met "Method" and
+        // "Community" among the article's own sections.
+        <nav aria-labelledby={`footer-${col.heading.toLowerCase()}`}>
+          <p class="col-title" id={`footer-${col.heading.toLowerCase()}`}>
+            {col.heading}
+          </p>
+          {col.links.map((link) => (
+            <a href={href(link.href)}>{link.label}</a>
+          ))}
+        </nav>
+      ))
+    }
+  </div>
+
+  <p class="bottom">{BOTTOM.map((line) => <span>{line}</span>)}</p>
+  </div>
+</div>
+
+<style>
+  /* A full-bleed band, so it sits flush against the article rather than
+     floating below it: its own top padding is the gap. */
+  .bmad-footer {
+    padding-block: clamp(2.8rem, 5vw, 3.6rem) 2.2rem;
+    background: var(--bmad-dark, #111418);
+    color: var(--bmad-dark-muted, #a2acb9);
+  }
+
+  /* On the dark ramp the band's ground is the page's ground, so there is no
+     band at all - only an unexplained gap where one should start. Lift it a
+     step and give it an edge. */
+  :global(:root[data-theme='dark']) .bmad-footer {
+    background: var(--bmad-dark-2, #1a1e24);
+    border-top: 1px solid var(--bmad-dark-line, #2e353e);
+  }
+
+  /* the article's own column, so the footer text sits under the prose */
+  .inner {
+    max-width: var(--sl-content-width);
+    margin-inline: var(--sl-content-margin-inline, auto);
+    padding-inline: var(--sl-content-pad-x);
+  }
+
+  .brand {
+    margin: 0;
+  }
+
+  .brand a {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  .tagline {
+    margin: 0.9rem 0 0;
+    max-width: 46ch;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-top: clamp(2.2rem, 4vw, 3rem);
+  }
+
+  .cols .col-title {
+    margin: 0 0 0.9rem;
+    font-family: var(--bmad-mono, ui-monospace, monospace);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #ffffff;
+  }
+
+  .cols a {
+    display: block;
+    padding: 0.28rem 0;
+    font-size: 0.9375rem;
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .cols a:hover {
+    color: #ffffff;
+  }
+
+  .bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.4rem;
+    margin: clamp(2.2rem, 4vw, 3rem) 0 0;
+    padding-top: 1.3rem;
+    border-top: 1px solid var(--bmad-dark-line, #2e353e);
+    font-family: var(--bmad-mono, ui-monospace, monospace);
+    font-size: 0.6875rem;
+    letter-spacing: 0.05em;
+    color: #78828f;
+  }
+
+  /* One column, not two: there are three groups, so two always orphans one
+     onto a row of its own and leaves the space beside it empty. */
+  @media (max-width: 32rem) {
+    .cols {
+      grid-template-columns: 1fr;
+      gap: 1.9rem;
+    }
+  }
+</style>

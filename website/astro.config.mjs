@@ -252,6 +252,9 @@ export default defineConfig({
       // Custom components
       components: {
         Header: './src/components/Header.astro',
+        SiteTitle: './src/components/SiteTitle.astro',
+        PageTitle: './src/components/PageTitle.astro',
+        TwoColumnContent: './src/components/TwoColumnContent.astro',
         MobileMenuFooter: './src/components/MobileMenuFooter.astro',
       },
 
