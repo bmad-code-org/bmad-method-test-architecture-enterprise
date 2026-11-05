@@ -564,7 +564,7 @@ site-search button kbd {
   border-inline-end-color: var(--sl-color-hairline);
 }
 
-.sl-menu-button {
+.header starlight-menu-button button {
   border-radius: 2px;
   box-shadow: none;
   border: 1px solid var(--sl-color-hairline);
@@ -814,14 +814,9 @@ main {
 }
 
 /* Source Markdown includes a title; Starlight supplies the page masthead. */
-.sl-markdown-content > h1:first-child:not(#how-a-skill-becomes-a-cli),
-.sl-markdown-content > .sl-heading-wrapper.level-h1:first-child:not(:has(#how-a-skill-becomes-a-cli)) {
+.sl-markdown-content > h1:first-child,
+.sl-markdown-content > .sl-heading-wrapper.level-h1:first-child {
   display: none;
-}
-
-#how-a-skill-becomes-a-cli {
-  font-family: var(--bmad-sans);
-  margin-bottom: 1.5rem;
 }
 
 /* Nested TEA navigation uses the same text register as page links. */
@@ -842,4 +837,15 @@ main {
   color: inherit;
   font-family: inherit;
   font-size: inherit;
+}
+
+/* Keep mobile search clear of Starlight's fixed menu button. */
+@media (max-width: 49.999rem) {
+  header.header .header.sl-flex {
+    padding-inline-end: 4.5rem;
+  }
+}
+
+.bmad-footer :focus-visible {
+  outline-color: var(--bmad-blue-on-dark);
 }

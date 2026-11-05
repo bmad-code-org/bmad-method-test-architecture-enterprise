@@ -103,6 +103,11 @@ async function main() {
         }
       }
     }
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(url);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    assert.ok(await page.locator('dialog[open]').isVisible(), 'Mobile search opens without hitting the menu button.');
+    await page.keyboard.press('Escape');
     // The prose theme must preserve Mermaid's own node label colors.
     await page.setViewportSize({ width: 1920, height: 1000 });
     await page.goto(url + 'explanation/tea-overview/');
