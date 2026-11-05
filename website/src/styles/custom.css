@@ -666,6 +666,22 @@ starlight-toc a[aria-current='true'] {
    Layout and page meta
    --------------------------------------------------------------- */
 
+/* Reserve the TOC column as soon as Starlight switches to desktop layout. */
+@media (min-width: 72rem) {
+  .right-sidebar-container {
+    width: var(--sl-sidebar-width);
+    flex-shrink: 0;
+  }
+
+  .right-sidebar {
+    width: var(--sl-sidebar-width);
+  }
+
+  [data-has-sidebar][data-has-toc] .main-pane {
+    width: calc(100% - var(--sl-sidebar-width));
+  }
+}
+
 /* Starlight sets `--sl-content-margin-inline: auto 0` on a page with both a
    sidebar and a TOC, which pins the prose to the contents list and piles the
    slack on its left: 268px against 24px at 1920. Keep the chrome on the edges
