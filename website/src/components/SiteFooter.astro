@@ -84,6 +84,7 @@ const href = (link: string) => (link.startsWith('/') ? `${base}${link}` : link);
      floating below it: its own top padding is the gap. */
   .bmad-footer {
     padding-block: clamp(2.8rem, 5vw, 3.6rem) 2.2rem;
+    padding-inline: var(--sl-content-pad-x);
     background: var(--bmad-dark, #111418);
     color: var(--bmad-dark-muted, #a2acb9);
   }
@@ -100,7 +101,6 @@ const href = (link: string) => (link.startsWith('/') ? `${base}${link}` : link);
   .inner {
     max-width: var(--sl-content-width);
     margin-inline: var(--sl-content-margin-inline, auto);
-    padding-inline: var(--sl-content-pad-x);
   }
 
   .brand {

@@ -82,7 +82,7 @@ export default defineConfig({
       title: 'Test Architect (TEA)',
       tagline: 'Risk-based test strategy, automation guidance, and release gate decisions for quality-driven development.',
 
-      favicon: '/favicon.ico',
+      favicon: '/favicon.svg',
 
       // Social links
       social: [

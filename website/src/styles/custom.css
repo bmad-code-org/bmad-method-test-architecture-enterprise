@@ -178,7 +178,6 @@ html {
 
 /* The label register, in one place, so it stays obvious how often it is spent. */
 .sidebar-content .top-level > li > details > summary,
-.sidebar-content .top-level > li > a,
 starlight-toc h2,
 .content-panel footer .meta {
   font-family: var(--bmad-mono);
@@ -453,7 +452,8 @@ starlight-toc h2,
    Cards and buttons
    --------------------------------------------------------------- */
 .card,
-.sl-link-card {
+.sl-link-card,
+.pagination-links a {
   border: 1px solid var(--sl-color-hairline);
   border-radius: 2px;
   background: none;
@@ -462,7 +462,8 @@ starlight-toc h2,
 }
 
 .card:hover,
-.sl-link-card:hover {
+.sl-link-card:hover,
+.pagination-links a:hover {
   transform: none;
   box-shadow: none;
   border-color: var(--bmad-accent);
@@ -597,6 +598,7 @@ site-search button kbd {
   margin-top: 0.25rem;
 }
 
+.sidebar-content .top-level > li > a,
 .sidebar-content .top-level ul a {
   padding: 0.2rem 0.7rem;
   border: 0;
@@ -820,4 +822,24 @@ main {
 #how-a-skill-becomes-a-cli {
   font-family: var(--bmad-sans);
   margin-bottom: 1.5rem;
+}
+
+/* Nested TEA navigation uses the same text register as page links. */
+.sidebar-content .top-level ul details > summary {
+  padding: 0.2rem 0.7rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.sidebar-content .top-level ul details > summary .large {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Mermaid supplies label colors for each authored node. */
+.sl-markdown-content pre.mermaid :is(p, li, strong, b, em, i) {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
 }
