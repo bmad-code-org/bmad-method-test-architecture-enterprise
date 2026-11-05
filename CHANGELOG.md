@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - TEA documentation now follows BMad Core’s visual style: Archivo text, Instrument Serif page titles, compact navigation, square cards, and a shared footer layout in light and dark themes.
 
+### Fixed
+
+- The Downloads navigation now opens a page with links to the source and prompt bundles.
+
 ## [3.6.0] - 2026-10-31
 
 ### Added
