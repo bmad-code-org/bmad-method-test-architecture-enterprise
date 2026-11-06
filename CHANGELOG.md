@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- CI baselines are remeasured on eval-quality 9 with their original sealed evidence and unchanged scores. Current-engine seal expectations retain the original capture digests, and routing corpus expectations include the 4.x migration commands.
+- CI baselines are remeasured on eval-quality 9 with their original sealed evidence and unchanged scores. Current-engine seal expectations retain the original capture digests through the engine's canonical raw-byte hashing, and routing corpus expectations include the 4.x migration commands.
 - TEA’s development lockfile now resolves the published eval-quality 9.0.0 engine.
 
 - Removed `installed_path` from the seven `workflow.yaml` files; BMAD's skill validator rejects it.
