@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-06
+
 ### Added
 
 - `bmad setup` now recognizes a TEA 2.x upgrade. A `retired.toml` in `bmod-tea` renames the eight `bmad-testarch-*` and `bmad-teach-me-testing` skills to their `bmad-tea-*` names and retires `bmad-testarch-atdd` and `bmad-testarch-ci`, so setup lists them, offers to remove them and moves their customization files.

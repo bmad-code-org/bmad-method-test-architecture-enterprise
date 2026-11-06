@@ -2,7 +2,7 @@
 
 [bmod]
 code = "tea"
-version = "3.6.1"
+version = "4.0.0"
 update_source = "github:bmad-code-org/bmad-method-test-architecture-enterprise/skills"
 skills = [
   "bmad-tea",
