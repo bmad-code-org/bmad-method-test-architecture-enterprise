@@ -105,6 +105,21 @@ async function main() {
     }
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(url);
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = 'dark';
+    });
+    const menuStyle = await page.getByRole('button', { name: 'Menu', exact: true }).evaluate((button) => ({
+      background: globalThis.getComputedStyle(button).backgroundColor,
+      color: globalThis.getComputedStyle(button).color,
+      navBackground: globalThis.getComputedStyle(document.querySelector('header.header')).backgroundColor,
+      textColor: globalThis.getComputedStyle(document.body).color,
+      radius: globalThis.getComputedStyle(button).borderRadius,
+      shadow: globalThis.getComputedStyle(button).boxShadow,
+    }));
+    assert.equal(menuStyle.background, menuStyle.navBackground, 'Mobile menu follows the dark navigation background.');
+    assert.equal(menuStyle.color, menuStyle.textColor, 'Mobile menu follows the dark text color.');
+    assert.equal(menuStyle.radius, '2px', 'Mobile menu matches the square navigation controls.');
+    assert.equal(menuStyle.shadow, 'none', 'Mobile menu has no drop shadow.');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     assert.ok(await page.locator('dialog[open]').isVisible(), 'Mobile search opens without hitting the menu button.');
     await page.keyboard.press('Escape');

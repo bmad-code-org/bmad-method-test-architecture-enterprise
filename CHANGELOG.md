@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The Downloads navigation now opens a page linking to the skills bundle and complete repository source. The prompt bundle includes the framework documentation step.
-- Mobile search stays clear of the menu button, and Mermaid labels retain their authored colors in both themes.
+- Mobile search stays clear of the menu button, the mobile menu uses square controls and theme colors, and Mermaid labels retain their authored colors in both themes.
 - The Linux confinement audit fixture opens withheld files through shell redirection, keeping its read-attempt check valid with Ubuntu 26.04’s Rust coreutils.
 
 ## [3.6.0] - 2026-10-31
