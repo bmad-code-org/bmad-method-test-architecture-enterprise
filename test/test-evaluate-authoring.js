@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
@@ -658,7 +659,7 @@ function checkSuite(kind, out) {
     const replay = path.join(folder, 'replay', runName);
     sameBytes(path.join(folder, 'contract.json'), path.join(replay, 'contract.json'), `${kind} ${runName} contract`);
     sameBytes(compiled, path.join(replay, 'eval-contract.json'), `${kind} ${runName} compile`);
-    sameBytes(sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${kind} ${runName} seal`);
+    sameBytes(sealed, refreshedSeal(path.join(replay, 'sealed-evaluator-brief.json')), `${kind} ${runName} seal`);
     const expectedProbeIds = runName === 'held-out' ? heldOut : authoredProbeIds.filter((id) => !heldOut.includes(id));
     runReplay(folder, runName, out, expectedProbeIds, heldOutOnly);
   }
