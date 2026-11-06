@@ -51,7 +51,7 @@ if (mode === 'retry' && attempt === 1) {
   process.exit(1);
 }
 if (mode === 'fail-agent') process.exit(1);
-const gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns', 'manifest-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
+let gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns', 'manifest-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
 const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
 const inventory = { total: ledger.length, covered: pct === 0 ? 0 : ledger.length, pct };
 const snapshot = '2026-10-09T00:00:00.000Z';
@@ -72,6 +72,36 @@ const summary = {
   risk_summary: { critical_open: pct === 0 ? 1 : 0, high_open: 0, medium_open: 0, low_open: 0 }, live_evidence: { requirements_live_only: 0 },
   blockers: [], recommendations: [], rejected_evidence: [], links: { trace_report_path: matrixPath },
 };
+// Boundary fixtures exercise the real CLI with independently declared gate outcomes.
+const thresholdCases = {
+  'p1-target': { P0: [1, 1], P1: [26, 29], verdict: 'CONCERNS', p1Status: 'PARTIAL' },
+  'p1-minimum': { P0: [1, 1], P1: [35, 44], verdict: 'FAIL', p1Status: 'NOT_MET' },
+  'overall-minimum': { P0: [1, 1], P2: [34, 43], verdict: 'FAIL', overallStatus: 'NOT_MET' },
+  'p0-complete': { P0: [199, 200], P1: [50, 50], verdict: 'FAIL', p0Status: 'NOT_MET' },
+};
+const threshold = Object.entries(thresholdCases).find(([key]) => mode.startsWith(`threshold-${key}-`))?.[1];
+const coveredIds = new Set();
+if (threshold) {
+  for (const priority of ['P0', 'P1', 'P2', 'P3']) {
+    const rows = ledger.filter(row => row.priority === priority);
+    const covered = threshold[priority]?.[0] ?? 0;
+    for (const row of rows.slice(0, covered)) coveredIds.add(row.id);
+    summary.coverage.priority_breakdown[priority] = {total: rows.length, covered, pct: rows.length ? Math.round(covered * 100 / rows.length) : 100};
+  }
+  summary.coverage.inventory = {total: ledger.length, covered: coveredIds.size, pct: Math.round(coveredIds.size * 100 / ledger.length)};
+  const {P0, P1} = summary.coverage.priority_breakdown;
+  const overall = summary.coverage.inventory.pct;
+  const rounded = mode.endsWith('-rounded');
+  gateStatus = rounded ? (P0.pct < 100 || P1.pct < 80 || overall < 80 ? 'FAIL' : P1.pct < 90 ? 'CONCERNS' : 'PASS') : threshold.verdict;
+  summary.risk_summary.critical_open = P0.total - P0.covered;
+  summary.gate_status = gateStatus;
+  summary.gate_criteria = {
+    p0_coverage_required: '100%', p0_coverage_actual: `${P0.pct}%`, p0_status: rounded ? (P0.pct === 100 ? 'MET' : 'NOT_MET') : threshold.p0Status ?? 'MET',
+    p1_coverage_target: '90%', p1_coverage_minimum: '80%', p1_coverage_actual: `${P1.pct}%`, p1_status: rounded ? (P1.pct >= 90 ? 'MET' : P1.pct >= 80 ? 'PARTIAL' : 'NOT_MET') : threshold.p1Status ?? 'MET',
+    overall_coverage_minimum: '80%', overall_coverage_actual: `${overall}%`, overall_status: rounded ? (overall >= 80 ? 'MET' : 'NOT_MET') : threshold.overallStatus ?? 'MET',
+  };
+}
+const coverageFor = row => threshold ? (coveredIds.has(row.id) ? 'FULL' : 'NONE') : pct ? 'FULL' : 'NONE';
 const coverage = pct ? 'FULL' : 'NONE';
 const storyOf = id => id.slice(0, id.lastIndexOf('--'));
 if (requirementOracle) {
@@ -104,7 +134,7 @@ if (mode === 'concerns') {
   summary.oracle.resolution_mode = 'synthetic_source';
   summary.inventory_basis = 'synthetic_requirements';
 }
-if (eligible) {
+if (eligible && !threshold) {
   summary.gate_status = gateStatus;
   summary.gate_criteria = {
     p0_coverage_required: '100%', p0_coverage_actual: `${pct}%`, p0_status: pct === 100 ? 'MET' : 'NOT_MET',
@@ -161,6 +191,7 @@ if (mode === 'manifest-invalid-failure-ignored') {
   summary.live_evidence.failed = 0;
   summary.live_evidence.fresh_failed = 0;
 }
+if (mode === 'fresh-hidden-failure') summary.live_evidence = {requirements_live_only: 0, freshness: 'fresh', failed: 3, fresh_failed: 0};
 if (mode === 'fresh-invalid-count') summary.live_evidence = { requirements_live_only: 0, freshness: 'fresh', failed: -1 };
 if (mode === 'source-priority-drift') {
   summary.coverage.priority_breakdown.P1 = summary.coverage.priority_breakdown.P0;
@@ -182,7 +213,7 @@ if (mode === 'missing-criteria') delete summary.gate_criteria;
 if (mode === 'summary-requirements-granularity') summary.oracle.granularity = 'requirements';
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
-fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\n${requirementOracle ? `oracleGranularity: requirements\ncriterionLedger: ${JSON.stringify(criterionLedger)}\n` : ''}stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${pct ? 'FULL' : 'NONE'}\n${contributorTable(row)}`).join('\n')}${requirementOracle ? aggregationBlock() : ''}`);
+fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\n${requirementOracle ? `oracleGranularity: requirements\ncriterionLedger: ${JSON.stringify(criterionLedger)}\n` : ''}stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${coverageFor(row)}\n${contributorTable(row)}`).join('\n')}${requirementOracle ? aggregationBlock() : ''}`);
 if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));

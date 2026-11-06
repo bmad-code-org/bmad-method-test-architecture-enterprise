@@ -275,7 +275,7 @@ test('should do something', async ({ {fixtureName} }) => {
 **DEV Agent Responsibilities:**
 
 1. **Pick one scaffolded test** from implementation checklist (start with highest priority)
-2. **Remove `test.skip()`** for that test and confirm it fails first
+2. **Remove `.skip` and the adjacent comment with its temporary reason** for that test and confirm it fails first
 3. **Read the test** to understand expected behavior
 4. **Implement minimal code** to make that specific test pass
 5. **Run the test** to verify it now passes (green)
@@ -395,8 +395,8 @@ See `tea-index.csv` for complete knowledge fragment mapping.
 **Questions or Issues?**
 
 - Ask in team standup
-- Tag @{tea_agent_username} in Slack/Discord
-- Refer to `./bmm/docs/tea-README.md` for workflow documentation
+- Ask your team’s test owner for project-specific guidance
+- Refer to the [Automate workflow guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)
 - Consult `{tea-knowledge}` for testing best practices
 
 ---

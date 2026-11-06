@@ -1586,7 +1586,7 @@ function normalizeReportScore(reportText, parsed) {
  * @throws {Error} With code REPORT_UNPARSEABLE on any missing/invalid element.
  */
 function parseReport(reportText, runContract = {}) {
-  const text = stripFencedCodeBlocks(reportText);
+  const text = stripFencedCodeBlocks(reportText.replace(/^\uFEFF/, ''));
 
   parseFrontmatter(text);
 

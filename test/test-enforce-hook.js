@@ -517,6 +517,91 @@ function run() {
   console.log(`${colors.yellow}Test Suite 7: Hook Self-Integrity${colors.reset}\n`);
   // ==========================================================================
 
+  const setupGuide = fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-framework/steps-c/step-04-docs-and-scripts.md'), 'utf8');
+  for (const glob of hook.DEFAULT_CONFIG.pactConfigGlobs) {
+    assert(setupGuide.includes(`\`${glob}\``), `framework setup preserves Pact config glob ${glob}`);
+  }
+  for (const [file, content] of [
+    ['e2e/a.spec.ts', 'first();\nsleep(100);\n'],
+    ['tests/test_a.py', 'first()\nsleep(100)\n'],
+    ['.maestro/login.yaml', 'appId: example\n---\n\n- sleep: 100\n- assertVisible: Done\n'],
+  ]) {
+    const finding = hook.scanContent(file, content, {}).find((value) => value.rule.id === 'H1');
+    assert(finding?.line === (file.endsWith('.yaml') ? 4 : 2), `hard wait keeps its source line in ${file}`);
+  }
+  for (const [file, content] of [
+    [
+      'src/FooTest.java',
+      'class FooTest { String text = """\nfixture' + String.fromCodePoint(92, 92) + '"""; void test() { Thread.sleep(100); } }',
+    ],
+    ['src/FooTest.kt', 'val text = """\nfixture' + String.fromCodePoint(92) + '"""; fun test() { Thread.sleep(100); }'],
+  ]) {
+    assert(
+      hook.scanContent(file, content, {}).some((value) => value.rule.id === 'H1'),
+      `code after escaped multiline delimiter remains visible in ${file}`,
+    );
+  }
+
+  // Drive the public hook entry point with real Write payloads.
+  const payloadProject = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-hook-regressions-'));
+  try {
+    const { spawnSync } = require('node:child_process');
+    const hookFile = path.resolve(__dirname, '../skills/bmad-tea-framework/resources/hooks/tea-enforce.cjs');
+    for (const [file, content, expected, label] of [
+      ['e2e/a.spec.ts', 'await new Promise(r => setTimeout(r, 1000));', 2, 'Promise timer blocks'],
+      ['e2e/a.spec.ts', 'await new Promise((resolve, reject) => {\n setTimeout(resolve, 1000);\n});', 2, 'multiline Promise timer blocks'],
+      ['e2e/a.spec.ts', "import { setTimeout } from 'node:timers/promises';\nawait setTimeout(1000);", 2, 'awaited timer blocks'],
+      ['e2e/a.spec.ts', 'await setTimeout(\n 1000\n);', 2, 'multiline awaited timer blocks'],
+      ['e2e/a.spec.ts', 'setTimeout(() => recordEvent(), 1000);', 0, 'unawaited callback stays with review'],
+      ['e2e/a.spec.ts', '// await setTimeout(1000);\nconst example = "await setTimeout(1000)";', 0, 'timer examples stay inert'],
+      ['e2e/a.spec.ts', 'await clock.setTimeout(1000);', 0, 'object method stays with review'],
+      ['vitest.config.pact.ts', 'export default {fileParallelism:false, maxWorkers:2.0};', 2, 'decimal worker count blocks'],
+      ['vitest.config.pact.ts', 'export default {fileParallelism:false, maxWorkers:2_000};', 2, 'numeric separator worker count blocks'],
+      ['vitest.config.pact.ts', 'export default {fileParallelism:false, maxWorkers:4e0};', 2, 'exponent worker count blocks'],
+      ['vitest.config.pact.ts', "export default {fileParallelism:false, maxWorkers:'4'};", 2, 'quoted worker count blocks'],
+      [
+        'vitest.config.pact.ts',
+        'export default {fileParallelism:false, maxConcurrency:1, minWorkers:"4"};',
+        2,
+        'later quoted count blocks',
+      ],
+      ['vitest.config.pact.ts', "export default {fileParallelism:false, maxWorkers:'1'};", 0, 'single quoted worker passes'],
+      [
+        'vitest.config.pact.ts',
+        'export default {fileParallelism:false, note: "maxWorkers: \'4\'"};',
+        0,
+        'quoted setting example stays inert',
+      ],
+      ['vitest.config.pact.ts', "export default {fileParallelism:false}; // maxWorkers:'4'", 0, 'comment setting stays inert'],
+      ['src/FooTest.java', 'class FooTest { String doc = """\nThread.sleep(100)\n"""; }', 0, 'Java text block stays inert'],
+      [
+        'src/FooTest.java',
+        'class FooTest { String doc = """\nfixture\n"""; void test() {Thread.sleep(100);} }',
+        2,
+        'Java code after text block blocks',
+      ],
+      ['app/src/test/kotlin/FooTest.kt', 'val text = """\nThread.sleep(100)\n"""', 0, 'Kotlin raw string stays inert'],
+      ['app/src/test/kotlin/FooTest.kt', 'fun t() {Thread.sleep(100)}', 2, 'Kotlin conventional path blocks'],
+      ['app/src/test/kotlin/FooTests.kt', 'fun t() {Thread.sleep(100)}', 2, 'Kotlin Tests suffix blocks'],
+      ['app/src/test/kotlin/FooIT.kt', 'fun t() {Thread.sleep(100)}', 2, 'Kotlin IT suffix blocks'],
+      ['.maestro/subflows/login.yaml', 'appId: com.example\n---\n- tapOn: Login', 0, 'reusable subflow needs no assertion'],
+      ['.maestro/subflows/login.yaml', 'appId: com.example\n---\n- sleep: 100', 2, 'subflow hard wait still blocks'],
+      ['.maestro/login.yaml', 'appId: com.example\n---\n- tapOn: Login', 2, 'top-level flow requires assertion'],
+      ['.maestro/subflows-test/login.yaml', 'appId: com.example\n---\n- tapOn: Login', 2, 'similar directory still requires assertion'],
+    ]) {
+      const result = spawnSync(process.execPath, [hookFile, '--pre'], {
+        cwd: payloadProject,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: payloadProject },
+        input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file, content } }),
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      assert(result.status === expected, label, `exit=${result.status} stderr=${result.stderr}`);
+    }
+  } finally {
+    fs.rmSync(payloadProject, { recursive: true, force: true });
+  }
+
   const hookPath = path.join(__dirname, '..', 'skills', 'bmad-tea-framework', 'resources', 'hooks', 'tea-enforce.cjs');
   const realSha = crypto.createHash('sha256').update(fs.readFileSync(hookPath)).digest('hex');
 

@@ -112,6 +112,12 @@ const p1Coverage = priorityBreakdown.P1.percentage;
 const hasP1Requirements = (priorityBreakdown.P1.total || 0) > 0;
 const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
+// Keep rounded percentages for display. Apply thresholds to integer counts.
+const meetsCoverage = (covered, total, threshold) => total === 0 || covered * 100 >= threshold * total;
+const p0Met = meetsCoverage(priorityBreakdown.P0.covered, priorityBreakdown.P0.total, 100);
+const p1MinimumMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, 80);
+const p1TargetMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, 90);
+const overallMet = meetsCoverage(stats.fully_covered, stats.total_requirements, 80);
 const criticalGaps = (coverageMatrix.gap_analysis?.critical_gaps || []).length;
 const isUnresolved = (value) => typeof value === 'string' && value.startsWith('{') && value.endsWith('}');
 const normalizeResolvedToken = (value) => {
@@ -306,33 +312,33 @@ if (!gateEligible) {
   rationale = `Gate decision skipped because allow_gate=${allowGate} and collection_status=${collectionStatus}.`;
 } else {
   // Rule 1: P0 coverage must be 100%
-  if (p0Coverage < 100) {
+  if (!p0Met) {
     gateDecision = 'FAIL';
     // Critical gaps are every P0 criterion under FULL, which includes PARTIAL, UNIT-ONLY, and
     // INTEGRATION-ONLY, so the count is stated as "below FULL coverage". See checklist.md's Gap Analysis.
     rationale = `P0 coverage is ${p0Coverage}% (required: 100%). ${criticalGaps} critical requirement(s) below FULL coverage.`;
   }
   // Rule 2: Overall coverage must be >= 80%
-  else if (overallCoverage < 80) {
+  else if (!overallMet) {
     gateDecision = 'FAIL';
     rationale = `Overall coverage is ${overallCoverage}% (minimum: 80%). Significant gaps exist.`;
   }
   // Rule 3: P1 coverage < 80% → FAIL
-  else if (effectiveP1Coverage < 80) {
+  else if (!p1MinimumMet) {
     gateDecision = 'FAIL';
     rationale = hasP1Requirements
       ? `P1 coverage is ${effectiveP1Coverage}% (minimum: 80%). High-priority gaps must be addressed.`
       : `P1 requirements are not present; continuing with remaining gate criteria.`;
   }
   // Rule 4: P1 coverage >= 90% and overall >= 80% with P0 at 100% → PASS
-  else if (effectiveP1Coverage >= 90) {
+  else if (p1TargetMet) {
     gateDecision = 'PASS';
     rationale = hasP1Requirements
       ? `P0 coverage is 100%, P1 coverage is ${effectiveP1Coverage}% (target: 90%), and overall coverage is ${overallCoverage}% (minimum: 80%).`
       : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%). No P1 requirements detected.`;
   }
   // Rule 5: P1 coverage 80-89% with P0 at 100% and overall >= 80% → CONCERNS
-  else if (effectiveP1Coverage >= 80) {
+  else if (p1MinimumMet) {
     gateDecision = 'CONCERNS';
     rationale = hasP1Requirements
       ? `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but P1 coverage is ${effectiveP1Coverage}% (target: 90%).`
@@ -366,7 +372,7 @@ if (!gateEligible) {
   // A live result is a one-time observation of one commit with no artifact anyone can re-run, so a
   // requirement resting only on it is capped at CONCERNS. This overlay only ever lowers PASS or
   // annotates an existing CONCERNS; it can never lift a FAIL.
-  const freshLiveFailures = liveEvidence.fresh_failed ?? (liveEvidence.freshness === 'fresh' ? liveEvidence.failed : 0);
+  const freshLiveFailures = Math.max(liveEvidence.fresh_failed ?? 0, liveEvidence.freshness === 'fresh' ? liveEvidence.failed : 0);
   if (freshLiveFailures > 0 && gateDecision === 'PASS') {
     gateDecision = 'CONCERNS';
     rationale = `${rationale} ${freshLiveFailures} fresh live verification failure(s) require investigation.`;
@@ -476,16 +482,16 @@ const gateReport = {
     ? {
         p0_coverage_required: '100%',
         p0_coverage_actual: `${p0Coverage}%`,
-        p0_status: p0Coverage === 100 ? 'MET' : 'NOT_MET',
+        p0_status: p0Met ? 'MET' : 'NOT_MET',
 
         p1_coverage_target: '90%',
         p1_coverage_minimum: '80%',
         p1_coverage_actual: `${effectiveP1Coverage}%`,
-        p1_status: effectiveP1Coverage >= 90 ? 'MET' : effectiveP1Coverage >= 80 ? 'PARTIAL' : 'NOT_MET',
+        p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
 
         overall_coverage_minimum: '80%',
         overall_coverage_actual: `${overallCoverage}%`,
-        overall_status: overallCoverage >= 80 ? 'MET' : 'NOT_MET',
+        overall_status: overallMet ? 'MET' : 'NOT_MET',
       }
     : null,
 
@@ -804,14 +810,14 @@ if (gateEligible) {
   e2eTraceSummary.gate_criteria = {
     p0_coverage_required: '100%',
     p0_coverage_actual: `${p0Coverage}%`,
-    p0_status: p0Coverage === 100 ? 'MET' : 'NOT_MET',
+    p0_status: p0Met ? 'MET' : 'NOT_MET',
     p1_coverage_target: '90%',
     p1_coverage_minimum: '80%',
     p1_coverage_actual: `${effectiveP1Coverage}%`,
-    p1_status: effectiveP1Coverage >= 90 ? 'MET' : effectiveP1Coverage >= 80 ? 'PARTIAL' : 'NOT_MET',
+    p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
     overall_coverage_minimum: '80%',
     overall_coverage_actual: `${overallCoverage}%`,
-    overall_status: overallCoverage >= 80 ? 'MET' : 'NOT_MET',
+    overall_status: overallMet ? 'MET' : 'NOT_MET',
   };
 }
 

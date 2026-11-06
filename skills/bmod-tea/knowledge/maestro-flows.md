@@ -188,7 +188,7 @@ tags:
 
 - Subflows are the mobile equivalent of a fixture: one owner, many consumers
 - Pass data through `env` rather than baking values into the subflow
-- Keep subflows in a dedicated directory so a flow-count metric does not treat them as tests
+- Keep reusable subflows in a `subflows/` directory so a flow-count metric can distinguish them from tests. The write-time hook exempts that exact directory from C4 assertion-presence checks and still enforces hard waits and other applicable rules. Calling test flows must assert the destination state.
 
 ### Example 5: Conditional and Platform-Specific Steps
 

@@ -50,6 +50,17 @@ function assert(condition, label, detail = '') {
   if (detail) console.log(`    ${colors.dim}${detail}${colors.reset}`);
 }
 
+const checklistHelp = fs.readFileSync(FILES.template, 'utf8').split('## Contact')[1];
+assert(Boolean(checklistHelp), 'generated checklist includes contact guidance');
+assert(
+  !/tea_agent_username|bmm\/docs\/tea-README/.test(checklistHelp),
+  'generated contact guidance has no stale path or undeclared contact token',
+);
+assert(
+  checklistHelp.includes('(https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)'),
+  'generated checklist links to the maintained Automate guide',
+);
+
 function read(name) {
   const body = fs.readFileSync(FILES[name], 'utf8');
   return name === 'docs' ? redModeSection(body) : body;
@@ -191,6 +202,39 @@ function main() {
         JSON.stringify(title),
       );
     }
+  }
+
+  const hook = require('../skills/bmad-tea-framework/resources/hooks/tea-enforce.cjs');
+  const markdown = new MarkdownIt();
+  for (const source of ['api', 'e2e', 'docs']) {
+    const examples = markdown
+      .parse(sources[source], {})
+      .filter((token) => token.type === 'fence' && /^(?:typescript|javascript|ts|js)$/.test(token.info));
+    let leaves = 0;
+    for (const example of examples) {
+      const skipped = literalSkipTitles(example.content).length;
+      if (skipped === 0) continue;
+      leaves += skipped;
+      assert(
+        !hook.scanContent('tests/generated.spec.ts', example.content, {}).some((finding) => finding.rule.id === 'C1'),
+        `${source} copied red examples document every skip`,
+      );
+      const reasons = example.content.match(/^[ \t]*\/\/ Red scaffold: awaiting implementation\./gm) ?? [];
+      assert(reasons.length === skipped, `${source} explains each skipped leaf with its temporary red-phase reason`);
+    }
+    assert(leaves > 0, `${source} includes copied red scaffolds for hook verification`);
+  }
+  assert(
+    hook
+      .scanContent('tests/generated.spec.ts', "test.skip('unexplained', () => {});", {})
+      .some((finding) => finding.rule.id === 'C1' && finding.rule.action === 'warn'),
+    'unexplained skipped tests still warn',
+  );
+  for (const source of ['api', 'e2e', 'aggregate', 'validate', 'checklist', 'template']) {
+    assert(
+      sources[source].includes('adjacent comment') && sources[source].includes('temporary reason'),
+      `${source} carries the generated skip reason and activation contract`,
+    );
   }
 
   const unnamed = [

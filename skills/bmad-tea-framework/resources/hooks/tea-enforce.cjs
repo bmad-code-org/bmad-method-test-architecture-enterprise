@@ -109,6 +109,7 @@ const DEFAULT_CONFIG = {
     '**/*Test.java',
     '**/*Tests.java',
     '**/*IT.java',
+    '**/*{Test,Tests,IT}.kt',
     '.maestro/**/*.{yaml,yml}',
     'maestro/**/*.{yaml,yml}',
   ],
@@ -311,7 +312,7 @@ function literal(source, start, end, mode) {
  */
 const codeInMask = (character) => (character === '\n' ? '\n' : ' ');
 
-function stripCLike(source, literals) {
+function stripCLike(source, literals, kind, kotlinRaw = false) {
   let out = '';
   let index = 0;
   // Whether a `/` at this position could open a regex literal rather than divide.
@@ -363,6 +364,24 @@ function stripCLike(source, literals) {
         regexAllowed = false;
         continue;
       }
+    }
+
+    if (kind === 'java' && source.startsWith('"""', index)) {
+      let scan = index + 3;
+      while (scan < source.length) {
+        if (source.startsWith('"""', scan)) {
+          scan += 3;
+          break;
+        }
+        // Java text blocks allow escaped quotes. Kotlin raw strings close at
+        // the same delimiter; preserving offsets keeps the operand views aligned.
+        if (!kotlinRaw && source[scan] === '\\') scan += 2;
+        else scan += 1;
+      }
+      out += literal(source, index, scan, literals);
+      index = scan;
+      regexAllowed = false;
+      continue;
     }
 
     if (character === '"' || character === "'" || character === '`') {
@@ -470,13 +489,13 @@ function stripYaml(source) {
     .join('\n');
 }
 
-function stripNoise(source, kind) {
+function stripNoise(source, kind, relativePath = '') {
   switch (kind) {
     case 'js':
     case 'java':
     case 'go':
     case 'pactconfig': {
-      return stripCLike(source);
+      return stripCLike(source, undefined, kind, relativePath.endsWith('.kt'));
     }
     case 'py': {
       return stripPython(source);
@@ -501,13 +520,13 @@ function stripNoise(source, kind) {
  * view, at the same offsets; the masked view says which of those characters sit
  * inside a literal, where whitespace is part of the value.
  */
-function stripComments(source, kind, mode) {
+function stripComments(source, kind, mode, relativePath = '') {
   switch (kind) {
     case 'js':
     case 'java':
     case 'go':
     case 'pactconfig': {
-      return stripCLike(source, mode);
+      return stripCLike(source, mode, kind, relativePath.endsWith('.kt'));
     }
     case 'py': {
       return stripPython(source, mode);
@@ -750,7 +769,10 @@ const RULES = [
     scope: 'file',
     kinds: ['maestro'],
     fix: 'Add `assertVisible`, `assertNotVisible`, `assertTrue`, or `extendedWaitUntil` on the destination state. A flow that only taps passes as long as the taps land.',
-    matchFile(strippedSource) {
+    matchFile(strippedSource, context) {
+      // Reusable Maestro fixtures live in the documented subflows directory.
+      // Other rules, including hard waits, still apply to these files.
+      if (/(?:^|\/)subflows\//.test(context.relativePath.replaceAll('\\', '/'))) return false;
       if (!/^\s*(?:-\s*)?(?:appId|tags)\s*:/m.test(strippedSource) && !/^\s*-\s*(?:launchApp|tapOn|inputText)\b/m.test(strippedSource)) {
         // Not a Maestro flow, just a YAML file that happened to match a glob.
         return false;
@@ -764,21 +786,18 @@ const RULES = [
     severity: 'HIGH',
     gate: 'Absolute',
     action: 'block',
-    scope: 'line',
+    scope: 'source',
     kinds: ['js', 'py', 'java', 'go', 'maestro'],
-    fix: 'Wait on the condition, not the clock: a web-first assertion, an explicit readiness signal, `cy.wait("@alias")`, or `extendedWaitUntil` in a Maestro flow.',
-    match(line, context) {
+    fix: 'Wait on a web-first assertion, an explicit readiness signal, `cy.wait("@alias")`, or `extendedWaitUntil` in a Maestro flow.',
+    matchSource(source, context) {
       const patterns = {
-        js: /(?:\bwaitForTimeout\s*\(|\bcy\.wait\s*\(\s*\d|(?:^|[^\w.])sleep\s*\(|\bdelay\s*\(\s*\d)/,
-        py: /(?:\btime\.sleep\s*\(|(?:^|[^\w.])sleep\s*\()/,
-        java: /\bThread\.sleep\s*\(/,
-        // The row's own catch-all — "or any bare timer used to order steps" — is
-        // what carries Go here; `time.Sleep` is the language's only spelling of it.
-        go: /\btime\.Sleep\s*\(/,
-        maestro: /^\s*-\s*sleep\s*:/,
+        js: /(?:\bwaitForTimeout\s*\(|\bcy\.wait\s*\(\s*\d|(?:^|[^\w.\r\n])sleep\s*\(|\bdelay\s*\(\s*\d|\bawait\s+setTimeout\s*\(\s*\d|\bnew\s+Promise\s*\(\s*(?:\(\s*)?([\w$]+)\s*(?:,\s*[\w$]+\s*)?\)?\s*=>\s*(?:{\s*)?setTimeout\s*\(\s*\1\s*,\s*\d)/gm,
+        py: /(?:\btime\.sleep\s*\(|(?:^|[^\w.\r\n])sleep\s*\()/gm,
+        java: /\bThread\.sleep\s*\(/g,
+        go: /\btime\.Sleep\s*\(/g,
+        maestro: /^[ \t]*-[ \t]*sleep[ \t]*:/gm,
       };
-      const pattern = patterns[context.kind];
-      return Boolean(pattern && pattern.test(line));
+      return [...source.matchAll(patterns[context.kind])].map((match) => [match.index, match.index + match[0].length]);
     },
   },
   {
@@ -820,11 +839,18 @@ const RULES = [
     scope: 'line',
     kinds: ['pactconfig'],
     fix: 'Remove the setting. Pact runs must stay serialized: no concurrent sequence, one worker, isolation on.',
-    match(line) {
+    match(line, context) {
       if (/concurrent\s*:\s*true/.test(line)) return true;
       if (/isolate\s*:\s*false/.test(line)) return true;
-      const concurrency = /(?:maxConcurrency|maxWorkers|minWorkers)\s*:\s*(\d+)/.exec(line);
-      return Boolean(concurrency && Number(concurrency[1]) > 1);
+      // Match keys in code, then read a numeric literal from the kept view.
+      // This accepts Vitest's quoted counts without treating string examples as settings.
+      for (const key of line.matchAll(/\b(?:maxConcurrency|maxWorkers|minWorkers)\s*:\s*/g)) {
+        const value = context.code
+          .slice(key.index + key[0].trimEnd().length)
+          .match(/^\s*(?:(\d[\d_]*(?:\.[\d_]*)?(?:[eE][+-]?\d[\d_]*)?)|(['"])(\d+)\2)/);
+        if (value && Number((value[1] ?? value[3]).replaceAll('_', '')) > 1) return true;
+      }
+      return false;
     },
   },
 ];
@@ -898,12 +924,13 @@ function scanContent(relativePath, source, config, options) {
   const gateOpen = isPactConfig ? matchesAnyGlob(relativePath, settings.pactConfigGlobs) : matchesAnyGlob(relativePath, settings.testGlobs);
   if (!gateOpen) return [];
 
-  const stripped = stripNoise(source, kind);
+  const stripped = stripNoise(source, kind, relativePath);
   const strippedLines = stripped.split('\n');
   const rawLines = source.split('\n');
   const lineCount = source.replace(/\n$/, '').split('\n').length;
   const lineStarts = lineStartOffsets(stripped);
   let views = null;
+  let keptLines = null;
   const findings = [];
 
   for (const rule of activeRules(settings)) {
@@ -924,7 +951,11 @@ function scanContent(relativePath, source, config, options) {
       continue;
     }
 
-    views ??= { code: stripComments(source, kind, 'keep') ?? stripped, mask: stripComments(source, kind, 'mask') ?? '' };
+    views ??= {
+      code: stripComments(source, kind, 'keep', relativePath) ?? stripped,
+      mask: stripComments(source, kind, 'mask', relativePath) ?? '',
+    };
+    keptLines ??= views.code.split('\n');
     // What a violation IS, independent of where it sits and of the comments and
     // layout around it: the code it spans, literals intact, whitespace outside
     // literals dropped. `introducedFindings` compares these.
@@ -952,7 +983,7 @@ function scanContent(relativePath, source, config, options) {
     }
 
     for (const [index, line] of strippedLines.entries()) {
-      const context = { kind, config: settings, rawLines, lineIndex: index, relativePath };
+      const context = { kind, config: settings, rawLines, lineIndex: index, relativePath, code: keptLines[index] };
       if (rule.match(line, context)) {
         findings.push({
           rule,

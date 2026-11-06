@@ -115,18 +115,22 @@ Set `hookSha256` to the sha256 of the file you copied in 3.1: `shasum -a 256 .cl
 
 Fill `testGlobs` from the frameworks selected in step 2 and the directories scaffolded in step 3:
 
-| Detected surface | Add to `testGlobs`                                                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Playwright       | `{test_dir}/**/*.spec.{ts,js}`                                                                                                       |
-| Cypress          | `cypress/e2e/**/*.cy.{ts,js}`                                                                                                        |
-| Vitest / Jest    | `**/*.test.{ts,tsx,js,jsx}`, `**/*.spec.{ts,tsx,js,jsx}` scoped to `{test_dir}` and the source tree that holds co-located unit tests |
-| Pact (consumer)  | `**/*.pacttest.{ts,js}`                                                                                                              |
-| pytest           | `tests/**/test_*.py`, `**/*_test.py`                                                                                                 |
-| JUnit            | `src/test/java/**/*{Test,Tests,IT}.java`                                                                                             |
-| Go test          | `**/*_test.go`                                                                                                                       |
-| Maestro          | `{maestro_root}/**/*.{yaml,yml}`                                                                                                     |
+| Detected surface | Add to `testGlobs`                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Playwright       | `{test_dir}/**/*.spec.{ts,js}`                                                                                                                                 |
+| Cypress          | `cypress/e2e/**/*.cy.{ts,js}`                                                                                                                                  |
+| Vitest / Jest    | `**/*.test.{ts,tsx,js,jsx}`, `**/*.spec.{ts,tsx,js,jsx}` scoped to `{test_dir}` and the source tree that holds co-located unit tests                           |
+| Pact (consumer)  | `**/*.pacttest.{ts,js}`                                                                                                                                        |
+| pytest           | `tests/**/test_*.py`, `**/*_test.py`                                                                                                                           |
+| JUnit            | `src/test/java/**/*{Test,Tests,IT}.java`; for Kotlin, `{kotlin_test_root}/**/*{Test,Tests,IT}.kt` with each detected root, including Android `src/androidTest` |
+| Go test          | `**/*_test.go`                                                                                                                                                 |
+| Maestro          | `{maestro_root}/**/*.{yaml,yml}`                                                                                                                               |
 
-Fill `pactConfigGlobs` only when a pact vitest config exists: `**/vitest.config.pact.{ts,js}`. Rows H6 and H8 are scoped to that path and cannot fire anywhere else.
+Keep reusable Maestro fixtures in a `subflows/` directory. C4 exempts those fixtures from the assertion-presence requirement; other rules, including H1 hard waits, still apply. Top-level test flows must assert their destination state.
+
+The hook mechanically checks JS/TS, Python, Java/Kotlin, Go, and Maestro. C# and Ruby suites use Test Review for quality checks; the hook has no mechanical language rules for them. Test Review also reads a wider set of test directories and file types so it can assess helpers and stack-specific behavior.
+
+Fill `pactConfigGlobs` only when a pact vitest config exists: `**/vitest.config.pact.{ts,js,mts,mjs,cts,cjs}` and `**/vitest.pact.config.{ts,js,mts,mjs,cts,cjs}`. Rows H6 and H8 are scoped to that path and cannot fire anywhere else.
 
 Fill `excludeGlobs` with the k6 script directory when k6 is present, for example `k6/**` or `load-tests/**`. A k6 script's `sleep(1)` is the documented way to model think-time between iterations, so H1 firing there would be the hook wrong about the one language where the pattern is correct. Say in the summary that k6 scripts are excluded and why.
 

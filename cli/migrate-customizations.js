@@ -224,12 +224,30 @@ function migrate(projectRoot, { check = false, beforeAction } = {}) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const usage = 'Usage: tea-migrate-customizations [--project-root PATH] [--check]';
-  const rootIndex = argv.indexOf('--project-root');
-  if (rootIndex !== -1 && (!argv[rootIndex + 1] || argv[rootIndex + 1].startsWith('--'))) throw new Error('--project-root requires a path');
-  if (argv.some((arg, index) => arg !== '--check' && arg !== '--project-root' && index !== rootIndex + 1)) throw new Error(usage);
-  const projectRoot = rootIndex < 0 ? process.cwd() : path.resolve(argv[rootIndex + 1]);
-  const check = argv.includes('--check');
+  const usage = 'Usage: tea-migrate-customizations [--project-root PATH] [--check] [--help]';
+  let projectRoot = process.cwd();
+  let check = false;
+  let help = false;
+  const seen = new Set();
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === '--help' || arg === '-h') {
+      help = true;
+    } else if (arg === '--check' && !seen.has(arg)) {
+      check = true;
+    } else if (arg === '--project-root' && !seen.has(arg)) {
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new Error('--project-root requires a path');
+      projectRoot = path.resolve(value);
+    } else {
+      throw new Error(usage);
+    }
+    seen.add(arg);
+  }
+  if (help) {
+    process.stdout.write(`${usage}\n`);
+    return 0;
+  }
   const actions = migrate(projectRoot, { check });
   for (const action of actions) {
     process.stdout.write(

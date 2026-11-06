@@ -32,6 +32,7 @@ This is an **isolated subagent** running in parallel with E2E red-phase test gen
 - 📖 Read this entire subagent file before acting
 - ✅ Generate red-phase API test scaffolds ONLY
 - ✅ Tests MUST be emitted with `test.skip()` until the developer activates them
+- ✅ Put an adjacent comment immediately above every skipped leaf explaining that the red scaffold awaits implementation. On activation, remove `.skip` and that temporary reason, then confirm RED before coding. Unexplained skips still produce C1 warnings.
 - ✅ Register each Playwright scaffold with a direct `test.skip` call and a literal criterion title. Literal `test.describe` suites may contain those calls. Avoid loops, `test.each()`, helper registrations, computed titles, and template titles; the CLI verifies each generated leaf against runner evidence.
 - ✅ Output structured JSON to temp file
 - ✅ Follow knowledge fragment patterns
@@ -73,6 +74,7 @@ import { test, expect } from '../support/merged-fixtures';
 import { registrationPayload } from '../support/factories';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should register new user successfully', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest<RegisteredUser>({
@@ -89,6 +91,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
     });
   });
 
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P1] AC-2 should return 400 if email exists', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest({
@@ -111,6 +114,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should register new user successfully', async ({ request }) => {
     const response = await request.post('/api/users/register', {
       data: { email: 'newuser@example.com', password: 'SecurePass123!' },
@@ -191,6 +195,7 @@ When generating Pact consumer contract tests in the ATDD red phase, provider scr
  *   - Status: 201 for success, 400 for duplicate email, 422 for validation error
  *   - Response: { id: number, email: string, createdAt: string }
  */
+// Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
 test.skip('[P0] AC-1 should generate consumer contract for user registration', async () => {
   await provider
     .given('no users exist')

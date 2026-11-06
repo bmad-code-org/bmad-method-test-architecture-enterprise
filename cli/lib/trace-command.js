@@ -1415,21 +1415,27 @@ function validateTraceOutputs({
     const p0 = summary.coverage.priority_breakdown.P0.pct;
     const p1 = summary.coverage.priority_breakdown.P1.pct;
     const overall = summary.coverage.inventory.pct;
+    // Percentages remain rounded for display; decisions compare the source counts.
+    const meets = (bucket, threshold) => bucket.total === 0 || bucket.covered * 100 >= threshold * bucket.total;
+    const p0Met = meets(summary.coverage.priority_breakdown.P0, 100);
+    const p1TargetMet = meets(summary.coverage.priority_breakdown.P1, 90);
+    const p1MinimumMet = meets(summary.coverage.priority_breakdown.P1, 80);
+    const overallMet = meets(summary.coverage.inventory, 80);
     const expectedCriteria = {
       p0_coverage_required: '100%',
       p0_coverage_actual: `${p0}%`,
-      p0_status: p0 === 100 ? 'MET' : 'NOT_MET',
+      p0_status: p0Met ? 'MET' : 'NOT_MET',
       p1_coverage_target: '90%',
       p1_coverage_minimum: '80%',
       p1_coverage_actual: `${p1}%`,
-      p1_status: p1 >= 90 ? 'MET' : p1 >= 80 ? 'PARTIAL' : 'NOT_MET',
+      p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
       overall_coverage_minimum: '80%',
       overall_coverage_actual: `${overall}%`,
-      overall_status: overall >= 80 ? 'MET' : 'NOT_MET',
+      overall_status: overallMet ? 'MET' : 'NOT_MET',
     };
     for (const [field, expected] of Object.entries(expectedCriteria))
       if (criteria[field] !== expected) throw new Error(`Trace gate ${field} contradicts the coverage inventory or Step 5 thresholds.`);
-    let expectedStatus = p0 < 100 || overall < 80 || p1 < 80 ? 'FAIL' : p1 < 90 ? 'CONCERNS' : 'PASS';
+    let expectedStatus = !p0Met || !overallMet || !p1MinimumMet ? 'FAIL' : p1TargetMet ? 'PASS' : 'CONCERNS';
     const liveOnly = summary.live_evidence.requirements_live_only;
     if (!Number.isInteger(liveOnly) || liveOnly < 0) throw new Error('Trace summary has invalid live-only coverage metadata.');
     const synthetic = summary.oracle.synthetic || ['synthetic_requirements', 'user_journeys'].includes(summary.inventory_basis);
@@ -1440,6 +1446,8 @@ function validateTraceOutputs({
       frozenLive?.freshFailed ?? summary.live_evidence.fresh_failed ?? (summary.live_evidence.freshness === 'fresh' ? liveFailed : 0);
     if (freshFailed !== undefined && (!Number.isInteger(freshFailed) || freshFailed < 0))
       throw new Error('Trace live evidence has invalid fresh_failed count.');
+    if (!frozenLive && summary.live_evidence.freshness === 'fresh' && freshFailed !== liveFailed)
+      throw new Error('Trace fresh live evidence fresh_failed contradicts its failed count.');
     const freshFailure = freshFailed > 0;
     if (expectedStatus === 'PASS' && ((synthetic && summary.confidence !== 'high') || liveOnly > 0 || freshFailure))
       expectedStatus = 'CONCERNS';

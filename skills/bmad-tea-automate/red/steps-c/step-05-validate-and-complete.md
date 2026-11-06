@@ -53,6 +53,7 @@ Use `{skill-root}/red/checklist.md` to validate:
 - Test files created correctly
 - Checklist matches acceptance criteria
 - Tests are generated as red-phase scaffolds and marked with `test.skip()`
+- Every skipped leaf has an adjacent comment explaining that its red scaffold awaits implementation; activation removes `.skip` and the temporary reason before confirming RED
 - Preflight preserved supplied criterion ids and assigned stable, collision-free ids to unnamed criteria
 - Every executable leaf title carries exactly one id from the persisted criterion registry
 - Every declared acceptance criterion has exactly one red-phase leaf scaffold

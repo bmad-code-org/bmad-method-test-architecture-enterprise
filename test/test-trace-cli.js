@@ -736,6 +736,76 @@ try {
   );
   fs.writeFileSync(path.join(root, '_bmad', 'custom', 'bmad-tea-trace.toml'), '[workflow]\npersistent_facts = ["trace policy applies"]\n');
 
+  check('exact coverage ratios enforce gate boundaries through the CLI', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file, 'utf8');
+    try {
+      for (const [name, counts, verdict] of [
+        ['p1-target', { P0: 1, P1: 29 }, 'CONCERNS'],
+        ['p1-minimum', { P0: 1, P1: 44 }, 'FAIL'],
+        ['overall-minimum', { P0: 1, P2: 43 }, 'FAIL'],
+        ['p0-complete', { P0: 200, P1: 50 }, 'FAIL'],
+      ]) {
+        let id = 0;
+        const rows = Object.entries(counts).flatMap(([priority, count]) =>
+          Array.from({ length: count }, () => `AC-${++id} (${priority}): Behavior ${id}.`),
+        );
+        fs.writeFileSync(file, `# Epic 4: Export\n\n${rows.join('\n')}\n`);
+        const correct = run(`threshold-${name}-correct`);
+        assert.equal(correct.status, verdict === 'FAIL' ? 1 : 0, `${name}: ${correct.stderr} ${correct.stdout}`);
+        assert.equal(correct.payload.gate_status, verdict);
+        const rounded = run(`threshold-${name}-rounded`);
+        assert.equal(rounded.status, 3, `${name}: accepted incorrect rounded gate ${rounded.stdout}`);
+      }
+    } finally {
+      fs.writeFileSync(file, original);
+    }
+  });
+  check('skill decision tree applies exact ratios and fresh-failure overlay', () => {
+    const step = fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-trace/steps-c/step-05-gate-decision.md'), 'utf8');
+    const script = step.split('**Decision Tree:**')[1].split('```javascript\n')[1].split('\n```')[0];
+    for (const [buckets, live_evidence, expected] of [
+      [{ P0: [1, 1], P1: [26, 29] }, {}, 'CONCERNS'],
+      [{ P0: [1, 1], P1: [35, 44] }, {}, 'FAIL'],
+      [{ P0: [1, 1], P2: [34, 43] }, {}, 'FAIL'],
+      [{ P0: [199, 200], P1: [50, 50] }, {}, 'FAIL'],
+      [{ P0: [1, 1], P1: [9, 10] }, {}, 'PASS'],
+      [{ P0: [1, 1], P1: [4, 5] }, {}, 'CONCERNS'],
+      [{ P0: [1, 1] }, { freshness: 'fresh', failed: 3, fresh_failed: 0 }, 'CONCERNS'],
+    ]) {
+      const requirements = Object.entries(buckets).flatMap(([priority, [covered, total]]) =>
+        Array.from({ length: total }, (_, i) => ({
+          priority,
+          coverage: i < covered ? 'FULL' : 'NONE',
+          tests: [{ id: `${priority}-${i}`, level: 'api' }],
+        })),
+      );
+      const priority_breakdown = Object.fromEntries(
+        ['P0', 'P1', 'P2', 'P3'].map((priority) => {
+          const [covered, total] = buckets[priority] ?? [0, 0];
+          return [priority, { covered, total, percentage: total ? Math.round((covered * 100) / total) : 100 }];
+        }),
+      );
+      const fully_covered = requirements.filter((row) => row.coverage === 'FULL').length;
+      const coverageMatrix = {
+        requirements,
+        live_evidence,
+        coverage_statistics: {
+          priority_breakdown,
+          total_requirements: requirements.length,
+          fully_covered,
+          overall_coverage_percentage: Math.round((fully_covered * 100) / requirements.length),
+        },
+      };
+      const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, { coverageMatrix });
+      assert.equal(actual, expected, JSON.stringify(buckets));
+    }
+  });
+  check('fresh failure counts cannot be understated without a frozen manifest', () => {
+    const result = run('fresh-hidden-failure');
+    assert.equal(result.status, 3, result.stdout);
+    assert.match(result.payload.reason, /fresh_failed.*failed/);
+  });
   check('packaged skill, resolved config, scope-specific artifacts, raw evidence', () => {
     const result = run('pass', ['--json', 'result.json']);
     assert.equal(result.status, 0, result.stderr);
@@ -825,12 +895,16 @@ try {
       ['not_present', 0, 100, 'PASS'],
       ['mixed', 1, 100, 'CONCERNS', 1],
       ['stale', 1, 100, 'CONCERNS', 1],
-      ['fresh', 1, 100, 'PASS', 0],
+      ['fresh', 1, 100, 'CONCERNS', 0],
     ]) {
       const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, {
         gateEligible: true,
         allowGate: true,
         collectionStatus: 'COLLECTED',
+        p0Met: p0Coverage === 100,
+        p1MinimumMet: true,
+        p1TargetMet: true,
+        overallMet: true,
         p0Coverage,
         overallCoverage: 100,
         effectiveP1Coverage: 100,

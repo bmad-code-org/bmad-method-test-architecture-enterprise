@@ -225,3 +225,33 @@ test('a stale lock names its path and recovery without deleting it', () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+for (const [args, status] of [
+  [['--help'], 0],
+  [['-h'], 0],
+  [['--chek'], 2],
+  [['unexpected'], 2],
+  [['--check', '--chek'], 2],
+  [['--project-root'], 2],
+  [['--project-root', '--check'], 2],
+  [['--project-root', '.', '--project-root', '.'], 2],
+  [['--help', '--chek'], 2],
+]) {
+  test(`CLI argument validation preserves legacy customizations: ${args.join(' ')}`, (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-migration-args-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const custom = path.join(root, '_bmad/custom');
+    fs.mkdirSync(custom, { recursive: true });
+    const original = '# preserve comments\nfoo = 1\n';
+    fs.writeFileSync(path.join(custom, 'bmad-testarch-trace.toml'), original);
+    const result = spawnSync(process.execPath, [path.resolve(__dirname, '../cli/migrate-customizations.js'), ...args], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    assert.equal(result.status, status, result.stderr);
+    assert.match(result.stdout + result.stderr, /Usage:|requires a path/);
+    assert.deepEqual(fs.readdirSync(custom), ['bmad-testarch-trace.toml']);
+    assert.equal(fs.readFileSync(path.join(custom, 'bmad-testarch-trace.toml'), 'utf8'), original);
+  });
+}
