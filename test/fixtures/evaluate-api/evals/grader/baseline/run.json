@@ -3,7 +3,7 @@
   "seed": "20261009T005647810Z-30949961",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "8.0.0",
+  "evalQualityVersion": "9.0.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {

@@ -303,6 +303,64 @@ function survivingHeartbeats(cliPid) {
  * Test Suite
  */
 async function runTests() {
+  // Windows editors may prepend a UTF-8 BOM to otherwise valid agent reports.
+  const bomRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-review-bom-'));
+  try {
+    const fixture = path.join(bomRoot, 'approve-bom.md');
+    const report = readFixture('reports', 'approve.md');
+    fs.writeFileSync(
+      fixture,
+      '\uFEFF' +
+        report.replace(
+          "workflowType: 'testarch-test-review'",
+          "workflowType: 'testarch-test-review'\nworkflowStatus: in-progress\nlastStep: step-01-load-context\nlastSaved: 2026-11-06\ninputDocuments: [story.md]",
+        ),
+    );
+    const result = runCli(
+      [
+        '--files',
+        'tests/legacy-login.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--output',
+        path.join(bomRoot, 'review.md'),
+        '--json',
+        path.join(bomRoot, 'verdict.json'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        '--retries',
+        '0',
+        ...stubPass('STUB_FIXTURE'),
+      ],
+      { STUB_FIXTURE: fixture },
+    );
+    assert(result.status === 0, 'real CLI accepts a valid BOM-prefixed report without retry', result.stderr);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(bomRoot, 'verdict.json'), 'utf8')).recommendation === 'Approve with Comments',
+      'BOM report retains its recommendation',
+    );
+    const published = fs.readFileSync(path.join(bomRoot, 'review.md'), 'utf8');
+    assert(published.startsWith('---\n'), 'published BOM report has normalized YAML frontmatter');
+    assert(
+      !/^(?:stepsCompleted|workflowStatus|lastStep|lastSaved|inputDocuments):/m.test(published),
+      'published BOM report omits interactive resume state',
+    );
+    assert(parseReport(published).recommendation === 'Approve with Comments', 'published BOM report remains a completed review verdict');
+    for (const name of fs.readdirSync(path.join(fixturesRoot, 'reports')).filter((name) => name.endsWith('.md'))) {
+      const text = readFixture('reports', name);
+      let parsed;
+      try {
+        parsed = parseReport(text);
+      } catch {
+        continue;
+      }
+      assert(JSON.stringify(parseReport('\uFEFF' + text)) === JSON.stringify(parsed), `BOM preserves parsed report ${name}`);
+    }
+  } finally {
+    fs.rmSync(bomRoot, { recursive: true, force: true });
+  }
+
   console.log(`${colors.cyan}========================================`);
   console.log('tea-test-review CLI Tests');
   console.log(`========================================${colors.reset}\n`);

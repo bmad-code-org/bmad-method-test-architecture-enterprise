@@ -322,14 +322,14 @@ function assertNoRetiredSurface(source, skillName, workflow) {
       const file = path.join('_bmad', 'custom', stem + suffix);
       if (source.read(file) !== null) {
         throw configError(
-          `${source.label(file)} is no longer read; its settings now live under [workflow.${surface.table}] in ${skillName}.toml and ${skillName}.user.toml. Run: npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root <project>`,
+          `${source.label(file)} is no longer read; its settings now live under [workflow.${surface.table}] in ${skillName}.toml and ${skillName}.user.toml. Run: npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root <project>`,
         );
       }
     }
   }
   if (skillName === 'bmad-tea-framework' && workflow && Object.hasOwn(workflow, 'ci_platform')) {
     throw configError(
-      'workflow.ci_platform in bmad-tea-framework.toml or .user.toml is no longer read; set ci_platform under [workflow.ci]. Run: npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root <project>',
+      'workflow.ci_platform in bmad-tea-framework.toml or .user.toml is no longer read; set ci_platform under [workflow.ci]. Run: npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root <project>',
     );
   }
 }

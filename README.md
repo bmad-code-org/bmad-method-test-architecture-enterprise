@@ -46,16 +46,23 @@ To install a tagged release, replace `<version>` with the release number:
 npx skills add https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/v<version>/skills
 ```
 
+### Upgrading to 4.0
+
+TEA 4.0 reads red-mode overrides from `[workflow.red]` in `bmad-tea-automate.toml` and CI overrides from `[workflow.ci]` in `bmad-tea-framework.toml`, including each personal `.user.toml` layer. Personal module settings belong in `_bmad/custom/config.user.toml`.
+Run `bmad migrate tea` to move existing settings, including legacy personal module keys. The 4.x CLI commands below handle customization files and report personal module keys that still need `bmad migrate tea`.
+
 ### Upgrading to 3.0
 
 The eight direct workflow commands now share the `bmad-tea-*` prefix. Replace `bmad-testarch-automate`, `-evaluate`, `-framework`, `-nfr`, `-test-design`, `-test-review`, and `-trace` with the same suffix under `bmad-tea-`. Replace `bmad-teach-me-testing` with `bmad-tea-teach-me-testing`. The 3.0 package does not publish the old slash commands. The `bmad-tea` agent, `bmod-tea` module, menu codes, and `tea-*` CLI executables keep their names.
 
-After installing 3.0, move project customizations to the new names:
+Use the 4.x migration tool to preview and apply customization changes:
 
 ```bash
-npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root . --check
-npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .
+npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root . --check
+npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root .
 ```
+
+Use `--help` for usage. For a directory whose name begins with a dash, pass `--project-root ./-name`; flag-like operands are rejected before the migration reads or writes files.
 
 This includes old CI and ATDD customization files and old skill references in custom `bmad-tea` agent menus. The command moves old-only files with their comments and permissions intact. When both old and new filenames exist, it reports both paths and asks for a manual merge so no comments or values are lost. Resolve the reported files, then rerun the command. See the [configuration reference](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/) for details.
 

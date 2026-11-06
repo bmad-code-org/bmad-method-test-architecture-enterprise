@@ -16,6 +16,7 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { recordObservation } = require('../cli/lib/evaluate/records');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = process.env.TEA_EVALUATE_GAP_LOOP_FIXTURE ?? path.join(__dirname, 'fixtures/evaluate-gap-loop');
@@ -399,14 +400,14 @@ function checkIntermediateDevelopment() {
   assert.match(transcript, /20260929T035839151Z-e5c0085e/);
 }
 
-function checkGenerated(folder, out) {
+async function checkGenerated(folder, out) {
   const phase = path.basename(path.dirname(folder));
   const compiled = path.join(out, `${phase}-compiled-contract.json`);
   const sealed = path.join(out, `${phase}-sealed-brief.json`);
   run(ENGINE, ['compile', '--in', path.join(folder, 'contract.json'), '--out', compiled]);
   run(ENGINE, ['seal', '--in', path.join(folder, 'contract.json'), '--out', sealed]);
   sameBytes(compiled, path.join(folder, 'compiled-contract.json'), `${phase} authored compile`);
-  sameBytes(sealed, path.join(folder, 'sealed-brief.json'), `${phase} authored seal`);
+  sameBytes(sealed, await refreshedSeal(path.join(folder, 'sealed-brief.json')), `${phase} authored seal`);
   return { compiled, sealed };
 }
 
@@ -829,7 +830,7 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
   const replay = path.join(folder, 'replay', runName);
   sameBytes(path.join(folder, 'contract.json'), path.join(replay, 'contract.json'), `${runName} authored contract`);
   sameBytes(generated.compiled, path.join(replay, 'eval-contract.json'), `${runName} generated compile`);
-  sameBytes(generated.sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${runName} generated seal`);
+  sameBytes(generated.sealed, await refreshedSeal(path.join(replay, 'sealed-evaluator-brief.json')), `${runName} generated seal`);
   const runRecord = readJson(path.join(replay, 'run.json'));
   assert.equal(runRecord.dirty, false, `${runName} replay was recorded from a dirty tree`);
   assert.equal(runRecord.evaluationFolder.dirty, false, `${runName} replay was recorded from a dirty evaluation folder`);
@@ -999,8 +1000,8 @@ async function main() {
   await checkBeforeDiagnostics();
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-gap-loop-'));
   try {
-    const beforeGenerated = checkGenerated(before, out);
-    const afterGenerated = checkGenerated(after, out);
+    const beforeGenerated = await checkGenerated(before, out);
+    const afterGenerated = await checkGenerated(after, out);
     await replayRun(before, 'held-out', out, 'CONCERNS', beforeGenerated);
     for (const runName of ['development', 'held-out']) await replayRun(after, runName, out, 'PASS', afterGenerated);
   } finally {

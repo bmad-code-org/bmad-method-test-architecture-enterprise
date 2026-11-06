@@ -34,7 +34,7 @@ An explicit native compare/accept request keeps that command's authority, includ
 
 ## On Activation
 
-Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-evaluate.toml` and `bmad-testarch-evaluate.user.toml`. If either exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
+Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-evaluate.toml` and `bmad-testarch-evaluate.user.toml`. If either exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
 
 ### Step 1: Resolve the Workflow Block
 

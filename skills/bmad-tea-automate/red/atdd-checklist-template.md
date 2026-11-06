@@ -275,7 +275,7 @@ test('should do something', async ({ {fixtureName} }) => {
 **DEV Agent Responsibilities:**
 
 1. **Pick one scaffolded test** from implementation checklist (start with highest priority)
-2. **Remove `test.skip()`** for that test and confirm it fails first
+2. **Remove `.skip` and the adjacent comment with its temporary reason** for that test and confirm it fails first
 3. **Read the test** to understand expected behavior
 4. **Implement minimal code** to make that specific test pass
 5. **Run the test** to verify it now passes (green)
@@ -329,7 +329,7 @@ test('should do something', async ({ {fixtureName} }) => {
 2. **If the story file cannot be updated automatically**, share this checklist and generated tests with the dev workflow as a manual handoff
 3. **Review this checklist** with team in standup or planning
 4. **Begin implementation** using implementation checklist as guide
-5. **Activate one scaffold at a time** by removing `test.skip()` for the current task, then confirm it fails before implementing
+5. **Activate one scaffold at a time** by removing `.skip` and the adjacent comment with its temporary reason for the current task, then confirm it fails before implementing
 6. **Work one activated test at a time** (red → green for each)
 7. **Share progress** in daily standup
 8. **When all activated tests pass**, refactor code for quality
@@ -395,8 +395,8 @@ See `tea-index.csv` for complete knowledge fragment mapping.
 **Questions or Issues?**
 
 - Ask in team standup
-- Tag @{tea_agent_username} in Slack/Discord
-- Refer to `./bmm/docs/tea-README.md` for workflow documentation
+- Ask your team’s test owner for project-specific guidance
+- Refer to the [Automate workflow guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/)
 - Consult `{tea-knowledge}` for testing best practices
 
 ---

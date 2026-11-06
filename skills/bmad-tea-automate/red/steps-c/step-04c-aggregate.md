@@ -19,6 +19,7 @@ Read outputs from parallel subagents (API + E2E red-phase test generation), aggr
 - ✅ Speak in `{communication_language}`
 - ✅ Read subagent outputs from temp files
 - ✅ Verify all tests are marked with test.skip() (TDD red phase)
+- ✅ Verify every skipped leaf has an adjacent comment explaining that its red scaffold awaits implementation. Keep that reason until activation, then remove `.skip` and the temporary reason together.
 - ✅ Generate shared fixtures based on fixture needs
 - ✅ Write all generated test files to disk
 - ❌ Do NOT remove test.skip() (that's done after feature implementation)
@@ -254,7 +255,7 @@ Note: More complete fixtures will be needed when moving to green phase.
 
 During implementation of each task:
 
-1. Remove `test.skip()` from the current test file or scenario
+1. Remove `.skip` and the adjacent comment with its temporary reason from the current scenario
 2. Run tests: `npm test`
 3. Verify the activated test fails first, then passes after implementation (green phase)
 4. If any activated tests still fail unexpectedly:
@@ -381,7 +382,7 @@ Display to user:
 📝 Next Steps:
 1. Link ATDD artifacts into the story file if available
 2. Implement the feature
-3. Remove test.skip() from the tests for the current task
+3. Remove `.skip` and the adjacent comment with its temporary reason from the tests for the current task
 4. Run activated tests → verify they FAIL before implementation, then PASS after implementation
 5. Commit passing tests
 

@@ -815,14 +815,35 @@ function describe(action, check) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const usage = 'Usage: tea-migrate-customizations [--project-root PATH] [--check] [--keep-existing]';
-  const flags = new Set(['--check', '--keep-existing', '--project-root']);
-  const rootIndex = argv.indexOf('--project-root');
-  if (rootIndex !== -1 && (!argv[rootIndex + 1] || argv[rootIndex + 1].startsWith('--'))) throw new Error('--project-root requires a path');
-  if (argv.some((arg, index) => !flags.has(arg) && (rootIndex === -1 || index !== rootIndex + 1))) throw new Error(usage);
-  const projectRoot = rootIndex < 0 ? process.cwd() : path.resolve(argv[rootIndex + 1]);
-  const check = argv.includes('--check');
-  const actions = migrate(projectRoot, { check, keepExisting: argv.includes('--keep-existing') });
+  const usage =
+    'Usage: tea-migrate-customizations [--project-root PATH] [--check] [--keep-existing] [--help]\nFor a directory beginning with a dash, use --project-root ./-name.';
+  let projectRoot = process.cwd();
+  let check = false;
+  let keepExisting = false;
+  let help = false;
+  const seen = new Set();
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === '--help' || arg === '-h') {
+      help = true;
+    } else if (arg === '--check' && !seen.has(arg)) {
+      check = true;
+    } else if (arg === '--keep-existing' && !seen.has(arg)) {
+      keepExisting = true;
+    } else if (arg === '--project-root' && !seen.has(arg)) {
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new Error('--project-root requires a path');
+      projectRoot = path.resolve(value);
+    } else {
+      throw new Error(usage);
+    }
+    seen.add(arg);
+  }
+  if (help) {
+    process.stdout.write(`${usage}\n`);
+    return 0;
+  }
+  const actions = migrate(projectRoot, { check, keepExisting });
   for (const action of actions) for (const line of describe(action, check)) process.stdout.write(`${line}\n`);
   if (actions.length === 0) process.stdout.write('No legacy TEA customizations found.\n');
   return 0;

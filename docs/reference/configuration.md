@@ -31,6 +31,19 @@ Skills read the config once at activation, so start a fresh chat after a change.
 Every module setup key is read by a skill.
 The two [Per-Skill Settings](#per-skill-settings) live in customization files and are configured separately.
 
+## Upgrading Customizations to 4.0
+
+TEA 4.0 changes the customization locations used by 3.x projects:
+
+| 3.x location                                     | 4.0 location                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| `bmad-tea-atdd.toml` and `.user.toml`            | `[workflow.red]` in `bmad-tea-automate.toml` and `.user.toml` |
+| `bmad-tea-ci.toml` and `.user.toml`              | `[workflow.ci]` in `bmad-tea-framework.toml` and `.user.toml` |
+| `ci_platform` directly under `[workflow]`        | `ci_platform` under `[workflow.ci]`                           |
+| Personal module keys in `_bmad/config.user.toml` | `_bmad/custom/config.user.toml`                               |
+
+Run `bmad migrate tea` before activating the updated skills. It offers to move legacy personal module keys and folds red and CI customizations into their owning skills. The 4.x CLI commands below handle customization files and list personal module keys that still need `bmad migrate tea`. Keep any setup cleanup backup until migration finishes.
+
 ## Upgrading Customizations to 3.0
 
 TEA 3.0 names every direct workflow `bmad-tea-*`. Use these command replacements:
@@ -48,12 +61,14 @@ TEA 3.0 names every direct workflow `bmad-tea-*`. Use these command replacements
 
 The 3.0 package does not publish the old slash commands. The agent name `bmad-tea`, module name `bmod-tea`, menu codes, and existing `tea-*` CLI names remain.
 
-After installing 3.0, run this in each existing project before invoking a workflow directly:
+Use the 4.x migration tool in each existing project before invoking a workflow directly:
 
 ```bash
-npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root . --check
-npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .
+npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root . --check
+npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root .
 ```
+
+Use `--help` for usage. For a directory whose name begins with a dash, pass `--project-root ./-name`; flag-like operands are rejected before the migration reads or writes files.
 
 The migration renames old customization files, including teaching files. ATDD and CI settings move into the owning skill: `bmad-tea-atdd` (or `bmad-testarch-atdd`) settings become `[workflow.red]` in `bmad-tea-automate.toml`, and `bmad-tea-ci` (or `bmad-testarch-ci`) settings become `[workflow.ci]` in `bmad-tea-framework.toml`, team and personal layers separately. A file that `bmad setup` cleanup already deleted is read from the newest `.v6-v7-migration-backup-*` folder that holds it, and a backup is never changed. A `ci_platform` set directly under `[workflow]` of the framework files moves into `[workflow.ci]`. A setting present in both places with different values, including a backup value that differs from the current file, is reported with both values and their files, and nothing changes until you make them agree or rerun with `--keep-existing` to keep the current value. The command records what it restored or left out in `_bmad/custom/.tea-customization-migration.json` (file and key names only), so a later edit of a restored value is never reported again. A `bmad-testarch-*` file that cleanup deleted before the upgrade is restored from the backup too. The command does not move `[modules.tea]` keys out of the legacy `_bmad/config.user.toml`; it lists them as not migrated, and `bmad migrate tea` moves them. The command updates old `[[agent.menu]]` skill IDs in `_bmad/custom/bmad-tea.toml` and `.user.toml`; ATDD routes to Automate and CI to Framework. It preserves other settings, comments, and file permissions. When old and new files coexist in one layer, merge their values and comments manually. The command checks every file before writing, and a second run changes nothing. Headless TEA CLIs read the pre-3.0 `bmad-testarch-*` filenames until migration completes, and stop with the migration command when they find ATDD or CI files.
 

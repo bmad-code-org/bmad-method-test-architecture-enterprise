@@ -29,7 +29,7 @@ precautions = """
 - A key already present in the target with a different value, or differing values for one key across candidate sources, is a conflict. Show both values and each side's provenance and let the user choose; overwrite nothing without that choice. A headless run stops on a conflict.
 - Remove an old live file only after the target write is re-read and verified. When both an old file and the target exist and differ, keep both and report the conflict.
 - Keep every other table, key and comment in the target files as it is, and merge into a file that already exists instead of replacing it.
-- Run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .` for the file moves as a script, with the same source order and conflict rules; it stops on a conflict and changes nothing, and `--keep-existing` keeps the existing value where a backup differs. It records what it restored in `_bmad/custom/.tea-customization-migration.json`, so a rerun is quiet. It does not move `_bmad/config.user.toml` keys; it reports them as not migrated, and this migration moves them.
+- Run `npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root .` for the file moves as a script, with the same source order and conflict rules; it stops on a conflict and changes nothing, and `--keep-existing` keeps the existing value where a backup differs. It records what it restored in `_bmad/custom/.tea-customization-migration.json`, so a rerun is quiet. It does not move `_bmad/config.user.toml` keys; it reports them as not migrated, and this migration moves them.
 """
 
 guide = """

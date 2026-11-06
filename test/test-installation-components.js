@@ -201,6 +201,22 @@ async function runTests() {
       skillDirectories.every((name) => !name.startsWith('bmad-testarch-') && name !== 'bmad-teach-me-testing'),
       'the installed skill tree has no old public workflow roots',
     );
+    const migrationCommand = 'npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations';
+    for (const relative of [
+      'README.md',
+      'docs/reference/configuration.md',
+      'cli/lib/resolve-tea-config.js',
+      'skills/bmod-tea/bmod.toml',
+      'skills/bmod-tea/migration-1.toml',
+      'skills/bmod-tea/migration-3.toml',
+    ]) {
+      const source = await fs.readFile(path.join(projectRoot, relative), 'utf8');
+      const commands = [...source.matchAll(/bmad-method-test-architecture-enterprise@(\d+)\s+tea-migrate-customizations/g)];
+      assert(
+        commands.length > 0 && commands.every((match) => match[1] === '4'),
+        `${relative} selects the 4.x tool that implements the migration`,
+      );
+    }
     for (const [name, legacyNames] of [
       ['bmad-tea-automate', ['bmad-testarch-automate', 'bmad-testarch-atdd', 'bmad-tea-atdd']],
       ['bmad-tea-evaluate', ['bmad-testarch-evaluate']],
@@ -214,7 +230,7 @@ async function runTests() {
       const skillText = await fs.readFile(path.join(projectRoot, 'skills', name, 'SKILL.md'), 'utf8');
       const guard = skillText.split('## On Activation\n')[1]?.split('### Step 1:')[0] ?? '';
       assert(
-        guard.includes('tea-migrate-customizations') &&
+        guard.includes(migrationCommand) &&
           guard.includes('{project-root}/_bmad/custom/') &&
           legacyNames.every((legacyName) => guard.includes(`${legacyName}.toml`) && guard.includes(`${legacyName}.user.toml`)),
         `${name} blocks activation while legacy customization files remain`,
@@ -252,7 +268,7 @@ async function runTests() {
       agentGuard.includes('bmad-testarch-') &&
         agentGuard.includes('bmad-teach-me-testing') &&
         agentGuard.includes('{project-root}/_bmad/custom/bmad-tea.toml') &&
-        agentGuard.includes('tea-migrate-customizations'),
+        agentGuard.includes(migrationCommand),
       'bmad-tea blocks removed menu skill IDs before dispatch',
     );
     assert(

@@ -29,6 +29,7 @@ This is an **isolated subagent** running in parallel with API red-phase test gen
 - 📖 Read this entire subagent file before acting
 - ✅ Generate red-phase E2E test scaffolds ONLY
 - ✅ Tests MUST be emitted with `test.skip()` until the developer activates them
+- ✅ Put an adjacent comment immediately above every skipped leaf explaining that the red scaffold awaits implementation. On activation, remove `.skip` and that temporary reason, then confirm RED before coding. Unexplained skips still produce C1 warnings.
 - ✅ Register each Playwright scaffold with a direct `test.skip` call and a literal criterion title. Literal `test.describe` suites may contain those calls. Avoid loops, `test.each()`, helper registrations, computed titles, and template titles; the CLI verifies each generated leaf against runner evidence.
 - ✅ Output structured JSON to temp file
 - ✅ Follow knowledge fragment patterns
@@ -102,6 +103,7 @@ For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 import { test, expect } from '../support/merged-fixtures';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
     // The outer assertion is the first potentially failing operation. It owns
     // every navigation, interaction, network, and outcome failure in this AC.
@@ -122,6 +124,7 @@ test.describe('[Story Name] E2E User Journey (ATDD)', () => {
   });
 
   // Stubs a 409 on purpose, so it opts out of network monitoring.
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip(
     '[P1] AC-2 should show error if email exists',
     { annotation: [{ type: 'skipNetworkMonitoring' }] },
@@ -155,6 +158,7 @@ Note the selectors: `getByLabel` and `getByRole`, never `[name="email"]` or `but
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should complete user registration successfully', async ({ page }) => {
     await expect(
       (async () => {

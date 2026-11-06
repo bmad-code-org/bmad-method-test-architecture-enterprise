@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
@@ -588,7 +589,7 @@ function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
   }
 }
 
-function checkSuite(kind, out) {
+async function checkSuite(kind, out) {
   const fixture = path.join(FIXTURES, kind);
   const folder = path.join(fixture, 'evaluation');
   for (const file of [
@@ -658,7 +659,7 @@ function checkSuite(kind, out) {
     const replay = path.join(folder, 'replay', runName);
     sameBytes(path.join(folder, 'contract.json'), path.join(replay, 'contract.json'), `${kind} ${runName} contract`);
     sameBytes(compiled, path.join(replay, 'eval-contract.json'), `${kind} ${runName} compile`);
-    sameBytes(sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${kind} ${runName} seal`);
+    sameBytes(sealed, await refreshedSeal(path.join(replay, 'sealed-evaluator-brief.json')), `${kind} ${runName} seal`);
     const expectedProbeIds = runName === 'held-out' ? heldOut : authoredProbeIds.filter((id) => !heldOut.includes(id));
     runReplay(folder, runName, out, expectedProbeIds, heldOutOnly);
   }
@@ -677,14 +678,17 @@ function checkSuite(kind, out) {
   }
 }
 
-function main() {
+async function main() {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-authoring-'));
   try {
-    for (const kind of ['ai-feature', 'test-review']) checkSuite(kind, out);
+    for (const kind of ['ai-feature', 'test-review']) await checkSuite(kind, out);
   } finally {
     fs.rmSync(out, { recursive: true, force: true });
   }
   console.log('ok both Evaluate authoring suites replayed byte for byte');
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

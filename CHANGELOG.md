@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TEA 4.0 requires migrating separate ATDD/CI overrides and the legacy personal configuration layer. Active migration and help commands select the 4.x CLI that implements the migration.
+
 - Red-mode settings now live under `[workflow.red]` in `bmad-tea-automate.toml` and CI settings under `[workflow.ci]` in `bmad-tea-framework.toml`, including `ci_platform`. Core's customization resolver reads them directly (`--skill bmad-tea-automate --key workflow.red`), which the separate `bmad-tea-atdd` and `bmad-tea-ci` names could not do. The skills and CLIs stop with the migration command when they find the old files or a `ci_platform` placed directly under `[workflow]`. `tea-migrate-customizations` applies the same rules, including the backup search, and lists `[modules.tea]` keys of the legacy `_bmad/config.user.toml` as not migrated.
 - The TEA CLIs merge the three config files BMAD core merges (`_bmad/config.toml`, `_bmad/custom/config.toml`, `_bmad/custom/config.user.toml`) and no longer read `_bmad/config.user.toml`. A `[modules.tea]` key held only by that file produces one warning that names the key and the migration.
 - When `bmod-tea` is not installed beside a TEA skill, the skill stops and tells the user to install it in the same scope as the skill (project or global).
@@ -22,7 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CI baselines are remeasured on eval-quality 9 with their original sealed evidence and unchanged scores. Current-engine seal expectations retain the original capture digests through the engine's canonical raw-byte hashing, and routing corpus expectations include the 4.x migration commands.
+- TEA’s development lockfile now resolves the published eval-quality 9.0.0 engine.
+
 - Removed `installed_path` from the seven `workflow.yaml` files; BMAD's skill validator rejects it.
+- Customization migration validates every argument before touching files and handles `--help` and `-h` safely.
+- Trace gates compare exact coverage counts at the P0, P1, and overall thresholds, and reject understated fresh live-failure counts and malformed fresh evidence.
+- Test Review accepts valid reports saved with a leading UTF-8 byte-order mark and normalizes the published report before removing interactive resume state.
+- Write-time enforcement detects Promise-based and awaited timer waits, quoted numeric Pact worker counts, and conventional Kotlin test paths. Java text blocks and Kotlin raw strings remain fixture data. Reusable Maestro `subflows/` skip C4 assertion-presence checks while retaining other enforcement.
+- Red-phase API and E2E examples explain each skipped scaffold with an adjacent reason that is removed on activation, using the hook’s existing documented-skip handling. Unexplained skips still warn.
+- Framework setup preserves both Pact config filename conventions and all supported config extensions. Its guidance states the hook’s language coverage and Maestro subflow convention.
+- Red-mode checklists link to the maintained Automate guide and refer users to their team’s test owner.
+- The macOS confinement test requires scoring to name an observed refused path while retaining the primary swap-report check and its bounded retry for kernel log loss.
+- The contributor lockfile installs with the supported Node 22/npm 10 toolchain, with a clean-install CI check, and native verification timeout tests recognize stopped zombie descendants in Linux containers.
 
 ## [3.6.1] - 2026-11-06
 

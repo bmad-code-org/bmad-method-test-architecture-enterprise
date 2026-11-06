@@ -1,0 +1,114 @@
+{
+  "command": "node tools/refresh-evaluate-seals.js --source 0b1363c82b63a86ae57a0a265171c66810aedf5a",
+  "sourceCommit": "0b1363c82b63a86ae57a0a265171c66810aedf5a",
+  "engineVersion": "9.0.0",
+  "purpose": "Current-engine seal expectations; original captured evidence remains immutable.",
+  "allowedChange": "Evaluator direction wording only; contract and every other sealed field unchanged.",
+  "files": {
+    "test/fixtures/evaluate-authoring/ai-feature/evaluation/replay/development/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:e0ae174ee96125322463bf279393460f1ba4d76fcbeed4a20b60599218d8047e",
+      "contract": "test/fixtures/evaluate-authoring/ai-feature/evaluation/replay/development/contract.json",
+      "contractDigest": "sha256:fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e",
+      "generated": "test/fixtures/evaluate-engine-seals/fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e.json",
+      "generatedDigest": "sha256:6d58e3c87dc497f72cdc073a73b5ce9fcc4dcfc83a991b5583c0fa8b5605dcef"
+    },
+    "test/fixtures/evaluate-authoring/ai-feature/evaluation/replay/held-out/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:e0ae174ee96125322463bf279393460f1ba4d76fcbeed4a20b60599218d8047e",
+      "contract": "test/fixtures/evaluate-authoring/ai-feature/evaluation/replay/held-out/contract.json",
+      "contractDigest": "sha256:fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e",
+      "generated": "test/fixtures/evaluate-engine-seals/fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e.json",
+      "generatedDigest": "sha256:6d58e3c87dc497f72cdc073a73b5ce9fcc4dcfc83a991b5583c0fa8b5605dcef"
+    },
+    "test/fixtures/evaluate-authoring/ai-feature/evaluation/sealed-brief.json": {
+      "sourceDigest": "sha256:e0ae174ee96125322463bf279393460f1ba4d76fcbeed4a20b60599218d8047e",
+      "contract": "test/fixtures/evaluate-authoring/ai-feature/evaluation/contract.json",
+      "contractDigest": "sha256:fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e",
+      "generated": "test/fixtures/evaluate-engine-seals/fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e.json",
+      "generatedDigest": "sha256:6d58e3c87dc497f72cdc073a73b5ce9fcc4dcfc83a991b5583c0fa8b5605dcef"
+    },
+    "test/fixtures/evaluate-authoring/test-review/evaluation/replay/development/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:43853a5562cb65808c6bd0fbe5829562cf7b054b1cd4781f87d07a573a439f5e",
+      "contract": "test/fixtures/evaluate-authoring/test-review/evaluation/replay/development/contract.json",
+      "contractDigest": "sha256:39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254",
+      "generated": "test/fixtures/evaluate-engine-seals/39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254.json",
+      "generatedDigest": "sha256:643b04bd0e5c6e98a8b4d1c6cfbf284e4fdce84df5cbda5aae9a50df9517e146"
+    },
+    "test/fixtures/evaluate-authoring/test-review/evaluation/replay/held-out/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:43853a5562cb65808c6bd0fbe5829562cf7b054b1cd4781f87d07a573a439f5e",
+      "contract": "test/fixtures/evaluate-authoring/test-review/evaluation/replay/held-out/contract.json",
+      "contractDigest": "sha256:39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254",
+      "generated": "test/fixtures/evaluate-engine-seals/39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254.json",
+      "generatedDigest": "sha256:643b04bd0e5c6e98a8b4d1c6cfbf284e4fdce84df5cbda5aae9a50df9517e146"
+    },
+    "test/fixtures/evaluate-authoring/test-review/evaluation/sealed-brief.json": {
+      "sourceDigest": "sha256:43853a5562cb65808c6bd0fbe5829562cf7b054b1cd4781f87d07a573a439f5e",
+      "contract": "test/fixtures/evaluate-authoring/test-review/evaluation/contract.json",
+      "contractDigest": "sha256:39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254",
+      "generated": "test/fixtures/evaluate-engine-seals/39edd3ea7f431e88913cdd3fdbf8ff600e755aa03d6d57359f493280cfc58254.json",
+      "generatedDigest": "sha256:643b04bd0e5c6e98a8b4d1c6cfbf284e4fdce84df5cbda5aae9a50df9517e146"
+    },
+    "test/fixtures/evaluate-ci-repos/nightly-deploy/evals/answer-grade/sealed-brief.json": {
+      "sourceDigest": "sha256:e0ae174ee96125322463bf279393460f1ba4d76fcbeed4a20b60599218d8047e",
+      "contract": "test/fixtures/evaluate-ci-repos/nightly-deploy/evals/answer-grade/contract.json",
+      "contractDigest": "sha256:fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e",
+      "generated": "test/fixtures/evaluate-engine-seals/fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e.json",
+      "generatedDigest": "sha256:6d58e3c87dc497f72cdc073a73b5ce9fcc4dcfc83a991b5583c0fa8b5605dcef"
+    },
+    "test/fixtures/evaluate-ci-repos/tagged-release/evals/answer-grade/sealed-brief.json": {
+      "sourceDigest": "sha256:e0ae174ee96125322463bf279393460f1ba4d76fcbeed4a20b60599218d8047e",
+      "contract": "test/fixtures/evaluate-ci-repos/tagged-release/evals/answer-grade/contract.json",
+      "contractDigest": "sha256:fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e",
+      "generated": "test/fixtures/evaluate-engine-seals/fec9f689b05e2060934d8a30283cbd74e76cf7f8354407f38ad1a15524345b3e.json",
+      "generatedDigest": "sha256:6d58e3c87dc497f72cdc073a73b5ce9fcc4dcfc83a991b5583c0fa8b5605dcef"
+    },
+    "test/fixtures/evaluate-gap-loop/after/evaluation/replay/development/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:050f7a21629d7775a7ec51cc3ddcffa7110d3600bb61097025bd421c91591d21",
+      "contract": "test/fixtures/evaluate-gap-loop/after/evaluation/replay/development/contract.json",
+      "contractDigest": "sha256:81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3",
+      "generated": "test/fixtures/evaluate-engine-seals/81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3.json",
+      "generatedDigest": "sha256:14d2260a1515a110cf03a493edaa53562b2a0eae3d1adb1000f103407c5993f4"
+    },
+    "test/fixtures/evaluate-gap-loop/after/evaluation/replay/held-out/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:050f7a21629d7775a7ec51cc3ddcffa7110d3600bb61097025bd421c91591d21",
+      "contract": "test/fixtures/evaluate-gap-loop/after/evaluation/replay/held-out/contract.json",
+      "contractDigest": "sha256:81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3",
+      "generated": "test/fixtures/evaluate-engine-seals/81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3.json",
+      "generatedDigest": "sha256:14d2260a1515a110cf03a493edaa53562b2a0eae3d1adb1000f103407c5993f4"
+    },
+    "test/fixtures/evaluate-gap-loop/after/evaluation/sealed-brief.json": {
+      "sourceDigest": "sha256:050f7a21629d7775a7ec51cc3ddcffa7110d3600bb61097025bd421c91591d21",
+      "contract": "test/fixtures/evaluate-gap-loop/after/evaluation/contract.json",
+      "contractDigest": "sha256:81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3",
+      "generated": "test/fixtures/evaluate-engine-seals/81afad0db70ff417a21b0b226f074fd12703ba4dba42f5add94ddaf05ab256c3.json",
+      "generatedDigest": "sha256:14d2260a1515a110cf03a493edaa53562b2a0eae3d1adb1000f103407c5993f4"
+    },
+    "test/fixtures/evaluate-gap-loop/before/evaluation/replay/development-stopped/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:85adcd660347ff1b63ad91ea3b351f9ea958aa9e42a13a1609409720827f8638",
+      "contract": "test/fixtures/evaluate-gap-loop/before/evaluation/replay/development-stopped/contract.json",
+      "contractDigest": "sha256:493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415",
+      "generated": "test/fixtures/evaluate-engine-seals/493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415.json",
+      "generatedDigest": "sha256:ad85b26d2c3974831491d7c088d98aec11657a61f8fd0e99a4a1b2991844cf11"
+    },
+    "test/fixtures/evaluate-gap-loop/before/evaluation/replay/gameability-diagnostic/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:85adcd660347ff1b63ad91ea3b351f9ea958aa9e42a13a1609409720827f8638",
+      "contract": "test/fixtures/evaluate-gap-loop/before/evaluation/replay/gameability-diagnostic/contract.json",
+      "contractDigest": "sha256:493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415",
+      "generated": "test/fixtures/evaluate-engine-seals/493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415.json",
+      "generatedDigest": "sha256:ad85b26d2c3974831491d7c088d98aec11657a61f8fd0e99a4a1b2991844cf11"
+    },
+    "test/fixtures/evaluate-gap-loop/before/evaluation/replay/held-out/sealed-evaluator-brief.json": {
+      "sourceDigest": "sha256:85adcd660347ff1b63ad91ea3b351f9ea958aa9e42a13a1609409720827f8638",
+      "contract": "test/fixtures/evaluate-gap-loop/before/evaluation/replay/held-out/contract.json",
+      "contractDigest": "sha256:493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415",
+      "generated": "test/fixtures/evaluate-engine-seals/493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415.json",
+      "generatedDigest": "sha256:ad85b26d2c3974831491d7c088d98aec11657a61f8fd0e99a4a1b2991844cf11"
+    },
+    "test/fixtures/evaluate-gap-loop/before/evaluation/sealed-brief.json": {
+      "sourceDigest": "sha256:85adcd660347ff1b63ad91ea3b351f9ea958aa9e42a13a1609409720827f8638",
+      "contract": "test/fixtures/evaluate-gap-loop/before/evaluation/contract.json",
+      "contractDigest": "sha256:493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415",
+      "generated": "test/fixtures/evaluate-engine-seals/493369d07033cb81a4659deecb6fac30c27bc7f1e2406517f253b97488f74415.json",
+      "generatedDigest": "sha256:ad85b26d2c3974831491d7c088d98aec11657a61f8fd0e99a4a1b2991844cf11"
+    }
+  }
+}

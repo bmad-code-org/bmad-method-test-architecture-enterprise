@@ -1525,7 +1525,7 @@ async function runReview(session) {
         copyReportArtifact(agentOutputPath, outputPath, copiedReportTemporaryPath);
       }
 
-      let rawReport = fs.readFileSync(agentOutputPath, 'utf8');
+      let rawReport = fs.readFileSync(agentOutputPath, 'utf8').replace(/^\uFEFF/, '');
       const parseAgentReport = (text) => {
         try {
           return parseReport(text, {

@@ -202,6 +202,7 @@ Before starting this workflow, verify:
 ### Red-Phase Scaffolds Verified
 
 - [ ] All generated acceptance test scaffolds are marked with `test.skip()`
+- [ ] Every skipped leaf has an adjacent comment explaining that its red scaffold awaits implementation; activation removes `.skip` and the temporary reason before confirming RED
 - [ ] No scaffold was emitted as an active passing test before implementation
 - [ ] Create verification activates only generated leaf skips in a disposable copy; permanent scaffolds and all other skips remain unchanged
 - [ ] Implementation activation guidance is documented: remove the current task's leaf `test.skip()` when development begins, then confirm RED before implementing

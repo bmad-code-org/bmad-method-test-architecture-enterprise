@@ -29,7 +29,7 @@ The router selects exactly one customization key (`workflow` for expand, `workfl
 
 ## On Activation
 
-Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-automate.toml`, `bmad-testarch-automate.user.toml`, `bmad-testarch-atdd.toml`, `bmad-testarch-atdd.user.toml`, `bmad-tea-atdd.toml`, and `bmad-tea-atdd.user.toml`. Red settings live under `[workflow.red]` in `bmad-tea-automate.toml` and `.user.toml`; the atdd files are read nowhere. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
+Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-automate.toml`, `bmad-testarch-automate.user.toml`, `bmad-testarch-atdd.toml`, `bmad-testarch-atdd.user.toml`, `bmad-tea-atdd.toml`, and `bmad-tea-atdd.user.toml`. Red settings live under `[workflow.red]` in `bmad-tea-automate.toml` and `.user.toml`; the atdd files are read nowhere. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
 
 ### Step 1: Resolve the Workflow Block
 

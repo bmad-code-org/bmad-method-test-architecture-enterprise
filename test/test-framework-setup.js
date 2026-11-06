@@ -241,7 +241,17 @@ test('native verification timeout stops shell descendants before returning', (t)
   assert.equal(outcome.completed, false);
   assert.match(outcome.issues.join('\n'), /timed out/);
   const pid = Number(fs.readFileSync(path.join(f.root, 'child.pid'), 'utf8'));
-  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  let stopped = false;
+  try {
+    process.kill(pid, 0);
+    // A container's PID 1 can leave a killed orphan as a zombie. It cannot run,
+    // although kill(pid, 0) succeeds until its parent reaps the process.
+    if (process.platform === 'linux') stopped = /^State:\s+Z\b/m.test(fs.readFileSync(`/proc/${pid}/status`, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ESRCH' || error.code === 'ENOENT') stopped = true;
+    else throw error;
+  }
+  assert.equal(stopped, true, `descendant ${pid} is still running after verification timeout`);
 });
 
 test('empty framework directory cannot establish Create completion', (t) => {

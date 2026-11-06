@@ -514,6 +514,7 @@ const totalRequirements = traceabilityMatrix.length;
 const coveredRequirements = traceabilityMatrix.filter((r) => r.coverage === 'FULL' || r.coverage === 'PARTIAL').length;
 const fullyCovered = traceabilityMatrix.filter((r) => r.coverage === 'FULL').length;
 
+// Rounded percentages are presentation values. Step 5 compares covered/total counts for every gate threshold.
 const safePct = (covered, total) => (total > 0 ? Math.round((covered / total) * 100) : 100);
 const coveragePercentage = safePct(fullyCovered, totalRequirements);
 

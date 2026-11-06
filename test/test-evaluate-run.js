@@ -6360,8 +6360,38 @@ async function checkLeftoverProcess() {
   }
 }
 
+/** Scoring must refuse an observed mount and name the evidence it actually received. */
+function scoreNamesObservedRefusal(scored, mounts) {
+  return scored.status === 3 && mounts.some((mount) => scored.output.includes(`mount outside allowlist: ${mount}`));
+}
+
 /** A leftover process that swaps a tracked evaluator/ file while the evaluator launches, and has it put itself back (Story 1.31). */
 async function checkEvaluatorSwap({ observer = null, requireOmitted = false } = {}) {
+  // A partial Darwin log can retain the refused diagnostic write while losing
+  // the evaluator swap. Score must still refuse that recorded marker path.
+  const markerPath = '/observed-marker/swapper.error';
+  const swapPath = '/evaluation/evaluator/impl.js';
+  for (const [scored, mounts, expected] of [
+    [{ status: 3, output: `mount outside allowlist: ${markerPath}` }, [markerPath], true],
+    [{ status: 0, output: `mount outside allowlist: ${markerPath}` }, [markerPath], false],
+    [{ status: 12, output: `mount outside allowlist: ${markerPath}` }, [markerPath], false],
+    [{ status: 3, output: `mount outside allowlist: ${swapPath}` }, [markerPath], false],
+    [{ status: 3, output: `mount outside allowlist: ${markerPath}` }, [], false],
+  ]) {
+    check(
+      scoreNamesObservedRefusal(scored, mounts) === expected,
+      `score diagnostic follows recorded refused mounts: ${JSON.stringify({ scored, mounts })}`,
+    );
+  }
+  const missing = 'swap retry witness: primary path report missing';
+  reportFailures.add(missing);
+  try {
+    check(onlyMissingReports([missing]), 'a missing primary swap report remains eligible for the bounded audit retry');
+    check(!onlyMissingReports([missing, 'score did not refuse the observed marker']), 'a score mismatch prevents the audit retry');
+  } finally {
+    reportFailures.delete(missing);
+  }
+
   for (const confined of [true, false]) {
     const label = confined ? 'confinement-swap' : 'confinement-swap-open';
     const project = makeProject(label, { unconfined: !confined, toolchain: true, edit: ({ folder }) => useWrappedEvaluator(folder) });
@@ -6441,8 +6471,7 @@ async function checkEvaluatorSwap({ observer = null, requireOmitted = false } = 
       }
       const scored = evaluate(['score', '--evaluation', project.folder], project.env);
       check(
-        scored.status === expectedExit &&
-          (omittedDiagnostic || namespaced || scored.output.includes(`mount outside allowlist: ${swapped}`)),
+        scored.status === expectedExit && (expectedExit === 0 || scoreNamesObservedRefusal(scored, mounts)),
         `${label}: score did not preserve its observed diagnostic outcome: ${scored.output}`,
       );
     } else {
@@ -22446,6 +22475,10 @@ const GROUPS = new Set(CASES.map(({ group }) => group));
  * (Story 1.60), so a case whose every failure is a missing report (`checkReport`) runs again, up to two more times, before
  * those failures count; a failure of any other check counts at once, and each attempt that is dropped is printed.
  */
+function onlyMissingReports(messages) {
+  return messages.length > 0 && messages.every((message) => reportFailures.has(message));
+}
+
 async function runCase(name, body, lossy = false) {
   const attempts = lossy && process.platform === 'darwin' ? 3 : 1;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -22457,7 +22490,7 @@ async function runCase(name, body, lossy = false) {
       check(false, `${name} could not finish: ${error.stack ?? error}`);
     }
     const fresh = failures.slice(failuresBefore);
-    if (fresh.length === 0 || attempt === attempts || !fresh.every((message) => reportFailures.has(message))) return;
+    if (fresh.length === 0 || attempt === attempts || !onlyMissingReports(fresh)) return;
     console.error(`${name}: attempt ${attempt} lost a report of the kernel's log (${fresh.length} missing); running it again`);
     await new Promise((resolve) => setTimeout(resolve, 3000));
     failures.length = failuresBefore;

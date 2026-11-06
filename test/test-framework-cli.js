@@ -472,7 +472,7 @@ test('retired CI files and a top-level ci_platform stop the framework CLI with t
     fs.writeFileSync(path.join(f.root, '_bmad/custom', file), text);
     const result = f.run([...f.agent('hooks'), '--scope', 'ci']);
     assert.notEqual(result.status, 0, file);
-    assert.match(result.stderr, /tea-migrate-customizations --project-root/, file);
+    assert.match(result.stderr, /--package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root/, file);
     assert.equal(fs.existsSync(path.join(f.root, 'artifacts/framework/setup-run-progress.md')), false, `${file} wrote no journal`);
   }
 });

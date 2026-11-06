@@ -820,6 +820,7 @@ import { test } from '../support/fixtures';
 import { expect } from '@playwright/test';
 
 test.describe('Profile API', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should fetch user profile', async ({ request, authToken }) => {
     const response = await request.get('/api/profile', {
       headers: { Authorization: `Bearer ${authToken}` },
@@ -832,6 +833,7 @@ test.describe('Profile API', () => {
     expect(profile).toHaveProperty('avatarUrl');
   });
 
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-2 should update user profile', async ({ request, authToken }) => {
     const response = await request.patch('/api/profile', {
       headers: { Authorization: `Bearer ${authToken}` },
@@ -847,6 +849,7 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P1] AC-4 should validate email format', async ({ request, authToken }) => {
     const response = await request.patch('/api/profile', {
       headers: { Authorization: `Bearer ${authToken}` },
@@ -875,6 +878,7 @@ const ProfileSchema = z.object({
 });
 
 test.describe('Profile API', () => {
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'GET',
@@ -888,6 +892,7 @@ test.describe('Profile API', () => {
     expect(profile.email).toContain('@');
   });
 
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P0] AC-2 should update user profile', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
@@ -905,6 +910,7 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
+  // Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
   test.skip('[P1] AC-4 should validate email format', async ({ apiRequest, authToken }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
@@ -929,6 +935,7 @@ Disable retries with `retryConfig: { maxRetries: 0 }` for tests that assert a 5x
 ```typescript
 import { test, expect } from '@playwright/test';
 
+// Red scaffold: awaiting implementation. Activate this criterion and confirm RED before coding.
 test.skip('[P0] AC-3 should edit and save profile', async ({ page }) => {
   // This assertion is the first potentially failing operation. Every browser
   // failure in the journey retains AC-3 provenance.
@@ -990,7 +997,8 @@ TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/a
 #### 5. Verify Red-Phase Scaffolds
 
 TEA verifies the TDD red phase using an isolated, un-skipped copy. The saved scaffolds keep `test.skip()` until you're ready to work on a task.
-Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
+Each skipped leaf has an adjacent comment explaining that it awaits implementation.
+Review the generated files, then remove `.skip` and the temporary reason for the current task and confirm that the newly activated test fails before you implement the feature.
 
 ```bash
 npm run test:e2e   # Playwright via TEA's framework scaffold, which carries the config path
