@@ -27,13 +27,9 @@ function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRo
   };
   if (!['none', 'auto', 'cli', 'mcp'].includes(tea.tea_browser_automation))
     throw new Error('tea_browser_automation must be none, auto, cli or mcp');
-  const namespace = mode === 'red' ? 'bmad-tea-atdd' : 'bmad-tea-automate';
-  const sibling = path.join(skillRoot, '..', namespace, 'customize.toml');
-  const defaultsPath =
-    mode === 'red' && !fs.existsSync(sibling)
-      ? path.join(skillRoot, 'red', 'customize.toml')
-      : path.join(mode === 'red' ? path.dirname(sibling) : skillRoot, 'customize.toml');
-  const workflowCustomization = readWorkflowCustomization(configSource(projectRoot), path.dirname(defaultsPath), projectRoot, namespace);
+  const workflowCustomization = readWorkflowCustomization(configSource(projectRoot), skillRoot, projectRoot, 'bmad-tea-automate', {
+    table: mode === 'red' ? 'red' : undefined,
+  });
   if (!workflowCustomization || typeof workflowCustomization !== 'object' || Array.isArray(workflowCustomization))
     throw new Error('selected workflow customization must contain a workflow table');
   const settings = { ...HEALING_DEFAULTS };

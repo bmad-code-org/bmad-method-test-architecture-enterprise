@@ -419,7 +419,7 @@ test('new optional config and matching customization policies fail without publi
   );
   assert.equal(f.run().status, 0);
   const saved = fs.readFileSync(path.join(f.root, 'learner/conversation.json'));
-  for (const mode of ['input:create:_bmad/config.user.toml', 'input:member:policies/learn.md']) {
+  for (const mode of ['input:create:_bmad/custom/config.user.toml', 'input:member:policies/learn.md']) {
     const failed = f.run('QA', mode);
     assert.equal(failed.status, 3, failed.stderr);
     assert.deepEqual(fs.readFileSync(path.join(f.root, 'learner/conversation.json')), saved);

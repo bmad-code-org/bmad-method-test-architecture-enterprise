@@ -144,7 +144,6 @@ function run(argv = process.argv) {
     ...consumedInputs,
     ...[
       '_bmad/config.toml',
-      '_bmad/config.user.toml',
       '_bmad/custom/config.toml',
       '_bmad/custom/config.user.toml',
       'package.json',

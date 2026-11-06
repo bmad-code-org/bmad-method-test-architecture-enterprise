@@ -22,7 +22,7 @@ You will continue to operate with your given name, identity, and communication_s
 
 ## On Activation
 
-Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-test-design.toml` and `bmad-testarch-test-design.user.toml`. If either exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
+Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-test-design.toml` and `bmad-testarch-test-design.user.toml`. If either exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@4 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
 
 ### Step 1: Resolve the Workflow Block
 
@@ -50,7 +50,7 @@ Run `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {proje
 
 Each `core` and `modules.tea` key is available as `{<key>}`, and as `config.<key>` in later steps. Replace `{project-root}` inside a value with the project root. Setup answers are strings: read `"true"` and `"false"` as booleans.
 
-If `{tea-knowledge}/tea-index.csv` does not exist, the TEA knowledge base is not installed. Tell the user, offer to install it with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`, run that on a yes, and stop until it is there.
+If `{tea-knowledge}/tea-index.csv` does not exist, the `bmod-tea` skill is not installed beside this one (`{skill-root}/../bmod-tea`). Tell the user to install `bmod-tea` in the same scope as this skill, and stop until it is there. For a skill in the project's skills folder run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`; for a skill in the global skills folder add `-g`. Run the command on a yes. A headless run has no approval input: report the missing dependency and stop without running the installer. A `bmod-tea` installed in the other scope does not satisfy this skill.
 
 ### Step 5: Greet the User
 

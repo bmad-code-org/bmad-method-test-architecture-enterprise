@@ -255,7 +255,7 @@ The CLI resolves the fragment-selection keys, `test_stack_type`, and the orchest
 The resolved `[core]` and complete `[modules.tea]` table are supplied in the prompt; the agent uses those values throughout activation and the skill.
 
 For a git-diff review, configuration comes from the selected base ref, including the default `origin/main` or the base resolved through `--pr`.
-The CLI pins that ref to a commit and reads `_bmad/config.toml`, `_bmad/config.user.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml` from its Git tree with `git show`.
+The CLI pins that ref to a commit and reads `_bmad/config.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml` from its Git tree with `git show`.
 Layers follow BMad structural merge rules: tables merge recursively, ordinary arrays append, keyed table arrays replace matching `code` or `id` entries, and later scalars win.
 Legacy `_bmad/tea/config.yaml` is read only when the base tree lacks `_bmad/config.toml`.
 A PR that edits, adds, removes, or breaks those files therefore keeps the review settings from its base.

@@ -7,7 +7,6 @@ description: 'Generate traceability matrix and quality gate decision. Use when t
 date: system-generated
 
 # Workflow components
-installed_path: "."
 instructions: "./instructions.md"
 validation: "./checklist.md"
 template: "./trace-template.md"
