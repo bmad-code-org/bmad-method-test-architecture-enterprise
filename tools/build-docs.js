@@ -48,6 +48,8 @@ const LLM_WARN_CHARS = LLM_MAX_CHARS - LLM_MIN_HEADROOM_CHARS;
 const LLM_EXCLUDE_PATTERNS = [
   // The site's not-found page, which is navigation chrome and carries no content.
   '404.md',
+  // Download navigation links carry no skill reference content.
+  'downloads',
   // TEA's test and evaluation design serves contributors; llms.txt links it under "Contributing".
   'explanation/how-tea-is-tested',
   // The command-line references: every flag, rule and exit code of one command,
@@ -298,7 +300,8 @@ function buildLlmsTxt() {
     '## Quick Links',
     '',
     `- [Full Documentation (llms-full.txt)](${SITE_URL}/llms-full.txt): Complete docs for AI context`,
-    `- [Source Bundle](${SITE_URL}/downloads/tea-sources.zip): Complete source code`,
+    `- [Downloads](${SITE_URL}/downloads): Skills bundle and complete repository source`,
+    `- [Skills Bundle](${SITE_URL}/downloads/tea-sources.zip): TEA skills and knowledge base`,
     `- [Prompts Bundle](${SITE_URL}/downloads/tea-prompts.zip): Agent prompts and skills`,
     '',
   ].join('\n');
@@ -554,7 +557,7 @@ async function generatePromptsBundle(downloadsDir) {
   if (!fs.existsSync(srcDir)) return;
 
   const zipPath = path.join(downloadsDir, 'tea-prompts.zip');
-  await createZipArchive(srcDir, zipPath, ['docs', '.DS_Store', '__pycache__', 'node_modules']);
+  await createZipArchive(srcDir, zipPath, ['.DS_Store', '__pycache__', 'node_modules']);
 
   const size = Math.floor(fs.statSync(zipPath).size / 1024);
   console.log(`    tea-prompts.zip (${size}K)`);

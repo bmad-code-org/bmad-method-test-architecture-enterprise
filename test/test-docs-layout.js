@@ -103,6 +103,37 @@ async function main() {
         }
       }
     }
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(url);
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    assert.ok(await page.locator('dialog[open]').isVisible(), 'Mobile search opens without hitting the menu button.');
+    await page.keyboard.press('Escape');
+    // The prose theme must preserve Mermaid's own node label colors.
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await page.goto(url + 'explanation/tea-overview/');
+    await page.waitForSelector('pre.mermaid[data-processed] .nodeLabel :is(strong, b)');
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      const labels = await page.locator('pre.mermaid .nodeLabel :is(strong, b)').evaluateAll((elements) =>
+        elements.map((element) => ({
+          text: globalThis.getComputedStyle(element).color,
+          node: globalThis.getComputedStyle(element.closest('.nodeLabel')).color,
+        })),
+      );
+      assert.ok(labels.length > 0, 'Diagram has bold labels to check.');
+      for (const label of labels) assert.equal(label.text, label.node, `Mermaid label inherits its node color in ${theme}`);
+    }
+    const footer = await page.evaluate(() => ({
+      article: document.querySelector('h1#_top').getBoundingClientRect().left,
+      brand: document.querySelector('.bmad-footer .brand').getBoundingClientRect().left,
+      labels: [...document.querySelectorAll('.bmad-footer nav')].map((nav) =>
+        document.querySelector(`#${nav.getAttribute('aria-labelledby')}`)?.textContent.trim(),
+      ),
+    }));
+    assert.ok(Math.abs(footer.article - footer.brand) <= 1, 'Wide-screen footer aligns with the article.');
+    assert.deepEqual(footer.labels, ['Test Architect', 'BMad', 'Community'], 'Footer navigation has visible labels.');
     assert.deepEqual(requestFailures, [], 'Documentation assets and scripts completed without local failures.');
     console.log(
       'Documentation layout: Automate and Framework TOCs, numbered steps, and viewport bounds passed at 1153px, 1440px, and 390px.',

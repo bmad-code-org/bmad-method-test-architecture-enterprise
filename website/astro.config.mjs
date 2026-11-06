@@ -82,7 +82,7 @@ export default defineConfig({
       title: 'Test Architect (TEA)',
       tagline: 'Risk-based test strategy, automation guidance, and release gate decisions for quality-driven development.',
 
-      favicon: '/favicon.ico',
+      favicon: '/favicon.svg',
 
       // Social links
       social: [
@@ -252,6 +252,9 @@ export default defineConfig({
       // Custom components
       components: {
         Header: './src/components/Header.astro',
+        SiteTitle: './src/components/SiteTitle.astro',
+        PageTitle: './src/components/PageTitle.astro',
+        TwoColumnContent: './src/components/TwoColumnContent.astro',
         MobileMenuFooter: './src/components/MobileMenuFooter.astro',
       },
 

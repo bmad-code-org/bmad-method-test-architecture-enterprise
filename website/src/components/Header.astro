@@ -2,13 +2,11 @@
 import config from 'virtual:starlight/user-config';
 import type { Props } from '@astrojs/starlight/props';
 
-import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
 import Search from 'virtual:starlight/components/Search';
 import SiteTitle from 'virtual:starlight/components/SiteTitle';
 import SocialIcons from 'virtual:starlight/components/SocialIcons';
 import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 
-import Banner from './Banner.astro';
 
 /**
  * Render the `Search` component if Pagefind is enabled or the default search component has been overridden.
@@ -17,7 +15,6 @@ const shouldRenderSearch =
 	config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro';
 ---
 
-<Banner />
 <div class="header sl-flex">
 	<div class="title-wrapper sl-flex">
 		<SiteTitle {...Astro.props} />
@@ -33,7 +30,6 @@ const shouldRenderSearch =
 			<SocialIcons {...Astro.props} />
 		</div>
 		<ThemeSelect {...Astro.props} />
-		<LanguageSelect {...Astro.props} />
 	</div>
 </div>
 
@@ -67,25 +63,25 @@ const shouldRenderSearch =
 		font-size: 0.875rem;
 		font-weight: 500;
 		padding: 0.25rem 0.5rem;
-		border-radius: 4px;
+		border-radius: 2px;
 		transition: color 0.15s ease, background-color 0.15s ease;
 	}
 
 	.nav-links a:hover {
 		color: var(--sl-color-accent);
-		background-color: rgba(59, 130, 246, 0.1);
+		background-color: var(--bmad-tint);
 	}
 
 	.nav-links::after {
 		content: '';
 		height: 2rem;
-		border-inline-end: 1px solid var(--sl-color-gray-5);
+		border-inline-end: 1px solid var(--sl-color-hairline);
 	}
 
 	.social-icons::after {
 		content: '';
 		height: 2rem;
-		border-inline-end: 1px solid var(--sl-color-gray-5);
+		border-inline-end: 1px solid var(--sl-color-hairline);
 	}
 
 	@media (min-width: 50rem) {
