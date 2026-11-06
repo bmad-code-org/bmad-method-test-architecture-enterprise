@@ -105,6 +105,12 @@ async function main() {
     }
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(url);
+    const menuStyle = await page.getByRole('button', { name: 'Menu', exact: true }).evaluate((button) => ({
+      radius: globalThis.getComputedStyle(button).borderRadius,
+      shadow: globalThis.getComputedStyle(button).boxShadow,
+    }));
+    assert.equal(menuStyle.radius, '2px', 'Mobile menu matches the square navigation controls.');
+    assert.equal(menuStyle.shadow, 'none', 'Mobile menu has no drop shadow.');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     assert.ok(await page.locator('dialog[open]').isVisible(), 'Mobile search opens without hitting the menu button.');
     await page.keyboard.press('Escape');

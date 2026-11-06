@@ -564,7 +564,9 @@ site-search button kbd {
   border-inline-end-color: var(--sl-color-hairline);
 }
 
-.header starlight-menu-button button {
+starlight-menu-button > button[aria-controls] {
+  background: var(--sl-color-bg);
+  color: var(--sl-color-text);
   border-radius: 2px;
   box-shadow: none;
   border: 1px solid var(--sl-color-hairline);
