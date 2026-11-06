@@ -1,0 +1,13 @@
+# Skills the tea module no longer ships under these names. `bmad setup` offers to delete any still installed and
+# moves a renamed skill's `_bmad/custom/` files to the new name. A retired name is never reused.
+renamed = [
+  { from = "bmad-testarch-automate", to = "bmad-tea-automate" },
+  { from = "bmad-testarch-evaluate", to = "bmad-tea-evaluate" },
+  { from = "bmad-testarch-framework", to = "bmad-tea-framework" },
+  { from = "bmad-testarch-nfr", to = "bmad-tea-nfr" },
+  { from = "bmad-testarch-test-design", to = "bmad-tea-test-design" },
+  { from = "bmad-testarch-test-review", to = "bmad-tea-test-review" },
+  { from = "bmad-testarch-trace", to = "bmad-tea-trace" },
+  { from = "bmad-teach-me-testing", to = "bmad-tea-teach-me-testing" },
+]
+removed = ["bmad-testarch-atdd", "bmad-testarch-ci"]

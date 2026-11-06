@@ -7,7 +7,6 @@ description: 'Generate tests in red or expand mode and run-and-heal new tests. U
 date: system-generated
 
 # Workflow components
-installed_path: "."
 instructions: "./instructions.md"
 validation: "./checklist.md"
 template: false

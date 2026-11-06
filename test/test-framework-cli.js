@@ -324,11 +324,10 @@ test('newly generated configuration and its hard link are protected before resul
 test('configured framework and CI hook identities require exact completed lifecycles', (t) => {
   const f = fixture(t);
   fs.mkdirSync(path.join(f.root, '_bmad/custom'));
-  for (const skill of ['framework', 'ci'])
-    fs.writeFileSync(
-      path.join(f.root, `_bmad/custom/bmad-tea-${skill}.toml`),
-      '[workflow]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n',
-    );
+  fs.writeFileSync(
+    path.join(f.root, '_bmad/custom/bmad-tea-framework.toml'),
+    '[workflow]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n\n[workflow.ci]\nactivation_steps_prepend=["Record activation."]\non_complete="Record completion."\n',
+  );
   const result = f.run([...f.agent('hooks'), '--scope', 'both']);
   assert.equal(result.status, 0, result.stderr + result.stdout);
 });
@@ -460,5 +459,20 @@ test('current public completion recognizer executes real unittest successes, fai
     assert.equal(value.verification[0].passedTests, mode === 'python-pass' ? 1 : 0);
     assert.equal(value.verification[0].failedTests, mode === 'python-fail' ? 1 : 0);
     assert.match(fs.readFileSync(value.verification[0].stderr, 'utf8'), /Ran 1 test/);
+  }
+});
+
+test('retired CI files and a top-level ci_platform stop the framework CLI with the migration command', (t) => {
+  for (const [file, text] of [
+    ['bmad-tea-ci.toml', '[workflow]\nci_platform="gitlab-ci"\n'],
+    ['bmad-tea-framework.toml', '[workflow]\nci_platform="gitlab-ci"\n'],
+  ]) {
+    const f = fixture(t);
+    fs.mkdirSync(path.join(f.root, '_bmad/custom'));
+    fs.writeFileSync(path.join(f.root, '_bmad/custom', file), text);
+    const result = f.run([...f.agent('hooks'), '--scope', 'ci']);
+    assert.notEqual(result.status, 0, file);
+    assert.match(result.stderr, /tea-migrate-customizations --project-root/, file);
+    assert.equal(fs.existsSync(path.join(f.root, 'artifacts/framework/setup-run-progress.md')), false, `${file} wrote no journal`);
   }
 });

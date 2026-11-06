@@ -75,8 +75,7 @@ Red Create requires `--story`.
 Edit requires change instructions.
 
 The CLI uses the [TEA configuration layers](./configuration.md) and module defaults when setup files are absent.
-Red resolves the `bmad-tea-atdd` customization surface.
-Expand resolves `bmad-tea-automate`.
+Both modes read `bmad-tea-automate.toml`. Red resolves its `[workflow.red]` table; expand resolves `[workflow]`.
 Prepend steps, facts, append steps, and completion hooks retain their order.
 
 | Option                                       | Meaning                                                        |

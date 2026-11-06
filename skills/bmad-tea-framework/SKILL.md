@@ -26,7 +26,7 @@ Before activation hooks or project writes, load `{skill-root}/resources/setup-ro
 
 ## On Activation
 
-Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-framework.toml`, `bmad-testarch-framework.user.toml`, `bmad-testarch-ci.toml`, and `bmad-testarch-ci.user.toml`. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
+Before resolving customizations or running hooks, inspect `{project-root}/_bmad/custom/` for `bmad-testarch-framework.toml`, `bmad-testarch-framework.user.toml`, `bmad-testarch-ci.toml`, `bmad-testarch-ci.user.toml`, `bmad-tea-ci.toml`, and `bmad-tea-ci.user.toml`. CI settings live under `[workflow.ci]` in `bmad-tea-framework.toml` and `.user.toml`; the ci files are read nowhere. Also stop when `[workflow]` of `bmad-tea-framework.toml` or `.user.toml` holds `ci_platform` directly, because only `[workflow.ci]` is read. If any exists, stop and tell the user to run `npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root {project-root}`. Resolve any reported manual merge, then start a fresh chat. Do not continue with default settings while legacy overrides remain.
 
 ### Step 1: Resolve the Workflow Block
 
@@ -40,7 +40,7 @@ Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skil
 
 Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
 
-When scope includes CI, resolve `ci_workflow` through `resources/setup-routing.md` section 2 before any CI hook, greeting, contract freeze or worker launch. Retain canonical `workflow` separately for explicit platform precedence. This resolution reads settings only; the activation stages below execute the applicable hooks and facts.
+When scope includes CI, resolve `ci_workflow` through `resources/setup-routing.md` section 2 before any CI hook, greeting, contract freeze or worker launch. Retain canonical `workflow` separately. This resolution reads settings only; the activation stages below execute the applicable hooks and facts.
 
 ### Step 2: Execute Prepend Steps
 
@@ -56,7 +56,7 @@ Run `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {proje
 
 Each `core` and `modules.tea` key is available as `{<key>}`, and as `config.<key>` in later steps. Replace `{project-root}` inside a value with the project root. Setup answers are strings: read `"true"` and `"false"` as booleans.
 
-If `{tea-knowledge}/tea-index.csv` does not exist, the TEA knowledge base is not installed. Tell the user, offer to install it with `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`, run that on a yes, and stop until it is there.
+If `{tea-knowledge}/tea-index.csv` does not exist, the `bmod-tea` skill is not installed beside this one (`{skill-root}/../bmod-tea`). Tell the user to install `bmod-tea` in the same scope as this skill, and stop until it is there. For a skill in the project's skills folder run `npx skills add bmad-code-org/bmad-method-test-architecture-enterprise --skill bmod-tea`; for a skill in the global skills folder add `-g`. Run the command on a yes. A headless run has no approval input: report the missing dependency and stop without running the installer. A `bmod-tea` installed in the other scope does not satisfy this skill.
 
 ### Step 5: Greet the User
 

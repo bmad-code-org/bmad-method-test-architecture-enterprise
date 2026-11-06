@@ -36,11 +36,7 @@ fs.mkdirSync(path.join(scratch, '_bmad/custom'), { recursive: true });
 fs.writeFileSync(path.join(scratch, 'policy.md'), 'STRICT_POLICY_RULE\n');
 fs.writeFileSync(
   path.join(scratch, '_bmad/custom/bmad-tea-automate.toml'),
-  '[workflow]\npersistent_facts = ["EXPAND ONLY", "file:{project-root}/policy.md"]\non_complete = "expand hook"\n',
-);
-fs.writeFileSync(
-  path.join(scratch, '_bmad/custom/bmad-tea-atdd.toml'),
-  '[workflow]\npersistent_facts = ["RED ONLY"]\non_complete = "red hook"\n',
+  '[workflow]\npersistent_facts = ["EXPAND ONLY", "file:{project-root}/policy.md"]\non_complete = "expand hook"\n\n[workflow.red]\npersistent_facts = ["RED ONLY"]\non_complete = "red hook"\n',
 );
 try {
   assert.deepEqual(selectMode(undefined, 'write acceptance tests'), { mode: 'red', selection: 'request' });
