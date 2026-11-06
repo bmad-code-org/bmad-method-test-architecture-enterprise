@@ -172,6 +172,17 @@ const reportedLiveEvidence =
     ? coverageMatrix.live_evidence
     : {};
 const liveEvidence = { ...liveEvidenceDefaults, ...reportedLiveEvidence };
+// An absent legacy live block retains the defaults. A fresh claim must carry
+// measured counts; missing or malformed evidence cannot establish a passing gate.
+if (liveEvidence.freshness === 'fresh' && (!Number.isInteger(reportedLiveEvidence.failed) || reportedLiveEvidence.failed < 0)) {
+  throw new Error('Fresh live evidence requires a nonnegative integer failed count');
+}
+if (
+  Object.hasOwn(reportedLiveEvidence, 'fresh_failed') &&
+  (!Number.isInteger(reportedLiveEvidence.fresh_failed) || reportedLiveEvidence.fresh_failed < 0)
+) {
+  throw new Error('Live evidence fresh_failed must be a nonnegative integer');
+}
 
 // The live-only count is what stands between live evidence and an unconditional PASS, so it is
 // re-derived here from the requirements themselves rather than trusted as a scalar. Phase 1 can be

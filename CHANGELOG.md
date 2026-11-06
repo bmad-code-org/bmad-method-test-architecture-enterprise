@@ -10,12 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Customization migration validates every argument before touching files and handles `--help` and `-h` safely.
-- Trace gates compare exact coverage counts at the P0, P1, and overall thresholds, and reject understated fresh live-failure counts.
-- Test Review accepts valid reports saved with a leading UTF-8 byte-order mark.
+- Trace gates compare exact coverage counts at the P0, P1, and overall thresholds, and reject understated fresh live-failure counts and malformed fresh evidence.
+- Test Review accepts valid reports saved with a leading UTF-8 byte-order mark and normalizes the published report before removing interactive resume state.
 - Write-time enforcement detects Promise-based and awaited timer waits, quoted numeric Pact worker counts, and conventional Kotlin test paths. Java text blocks and Kotlin raw strings remain fixture data. Reusable Maestro `subflows/` skip C4 assertion-presence checks while retaining other enforcement.
 - Red-phase API and E2E examples explain each skipped scaffold with an adjacent reason that is removed on activation, using the hook’s existing documented-skip handling. Unexplained skips still warn.
 - Framework setup preserves both Pact config filename conventions and all supported config extensions. Its guidance states the hook’s language coverage and Maestro subflow convention.
 - Red-mode checklists link to the maintained Automate guide and refer users to their team’s test owner.
+- The macOS confinement test requires scoring to name an observed refused path while retaining the primary swap-report check and its bounded retry for kernel log loss.
 - The contributor lockfile installs with the supported Node 22/npm 10 toolchain, with a clean-install CI check, and native verification timeout tests recognize stopped zombie descendants in Linux containers.
 
 ## [3.6.1] - 2026-11-06

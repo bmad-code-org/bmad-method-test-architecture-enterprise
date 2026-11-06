@@ -224,7 +224,8 @@ function migrate(projectRoot, { check = false, beforeAction } = {}) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const usage = 'Usage: tea-migrate-customizations [--project-root PATH] [--check] [--help]';
+  const usage =
+    'Usage: tea-migrate-customizations [--project-root PATH] [--check] [--help]\nFor a directory beginning with a dash, use --project-root ./-name.';
   let projectRoot = process.cwd();
   let check = false;
   let help = false;

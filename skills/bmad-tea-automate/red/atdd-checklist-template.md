@@ -329,7 +329,7 @@ test('should do something', async ({ {fixtureName} }) => {
 2. **If the story file cannot be updated automatically**, share this checklist and generated tests with the dev workflow as a manual handoff
 3. **Review this checklist** with team in standup or planning
 4. **Begin implementation** using implementation checklist as guide
-5. **Activate one scaffold at a time** by removing `test.skip()` for the current task, then confirm it fails before implementing
+5. **Activate one scaffold at a time** by removing `.skip` and the adjacent comment with its temporary reason for the current task, then confirm it fails before implementing
 6. **Work one activated test at a time** (red → green for each)
 7. **Share progress** in daily standup
 8. **When all activated tests pass**, refactor code for quality

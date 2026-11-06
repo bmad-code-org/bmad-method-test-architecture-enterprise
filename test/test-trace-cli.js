@@ -801,6 +801,38 @@ try {
       assert.equal(actual, expected, JSON.stringify(buckets));
     }
   });
+  check('skill rejects unknown fresh failure counts and preserves legacy absence', () => {
+    const step = fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-trace/steps-c/step-05-gate-decision.md'), 'utf8');
+    const script = step.split('**Decision Tree:**')[1].split('```javascript\n')[1].split('\n```')[0];
+    const execute = (live_evidence) =>
+      require('node:vm').runInNewContext(`${script}\ngateDecision`, {
+        coverageMatrix: {
+          requirements: [{ priority: 'P0', coverage: 'FULL', tests: [{ id: 'test-1', level: 'api' }] }],
+          coverage_statistics: {
+            total_requirements: 1,
+            fully_covered: 1,
+            overall_coverage_percentage: 100,
+            priority_breakdown: Object.fromEntries(
+              ['P0', 'P1', 'P2', 'P3'].map((priority) => [
+                priority,
+                { total: priority === 'P0' ? 1 : 0, covered: priority === 'P0' ? 1 : 0, percentage: 100 },
+              ]),
+            ),
+          },
+          live_evidence,
+        },
+      });
+    for (const failed of [undefined, null, 'invalid', -1, 0.5, Number.NaN]) {
+      assert.throws(() => execute({ freshness: 'fresh', failed, fresh_failed: 3 }), /requires a nonnegative integer failed count/);
+    }
+    for (const fresh_failed of [undefined, null, 'invalid', -1, 0.5, Number.NaN]) {
+      assert.throws(() => execute({ freshness: 'fresh', failed: 3, fresh_failed }), /fresh_failed must be a nonnegative integer/);
+    }
+    assert.throws(() => execute({ freshness: 'fresh', fresh_failed: 3 }), /requires a nonnegative integer failed count/);
+    assert.equal(execute({ freshness: 'fresh', failed: 3 }), 'CONCERNS');
+    assert.equal(execute(), 'PASS');
+    assert.equal(execute({}), 'PASS');
+  });
   check('fresh failure counts cannot be understated without a frozen manifest', () => {
     const result = run('fresh-hidden-failure');
     assert.equal(result.status, 3, result.stdout);

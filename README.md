@@ -57,6 +57,8 @@ npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizati
 npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .
 ```
 
+Use `--help` for usage. For a directory whose name begins with a dash, pass `--project-root ./-name`; flag-like operands are rejected before the migration reads or writes files.
+
 This includes old CI and ATDD customization files and old skill references in custom `bmad-tea` agent menus. The command moves old-only files with their comments and permissions intact. When both old and new filenames exist, it reports both paths and asks for a manual merge so no comments or values are lost. Resolve the reported files, then rerun the command. See the [configuration reference](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/) for details.
 
 An existing host may retain the old skill folders after installing 3.0. Check the host's project and global skills folders, back up any edits in the old folders, and move those eight folders out of skill discovery. The [troubleshooting guide](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/troubleshooting/#old-slash-commands-still-appear-after-30) lists the exact folders and a safe cleanup sequence. Restart the host so its command list refreshes.

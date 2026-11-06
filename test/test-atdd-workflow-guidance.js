@@ -50,6 +50,12 @@ function assert(condition, label, detail = '') {
   if (detail) console.log(`    ${colors.dim}${detail}${colors.reset}`);
 }
 
+const nextActivation = fs.readFileSync(FILES.template, 'utf8').split('## Next Steps')[1];
+assert(
+  nextActivation.includes('removing `.skip` and the adjacent comment with its temporary reason'),
+  'generated Next Steps removes the scaffold marker and temporary reason',
+);
+
 const checklistHelp = fs.readFileSync(FILES.template, 'utf8').split('## Contact')[1];
 assert(Boolean(checklistHelp), 'generated checklist includes contact guidance');
 assert(

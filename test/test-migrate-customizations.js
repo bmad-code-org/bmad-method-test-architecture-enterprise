@@ -255,3 +255,27 @@ for (const [args, status] of [
     assert.equal(fs.readFileSync(path.join(custom, 'bmad-testarch-trace.toml'), 'utf8'), original);
   });
 }
+
+test('dash-prefixed directories use an explicit relative path without consuming mistyped options', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-migration-dash-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const custom = path.join(root, '-project', '_bmad/custom');
+  fs.mkdirSync(custom, { recursive: true });
+  const original = '# preserve me\nfoo = 1\n';
+  const old = path.join(custom, 'bmad-testarch-trace.toml');
+  fs.writeFileSync(old, original);
+  const cli = path.resolve(__dirname, '../cli/migrate-customizations.js');
+  for (const operand of ['-project', '--chek', '--check']) {
+    const result = spawnSync(process.execPath, [cli, '--project-root', operand], { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(fs.readFileSync(old, 'utf8'), original);
+  }
+  const check = spawnSync(process.execPath, [cli, '--project-root', './-project', '--check'], { cwd: root, encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stderr);
+  assert.match(check.stdout, /Would move/);
+  assert.equal(fs.readFileSync(old, 'utf8'), original);
+  const apply = spawnSync(process.execPath, [cli, '--project-root', './-project'], { cwd: root, encoding: 'utf8' });
+  assert.equal(apply.status, 0, apply.stderr);
+  assert.equal(fs.existsSync(old), false);
+  assert.equal(fs.readFileSync(path.join(custom, 'bmad-tea-trace.toml'), 'utf8'), original);
+});

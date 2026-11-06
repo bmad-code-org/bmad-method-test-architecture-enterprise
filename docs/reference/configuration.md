@@ -55,6 +55,8 @@ npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizati
 npx --package=bmad-method-test-architecture-enterprise@3 tea-migrate-customizations --project-root .
 ```
 
+Use `--help` for usage. For a directory whose name begins with a dash, pass `--project-root ./-name`; flag-like operands are rejected before the migration reads or writes files.
+
 The migration renames old customization files, including ATDD, CI, and teaching files. It updates old `[[agent.menu]]` skill IDs in `_bmad/custom/bmad-tea.toml` and `.user.toml`; ATDD routes to Automate and CI to Framework. It preserves other settings, comments, and file permissions. When old and new files coexist in one layer, merge their values and comments manually. The command checks every file before writing. Headless TEA CLIs can read old filenames until migration completes.
 
 An upgrade can leave the former skill folders in a host's project or global skills directory. After migrating customization files, [check for old slash commands and move their folders to a backup](/reference/troubleshooting/#old-slash-commands-still-appear-after-30). Review edits in those folders before removing them from the host's skill discovery path.
