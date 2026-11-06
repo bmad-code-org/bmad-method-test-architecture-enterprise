@@ -9,7 +9,7 @@
 #   cleared   read the file from `cat` and the file beside it (its name and `.node`) from Node, each in a process started with an
 #             empty environment
 #   write     redirect output into the file, which the confinement refuses
-#   withheld  cat a file of the evaluation folder
+#   withheld  open a file of the evaluation folder through the shell's redirection
 #
 # With VERDICT_WHEN set, the act runs only in the workspaces it names by runtime label, separated by commas (trial-clean-1, for
 # example), as it does for verdict.js; with it unset every call acts.
@@ -22,8 +22,13 @@ if [ -n "${VERDICT_WHEN:-}" ]; then
   esac
 fi
 case "${VERDICT_SH:-}" in
-  read | withheld)
+  read)
     cat "$VERDICT_TOUCH" >/dev/null 2>&1
+    ;;
+  withheld)
+    # uutils cat checks metadata first and never opens a hidden path. Open through the shell itself.
+    # A failed redirection of the special builtin must end only the subshell, so verdict.js still answers.
+    (: <"$VERDICT_TOUCH") 2>/dev/null
     ;;
   clean)
     cat /etc/hosts >/dev/null 2>&1

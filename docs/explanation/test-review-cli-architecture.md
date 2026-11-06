@@ -3,7 +3,7 @@ title: Test Review CLI Architecture
 description: How the tea-test-review CLI wraps an interactive skill into a required CI gate, and how to build one
 ---
 
-# How a Skill Becomes a CLI
+## How a Skill Becomes a CLI
 
 A TEA skill expects a human: it asks which mode to run and what inputs to use. A CI gate can't. No human, no blocking questions, must end in an exit code.
 
