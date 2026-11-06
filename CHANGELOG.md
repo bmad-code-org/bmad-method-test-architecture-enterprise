@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- TEA’s development lockfile now resolves the published eval-quality 9.0.0 engine.
 - Customization migration validates every argument before touching files and handles `--help` and `-h` safely.
 - Trace gates compare exact coverage counts at the P0, P1, and overall thresholds, and reject understated fresh live-failure counts and malformed fresh evidence.
 - Test Review accepts valid reports saved with a leading UTF-8 byte-order mark and normalizes the published report before removing interactive resume state.
