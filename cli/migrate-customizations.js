@@ -4,6 +4,7 @@
  * stems into [workflow.red] and [workflow.ci] of their owning skills, and agent menu references to current skill ids.
  */
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const TOML = require('smol-toml');
@@ -296,17 +297,31 @@ function legacyConfigNotice(root, backups) {
   if (!legacy) return null;
   const tea = tryParse(legacy.text)?.modules?.tea;
   if (!isTable(tea)) return null;
-  const held = new Set();
-  for (const segments of CONFIG_LAYERS) {
+  // The old core order was config.toml, config.user.toml, custom/config.toml, custom/config.user.toml, so only the custom layers outranked the legacy file.
+  const teaTable = (segments) => {
     const file = path.join(root, ...segments);
     const text = readOptional(file);
-    if (text === null) continue;
-    const layer = parse(file, text).modules?.tea;
-    if (isTable(layer)) for (const key of Object.keys(layer)) held.add(key);
+    const layer = text === null ? undefined : parse(file, text).modules?.tea;
+    return { file, tea: isTable(layer) ? layer : {} };
+  };
+  const held = new Set();
+  for (const segments of CONFIG_LAYERS.slice(1)) for (const key of Object.keys(teaTable(segments).tea)) held.add(key);
+  const base = teaTable(CONFIG_LAYERS[0]);
+  const ignored = [];
+  const shadowed = [];
+  for (const [key, value] of Object.entries(tea)) {
+    if (held.has(key)) continue;
+    if (Object.hasOwn(base.tea, key) && JSON.stringify(base.tea[key]) === JSON.stringify(value)) continue;
+    ignored.push(key);
+    if (Object.hasOwn(base.tea, key)) {
+      shadowed.push(
+        `${key} is ${JSON.stringify(value)} in ${legacy.file} and ${JSON.stringify(base.tea[key])} in ${base.file}, which TEA uses.`,
+      );
+    }
   }
-  const ignored = Object.keys(tea).filter((key) => !held.has(key));
   if (ignored.length === 0) return null;
-  const line = `Not migrated by this command: ${legacy.file} [modules.tea] keys ${ignored.join(', ')} are ignored by TEA. Run \`bmad migrate tea\` to move them.`;
+  const detail = shadowed.length === 0 ? '' : ` ${shadowed.join(' ')}`;
+  const line = `Not migrated by this command: ${legacy.file} [modules.tea] keys ${ignored.join(', ')} are ignored by TEA.${detail} Run \`bmad migrate tea\` to move them.`;
   return { kind: 'notice', messages: [{ done: line, check: line }] };
 }
 
@@ -787,24 +802,177 @@ function migrate(projectRoot, { check = false, keepExisting = false, beforeActio
     fs.mkdirSync(customRoot);
   }
   const lock = path.join(customRoot, '.tea-migration.lock');
+  const recovered = [];
+  holdSignals();
   try {
-    fs.mkdirSync(lock, { mode: 0o700 });
-  } catch (error) {
-    if (error.code === 'EEXIST') {
-      throw new Error(
-        `Migration lock exists at ${lock}. Check for a running migration; if none is running, inspect and remove the stale lock directory, then retry.`,
-      );
+    acquireLock(lock, customRoot, recovered);
+    try {
+      const plan = preflight(root, customRoot, { keepExisting });
+      applyActions(plan.actions, customRoot, beforeAction);
+      if (!isDeepStrictEqual(plan.nextRecord, plan.record)) writeRecord(customRoot, plan.nextRecord);
+      return [...recovered.map(recoveryNotice), ...plan.actions];
+    } finally {
+      releaseLock(lock);
     }
-    throw new Error(`Cannot lock ${customRoot} for migration: ${error.message}`);
+  } finally {
+    releaseSignals();
+  }
+}
+
+const LOCK_OWNER = 'owner.json';
+const SIGNALS = ['SIGINT', 'SIGTERM'];
+const signalState = { holders: 0, installed: false, exitOnSignal: false };
+
+/**
+ * The apply phase is synchronous, so Node cannot run a signal handler until it returns. Holding a listener keeps the
+ * default kill from interrupting the apply: the run finishes, the lock and temp files are released, and only then does
+ * the deferred signal take effect.
+ */
+function onSignal(signal) {
+  dropSignals();
+  const code = 128 + os.constants.signals[signal];
+  if (signalState.exitOnSignal) {
+    process.stderr.write(`Received ${signal}; the migration finished its current run and released the lock.\n`);
+    process.exitCode = code;
+  } else if (process.listenerCount(signal) === 0) {
+    process.kill(process.pid, signal);
+  }
+}
+
+function dropSignals() {
+  for (const signal of SIGNALS) process.removeListener(signal, onSignal);
+  signalState.installed = false;
+}
+
+function holdSignals() {
+  signalState.holders++;
+  if (signalState.installed) return;
+  for (const signal of SIGNALS) process.on(signal, onSignal);
+  signalState.installed = true;
+}
+
+function releaseSignals() {
+  signalState.holders--;
+  // A signal that arrived during the synchronous run is delivered on the next event-loop pass; keep the listener until then.
+  setImmediate(() => {
+    if (signalState.holders === 0 && signalState.installed) dropSignals();
+  });
+}
+
+function readLockOwner(lock) {
+  try {
+    const owner = JSON.parse(fs.readFileSync(path.join(lock, LOCK_OWNER), 'utf8'));
+    if (Number.isInteger(owner?.pid) && owner.pid > 0 && typeof owner.hostname === 'string') return owner;
+  } catch {
+    // No readable owner record: the lock stays until a person inspects it.
+  }
+  return null;
+}
+
+function processIsGone(pid) {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
+function leftoverFiles(customRoot, pid) {
+  const own = new RegExp(`^\\.tea-migration-${pid}-\\d+\\.(tmp|bak)$`);
+  const any = /^\.tea-migration-\d+-\d+\.(tmp|bak)$/;
+  let names = [];
+  try {
+    names = fs.readdirSync(customRoot);
+  } catch {
+    // The folder is checked before the lock is taken; an unreadable listing only shortens the report.
+  }
+  return names.filter((name) => (pid === undefined ? any : own).test(name)).map((name) => path.join(customRoot, name));
+}
+
+function describeOwner(owner) {
+  return `held by pid ${owner.pid} on ${owner.hostname}${owner.started_at ? ` since ${owner.started_at}` : ''}`;
+}
+
+function lockHeldMessage(lock, customRoot, owner) {
+  const leftovers = leftoverFiles(customRoot, owner?.pid);
+  const parts = [`Migration lock exists at ${lock}${owner ? ` (${describeOwner(owner)})` : ''}.`];
+  parts.push(
+    owner && owner.hostname === os.hostname()
+      ? 'The owning process is still running; wait for it to finish, then retry.'
+      : 'Check for a running migration; if none is running, inspect and remove the stale lock directory, then retry.',
+  );
+  if (leftovers.length > 0) parts.push(`Files left by an interrupted run: ${leftovers.join(', ')}.`);
+  return parts.join(' ');
+}
+
+function recoveryNotice({ lock, owner, removed, backups }) {
+  const line =
+    `Recovered the stale migration lock ${lock} (${describeOwner(owner)}, no longer running)` +
+    `${removed.length > 0 ? `; removed ${removed.join(', ')}` : ''}` +
+    `${backups.length > 0 ? `; left ${backups.join(', ')} holding file contents from before the interrupted run` : ''}.`;
+  return { kind: 'notice', messages: [{ done: line, check: line }] };
+}
+
+function acquireLock(lock, customRoot, recovered) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.mkdirSync(lock, { mode: 0o700 });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw new Error(`Cannot lock ${customRoot} for migration: ${error.message}`);
+      takeOverStaleLock(lock, customRoot, recovered, attempt);
+      continue;
+    }
+    try {
+      fs.writeFileSync(
+        path.join(lock, LOCK_OWNER),
+        `${JSON.stringify({ pid: process.pid, hostname: os.hostname(), started_at: new Date().toISOString() })}\n`,
+      );
+    } catch (error) {
+      // An ownerless lock could never be recovered automatically, so give the directory back before failing.
+      fs.rmSync(lock, { recursive: true, force: true });
+      throw new Error(`Cannot record the migration lock owner in ${lock}: ${error.message}`);
+    }
+    return;
+  }
+}
+
+const isStale = (owner) => owner !== null && owner.hostname === os.hostname() && processIsGone(owner.pid);
+
+/**
+ * Clear a lock whose same-host owner process is gone, with its temp files; any other existing lock is an error.
+ *
+ * Two runs can both see the same dead owner. The recovery claim is an exclusive directory, and the owner is read
+ * again while holding it, so a run that saw the dead owner can never delete a lock another run has since acquired.
+ */
+function takeOverStaleLock(lock, customRoot, recovered, attempt) {
+  if (attempt > 0 || !isStale(readLockOwner(lock))) throw new Error(lockHeldMessage(lock, customRoot, readLockOwner(lock)));
+  const claim = `${lock}.recovery`;
+  try {
+    fs.mkdirSync(claim, { mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw new Error(`Cannot claim stale lock recovery at ${claim}: ${error.message}`);
+    throw new Error(
+      `${lockHeldMessage(lock, customRoot, readLockOwner(lock))} Another run is recovering it (${claim}); if none is running, remove that directory too.`,
+    );
   }
   try {
-    const plan = preflight(root, customRoot, { keepExisting });
-    applyActions(plan.actions, customRoot, beforeAction);
-    if (!isDeepStrictEqual(plan.nextRecord, plan.record)) writeRecord(customRoot, plan.nextRecord);
-    return plan.actions;
+    const owner = readLockOwner(lock);
+    if (!fs.existsSync(lock)) return;
+    if (!isStale(owner)) throw new Error(lockHeldMessage(lock, customRoot, owner));
+    const leftovers = leftoverFiles(customRoot, owner.pid);
+    const removed = leftovers.filter((file) => file.endsWith('.tmp'));
+    for (const file of removed) fs.rmSync(file, { force: true });
+    fs.rmSync(lock, { recursive: true, force: true });
+    recovered.push({ lock, owner, removed, backups: leftovers.filter((file) => file.endsWith('.bak')) });
   } finally {
-    fs.rmdirSync(lock);
+    fs.rmdirSync(claim);
   }
+}
+
+function releaseLock(lock) {
+  fs.rmSync(path.join(lock, LOCK_OWNER), { force: true });
+  fs.rmdirSync(lock);
 }
 
 function describe(action, check) {
@@ -850,6 +1018,7 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) {
+  signalState.exitOnSignal = true;
   try {
     process.exitCode = main();
   } catch (error) {

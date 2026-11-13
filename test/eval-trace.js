@@ -689,8 +689,8 @@ function selectSets(groundTruth, requested) {
   return all.filter((set) => requested.includes(set.id));
 }
 
-/** Math.round(covered / total * 100), with an empty priority resolving to 100. */
-const safePct = (covered, total) => (total > 0 ? Math.round((covered / total) * 100) : 100);
+/** floor(covered * 100 / total), with an empty priority resolving to 100. */
+const safePct = (covered, total) => (total > 0 ? Math.floor((covered * 100) / total) : 100);
 
 /**
  * The gate decision Rules 1 to 5 of step-05 produce for three percentages.
@@ -1832,7 +1832,7 @@ function pctCheck(field, expected, actual, tolerance) {
  * those recommendations from the same buckets risk_summary counts.
  *
  * The internal group checks the report against itself: every percentage it prints must
- * be the rounding of the counts it prints beside them. A run whose counts are right and
+ * be the floor of the counts it prints beside them. A run whose counts are right and
  * whose percentage is not has a calculation defect the ground truth cannot see.
  */
 function scoreArithmetic(summary, expected, tolerance) {
@@ -1870,7 +1870,7 @@ function scoreArithmetic(summary, expected, tolerance) {
     ...PRIORITIES.map((name) => [`priority_breakdown.${name}`, summary.coverage?.priority_breakdown?.[name] ?? {}]),
   ];
   for (const [label, block] of internal) {
-    checks.push(check(`${label}.pct is round(covered/total*100)`, safePct(block.covered ?? 0, block.total ?? 0), block.pct));
+    checks.push(check(`${label}.pct is floor(covered*100/total)`, safePct(block.covered ?? 0, block.total ?? 0), block.pct));
   }
   // The ids named across every recommendation, compared by containment: the critical,
   // high, and partial buckets each owe one recommendation naming their members, and

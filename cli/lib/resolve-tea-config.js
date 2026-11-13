@@ -11,8 +11,9 @@
  *   2. The consuming project's `[modules.tea]` table, merged from
  *      _bmad/config.toml, _bmad/custom/config.toml and
  *      _bmad/custom/config.user.toml (later files win), the three files
- *      BMad core merges, as `bmad setup tea` writes it. Only when _bmad/config.toml does not exist is a v6
- *      _bmad/tea/config.yaml read instead, so older installs keep working in CI.
+ *      BMad core merges, as `bmad setup tea` writes it. Each layer counts when its file exists, so custom
+ *      layers apply even where the installer-owned _bmad/config.toml is not committed. Only when none of the
+ *      three exists is a v6 _bmad/tea/config.yaml read instead, so older installs keep working in CI.
  *   3. The module default declared in skills/bmod-tea/bmod.toml
  *
  * Step 01 of the workflow branches on these keys (Playwright Utils loading
@@ -32,7 +33,7 @@ const TOML = require('smol-toml');
 const { minimatch } = require('minimatch');
 const { globSync } = require('glob');
 
-/** The central config layers, lowest precedence first, the three files BMad core merges. Only the first is required. */
+/** The central config layers, lowest precedence first, the three files BMad core merges. Each applies when its file exists. */
 const CONFIG_LAYER_RELATIVE_PATHS = [
   path.join('_bmad', 'config.toml'),
   path.join('_bmad', 'custom', 'config.toml'),
@@ -44,8 +45,18 @@ const LEGACY_CONFIG_RELATIVE_PATH = path.join('_bmad', 'tea', 'config.yaml');
 const LEGACY_USER_CONFIG_RELATIVE_PATH = path.join('_bmad', 'config.user.toml');
 const warnedLegacyUserConfig = new Set();
 
-/** Tell the user once per process that `[modules.tea]` keys in the legacy personal layer are ignored. */
-function warnLegacyUserConfig(source, tea) {
+/**
+ * Tell the user once per process that `[modules.tea]` keys in the legacy personal layer are ignored.
+ *
+ * The old core order was config.toml, config.user.toml, custom/config.toml, custom/config.user.toml
+ * (later wins), so the legacy file outranked only `_bmad/config.toml`. A legacy key lost its effect
+ * when neither custom layer holds it. When `_bmad/config.toml` holds the same value, nothing
+ * changed and the key stays quiet; a different value there is shown next to the legacy one.
+ *
+ * @param {object} source - Working-tree or pinned-base configuration reader.
+ * @param {{label: string, tea: object}[]} layers - The central layers in merge order, each with its own `[modules.tea]` table.
+ */
+function warnLegacyUserConfig(source, layers) {
   const content = source.read(LEGACY_USER_CONFIG_RELATIVE_PATH);
   if (content === null) return;
   const label = source.label(LEGACY_USER_CONFIG_RELATIVE_PATH);
@@ -57,11 +68,25 @@ function warnLegacyUserConfig(source, tea) {
     return;
   }
   if (!isPlainObject(legacyTea)) return;
-  const ignored = Object.keys(legacyTea).filter((key) => !Object.hasOwn(tea, key));
+  const [base, ...custom] = layers;
+  const ignored = [];
+  const shadowed = [];
+  for (const [key, value] of Object.entries(legacyTea)) {
+    if (custom.some((layer) => Object.hasOwn(layer.tea, key))) continue;
+    if (!Object.hasOwn(base.tea, key)) {
+      ignored.push(key);
+    } else if (JSON.stringify(base.tea[key]) !== JSON.stringify(value)) {
+      ignored.push(key);
+      shadowed.push(
+        `${key} is ${JSON.stringify(value)} in ${label} and ${JSON.stringify(base.tea[key])} in ${base.label}, which TEA uses.`,
+      );
+    }
+  }
   if (ignored.length === 0) return;
   warnedLegacyUserConfig.add(label);
+  const detail = shadowed.length === 0 ? '' : ` ${shadowed.join(' ')}`;
   process.stderr.write(
-    `Warning: ${label} is no longer merged. TEA ignores its [modules.tea] keys (${ignored.join(', ')}). Run \`bmad migrate tea\` to move them into _bmad/custom/config.user.toml.\n`,
+    `Warning: ${label} is no longer merged. TEA ignores its [modules.tea] keys (${ignored.join(', ')}).${detail} Run \`bmad migrate tea\` to move them into _bmad/custom/config.user.toml.\n`,
   );
 }
 
@@ -427,28 +452,38 @@ function unionEqualCustomizationValues(legacy, current) {
   return result;
 }
 
-/** Coerce the keys this CLI cares about out of a raw TEA config table. */
+/**
+ * Coerce the keys this CLI cares about out of a raw TEA config table.
+ *
+ * @param {object} table - Raw `[modules.tea]` keys.
+ * @param {string|Record<string, string>} source - One label for every key, or the label of the file that supplied each key.
+ */
 function pickTeaValues(table, source) {
+  const labelOf = (key) => (typeof source === 'string' ? source : (source[key] ?? 'the configuration'));
   const values = {};
   if ('tea_use_playwright_utils' in table) {
-    values.tea_use_playwright_utils = coerceBoolean(table.tea_use_playwright_utils, 'tea_use_playwright_utils', source);
+    values.tea_use_playwright_utils = coerceBoolean(
+      table.tea_use_playwright_utils,
+      'tea_use_playwright_utils',
+      labelOf('tea_use_playwright_utils'),
+    );
   }
   if ('tea_use_pactjs_utils' in table) {
-    values.tea_use_pactjs_utils = coerceBoolean(table.tea_use_pactjs_utils, 'tea_use_pactjs_utils', source);
+    values.tea_use_pactjs_utils = coerceBoolean(table.tea_use_pactjs_utils, 'tea_use_pactjs_utils', labelOf('tea_use_pactjs_utils'));
   }
   if ('tea_pact_mcp' in table) {
-    values.tea_pact_mcp = coercePactMcp(table.tea_pact_mcp, source);
+    values.tea_pact_mcp = coercePactMcp(table.tea_pact_mcp, labelOf('tea_pact_mcp'));
   }
   if ('tea_execution_mode' in table) {
-    values.tea_execution_mode = coerceExecutionMode(table.tea_execution_mode, source);
+    values.tea_execution_mode = coerceExecutionMode(table.tea_execution_mode, labelOf('tea_execution_mode'));
   }
   if ('tea_capability_probe' in table) {
-    values.tea_capability_probe = coerceBoolean(table.tea_capability_probe, 'tea_capability_probe', source);
+    values.tea_capability_probe = coerceBoolean(table.tea_capability_probe, 'tea_capability_probe', labelOf('tea_capability_probe'));
   }
   if ('test_stack_type' in table) {
     const stack = typeof table.test_stack_type === 'string' ? table.test_stack_type.trim().toLowerCase() : '';
     if (!['auto', 'frontend', 'backend', 'fullstack', 'mobile'].includes(stack)) {
-      throw configError(`test_stack_type in ${source} must be auto, frontend, backend, fullstack or mobile`);
+      throw configError(`test_stack_type in ${labelOf('test_stack_type')} must be auto, frontend, backend, fullstack or mobile`);
     }
     values.test_stack_type = stack;
   }
@@ -457,31 +492,47 @@ function pickTeaValues(table, source) {
 
 /**
  * Merge the central TOML layers and return their core and TEA tables.
+ * Each layer is shape-checked before the merge, and every `[modules.tea]` key
+ * remembers the file that supplied its final value, so errors name that file.
  *
  * @param {object} source - Working-tree or pinned-base configuration reader.
- * @returns {{core: object, tea: object}}
+ * @returns {{core: object, tea: object, teaSources: Record<string, string>, found: string[]}}
+ *   `found` lists the labels of the layer files that exist.
  */
 function readCentralConfig(source) {
   let merged = {};
+  const layers = [];
+  const found = [];
+  const teaSources = {};
   for (const relativePath of CONFIG_LAYER_RELATIVE_PATHS) {
+    const label = source.label(relativePath);
     const content = source.read(relativePath);
-    if (content === null) continue;
-    const parsed = parseToml(content, source.label(relativePath));
+    if (content === null) {
+      layers.push({ label, tea: {} });
+      continue;
+    }
+    found.push(label);
+    const parsed = parseToml(content, label);
+    const { modules, core } = parsed;
+    if (modules !== undefined && !isPlainObject(modules)) {
+      throw configError(`[modules] in ${label} must be a table`);
+    }
+    if (modules?.tea !== undefined && !isPlainObject(modules.tea)) {
+      throw configError(`[modules.tea] in ${label} must be a table of config keys`);
+    }
+    if (core !== undefined && !isPlainObject(core)) {
+      throw configError(`[core] in ${label} must be a table of config keys`);
+    }
+    layers.push({ label, tea: modules?.tea || {} });
+    for (const key of Object.keys(modules?.tea || {})) teaSources[key] = label;
     merged = mergeTables(merged, parsed);
   }
-  const modules = merged.modules;
-  if (modules !== undefined && (!isPlainObject(modules) || (modules.tea !== undefined && !isPlainObject(modules.tea)))) {
-    throw configError(`[modules.tea] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
-  }
-  warnLegacyUserConfig(source, modules?.tea || {});
-  if (merged.core !== undefined && !isPlainObject(merged.core)) {
-    throw configError(`[core] in ${source.label(CONFIG_RELATIVE_PATH)} must be a table of config keys`);
-  }
-  return { core: merged.core || {}, tea: modules?.tea || {} };
+  warnLegacyUserConfig(source, layers);
+  return { core: merged.core || {}, tea: merged.modules?.tea || {}, teaSources, found };
 }
 
 /**
- * Read a v6 _bmad/tea/config.yaml, used only when _bmad/config.toml is absent.
+ * Read a v6 _bmad/tea/config.yaml, used only when none of the central TOML layers exists.
  *
  * @param {string} configPath
  * @param {string} content
@@ -510,17 +561,20 @@ function readLegacyTeaTable(configPath, content) {
  *
  * @param {string} projectRoot - Consuming project root.
  * @param {string} [baseRef] - Base commit or ref; omitted for working-tree config.
- * @returns {{present: boolean, path: string, format: 'toml'|'yaml'|null, values: object}}
+ * @returns {{present: boolean, path: string, paths: string[], format: 'toml'|'yaml'|null, values: object}}
+ *   Present when any of the three central layers exists. `paths` lists the files read; `path` is the base
+ *   file when it exists, else the first layer found, else the base file's expected location.
  */
 function readTeaConfigFile(projectRoot, baseRef, source = configSource(projectRoot, baseRef)) {
   const centralPath = source.label(CONFIG_RELATIVE_PATH);
-  if (source.read(CONFIG_RELATIVE_PATH) !== null) {
-    const config = readCentralConfig(source);
+  const config = readCentralConfig(source);
+  if (config.found.length > 0) {
     return {
       present: true,
-      path: centralPath,
+      path: config.found.includes(centralPath) ? centralPath : config.found[0],
+      paths: config.found,
       format: 'toml',
-      values: pickTeaValues(config.tea, centralPath),
+      values: pickTeaValues(config.tea, config.teaSources),
       core: config.core,
       tea: config.tea,
     };
@@ -534,9 +588,17 @@ function readTeaConfigFile(projectRoot, baseRef, source = configSource(projectRo
         .filter((key) => key in table)
         .map((key) => [key, table[key]]),
     );
-    return { present: true, path: legacyPath, format: 'yaml', values: pickTeaValues(table, legacyPath), core, tea: table };
+    return {
+      present: true,
+      path: legacyPath,
+      paths: [legacyPath],
+      format: 'yaml',
+      values: pickTeaValues(table, legacyPath),
+      core,
+      tea: table,
+    };
   }
-  return { present: false, path: centralPath, format: null, values: {}, core: {}, tea: {} };
+  return { present: false, path: centralPath, paths: [], format: null, values: {}, core: {}, tea: {} };
 }
 
 /**
@@ -599,7 +661,7 @@ const KEY_TO_INSTALLED_FIELD = {
  *   FLAG_TO_KEY are read, and only when not undefined.
  * @param {Set<string>} [options.inputPaths] - Receives working-tree inputs, including missing optional layers.
  * @param {Map<string, string[]>} [options.inputPatterns] - Receives policy glob membership used during resolution.
- * @returns {{values: object, sources: object, installed: object, configSnapshot: object, workflowCustomization: object, configCommit: string|null, configPath: string, configPresent: boolean, configFormat: string|null}}
+ * @returns {{values: object, sources: object, installed: object, configSnapshot: object, workflowCustomization: object, configCommit: string|null, configPath: string, configPaths: string[], configPresent: boolean, configFormat: string|null}}
  *   `installed` carries one boolean per library gate, read from the project
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
@@ -655,6 +717,7 @@ function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillNa
     workflowCustomization,
     configCommit: source.commit ?? null,
     configPath: file.path,
+    configPaths: file.paths,
     configPresent: file.present,
     configFormat: file.format,
   };

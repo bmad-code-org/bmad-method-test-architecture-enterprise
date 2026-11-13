@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The enforcement hook no longer blocks MSW's `delay()` latency simulation or methods named `sleep`, and its hard-wait check (H1) now catches `new Promise<void>` and `function` executors resolved by `setTimeout`, non-zero `asyncio.sleep`, `TimeUnit.<UNIT>.sleep` and a bare `<-time.After(...)` receive in Go. Kotlin `delay()` stays allowed because `runTest` runs it on virtual time (#478, #484).
+- The tautology check (C3) catches self-comparisons in `node:assert` and chai `assert`, unittest `assertEqual` and `assert True`, AssertJ `assertThat(x).isEqualTo(x)` and testify `require` (#485).
+- The disabled-test check (C1) catches `test.fixme`, `test.describe.skip`, `@unittest.skip` and Go `t.Skip`, `t.Skipf` and `t.SkipNow`, and accepts a reason written inside the call, such as Playwright's `test.skip(condition, "reason")` or Go's `t.Skip("reason")` (#486).
+- The framework setup guide documents the `excludeGlobs` and `disabledRules` keys of `.tea/enforce-config.json`.
+- `tea-test-review` applies `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml` when `_bmad/config.toml` is absent, prints `no config found; using module defaults` when no layer exists, and names the file that supplied an invalid value (#480, #481).
+- A `[modules.tea]` key in the legacy `_bmad/config.user.toml` now warns whenever neither custom layer holds it, including when `_bmad/config.toml` sets a different value, and the warning shows both values. Migration-3 states the old precedence correctly: the legacy file outranked only `_bmad/config.toml` (#479).
+- Trace reports round coverage percentages down, so a FAIL at 199 of 200 P0 items reads 99% (#482). The gate summary also prints the critical gap count instead of an undefined value.
+- Migration-1 says correctly that `bmad-testarch-automate` customizations are renamed to `bmad-tea-automate` with `[workflow]` unchanged, and only `bmad-testarch-atdd` settings move into `[workflow.red]` (#483).
+- An interrupted `tea-migrate-customizations` run no longer leaves a lock that blocks every rerun. Ctrl-C lets the run finish and release the lock, the lock records its owner, and a lock left by a process that is gone is cleared on the next run along with its temporary files (#490).
+- TEA's module record points the `bmad` requirement at `skills/core-tools`, where BMAD core keeps it since its per-module skill layout, so the install command offered when `bmad` is missing resolves.
+- The BMAD core compatibility check finds core's scripts in both the flat and the per-module skill layout, so it runs again against core `dev`.
+
 ## [4.0.0] - 2026-11-06
 
 ### Added

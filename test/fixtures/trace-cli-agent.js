@@ -82,16 +82,18 @@ const thresholdCases = {
 const threshold = Object.entries(thresholdCases).find(([key]) => mode.startsWith(`threshold-${key}-`))?.[1];
 const coveredIds = new Set();
 if (threshold) {
+  // The correct display rounds down; the -rounded modes round up, which the CLI must reject.
+  const rounded = mode.endsWith('-rounded');
+  const percent = (covered, total) => (total ? (rounded ? Math.round(covered * 100 / total) : Math.floor(covered * 100 / total)) : 100);
   for (const priority of ['P0', 'P1', 'P2', 'P3']) {
     const rows = ledger.filter(row => row.priority === priority);
     const covered = threshold[priority]?.[0] ?? 0;
     for (const row of rows.slice(0, covered)) coveredIds.add(row.id);
-    summary.coverage.priority_breakdown[priority] = {total: rows.length, covered, pct: rows.length ? Math.round(covered * 100 / rows.length) : 100};
+    summary.coverage.priority_breakdown[priority] = {total: rows.length, covered, pct: percent(covered, rows.length)};
   }
-  summary.coverage.inventory = {total: ledger.length, covered: coveredIds.size, pct: Math.round(coveredIds.size * 100 / ledger.length)};
+  summary.coverage.inventory = {total: ledger.length, covered: coveredIds.size, pct: percent(coveredIds.size, ledger.length)};
   const {P0, P1} = summary.coverage.priority_breakdown;
   const overall = summary.coverage.inventory.pct;
-  const rounded = mode.endsWith('-rounded');
   gateStatus = rounded ? (P0.pct < 100 || P1.pct < 80 || overall < 80 ? 'FAIL' : P1.pct < 90 ? 'CONCERNS' : 'PASS') : threshold.verdict;
   summary.risk_summary.critical_open = P0.total - P0.covered;
   summary.gate_status = gateStatus;

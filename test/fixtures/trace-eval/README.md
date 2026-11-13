@@ -33,7 +33,7 @@ These are functions of a run's output and the corpus, and each has a check in th
 
 - Every criterion id in the oracle document appears in the matrix exactly once, and no id outside it appears.
 - Every reported coverage status is inside the five-value enum.
-- `coverage.inventory` and `coverage.priority_breakdown` match the counts and percentages recomputed from `criteria[].trueCoverage`, and each percentage equals `round(covered / total * 100)` with an empty priority resolving to 100.
+- `coverage.inventory` and `coverage.priority_breakdown` match the counts and percentages recomputed from `criteria[].trueCoverage`, and each percentage equals `floor(covered * 100 / total)` with an empty priority resolving to 100.
 - `gate_status` is the decision Rules 1 to 5 produce from those percentages, `gate_criteria` carries the thresholds and the statuses they give, and `gate_basis` is `priority_thresholds` for both sets.
 - `risk_summary` matches the gap buckets, `coverage.by_level.*.criteria_covered` matches `byLevelCriteriaCovered`, and `tests.files`, `tests.cases` and `coverage.by_level.*.tests` match `expectedTestInventory`.
 - `collection_status` is `COLLECTED`, the oracle block names the epic as its source, and the run metadata step-05 fixes has its fixed values.

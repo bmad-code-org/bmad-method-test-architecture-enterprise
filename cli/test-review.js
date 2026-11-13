@@ -1117,7 +1117,11 @@ async function runReview(session) {
     configSnapshot = resolvedTeaConfig.configSnapshot;
     workflowCustomization = resolvedTeaConfig.workflowCustomization;
     configCommit = resolvedTeaConfig.configCommit;
-    console.error(`tea-test-review: config ${resolvedTeaConfig.configPath}`);
+    console.error(
+      resolvedTeaConfig.configPresent
+        ? `tea-test-review: config ${resolvedTeaConfig.configPaths.join(', ')}`
+        : 'tea-test-review: no config found; using module defaults',
+    );
   } catch (error) {
     if (error.code === 'TEA_CONFIG_INVALID') {
       fail(EXIT.ENV_ERROR, error.message);

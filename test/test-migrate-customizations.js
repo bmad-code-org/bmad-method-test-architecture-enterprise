@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const test = require('node:test');
 const TOML = require('smol-toml');
 const { migrate } = require('../cli/migrate-customizations');
@@ -627,15 +627,30 @@ test('names [modules.tea] keys of a legacy personal config that TEA ignores, wit
     write(legacy, legacyText);
     write(path.join(root, '_bmad', 'config.toml'), '[modules.tea]\ntea_use_mcp_enhancements = false\n');
     write(path.join(custom, 'config.user.toml'), '[modules.tea]\nrisk_threshold = "p2"\n');
-    const expected = `Not migrated by this command: ${legacy} [modules.tea] keys test_artifacts are ignored by TEA. Run \`bmad migrate tea\` to move them.\n`;
+    const expected = `Not migrated by this command: ${legacy} [modules.tea] keys test_artifacts, tea_use_mcp_enhancements are ignored by TEA. tea_use_mcp_enhancements is true in ${legacy} and false in ${path.join(root, '_bmad', 'config.toml')}, which TEA uses. Run \`bmad migrate tea\` to move them.\n`;
     for (const args of [['--check'], []]) {
       const result = cli(['--project-root', root, ...args], root);
       assert.equal(result.status, 0, result.stderr);
       assert.equal(result.stdout, expected);
     }
     assert.equal(read(legacy), legacyText);
-    write(path.join(custom, 'config.toml'), '[modules.tea]\ntest_artifacts = "y"\n');
+    write(path.join(custom, 'config.toml'), '[modules.tea]\ntest_artifacts = "y"\ntea_use_mcp_enhancements = true\n');
     assert.equal(cli(['--project-root', root], root).stdout, 'No legacy TEA customizations found.\n');
+  });
+});
+
+test('reports a legacy personal key that _bmad/config.toml shadows with a different value, and stays quiet for an equal one', () => {
+  withProject(({ root }) => {
+    const legacy = path.join(root, '_bmad', 'config.user.toml');
+    const base = path.join(root, '_bmad', 'config.toml');
+    write(base, '[modules.tea]\ntea_use_playwright_utils = "true"\ntea_pact_mcp = "mcp"\n');
+    write(legacy, '[modules.tea]\ntea_use_playwright_utils = "false"\ntea_pact_mcp = "mcp"\n');
+    const expected = `Not migrated by this command: ${legacy} [modules.tea] keys tea_use_playwright_utils are ignored by TEA. tea_use_playwright_utils is "false" in ${legacy} and "true" in ${base}, which TEA uses. Run \`bmad migrate tea\` to move them.\n`;
+    const check = cli(['--project-root', root, '--check'], root);
+    assert.equal(check.status, 0, check.stderr);
+    assert.equal(check.stdout, expected);
+    write(base, '[modules.tea]\ntea_use_playwright_utils = "false"\ntea_pact_mcp = "mcp"\n');
+    assert.equal(cli(['--project-root', root, '--check'], root).stdout, 'No legacy TEA customizations found.\n');
   });
 });
 
@@ -832,6 +847,184 @@ test('concurrent destination creation stops migration without overwriting it and
     assert.equal(read(second), '[workflow]\non_complete="second"\n');
     assert.equal(read(secondNew), '[workflow]\non_complete="concurrent"\n');
   });
+});
+
+function writeOwner(lock, owner) {
+  write(path.join(lock, 'owner.json'), `${JSON.stringify(owner)}\n`);
+}
+
+function deadPid() {
+  const child = spawnSync(process.execPath, ['-e', '']);
+  return child.pid;
+}
+
+test('a lock left by a dead process on this host is recovered and its temp files are removed', () => {
+  withProject(({ root, custom }) => {
+    const pid = deadPid();
+    const lock = path.join(custom, '.tea-migration.lock');
+    writeOwner(lock, { pid, hostname: os.hostname(), started_at: '2026-01-01T00:00:00.000Z' });
+    const temp = path.join(custom, `.tea-migration-${pid}-0.tmp`);
+    const backup = path.join(custom, `.tea-migration-${pid}-1.bak`);
+    const foreign = path.join(custom, `.tea-migration-${process.pid}-0.tmp`);
+    write(temp, 'partial');
+    write(backup, 'previous');
+    write(foreign, 'someone else');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const actions = migrate(root);
+    assert.equal(fs.existsSync(lock), false);
+    assert.equal(fs.existsSync(temp), false);
+    assert.equal(read(backup), 'previous');
+    assert.equal(read(foreign), 'someone else');
+    assert.equal(read(path.join(custom, 'bmad-tea-nfr.toml')), '[workflow]\non_complete="keep"\n');
+    const notice = actions.find((action) => action.kind === 'notice').messages[0].done;
+    assert.ok(notice.includes(`pid ${pid}`) && notice.includes(temp) && notice.includes(backup), notice);
+  });
+});
+
+test('a lock whose owner record cannot be written is removed so the next run is not blocked', () => {
+  withProject(({ root, custom }) => {
+    const lock = path.join(custom, '.tea-migration.lock');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const original = fs.writeFileSync;
+    fs.writeFileSync = (file, ...rest) => {
+      if (file === path.join(lock, 'owner.json')) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+      return original.call(fs, file, ...rest);
+    };
+    try {
+      assert.throws(() => migrate(root), /Cannot record the migration lock owner.*ENOSPC/);
+    } finally {
+      fs.writeFileSync = original;
+    }
+    assert.equal(fs.existsSync(lock), false);
+    migrate(root);
+    assert.equal(read(path.join(custom, 'bmad-tea-nfr.toml')), '[workflow]\non_complete="keep"\n');
+  });
+});
+
+test('stale lock recovery re-reads the owner under an exclusive claim, so it never deletes a lock another run took', () => {
+  withProject(({ root, custom }) => {
+    const lock = path.join(custom, '.tea-migration.lock');
+    const claim = `${lock}.recovery`;
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const live = { pid: process.pid, hostname: os.hostname(), started_at: 'now' };
+
+    // Another run already holds the claim: this run stops and names it.
+    writeOwner(lock, { pid: deadPid(), hostname: os.hostname(), started_at: 'then' });
+    fs.mkdirSync(claim);
+    assert.throws(
+      () => migrate(root),
+      (error) => error.message.includes(claim),
+    );
+    assert.equal(fs.existsSync(lock), true);
+    fs.rmdirSync(claim);
+
+    // Another run recovers the dead owner's lock and takes a fresh one between this run's first read and its claim.
+    const original = fs.mkdirSync;
+    fs.mkdirSync = (dir, ...rest) => {
+      const result = original.call(fs, dir, ...rest);
+      if (dir === claim) writeOwner(lock, live);
+      return result;
+    };
+    try {
+      assert.throws(
+        () => migrate(root),
+        (error) => error.message.includes(`pid ${process.pid}`),
+      );
+    } finally {
+      fs.mkdirSync = original;
+    }
+    assert.deepEqual(JSON.parse(read(path.join(lock, 'owner.json'))), live);
+    assert.equal(fs.existsSync(claim), false);
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-testarch-nfr.toml')), true);
+  });
+});
+
+test('a lock held by a live process, another host, or no owner record keeps blocking', () => {
+  withProject(({ root, custom }) => {
+    const lock = path.join(custom, '.tea-migration.lock');
+    const temp = path.join(custom, `.tea-migration-${process.pid}-0.tmp`);
+    write(temp, 'in flight');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const cases = [
+      [{ pid: process.pid, hostname: os.hostname(), started_at: 'now' }, `pid ${process.pid}`],
+      [{ pid: deadPid(), hostname: `${os.hostname()}-elsewhere`, started_at: 'now' }, 'elsewhere'],
+    ];
+    for (const [owner, expected] of cases) {
+      fs.rmSync(lock, { recursive: true, force: true });
+      writeOwner(lock, owner);
+      assert.throws(
+        () => migrate(root),
+        (error) => error.message.includes(lock) && error.message.includes(expected),
+      );
+      assert.equal(fs.existsSync(lock), true);
+    }
+    fs.rmSync(lock, { recursive: true, force: true });
+    fs.mkdirSync(lock);
+    write(path.join(lock, 'owner.json'), 'not json');
+    assert.throws(() => migrate(root), /remove the stale lock/);
+    assert.equal(fs.existsSync(temp), true);
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-testarch-nfr.toml')), true);
+  });
+});
+
+function withinTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+test('SIGINT during the apply finishes the run, releases the lock and temp files, and exits 130', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-migration-sigint-'));
+  let child;
+  let exited;
+  try {
+    const custom = path.join(root, '_bmad', 'custom');
+    write(path.join(custom, 'bmad-testarch-atdd.toml'), '[workflow]\non_complete="red"\n');
+    write(path.join(custom, 'bmad-testarch-trace.toml'), '[workflow]\non_complete="trace"\n');
+    const mark = path.join(root, 'paused');
+    const go = path.join(root, 'go');
+    // Pause after the first link so the signal lands in the middle of the synchronous apply.
+    const preload = path.join(root, 'pause-after-first-link.js');
+    write(
+      preload,
+      `const fs = require('node:fs'); const link = fs.linkSync; let linked = 0;
+fs.linkSync = function (...args) {
+  const result = link.apply(this, args);
+  if (++linked === 1) { fs.writeFileSync(${JSON.stringify(mark)}, ''); while (!fs.existsSync(${JSON.stringify(go)})) {} }
+  return result;
+};\n`,
+    );
+    child = spawn(process.execPath, ['--require', preload, CLI, '--project-root', root], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => (stderr += chunk));
+    exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
+    for (let waited = 0; !fs.existsSync(mark); waited += 10) {
+      assert.ok(waited < 20_000, 'the child never reached the apply phase');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(fs.existsSync(path.join(custom, '.tea-migration.lock')), true);
+    child.kill('SIGINT');
+    write(go, '');
+    assert.deepEqual(await withinTimeout(exited, 20_000, 'the interrupted child never exited'), { code: 130, signal: null }, stderr);
+    assert.match(stderr, /SIGINT/);
+    assert.deepEqual(
+      fs.readdirSync(custom).filter((name) => name.startsWith('.tea-migration')),
+      [],
+    );
+    const rerun = cli(['--project-root', root]);
+    assert.equal(rerun.status, 0, rerun.stderr);
+    assert.equal(TOML.parse(read(path.join(custom, 'bmad-tea-automate.toml'))).workflow.red.on_complete, 'red');
+    assert.equal(read(path.join(custom, 'bmad-tea-trace.toml')), '[workflow]\non_complete="trace"\n');
+  } finally {
+    // A failed assertion must not leave the paused child spinning and holding this test's pipes open.
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await withinTimeout(exited, 5000, 'the child survived SIGKILL').catch(() => {});
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('a stale lock names its path and recovery without deleting it', () => {

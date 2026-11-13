@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
-  "sourceSpecDigest": "sha256:9d019e1b4fd418999e447830974da43a9e32352e08369ea19b47136d1ecc152d",
+  "sourceSpecDigest": "sha256:ad277aba5af3e7fdb52570a61b775d477bfccb00bba217b289fa739e1cf4eb69",
   "behaviors": [
     {
       "id": "B-001",
@@ -45,7 +45,7 @@
     },
     {
       "id": "B-003",
-      "description": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is round(7 / 10 * 100) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "description": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is floor(7 * 100 / 10) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
       "severity": "critical",
       "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
       "requirementLinks": [
@@ -330,7 +330,7 @@
     },
     {
       "id": "B-018",
-      "description": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is round(5 / 5 * 100) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "description": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is floor(5 * 100 / 5) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
       "severity": "critical",
       "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
       "requirementLinks": [
@@ -703,7 +703,7 @@
     {
       "id": "O-003",
       "polarity": "expects-hold",
-      "commentary": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is round(7 / 10 * 100) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "commentary": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is floor(7 * 100 / 10) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -1838,7 +1838,7 @@
     {
       "id": "O-018",
       "polarity": "expects-hold",
-      "commentary": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is round(5 / 5 * 100) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "commentary": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is floor(5 * 100 / 5) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",

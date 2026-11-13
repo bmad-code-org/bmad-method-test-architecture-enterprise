@@ -702,7 +702,7 @@ The migration keeps the thirteen current module settings, converts their values 
 It removes both moved keys and all unread keys from every `[modules.tea]` layer, and offers to delete the classic installer's config, help file, and TEA agent or skill copies under `_bmad/tea/`.
 If answers survive only in the classic YAML while the TOML holds defaults, the migration proposes restoring them for your approval.
 A `_bmad/tea/config.yaml` that is left is not read by any skill.
-The `tea-test-review` CLI is the one exception: it reads that file only when `_bmad/config.toml` does not exist, so older CI setups keep working.
+The `tea-test-review` CLI is the one exception: it reads that file only when none of `_bmad/config.toml`, `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml` exists, so older CI setups keep working.
 See [tea-test-review CLI](/docs/reference/tea-test-review-cli.md).
 
 The `risk_threshold` key was never read by a skill and is no longer asked at setup.

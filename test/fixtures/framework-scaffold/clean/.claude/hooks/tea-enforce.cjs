@@ -587,13 +587,69 @@ function interpolates(text, mask, kind) {
 function selfComparisons(stripped, views, pattern) {
   const spans = [];
   for (const match of stripped.matchAll(pattern)) {
-    const operands = [1, 2].map((group) => {
-      const [start, end] = match.indices[group] ?? [0, 0];
-      return { text: views.code.slice(start, end), mask: views.mask.slice(start, end) };
-    });
-    if (operands.some(({ text, mask }) => interpolates(text, mask, views.kind))) continue;
-    const [left, right] = operands.map(({ text, mask }) => normalizeOperand(text, mask));
-    if (left.length > 0 && left === right) spans.push([match.index, match.index + match[0].length]);
+    const ranges = [1, 2].map((group) => match.indices[group] ?? [0, 0]);
+    if (operandsMatch(views, ranges)) spans.push([match.index, match.index + match[0].length]);
+  }
+  return spans;
+}
+
+/** Whether the two `[start, end]` ranges read as the same expression. */
+function operandsMatch(views, ranges) {
+  const operands = ranges.map(([start, end]) => ({ text: views.code.slice(start, end), mask: views.mask.slice(start, end) }));
+  if (operands.some(({ text, mask }) => interpolates(text, mask, views.kind))) return false;
+  const [left, right] = operands.map(({ text, mask }) => normalizeOperand(text, mask));
+  return left.length > 0 && left === right;
+}
+
+/**
+ * The top-level arguments of the call whose argument list starts at `from` (the
+ * index right after the opening paren), as `[start, end]` ranges, or null when the
+ * call never closes. `()`, `[]` and `{}` nest, so a comma inside an array, an
+ * object or a nested call never splits an argument. It reads the stripped view,
+ * where a literal is blank and cannot fake a bracket or a comma. A trailing comma
+ * leaves no empty last argument.
+ */
+function callArguments(stripped, from) {
+  const ranges = [];
+  let depth = 0;
+  let start = from;
+  for (let index = from; index < stripped.length; index += 1) {
+    const character = stripped[index];
+    if ('([{'.includes(character)) depth += 1;
+    else if (')]}'.includes(character)) {
+      if (depth === 0) {
+        if (character !== ')') return null;
+        ranges.push([start, index]);
+        if (ranges.length > 1 && stripped.slice(...ranges.at(-1)).trim() === '') ranges.pop();
+        return ranges;
+      }
+      depth -= 1;
+    } else if (character === ',' && depth === 0) {
+      ranges.push([start, index]);
+      start = index + 1;
+    }
+  }
+  return null;
+}
+
+/**
+ * `selfComparisons` for assertion calls that take the compared values as their
+ * first two arguments. `prefix` matches up to the first of them.
+ *
+ * The arguments are split at top-level commas, so `assert.deepStrictEqual([1, [1, 2]], actual)`
+ * compares `[1, [1, 2]]` against `actual`. An operand with a paren in it holds a
+ * call or a grouping, which can evaluate differently each time, and is never
+ * reported.
+ */
+function selfComparingCalls(stripped, views, prefix) {
+  const spans = [];
+  for (const match of stripped.matchAll(prefix)) {
+    const from = match.index + match[0].length;
+    const args = callArguments(stripped, from);
+    if (!args || args.length < 2) continue;
+    const ranges = args.slice(0, 2);
+    if (ranges.some(([start, end]) => /[()]/.test(stripped.slice(start, end)))) continue;
+    if (operandsMatch(views, ranges)) spans.push([match.index, ranges[1][1]]);
   }
   return spans;
 }
@@ -603,7 +659,7 @@ function matchSpans(source, pattern) {
   return [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]);
 }
 
-const SKIP_TOKEN = /\.skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
+const SKIP_TOKEN = /\.skip|\.fixme|\.Skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
 
 /**
  * Where this line's comment starts, or -1.
@@ -642,8 +698,39 @@ function commentIndex(line, kind) {
   return -1;
 }
 
+/**
+ * Whether the call matched by `callPattern` on this line carries a non-empty
+ * string literal as its argument number `argIndex` (zero-based).
+ *
+ * The argument boundaries come from the stripped line, where every literal is
+ * blank, so a comma or a paren inside a test title cannot fake one. The string
+ * itself is read from the kept line (`code`) at the same offset: the stripped
+ * line has no quote left to find.
+ */
+function callHasStringArgument(stripped, code, callPattern, argIndex) {
+  const call = callPattern.exec(stripped);
+  if (!call) return false;
+  let depth = 0;
+  let argument = 0;
+  let start = call.index + call[0].length;
+  for (let index = start; argument < argIndex && index < stripped.length; index += 1) {
+    const character = stripped[index];
+    if ('([{'.includes(character)) depth += 1;
+    else if (')]}'.includes(character)) {
+      if (depth === 0) break;
+      depth -= 1;
+    } else if (character === ',' && depth === 0) {
+      argument += 1;
+      start = index + 1;
+    }
+  }
+  if (argument !== argIndex) return false;
+  const opening = code.slice(start).match(/^\s*(["'`])(?!\1)/);
+  return Boolean(opening);
+}
+
 /** C1's escape hatch: a comment on the line or the line above documents the skip. */
-function hasAdjacentComment(rawLines, lineIndex, kind) {
+function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '') {
   const current = rawLines[lineIndex] || '';
   const above = (rawLines[lineIndex - 1] || '').trim();
 
@@ -654,9 +741,17 @@ function hasAdjacentComment(rawLines, lineIndex, kind) {
   // and `@Disabled("...")` are the documented forms in their languages, and the
   // reason sits in a different argument position in each. An annotation call with
   // any string literal in it is the honest predicate; pinning the position would
-  // pass one language and fail the other. JavaScript has no such form, so this
-  // branch is scoped rather than applied everywhere.
+  // pass one language and fail the other. This branch is scoped to the languages
+  // that have annotations.
   if ((kind === 'py' || kind === 'java') && /@[\w.]+\s*\(/.test(current) && /["']/.test(current)) return true;
+
+  // JavaScript and Go put the reason inside the call. Playwright documents
+  // `test.skip(condition, 'reason')` and `test.fixme(condition, 'reason')`: the
+  // reason is the second argument. Go's `t.Skip("reason")` and `t.Skipf("...")`
+  // carry it as the first. Only a non-empty string counts, so `test.skip(cond)`,
+  // `test.skip(title, fn)` and an empty `""` still report.
+  if (kind === 'js' && callHasStringArgument(stripped, code, /\.(?:skip|fixme)\s*\(/, 1)) return true;
+  if (kind === 'go' && callHasStringArgument(stripped, code, /\.Skip(?:f)?\s*\(/, 0)) return true;
 
   // A trailing comment AFTER the token. One before it documents something else.
   const tokenIndex = current.search(SKIP_TOKEN);
@@ -672,6 +767,142 @@ function hasAdjacentComment(rawLines, lineIndex, kind) {
 // the reason it is not a block.
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether the bare identifier `delay` is MSW's `delay` in this file: imported as
+ * `import { delay } from 'msw'` (also a subpath, also beside a default import) or
+ * destructured as `const { delay } = require('msw')`. Read from the kept view
+ * because the module name is a string literal. An aliased `delay as X` leaves the
+ * bare name free, and a `delay` from any other module is a real wait and still
+ * fires. Member calls such as `msw.delay(300)` never match the bare-call pattern.
+ */
+const MSW_MODULE = String.raw`['"]msw(?:\/[\w/-]+)?['"]`;
+const MSW_NAMED_IMPORT = new RegExp(String.raw`\bimport\s+(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*${MSW_MODULE}`, 'g');
+const MSW_DESTRUCTURE = new RegExp(
+  String.raw`\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?(?:require\s*\(|import\s*\()\s*${MSW_MODULE}\s*\)`,
+  'g',
+);
+
+function bindsMswDelay(code) {
+  const binds = (list, separator) =>
+    list.split(',').some((entry) => {
+      const [name, local = name] = entry
+        .replace(/=.*$/s, '')
+        .trim()
+        .split(separator)
+        .map((part) => part.trim());
+      return name === 'delay' && local === 'delay';
+    });
+  return (
+    [...code.matchAll(MSW_NAMED_IMPORT)].some((match) => binds(match[1].replaceAll(/\btype\s+(?=[\w$])/g, ''), /\s+as\s+/)) ||
+    [...code.matchAll(MSW_DESTRUCTURE)].some((match) => binds(match[1], /\s*:\s*/))
+  );
+}
+
+/**
+ * The index just past the bracket that closes the one at `open`, or -1.
+ * `([{` nest as one family; `<` is not a bracket here.
+ */
+function closingIndex(source, open) {
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    const character = source[index];
+    if ('([{'.includes(character)) depth += 1;
+    else if (')]}'.includes(character)) {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Where a TypeScript return-type annotation ends, given the index of its colon on
+ * the stripped source: `'body'` when a `{` opens a function body after it,
+ * `'signature'` when the type is cut off by `;`, `,`, a closing bracket or the end
+ * of the line, and null when the shape is neither.
+ *
+ * A `{` right after `:`, `|`, `&`, `,`, `(`, `<`, `=>` or inside generics is a type
+ * literal and is skipped as a whole. Any other `{` is the body.
+ */
+function returnTypeEnd(source, colon) {
+  let angle = 0;
+  let previous = ':';
+  let arrow = false;
+  for (let index = colon + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '\n') {
+      if (angle > 0) continue;
+      const continues = /^\s*(?:\|(?!\|)|&(?!&))/.test(source.slice(index + 1)) || '|&:,<'.includes(previous) || arrow;
+      if (continues) continue;
+      return 'signature';
+    }
+    if (/\s/.test(character)) continue;
+    const opensLiteral = angle > 0 || arrow || ':|&,(<'.includes(previous);
+    if (character === '{' && !opensLiteral) return 'body';
+    if ('([{'.includes(character)) {
+      const end = closingIndex(source, index);
+      if (end === -1) return null;
+      index = end - 1;
+      previous = source[index];
+      arrow = false;
+      continue;
+    }
+    if (character === '=' && source[index + 1] === '>') {
+      index += 1;
+      previous = '>';
+      arrow = true;
+      continue;
+    }
+    arrow = false;
+    if (character === '<') angle += 1;
+    else if (character === '>' && angle > 0) angle -= 1;
+    else if (angle === 0 && ';,)}]'.includes(character)) return 'signature';
+    else if (angle === 0 && character === '=') return null;
+    previous = character;
+  }
+  return 'signature';
+}
+
+/** A modifier a TypeScript member may carry before its name. */
+const MEMBER_MODIFIERS = String.raw`(?:(?:public|private|protected|static|abstract|readonly|async|declare|override)\s+)*`;
+
+/**
+ * Spans of the `sleep(...)` calls in JavaScript or TypeScript, leaving out the
+ * places that declare a helper named sleep and wait on nothing:
+ *
+ * - `function sleep(ms) {`, `declare function sleep(ms): Promise<void>;`
+ * - a method with a body: `sleep(cb: () => void) {}`, `sleep(): { ok: boolean } {}`,
+ *   `async sleep(): Promise<void> {`, with the parameter list read to its balanced
+ *   closing paren so parens and braces inside it do not end it early
+ * - a body-less signature in an interface, type literal, abstract class or
+ *   overload list: `sleep(ms: number): Promise<void>;`, where the name starts a
+ *   member (after `{`, `;`, `,`, `}`, or at the head of its line, behind any
+ *   modifiers) and a `: type` follows the parameters on the same line.
+ *
+ * A ternary `cond ? sleep(1) : other` is a call: `sleep` is not at the head of a
+ * member there. Anything not recognised as one of the shapes above is a call.
+ */
+function sleepCalls(source) {
+  const spans = [];
+  const memberHead = new RegExp(String.raw`(?:^|[\n{;,}])[ \t]*${MEMBER_MODIFIERS}$`);
+  for (const match of source.matchAll(/(?<![\w.$])sleep\s*\(/g)) {
+    const before = source.slice(Math.max(0, match.index - 200), match.index);
+    if (/\bfunction\s*\*?\s*$/.test(before)) continue;
+    const open = match.index + match[0].length - 1;
+    const close = closingIndex(source, open);
+    if (close !== -1) {
+      if (/^\s*\{/.test(source.slice(close, close + 40))) continue;
+      const colon = source.slice(close, close + 40).match(/^[ \t]*:/);
+      if (colon) {
+        const end = returnTypeEnd(source, close + colon[0].length - 1);
+        if (end === 'body' || (end === 'signature' && memberHead.test(before))) continue;
+      }
+    }
+    spans.push([match.index, match.index + match[0].length]);
+  }
+  return spans;
+}
+
 const RULES = [
   {
     id: 'C1',
@@ -685,17 +916,19 @@ const RULES = [
     // fight TEA's doctrine and train users to disable the hook.
     actionReason: 'the row is conditioned on a documented, still-true reason, which is not mechanically decidable',
     scope: 'line',
-    kinds: ['js', 'py', 'java'],
+    kinds: ['js', 'py', 'java', 'go'],
     fix: 'Delete the test, or document why it is skipped on the line or the line above and keep that reason true.',
     match(line, context) {
       const patterns = {
-        js: /(?:^|[^\w.])(?:x(?:it|describe|test)\s*\(|\w+\.skip\s*[(.]|\w+\.todo\s*\()/,
-        py: /@pytest\.mark\.skip/,
+        js: /(?:^|[^\w.])(?:x(?:it|describe|test)\s*\(|\w+(?:\.\w+)*\.(?:skip|fixme)\s*[(.]|\w+\.todo\s*\()/,
+        py: /@(?:pytest\.mark\.skip|unittest\.skip)/,
+        // No identifier is required before the dot: `s.T().Skip()` is a skip too.
+        go: /\.Skip(?:f|Now)?\s*\(/,
         java: /@(?:Ignore|Disabled)\b/,
       };
       const pattern = patterns[context.kind];
       if (!pattern || !pattern.test(line)) return false;
-      return !hasAdjacentComment(context.rawLines, context.lineIndex, context.kind);
+      return !hasAdjacentComment(context.rawLines, context.lineIndex, context.kind, line, context.code);
     },
   },
   {
@@ -729,27 +962,44 @@ const RULES = [
         // `.not.` is excluded on purpose: `expect(x).not.toBe(x)` is a defect too,
         // but it always FAILS, so it is not the "test cannot fail" failure this row
         // is about, and blocking it would be this hook overreaching its row.
-        return selfComparisons(
-          stripped,
-          context,
-          /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
-        );
+        return [
+          ...selfComparisons(
+            stripped,
+            context,
+            /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
+          ),
+          // node:assert and chai's assert style. The optional third argument is a
+          // message, and `notStrictEqual` always fails, so it is not listed.
+          ...selfComparingCalls(stripped, context, /(?<![\w$])assert\s*\.\s*(?:strictEqual|equal|deepStrictEqual|deepEqual)\s*\(/g),
+        ];
       }
       if (context.kind === 'py') {
         // Horizontal whitespace only: a Python statement does not continue onto the
         // next line without a bracket or a backslash, so `\s` here would pair an
         // `assert` with a `==` on a later, unrelated line.
-        return selfComparisons(stripped, context, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg);
+        return [
+          ...selfComparisons(stripped, context, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg),
+          // unittest. The third argument, when present, is a message.
+          ...selfComparingCalls(
+            stripped,
+            context,
+            /\bself\s*\.\s*assert(?:Equal|Equals|Is|CountEqual|ListEqual|DictEqual|TupleEqual|SetEqual|SequenceEqual|AlmostEqual)\s*\(/g,
+          ),
+          // `assert True, "msg"` is as inert as `assert True`. `assert True == x` is not it.
+          ...matchSpans(stripped, /^[ \t]*assert[ \t]+True[ \t]*(?=,|$)/gm),
+        ];
       }
       if (context.kind === 'java') {
         return [
           ...matchSpans(stripped, /assertTrue\s*\(\s*true\s*\)/g),
           ...matchSpans(stripped, /assertFalse\s*\(\s*false\s*\)/g),
           ...selfComparisons(stripped, context, /assertEquals\s*\(([^,()]+?),([^,()]+?)\)/dg),
+          // AssertJ.
+          ...selfComparisons(stripped, context, /assertThat\s*\(([^,()]+?)\)\s*\.\s*(?:isEqualTo|isSameAs)\s*\(([^,()]+?)\)/dg),
         ];
       }
       if (context.kind === 'go') {
-        return selfComparisons(stripped, context, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
+        return selfComparisons(stripped, context, /(?:assert|require)\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
       }
       return [];
     },
@@ -790,14 +1040,53 @@ const RULES = [
     kinds: ['js', 'py', 'java', 'go', 'maestro'],
     fix: 'Wait on a web-first assertion, an explicit readiness signal, `cy.wait("@alias")`, or `extendedWaitUntil` in a Maestro flow.',
     matchSource(source, context) {
+      // The timer a hard wait hands to a Promise executor, ending at the delay's
+      // first digit. It must CALL the resolver: `setTimeout(r, 1000)` and
+      // `setTimeout(() => r(), 1000)` wait, while `setTimeout(() => reject(...), 5000)`
+      // is a timeout guard on something else and stays silent.
+      const timer = (resolver) => `setTimeout\\s*\\(\\s*(?:${resolver}|\\(\\s*\\)\\s*=>\\s*${resolver}\\s*\\(\\s*\\))\\s*,\\s*\\d`;
+      // The optional `<void>` is the TypeScript type argument on `new Promise<void>(`.
+      const promise = String.raw`\bnew\s+Promise\s*(?:<[^<>()]*>)?\s*\(\s*`;
+      const params = String.raw`([\w$]+)\s*(?:,\s*[\w$]+\s*)?`;
+      const firstParam = String.raw`\1`;
       const patterns = {
-        js: /(?:\bwaitForTimeout\s*\(|\bcy\.wait\s*\(\s*\d|(?:^|[^\w.\r\n])sleep\s*\(|\bdelay\s*\(\s*\d|\bawait\s+setTimeout\s*\(\s*\d|\bnew\s+Promise\s*\(\s*(?:\(\s*)?([\w$]+)\s*(?:,\s*[\w$]+\s*)?\)?\s*=>\s*(?:{\s*)?setTimeout\s*\(\s*\1\s*,\s*\d)/gm,
-        py: /(?:\btime\.sleep\s*\(|(?:^|[^\w.\r\n])sleep\s*\()/gm,
-        java: /\bThread\.sleep\s*\(/g,
-        go: /\btime\.Sleep\s*\(/g,
-        maestro: /^[ \t]*-[ \t]*sleep[ \t]*:/gm,
+        js: [
+          /\bwaitForTimeout\s*\(/g,
+          /\bcy\.wait\s*\(\s*\d/g,
+          // MSW's `delay()` simulates server latency inside a handler, so it is
+          // left out when the bare `delay` is the one imported from msw. A member
+          // call such as `nockScope.delay(200)` belongs to a library and is left
+          // out too.
+          ...(bindsMswDelay(context.code) ? [] : [/(?<![\w.$])delay\s*\(\s*\d/g]),
+          /\bawait\s+setTimeout\s*\(\s*\d/g,
+          new RegExp(String.raw`${promise}(?:\(\s*)?${params}\)?\s*=>\s*(?:{\s*)?${timer(firstParam)}`, 'g'),
+          new RegExp(String.raw`${promise}function\s*\(\s*${params}\)\s*{\s*${timer(firstParam)}`, 'g'),
+        ],
+        py: [
+          /\btime\.sleep\s*\(/g,
+          // `def sleep(self):` defines a helper.
+          /(?<![\w.])(?<!\bdef\s+)sleep\s*\(/g,
+          // `asyncio.sleep(0)` is a cooperative yield, not a wait.
+          /\basyncio\.sleep\s*\((?!\s*0(?:\.0*)?\s*\))/g,
+        ],
+        // Kotlin's `delay()` stays out on purpose: under `runTest` it advances
+        // virtual time and waits on nothing.
+        java: [
+          /\bThread\.sleep\s*\(/g,
+          /\b(?:TimeUnit\.)?(?:NANOSECONDS|MICROSECONDS|MILLISECONDS|SECONDS|MINUTES|HOURS|DAYS)\.sleep\s*\(/g,
+        ],
+        // A bare `<-time.After(d)` statement blocks for d. Inside a select it is
+        // `case <-time.After(d):`, a timeout guard, and the line does not start with
+        // the receive.
+        go: [/\btime\.Sleep\s*\(/g, /(?:^|[;{])[ \t]*<-[ \t]*time\.After\s*\(/gm],
+        maestro: [/^[ \t]*-[ \t]*sleep[ \t]*:/gm],
       };
-      return [...source.matchAll(patterns[context.kind])].map((match) => [match.index, match.index + match[0].length]);
+      return [
+        ...patterns[context.kind].flatMap((pattern) =>
+          [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]),
+        ),
+        ...(context.kind === 'js' ? sleepCalls(source) : []),
+      ].sort((a, b) => a[0] - b[0]);
     },
   },
   {

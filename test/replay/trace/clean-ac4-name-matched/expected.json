@@ -37,7 +37,7 @@
     "is a P1 with no coverage, so high_open reads 1 against 0 (1). Dropping its two api tests takes api",
     "criteria_covered to 2 against 3 and api tests to 2 against 4 (2), and the file they share leaves the",
     "count: tests.files 3 against 4 and tests.cases 4 against 6 (2). The internal checks pass because 4/5",
-    "and 1/2 round to what is printed. 9 failed, 29 passed.",
+    "and 1/2 floor to what is printed. 9 failed, 29 passed.",
     "",
     "gate_criteria: p1_coverage_actual 50% against 100%, p1_status NOT_MET against MET, and",
     "overall_coverage_actual 80% against 100%. overall_status stays MET because 80 meets the 80% minimum,",
