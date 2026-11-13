@@ -15,7 +15,7 @@ skills = [
   "bmad-tea-test-review",
   "bmad-tea-trace",
 ]
-required_skills = [{ skill = "bmad", version = "6.13.0-next", source = "github:bmad-code-org/BMAD-METHOD/skills" }]
+required_skills = [{ skill = "bmad", version = "6.13.0-next", source = "github:bmad-code-org/BMAD-METHOD/skills/core-tools" }]
 pre_install_message = ""
 post_install_message = '''
 TEA is ready. Talk to Murat (bmad-tea) or start with Test Design (bmad-tea-test-design).

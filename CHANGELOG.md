@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trace reports round coverage percentages down, so a FAIL at 199 of 200 P0 items reads 99% (#482). The gate summary also prints the critical gap count instead of an undefined value.
 - Migration-1 says correctly that `bmad-testarch-automate` customizations are renamed to `bmad-tea-automate` with `[workflow]` unchanged, and only `bmad-testarch-atdd` settings move into `[workflow.red]` (#483).
 - An interrupted `tea-migrate-customizations` run no longer leaves a lock that blocks every rerun. Ctrl-C lets the run finish and release the lock, the lock records its owner, and a lock left by a process that is gone is cleared on the next run along with its temporary files (#490).
+- TEA's module record points the `bmad` requirement at `skills/core-tools`, where BMAD core keeps it since its per-module skill layout, so the install command offered when `bmad` is missing resolves.
 - The BMAD core compatibility check finds core's scripts in both the flat and the per-module skill layout, so it runs again against core `dev`.
 
 ## [4.0.0] - 2026-11-06
