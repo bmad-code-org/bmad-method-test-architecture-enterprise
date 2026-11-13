@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-11-13
+
 ### Fixed
 
 - The enforcement hook no longer blocks MSW's `delay()` latency simulation or methods named `sleep`, and its hard-wait check (H1) now catches `new Promise<void>` and `function` executors resolved by `setTimeout`, non-zero `asyncio.sleep`, `TimeUnit.<UNIT>.sleep` and a bare `<-time.After(...)` receive in Go. Kotlin `delay()` stays allowed because `runTest` runs it on virtual time (#478, #484).
