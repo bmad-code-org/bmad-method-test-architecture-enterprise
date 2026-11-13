@@ -937,17 +937,37 @@ function acquireLock(lock, customRoot, recovered) {
   }
 }
 
-/** Clear a lock whose same-host owner process is gone, with its temp files; any other existing lock is an error. */
+const isStale = (owner) => owner !== null && owner.hostname === os.hostname() && processIsGone(owner.pid);
+
+/**
+ * Clear a lock whose same-host owner process is gone, with its temp files; any other existing lock is an error.
+ *
+ * Two runs can both see the same dead owner. The recovery claim is an exclusive directory, and the owner is read
+ * again while holding it, so a run that saw the dead owner can never delete a lock another run has since acquired.
+ */
 function takeOverStaleLock(lock, customRoot, recovered, attempt) {
-  const owner = readLockOwner(lock);
-  if (attempt > 0 || !owner || owner.hostname !== os.hostname() || !processIsGone(owner.pid)) {
-    throw new Error(lockHeldMessage(lock, customRoot, owner));
+  if (attempt > 0 || !isStale(readLockOwner(lock))) throw new Error(lockHeldMessage(lock, customRoot, readLockOwner(lock)));
+  const claim = `${lock}.recovery`;
+  try {
+    fs.mkdirSync(claim, { mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw new Error(`Cannot claim stale lock recovery at ${claim}: ${error.message}`);
+    throw new Error(
+      `${lockHeldMessage(lock, customRoot, readLockOwner(lock))} Another run is recovering it (${claim}); if none is running, remove that directory too.`,
+    );
   }
-  const leftovers = leftoverFiles(customRoot, owner.pid);
-  const removed = leftovers.filter((file) => file.endsWith('.tmp'));
-  for (const file of removed) fs.rmSync(file, { force: true });
-  fs.rmSync(lock, { recursive: true, force: true });
-  recovered.push({ lock, owner, removed, backups: leftovers.filter((file) => file.endsWith('.bak')) });
+  try {
+    const owner = readLockOwner(lock);
+    if (!fs.existsSync(lock)) return;
+    if (!isStale(owner)) throw new Error(lockHeldMessage(lock, customRoot, owner));
+    const leftovers = leftoverFiles(customRoot, owner.pid);
+    const removed = leftovers.filter((file) => file.endsWith('.tmp'));
+    for (const file of removed) fs.rmSync(file, { force: true });
+    fs.rmSync(lock, { recursive: true, force: true });
+    recovered.push({ lock, owner, removed, backups: leftovers.filter((file) => file.endsWith('.bak')) });
+  } finally {
+    fs.rmdirSync(claim);
+  }
 }
 
 function releaseLock(lock) {

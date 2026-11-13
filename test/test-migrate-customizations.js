@@ -901,6 +901,44 @@ test('a lock whose owner record cannot be written is removed so the next run is 
   });
 });
 
+test('stale lock recovery re-reads the owner under an exclusive claim, so it never deletes a lock another run took', () => {
+  withProject(({ root, custom }) => {
+    const lock = path.join(custom, '.tea-migration.lock');
+    const claim = `${lock}.recovery`;
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const live = { pid: process.pid, hostname: os.hostname(), started_at: 'now' };
+
+    // Another run already holds the claim: this run stops and names it.
+    writeOwner(lock, { pid: deadPid(), hostname: os.hostname(), started_at: 'then' });
+    fs.mkdirSync(claim);
+    assert.throws(
+      () => migrate(root),
+      (error) => error.message.includes(claim),
+    );
+    assert.equal(fs.existsSync(lock), true);
+    fs.rmdirSync(claim);
+
+    // Another run recovers the dead owner's lock and takes a fresh one between this run's first read and its claim.
+    const original = fs.mkdirSync;
+    fs.mkdirSync = (dir, ...rest) => {
+      const result = original.call(fs, dir, ...rest);
+      if (dir === claim) writeOwner(lock, live);
+      return result;
+    };
+    try {
+      assert.throws(
+        () => migrate(root),
+        (error) => error.message.includes(`pid ${process.pid}`),
+      );
+    } finally {
+      fs.mkdirSync = original;
+    }
+    assert.deepEqual(JSON.parse(read(path.join(lock, 'owner.json'))), live);
+    assert.equal(fs.existsSync(claim), false);
+    assert.equal(fs.existsSync(path.join(custom, 'bmad-testarch-nfr.toml')), true);
+  });
+});
+
 test('a lock held by a live process, another host, or no owner record keeps blocking', () => {
   withProject(({ root, custom }) => {
     const lock = path.join(custom, '.tea-migration.lock');
@@ -929,8 +967,18 @@ test('a lock held by a live process, another host, or no owner record keeps bloc
   });
 });
 
+function withinTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 test('SIGINT during the apply finishes the run, releases the lock and temp files, and exits 130', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-migration-sigint-'));
+  let child;
+  let exited;
   try {
     const custom = path.join(root, '_bmad', 'custom');
     write(path.join(custom, 'bmad-testarch-atdd.toml'), '[workflow]\non_complete="red"\n');
@@ -948,10 +996,10 @@ fs.linkSync = function (...args) {
   return result;
 };\n`,
     );
-    const child = spawn(process.execPath, ['--require', preload, CLI, '--project-root', root], { stdio: ['ignore', 'pipe', 'pipe'] });
+    child = spawn(process.execPath, ['--require', preload, CLI, '--project-root', root], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (chunk) => (stderr += chunk));
-    const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
+    exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
     for (let waited = 0; !fs.existsSync(mark); waited += 10) {
       assert.ok(waited < 20_000, 'the child never reached the apply phase');
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -959,7 +1007,7 @@ fs.linkSync = function (...args) {
     assert.equal(fs.existsSync(path.join(custom, '.tea-migration.lock')), true);
     child.kill('SIGINT');
     write(go, '');
-    assert.deepEqual(await exited, { code: 130, signal: null }, stderr);
+    assert.deepEqual(await withinTimeout(exited, 20_000, 'the interrupted child never exited'), { code: 130, signal: null }, stderr);
     assert.match(stderr, /SIGINT/);
     assert.deepEqual(
       fs.readdirSync(custom).filter((name) => name.startsWith('.tea-migration')),
@@ -970,6 +1018,11 @@ fs.linkSync = function (...args) {
     assert.equal(TOML.parse(read(path.join(custom, 'bmad-tea-automate.toml'))).workflow.red.on_complete, 'red');
     assert.equal(read(path.join(custom, 'bmad-tea-trace.toml')), '[workflow]\non_complete="trace"\n');
   } finally {
+    // A failed assertion must not leave the paused child spinning and holding this test's pipes open.
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await withinTimeout(exited, 5000, 'the child survived SIGKILL').catch(() => {});
+    }
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

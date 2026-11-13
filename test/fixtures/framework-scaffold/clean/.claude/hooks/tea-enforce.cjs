@@ -768,10 +768,35 @@ function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '')
 // ---------------------------------------------------------------------------
 
 /**
- * `delay` imported from MSW. Read from the kept view because the module name is a
- * string literal. A `delay` from any other module is a real wait and still fires.
+ * Whether the bare identifier `delay` is MSW's `delay` in this file: imported as
+ * `import { delay } from 'msw'` (also a subpath, also beside a default import) or
+ * destructured as `const { delay } = require('msw')`. Read from the kept view
+ * because the module name is a string literal. An aliased `delay as X` leaves the
+ * bare name free, and a `delay` from any other module is a real wait and still
+ * fires. Member calls such as `msw.delay(300)` never match the bare-call pattern.
  */
-const MSW_DELAY_IMPORT = /\bimport\s*\{[^}]*\bdelay\b[^}]*\}\s*from\s*['"]msw(?:\/[\w/-]+)?['"]/;
+const MSW_MODULE = String.raw`['"]msw(?:\/[\w/-]+)?['"]`;
+const MSW_NAMED_IMPORT = new RegExp(String.raw`\bimport\s+(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*${MSW_MODULE}`, 'g');
+const MSW_DESTRUCTURE = new RegExp(
+  String.raw`\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?(?:require\s*\(|import\s*\()\s*${MSW_MODULE}\s*\)`,
+  'g',
+);
+
+function bindsMswDelay(code) {
+  const binds = (list, separator) =>
+    list.split(',').some((entry) => {
+      const [name, local = name] = entry
+        .replace(/=.*$/s, '')
+        .trim()
+        .split(separator)
+        .map((part) => part.trim());
+      return name === 'delay' && local === 'delay';
+    });
+  return (
+    [...code.matchAll(MSW_NAMED_IMPORT)].some((match) => binds(match[1].replaceAll(/\btype\s+(?=[\w$])/g, ''), /\s+as\s+/)) ||
+    [...code.matchAll(MSW_DESTRUCTURE)].some((match) => binds(match[1], /\s*:\s*/))
+  );
+}
 
 /**
  * The index just past the bracket that closes the one at `open`, or -1.
@@ -1029,9 +1054,10 @@ const RULES = [
           /\bwaitForTimeout\s*\(/g,
           /\bcy\.wait\s*\(\s*\d/g,
           // MSW's `delay()` simulates server latency inside a handler, so it is
-          // left out when the file imports it from msw. A member call such as
-          // `nockScope.delay(200)` belongs to a library and is left out too.
-          ...(MSW_DELAY_IMPORT.test(context.code) ? [] : [/(?<![\w.$])delay\s*\(\s*\d/g]),
+          // left out when the bare `delay` is the one imported from msw. A member
+          // call such as `nockScope.delay(200)` belongs to a library and is left
+          // out too.
+          ...(bindsMswDelay(context.code) ? [] : [/(?<![\w.$])delay\s*\(\s*\d/g]),
           /\bawait\s+setTimeout\s*\(\s*\d/g,
           new RegExp(String.raw`${promise}(?:\(\s*)?${params}\)?\s*=>\s*(?:{\s*)?${timer(firstParam)}`, 'g'),
           new RegExp(String.raw`${promise}function\s*\(\s*${params}\)\s*{\s*${timer(firstParam)}`, 'g'),
@@ -1041,7 +1067,7 @@ const RULES = [
           // `def sleep(self):` defines a helper.
           /(?<![\w.])(?<!\bdef\s+)sleep\s*\(/g,
           // `asyncio.sleep(0)` is a cooperative yield, not a wait.
-          /\basyncio\.sleep\s*\(\s*(?!0(?:\.0*)?\s*\))/g,
+          /\basyncio\.sleep\s*\((?!\s*0(?:\.0*)?\s*\))/g,
         ],
         // Kotlin's `delay()` stays out on purpose: under `runTest` it advances
         // virtual time and waits on nothing.
