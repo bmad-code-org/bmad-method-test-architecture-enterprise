@@ -57,8 +57,8 @@ const GATE_ORACLE = 'O-001';
 
 const twinOf = (id) => path.join(TWINS, id.toLowerCase(), path.basename(REFERENCE));
 
-/** The percentage the summary derives (`Math.round(covered / total * 100)`, and 100 for an empty band), as the skill's own arithmetic. */
-const pct = ({ covered, total }) => (total === 0 ? 100 : Math.round((covered / total) * 100));
+/** The percentage the summary derives (`Math.floor(covered * 100 / total)`, and 100 for an empty band), as the skill's own arithmetic. */
+const pct = ({ covered, total }) => (total === 0 ? 100 : Math.floor((covered * 100) / total));
 
 /** The gate decision and criteria the skill's rules 1 to 5 derive from a summary's own bands (step-05, `skillRuleCitations.gateRule*`). */
 function gateOf(summary) {

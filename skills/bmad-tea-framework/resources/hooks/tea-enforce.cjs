@@ -603,7 +603,7 @@ function matchSpans(source, pattern) {
   return [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]);
 }
 
-const SKIP_TOKEN = /\.skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
+const SKIP_TOKEN = /\.skip|\.fixme|\.Skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
 
 /**
  * Where this line's comment starts, or -1.
@@ -642,8 +642,39 @@ function commentIndex(line, kind) {
   return -1;
 }
 
+/**
+ * Whether the call matched by `callPattern` on this line carries a non-empty
+ * string literal as its argument number `argIndex` (zero-based).
+ *
+ * The argument boundaries come from the stripped line, where every literal is
+ * blank, so a comma or a paren inside a test title cannot fake one. The string
+ * itself is read from the kept line (`code`) at the same offset: the stripped
+ * line has no quote left to find.
+ */
+function callHasStringArgument(stripped, code, callPattern, argIndex) {
+  const call = callPattern.exec(stripped);
+  if (!call) return false;
+  let depth = 0;
+  let argument = 0;
+  let start = call.index + call[0].length;
+  for (let index = start; argument < argIndex && index < stripped.length; index += 1) {
+    const character = stripped[index];
+    if ('([{'.includes(character)) depth += 1;
+    else if (')]}'.includes(character)) {
+      if (depth === 0) break;
+      depth -= 1;
+    } else if (character === ',' && depth === 0) {
+      argument += 1;
+      start = index + 1;
+    }
+  }
+  if (argument !== argIndex) return false;
+  const opening = code.slice(start).match(/^\s*(["'`])(?!\1)/);
+  return Boolean(opening);
+}
+
 /** C1's escape hatch: a comment on the line or the line above documents the skip. */
-function hasAdjacentComment(rawLines, lineIndex, kind) {
+function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '') {
   const current = rawLines[lineIndex] || '';
   const above = (rawLines[lineIndex - 1] || '').trim();
 
@@ -654,9 +685,17 @@ function hasAdjacentComment(rawLines, lineIndex, kind) {
   // and `@Disabled("...")` are the documented forms in their languages, and the
   // reason sits in a different argument position in each. An annotation call with
   // any string literal in it is the honest predicate; pinning the position would
-  // pass one language and fail the other. JavaScript has no such form, so this
-  // branch is scoped rather than applied everywhere.
+  // pass one language and fail the other. This branch is scoped to the languages
+  // that have annotations.
   if ((kind === 'py' || kind === 'java') && /@[\w.]+\s*\(/.test(current) && /["']/.test(current)) return true;
+
+  // JavaScript and Go put the reason inside the call. Playwright documents
+  // `test.skip(condition, 'reason')` and `test.fixme(condition, 'reason')`: the
+  // reason is the second argument. Go's `t.Skip("reason")` and `t.Skipf("...")`
+  // carry it as the first. Only a non-empty string counts, so `test.skip(cond)`,
+  // `test.skip(title, fn)` and an empty `""` still report.
+  if (kind === 'js' && callHasStringArgument(stripped, code, /\.(?:skip|fixme)\s*\(/, 1)) return true;
+  if (kind === 'go' && callHasStringArgument(stripped, code, /\.Skip(?:f)?\s*\(/, 0)) return true;
 
   // A trailing comment AFTER the token. One before it documents something else.
   const tokenIndex = current.search(SKIP_TOKEN);
@@ -672,6 +711,12 @@ function hasAdjacentComment(rawLines, lineIndex, kind) {
 // the reason it is not a block.
 // ---------------------------------------------------------------------------
 
+/**
+ * `delay` imported from MSW. Read from the kept view because the module name is a
+ * string literal. A `delay` from any other module is a real wait and still fires.
+ */
+const MSW_DELAY_IMPORT = /\bimport\s*\{[^}]*\bdelay\b[^}]*\}\s*from\s*['"]msw(?:\/[\w/-]+)?['"]/;
+
 const RULES = [
   {
     id: 'C1',
@@ -685,17 +730,19 @@ const RULES = [
     // fight TEA's doctrine and train users to disable the hook.
     actionReason: 'the row is conditioned on a documented, still-true reason, which is not mechanically decidable',
     scope: 'line',
-    kinds: ['js', 'py', 'java'],
+    kinds: ['js', 'py', 'java', 'go'],
     fix: 'Delete the test, or document why it is skipped on the line or the line above and keep that reason true.',
     match(line, context) {
       const patterns = {
-        js: /(?:^|[^\w.])(?:x(?:it|describe|test)\s*\(|\w+\.skip\s*[(.]|\w+\.todo\s*\()/,
-        py: /@pytest\.mark\.skip/,
+        js: /(?:^|[^\w.])(?:x(?:it|describe|test)\s*\(|\w+(?:\.\w+)*\.(?:skip|fixme)\s*[(.]|\w+\.todo\s*\()/,
+        py: /@(?:pytest\.mark\.skip|unittest\.skip)/,
+        // No identifier is required before the dot: `s.T().Skip()` is a skip too.
+        go: /\.Skip(?:f|Now)?\s*\(/,
         java: /@(?:Ignore|Disabled)\b/,
       };
       const pattern = patterns[context.kind];
       if (!pattern || !pattern.test(line)) return false;
-      return !hasAdjacentComment(context.rawLines, context.lineIndex, context.kind);
+      return !hasAdjacentComment(context.rawLines, context.lineIndex, context.kind, line, context.code);
     },
   },
   {
@@ -729,27 +776,48 @@ const RULES = [
         // `.not.` is excluded on purpose: `expect(x).not.toBe(x)` is a defect too,
         // but it always FAILS, so it is not the "test cannot fail" failure this row
         // is about, and blocking it would be this hook overreaching its row.
-        return selfComparisons(
-          stripped,
-          context,
-          /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
-        );
+        return [
+          ...selfComparisons(
+            stripped,
+            context,
+            /expect\s*\(([^(),]+?)\)\s*\.\s*(?:to\s*\.\s*)?(?:toBe|toEqual|toStrictEqual|toBeCloseTo|equal|equals|eql|deep\s*\.\s*equal)\s*\(([^(),]+?)\)/dg,
+          ),
+          // node:assert and chai's assert style. The optional third argument is a
+          // message, and `notStrictEqual` always fails, so it is not listed.
+          ...selfComparisons(
+            stripped,
+            context,
+            /(?<![\w$])assert\s*\.\s*(?:strictEqual|equal|deepStrictEqual|deepEqual)\s*\(([^(),]+?),([^(),]+?)(?=[,)])/dg,
+          ),
+        ];
       }
       if (context.kind === 'py') {
         // Horizontal whitespace only: a Python statement does not continue onto the
         // next line without a bracket or a backslash, so `\s` here would pair an
         // `assert` with a `==` on a later, unrelated line.
-        return selfComparisons(stripped, context, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg);
+        return [
+          ...selfComparisons(stripped, context, /assert[ \t]+([^=<>!\s]+)[ \t]*==[ \t]*([^=<>!\s#]+)/dg),
+          // unittest. The third argument, when present, is a message.
+          ...selfComparisons(
+            stripped,
+            context,
+            /\bself\s*\.\s*assert(?:Equal|Equals|Is|CountEqual|ListEqual|DictEqual|TupleEqual|SetEqual|SequenceEqual|AlmostEqual)\s*\(([^(),]+?),([^(),]+?)(?=[,)])/dg,
+          ),
+          // `assert True, "msg"` is as inert as `assert True`. `assert True == x` is not it.
+          ...matchSpans(stripped, /^[ \t]*assert[ \t]+True[ \t]*(?=,|$)/gm),
+        ];
       }
       if (context.kind === 'java') {
         return [
           ...matchSpans(stripped, /assertTrue\s*\(\s*true\s*\)/g),
           ...matchSpans(stripped, /assertFalse\s*\(\s*false\s*\)/g),
           ...selfComparisons(stripped, context, /assertEquals\s*\(([^,()]+?),([^,()]+?)\)/dg),
+          // AssertJ.
+          ...selfComparisons(stripped, context, /assertThat\s*\(([^,()]+?)\)\s*\.\s*(?:isEqualTo|isSameAs)\s*\(([^,()]+?)\)/dg),
         ];
       }
       if (context.kind === 'go') {
-        return selfComparisons(stripped, context, /assert\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
+        return selfComparisons(stripped, context, /(?:assert|require)\.(?:Equal|EqualValues)\s*\(\s*t\s*,([^,()]+?),([^,()]+?)\)/dg);
       }
       return [];
     },
@@ -790,14 +858,52 @@ const RULES = [
     kinds: ['js', 'py', 'java', 'go', 'maestro'],
     fix: 'Wait on a web-first assertion, an explicit readiness signal, `cy.wait("@alias")`, or `extendedWaitUntil` in a Maestro flow.',
     matchSource(source, context) {
+      // The timer a hard wait hands to a Promise executor, ending at the delay's
+      // first digit. It must CALL the resolver: `setTimeout(r, 1000)` and
+      // `setTimeout(() => r(), 1000)` wait, while `setTimeout(() => reject(...), 5000)`
+      // is a timeout guard on something else and stays silent.
+      const timer = (resolver) => `setTimeout\\s*\\(\\s*(?:${resolver}|\\(\\s*\\)\\s*=>\\s*${resolver}\\s*\\(\\s*\\))\\s*,\\s*\\d`;
+      // The optional `<void>` is the TypeScript type argument on `new Promise<void>(`.
+      const promise = String.raw`\bnew\s+Promise\s*(?:<[^<>()]*>)?\s*\(\s*`;
+      const params = String.raw`([\w$]+)\s*(?:,\s*[\w$]+\s*)?`;
+      const firstParam = String.raw`\1`;
       const patterns = {
-        js: /(?:\bwaitForTimeout\s*\(|\bcy\.wait\s*\(\s*\d|(?:^|[^\w.\r\n])sleep\s*\(|\bdelay\s*\(\s*\d|\bawait\s+setTimeout\s*\(\s*\d|\bnew\s+Promise\s*\(\s*(?:\(\s*)?([\w$]+)\s*(?:,\s*[\w$]+\s*)?\)?\s*=>\s*(?:{\s*)?setTimeout\s*\(\s*\1\s*,\s*\d)/gm,
-        py: /(?:\btime\.sleep\s*\(|(?:^|[^\w.\r\n])sleep\s*\()/gm,
-        java: /\bThread\.sleep\s*\(/g,
-        go: /\btime\.Sleep\s*\(/g,
-        maestro: /^[ \t]*-[ \t]*sleep[ \t]*:/gm,
+        js: [
+          /\bwaitForTimeout\s*\(/g,
+          /\bcy\.wait\s*\(\s*\d/g,
+          // A call, never a definition: `function sleep(ms) {`, an object method
+          // `sleep() {` and a class method `async sleep(): Promise<void> {` all
+          // declare a sleep helper and wait on nothing.
+          /(?<![\w.$])(?<!\bfunction\s*\*?\s*)sleep\s*\((?![^()]*\)\s*(?::\s*[^{};=()]+)?\{)/g,
+          // MSW's `delay()` simulates server latency inside a handler, so it is
+          // left out when the file imports it from msw.
+          ...(MSW_DELAY_IMPORT.test(context.code) ? [] : [/\bdelay\s*\(\s*\d/g]),
+          /\bawait\s+setTimeout\s*\(\s*\d/g,
+          new RegExp(String.raw`${promise}(?:\(\s*)?${params}\)?\s*=>\s*(?:{\s*)?${timer(firstParam)}`, 'g'),
+          new RegExp(String.raw`${promise}function\s*\(\s*${params}\)\s*{\s*${timer(firstParam)}`, 'g'),
+        ],
+        py: [
+          /\btime\.sleep\s*\(/g,
+          // `def sleep(self):` defines a helper.
+          /(?<![\w.])(?<!\bdef\s+)sleep\s*\(/g,
+          // `asyncio.sleep(0)` is a cooperative yield, not a wait.
+          /\basyncio\.sleep\s*\(\s*(?!0(?:\.0*)?\s*\))/g,
+        ],
+        // Kotlin's `delay()` stays out on purpose: under `runTest` it advances
+        // virtual time and waits on nothing.
+        java: [
+          /\bThread\.sleep\s*\(/g,
+          /\b(?:TimeUnit\.)?(?:NANOSECONDS|MICROSECONDS|MILLISECONDS|SECONDS|MINUTES|HOURS|DAYS)\.sleep\s*\(/g,
+        ],
+        // A bare `<-time.After(d)` statement blocks for d. Inside a select it is
+        // `case <-time.After(d):`, a timeout guard, and the line does not start with
+        // the receive.
+        go: [/\btime\.Sleep\s*\(/g, /(?:^|[;{])[ \t]*<-[ \t]*time\.After\s*\(/gm],
+        maestro: [/^[ \t]*-[ \t]*sleep[ \t]*:/gm],
       };
-      return [...source.matchAll(patterns[context.kind])].map((match) => [match.index, match.index + match[0].length]);
+      return patterns[context.kind]
+        .flatMap((pattern) => [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]))
+        .sort((a, b) => a[0] - b[0]);
     },
   },
   {

@@ -1310,7 +1310,7 @@ function validateTraceOutputs({
     ) {
       throw new Error(`Trace coverage ${name} has invalid counts.`);
     }
-    const expected = bucket.total === 0 ? 100 : Math.round((bucket.covered / bucket.total) * 100);
+    const expected = bucket.total === 0 ? 100 : Math.floor((bucket.covered * 100) / bucket.total);
     if (bucket.pct !== expected) throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
   }
   const priorities = ['P0', 'P1', 'P2', 'P3'].map((key) => summary.coverage.priority_breakdown[key]);
@@ -1415,7 +1415,7 @@ function validateTraceOutputs({
     const p0 = summary.coverage.priority_breakdown.P0.pct;
     const p1 = summary.coverage.priority_breakdown.P1.pct;
     const overall = summary.coverage.inventory.pct;
-    // Percentages remain rounded for display; decisions compare the source counts.
+    // Displayed percentages round down, so they reach a whole-number threshold exactly when the counts do; decisions compare the source counts.
     const meets = (bucket, threshold) => bucket.total === 0 || bucket.covered * 100 >= threshold * bucket.total;
     const p0Met = meets(summary.coverage.priority_breakdown.P0, 100);
     const p1TargetMet = meets(summary.coverage.priority_breakdown.P1, 90);

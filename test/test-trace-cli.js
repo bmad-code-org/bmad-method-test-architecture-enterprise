@@ -498,11 +498,11 @@ function retally(value) {
     ['P0', 'P1', 'P2', 'P3'].map((priority) => {
       const bucket = rows.filter((row) => row.priority === priority);
       const covered = bucket.filter((row) => status[row.id] === 'FULL').length;
-      return [priority, { total: bucket.length, covered, pct: bucket.length > 0 ? Math.round((covered / bucket.length) * 100) : 100 }];
+      return [priority, { total: bucket.length, covered, pct: bucket.length > 0 ? Math.floor((covered * 100) / bucket.length) : 100 }];
     }),
   );
   const covered = rows.filter((row) => status[row.id] === 'FULL').length;
-  const overall = Math.round((covered / rows.length) * 100);
+  const overall = Math.floor((covered * 100) / rows.length);
   summary.coverage.inventory = { total: rows.length, covered, pct: overall };
   summary.coverage.priority_breakdown = breakdown;
   summary.risk_summary.critical_open = breakdown.P0.total - breakdown.P0.covered;
@@ -751,11 +751,13 @@ try {
           Array.from({ length: count }, () => `AC-${++id} (${priority}): Behavior ${id}.`),
         );
         fs.writeFileSync(file, `# Epic 4: Export\n\n${rows.join('\n')}\n`);
+        // The floored percentage is accepted and is the one the gate exports; the rounded-up one is rejected.
         const correct = run(`threshold-${name}-correct`);
         assert.equal(correct.status, verdict === 'FAIL' ? 1 : 0, `${name}: ${correct.stderr} ${correct.stdout}`);
         assert.equal(correct.payload.gate_status, verdict);
         const rounded = run(`threshold-${name}-rounded`);
         assert.equal(rounded.status, 3, `${name}: accepted incorrect rounded gate ${rounded.stdout}`);
+        assert.match(rounded.stderr + rounded.stdout, /contradicts the coverage inventory|does not match its counts/);
       }
     } finally {
       fs.writeFileSync(file, original);
@@ -783,7 +785,7 @@ try {
       const priority_breakdown = Object.fromEntries(
         ['P0', 'P1', 'P2', 'P3'].map((priority) => {
           const [covered, total] = buckets[priority] ?? [0, 0];
-          return [priority, { covered, total, percentage: total ? Math.round((covered * 100) / total) : 100 }];
+          return [priority, { covered, total, percentage: total ? Math.floor((covered * 100) / total) : 100 }];
         }),
       );
       const fully_covered = requirements.filter((row) => row.coverage === 'FULL').length;
@@ -794,12 +796,68 @@ try {
           priority_breakdown,
           total_requirements: requirements.length,
           fully_covered,
-          overall_coverage_percentage: Math.round((fully_covered * 100) / requirements.length),
+          overall_coverage_percentage: Math.floor((fully_covered * 100) / requirements.length),
         },
       };
       const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, { coverageMatrix });
       assert.equal(actual, expected, JSON.stringify(buckets));
     }
+  });
+  check('skill displays percentages rounded down so a shown value never meets a missed threshold', () => {
+    const read = (name) => fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-trace/steps-c', name), 'utf8');
+    const safePctSource = read('step-04-analyze-gaps.md').match(/^const safePct = .*;$/m)?.[0];
+    assert.ok(safePctSource, 'step-04 defines safePct');
+    const safePct = require('node:vm').runInNewContext(`${safePctSource}\nsafePct`);
+    for (const [covered, total, expected] of [
+      [199, 200, 99],
+      [179, 200, 89],
+      [159, 200, 79],
+      [200, 200, 100],
+      [29, 100, 29],
+      [57, 100, 57],
+      [0, 0, 100],
+      [0, 5, 0],
+    ])
+      assert.equal(safePct(covered, total), expected, `${covered}/${total}`);
+    const script = read('step-05-gate-decision.md').split('**Decision Tree:**')[1].split('```javascript\n')[1].split('\n```')[0];
+    const render = (buckets) => {
+      const requirements = Object.entries(buckets).flatMap(([priority, [covered, total]]) =>
+        Array.from({ length: total }, (_, i) => ({
+          priority,
+          coverage: i < covered ? 'FULL' : 'NONE',
+          tests: [{ id: `${priority}-${i}`, level: 'api' }],
+        })),
+      );
+      const fully_covered = requirements.filter((row) => row.coverage === 'FULL').length;
+      return require('node:vm').runInNewContext(`${script}\n({ gateDecision, rationale })`, {
+        coverageMatrix: {
+          requirements,
+          live_evidence: {},
+          gap_analysis: { critical_gaps: requirements.filter((row) => row.priority === 'P0' && row.coverage !== 'FULL') },
+          coverage_statistics: {
+            total_requirements: requirements.length,
+            fully_covered,
+            overall_coverage_percentage: safePct(fully_covered, requirements.length),
+            priority_breakdown: Object.fromEntries(
+              ['P0', 'P1', 'P2', 'P3'].map((priority) => {
+                const [covered, total] = buckets[priority] ?? [0, 0];
+                return [priority, { covered, total, percentage: safePct(covered, total) }];
+              }),
+            ),
+          },
+        },
+      });
+    };
+    const p0 = render({ P0: [199, 200], P1: [50, 50] });
+    assert.equal(p0.gateDecision, 'FAIL');
+    assert.match(p0.rationale, /P0 coverage is 99% \(required: 100%\)\. 1 critical/);
+    const p1 = render({ P0: [1, 1], P1: [179, 200], P2: [200, 200] });
+    assert.equal(p1.gateDecision, 'CONCERNS');
+    assert.match(p1.rationale, /P1 coverage is 89% \(target: 90%\)/);
+    const overall = render({ P0: [1, 1], P2: [158, 199] });
+    assert.equal(overall.gateDecision, 'FAIL');
+    assert.match(overall.rationale, /Overall coverage is 79% \(minimum: 80%\)/);
+    assert.equal(render({ P0: [200, 200], P1: [200, 200] }).gateDecision, 'PASS');
   });
   check('skill rejects unknown fresh failure counts and preserves legacy absence', () => {
     const step = fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-trace/steps-c/step-05-gate-decision.md'), 'utf8');

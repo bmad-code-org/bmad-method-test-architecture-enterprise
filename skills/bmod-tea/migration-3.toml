@@ -5,21 +5,21 @@ module = "tea"
 from = "3 with separate atdd and ci customization files"
 to = "3 with [workflow.red] and [workflow.ci] tables"
 title = "Move TEA red and CI customizations into their owning skills"
-summary = "Moves the settings of bmad-tea-atdd into [workflow.red] of bmad-tea-automate.toml and those of bmad-tea-ci into [workflow.ci] of bmad-tea-framework.toml, team and user layers separately, reading live files first and cleanup backups when `bmad setup` already removed a file. Also offers to move [modules.tea] keys held only by the legacy _bmad/config.user.toml into _bmad/custom/config.user.toml. Nothing is overwritten without your choice."
+summary = "Moves the settings of bmad-tea-atdd into [workflow.red] of bmad-tea-automate.toml and those of bmad-tea-ci into [workflow.ci] of bmad-tea-framework.toml, team and user layers separately, reading live files first and cleanup backups when `bmad setup` already removed a file. Also offers to move [modules.tea] keys of the legacy _bmad/config.user.toml that neither custom layer holds into _bmad/custom/config.user.toml. Nothing is overwritten without your choice."
 
 # Read-only signals. Any one of them makes this migration worth offering.
 detect = """
 - `{project-root}/_bmad/custom/` holds `bmad-tea-atdd.toml`, `bmad-tea-atdd.user.toml`, `bmad-tea-ci.toml`, `bmad-tea-ci.user.toml`, `bmad-testarch-atdd.toml`, `bmad-testarch-atdd.user.toml`, `bmad-testarch-ci.toml` or `bmad-testarch-ci.user.toml`.
 - `bmad-tea-framework.toml` or `bmad-tea-framework.user.toml` in `{project-root}/_bmad/custom/` holds `ci_platform` directly under `[workflow]`.
 - A `{project-root}/.v6-v7-migration-backup-*/_bmad/custom/` folder holds one of the files above, or a pre-3.0 `bmad-testarch-<skill>.toml` or `.user.toml` file, and the live `_bmad/custom/` holds neither that file nor its `bmad-tea-*` successor. `bmad setup` cleanup lists these files as unused customizations and deletes them, so a backup can be the only copy left.
-- `{project-root}/_bmad/config.user.toml` exists with a `[modules.tea]` table, live or only as `{project-root}/.v6-v7-migration-backup-*/_bmad/config.user.toml`. Core merges only `_bmad/config.toml`, `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, so keys that only this file holds are ignored.
+- `{project-root}/_bmad/config.user.toml` exists with a `[modules.tea]` table, live or only as `{project-root}/.v6-v7-migration-backup-*/_bmad/config.user.toml`. Core no longer merges this file. It ranked above `_bmad/config.toml` and below `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, so a key is ignored when neither custom file holds it, even if `_bmad/config.toml` sets the same key.
 A project with none of those signals, or one whose plan below is already complete, is migrated; say so and stop.
 """
 
 target = """
 - Red-mode settings are `[workflow.red]` in `_bmad/custom/bmad-tea-automate.toml` (team) and `bmad-tea-automate.user.toml` (user). CI settings, `ci_platform` included, are `[workflow.ci]` in `bmad-tea-framework.toml` and `bmad-tea-framework.user.toml`.
 - No `bmad-tea-atdd`, `bmad-tea-ci`, `bmad-testarch-atdd` or `bmad-testarch-ci` file remains in `_bmad/custom/` once its content is verified in the target. `ci_platform` is no longer a key of `[workflow]` in the framework files.
-- Every `[modules.tea]` key that only `_bmad/config.user.toml` held lives in `_bmad/custom/config.user.toml`, keeping its precedence over team values.
+- Every `[modules.tea]` key of `_bmad/config.user.toml` that neither custom file holds lives in `_bmad/custom/config.user.toml`, where it keeps its precedence over `_bmad/config.toml`.
 """
 
 precautions = """
@@ -33,8 +33,8 @@ precautions = """
 """
 
 guide = """
-1. **Inventory.** List, per layer (team, user) and surface (red from atdd, CI from ci), every candidate source: the live files named in the detect signals, and for each absent live file the newest backup folder that contains it. Record each source's provenance (`live` or the backup folder). Add framework override files that set `ci_platform` directly under `[workflow]`. Add every `[modules.tea]` key of `_bmad/config.user.toml`, live or from the newest backup that contains it. A personal override is a candidate even when `_bmad/config.toml` or `_bmad/custom/config.toml` holds the same key, because it takes precedence over those layers. Compare each key only with `_bmad/custom/config.user.toml`, the canonical personal layer.
-2. **Plan.** Build one row per moved table or key: source file and provenance, destination file and table, and the status (`new`, `same value already present`, `conflict`). Show each conflict with both values. Retired v6 names (`bmad-testarch-atdd`, `bmad-testarch-ci`) are sources too, read before any content rewrite. Wait for approval, and for the user's choice on each conflict. For a `_bmad/config.user.toml` key present in `_bmad/custom/config.user.toml` with a different value, report both values and keep the canonical value unless the user chooses the legacy one.
+1. **Inventory.** List, per layer (team, user) and surface (red from atdd, CI from ci), every candidate source: the live files named in the detect signals, and for each absent live file the newest backup folder that contains it. Record each source's provenance (`live` or the backup folder). Add framework override files that set `ci_platform` directly under `[workflow]`. Add every `[modules.tea]` key of `_bmad/config.user.toml`, live or from the newest backup that contains it. The old core order was `_bmad/config.toml`, `_bmad/config.user.toml`, `_bmad/custom/config.toml`, `_bmad/custom/config.user.toml`, later files winning. A personal override is a candidate when neither `_bmad/custom/config.toml` nor `_bmad/custom/config.user.toml` holds the key, because only those two layers outranked it. `_bmad/config.toml` is ignored in that comparison, so a key it sets to a different value is still a candidate; show both values and their files. A key that either custom file holds is not a candidate, because the custom value already won before the change.
+2. **Plan.** Build one row per moved table or key: source file and provenance, destination file and table, and the status (`new`, `same value already present`, `conflict`). Show each conflict with both values. Retired v6 names (`bmad-testarch-atdd`, `bmad-testarch-ci`) are sources too, read before any content rewrite. Wait for approval, and for the user's choice on each conflict. For a `_bmad/config.user.toml` key that `_bmad/config.toml` sets to a different value, report both values and their files, and move the legacy value unless the user keeps the `_bmad/config.toml` one.
 3. **Apply.** For each approved row write the destination, preserving the source text (comments and order) and rewriting `[workflow]` to `[workflow.red]` or `[workflow.ci]`. Re-read and parse the destination to verify it holds every moved key, then remove the old live file. Move a top-level `ci_platform` into `[workflow.ci]` of the same framework file. Move approved legacy `config.user.toml` keys into `[modules.tea]` of `_bmad/custom/config.user.toml`. A backup source is only read.
 4. **Resume.** A rerun recomputes the plan from disk: a source whose content is fully present in its destination changes nothing, and an interrupted run continues from the files that remain. Record each key or file restored from a backup, and each backup value the user chose to leave out, in the plan (the script uses `_bmad/custom/.tea-customization-migration.json`); a recorded item is never a conflict again, so a destination the user edited after migrating stays quiet. An unrecorded backup value that differs from the destination is a conflict.
 5. **Report.** Show the destination tables, the files removed, any conflicts left for the user and the files that remain.
@@ -45,6 +45,6 @@ checklist = [
   "`uv run _bmad/scripts/resolve_customization.py --skill <automate-skill-root> --project-root . --key workflow.red` prints the migrated red settings.",
   "`uv run _bmad/scripts/resolve_customization.py --skill <framework-skill-root> --project-root . --key workflow.ci` prints the migrated CI settings, `ci_platform` included.",
   "`[workflow]` of the framework override files holds no `ci_platform`.",
-  "Every `[modules.tea]` key that only `_bmad/config.user.toml` held is in `_bmad/custom/config.user.toml`, or the user kept the canonical value.",
+  "Every `[modules.tea]` key of `_bmad/config.user.toml` that neither custom file holds is in `_bmad/custom/config.user.toml`, or the user kept the canonical value.",
   "A second run changes nothing.",
 ]

@@ -5496,6 +5496,130 @@ async function runTests() {
         invalidConfigBase.stderr,
       );
 
+      // Config layering regressions: every layer file counts on its own, errors name the file that supplied the value,
+      // and a legacy personal key shadowed by the team value is reported with both values.
+      const layerRepo = (name, files) => {
+        const repo = path.join(tmpRoot, `layer-${name}`);
+        fs.mkdirSync(path.join(repo, 'tests'), { recursive: true });
+        fs.writeFileSync(path.join(repo, 'tests', 'layer.spec.ts'), "test('checks price', () => { expect(price()).toBe(20); });\n");
+        for (const [file, text] of Object.entries(files)) {
+          fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+          fs.writeFileSync(path.join(repo, file), text);
+        }
+        return repo;
+      };
+      const layerRun = (repo) => runCli(['--project-root', repo, '--agent', 'none', '--no-isolate', '--files', 'tests/layer.spec.ts']);
+
+      const customOnlyRepo = layerRepo('custom-only', {
+        '_bmad/custom/config.toml': '[modules.tea]\ntea_use_playwright_utils = "false"\n',
+      });
+      const customOnly = layerRun(customOnlyRepo);
+      assert(
+        customOnly.status === 0 && customOnly.stdout.includes('tea_use_playwright_utils=false'),
+        'a custom layer applies when _bmad/config.toml is absent',
+        customOnly.stdout + customOnly.stderr,
+      );
+      assert(
+        customOnly.stderr.includes(`tea-test-review: config ${path.join(customOnlyRepo, '_bmad', 'custom', 'config.toml')}`) &&
+          !customOnly.stderr.includes(path.join(customOnlyRepo, '_bmad', 'config.toml')),
+        'the config line names the layer files that exist, never the absent base file',
+        customOnly.stderr,
+      );
+      const customUserOnly = layerRun(
+        layerRepo('custom-user-only', { '_bmad/custom/config.user.toml': '[modules.tea]\ntea_pact_mcp = "none"\n' }),
+      );
+      assert(
+        customUserOnly.status === 0 && customUserOnly.stdout.includes('tea_pact_mcp=none'),
+        'the personal custom layer applies when it is the only layer',
+        customUserOnly.stdout + customUserOnly.stderr,
+      );
+      const yamlAndCustom = layerRun(
+        layerRepo('yaml-and-custom', {
+          '_bmad/tea/config.yaml': 'tea_pact_mcp: none\ntea_use_playwright_utils: false\n',
+          '_bmad/custom/config.toml': '[modules.tea]\ntea_use_playwright_utils = "true"\n',
+        }),
+      );
+      assert(
+        yamlAndCustom.status === 0 &&
+          yamlAndCustom.stdout.includes('tea_use_playwright_utils=true') &&
+          yamlAndCustom.stdout.includes('tea_pact_mcp=mcp'),
+        'the v6 YAML fallback is read only when none of the three TOML layers exists',
+        yamlAndCustom.stdout + yamlAndCustom.stderr,
+      );
+      const noLayersRepo = layerRepo('none', {});
+      const noLayers = layerRun(noLayersRepo);
+      assert(
+        noLayers.status === 0 &&
+          noLayers.stderr.includes('tea-test-review: no config found; using module defaults') &&
+          !noLayers.stderr.includes('tea-test-review: config ') &&
+          !noLayers.stderr.includes(path.join('_bmad', 'config.toml')),
+        'with no config at all the CLI says so instead of naming a file that does not exist',
+        noLayers.stderr,
+      );
+
+      const badUserRepo = layerRepo('bad-user', {
+        '_bmad/config.toml': '[modules.tea]\ntea_pact_mcp = "mcp"\n',
+        '_bmad/custom/config.user.toml': '[modules.tea]\ntea_pact_mcp = "smartbear"\n',
+      });
+      const badUser = layerRun(badUserRepo);
+      assert(
+        badUser.status === 2 &&
+          badUser.stderr.includes(path.join(badUserRepo, '_bmad', 'custom', 'config.user.toml')) &&
+          !badUser.stderr.includes(path.join(badUserRepo, '_bmad', 'config.toml')),
+        'an invalid value from a custom layer names that layer, not the base file',
+        badUser.stderr,
+      );
+      const overriddenBadRepo = layerRepo('overridden-bad', {
+        '_bmad/config.toml': '[modules.tea]\ntea_pact_mcp = "smartbear"\n',
+        '_bmad/custom/config.toml': '[modules.tea]\ntea_pact_mcp = "mcp"\n',
+      });
+      assert(layerRun(overriddenBadRepo).status === 0, 'a bad base value that a later layer replaces is never validated');
+      const shapeCases = [
+        ['modules-string', 'modules = "oops"\n', '[modules] in', '_bmad/custom/config.toml'],
+        ['tea-string', '[modules]\ntea = 1\n', '[modules.tea] in', '_bmad/custom/config.toml'],
+        ['core-string', 'core = 1\n', '[core] in', '_bmad/custom/config.user.toml'],
+      ];
+      for (const [name, text, message, file] of shapeCases) {
+        const repo = layerRepo(`shape-${name}`, { '_bmad/config.toml': '[modules.tea]\ntea_pact_mcp = "mcp"\n', [file]: text });
+        const result = layerRun(repo);
+        assert(
+          result.status === 2 && result.stderr.includes(message) && result.stderr.includes(path.join(repo, file)),
+          `a table-shape error in ${file} names that file (${name})`,
+          result.stderr,
+        );
+      }
+
+      const shadowRepo = layerRepo('legacy-shadow', {
+        '_bmad/config.toml': '[modules.tea]\ntea_use_playwright_utils = "true"\ntea_pact_mcp = "mcp"\n',
+        '_bmad/config.user.toml': '[modules.tea]\ntea_use_playwright_utils = "false"\ntea_pact_mcp = "mcp"\n',
+      });
+      const shadow = layerRun(shadowRepo);
+      const shadowLegacy = path.join(shadowRepo, '_bmad', 'config.user.toml');
+      assert(
+        shadow.status === 0 &&
+          shadow.stdout.includes('tea_use_playwright_utils=true') &&
+          shadow.stderr.includes(
+            `Warning: ${shadowLegacy} is no longer merged. TEA ignores its [modules.tea] keys (tea_use_playwright_utils).`,
+          ) &&
+          shadow.stderr.includes(
+            `tea_use_playwright_utils is "false" in ${shadowLegacy} and "true" in ${path.join(shadowRepo, '_bmad', 'config.toml')}, which TEA uses.`,
+          ) &&
+          !shadow.stderr.includes('tea_pact_mcp'),
+        'a legacy personal key shadowed by _bmad/config.toml warns with both values and files; an equal value stays quiet',
+        shadow.stderr,
+      );
+      const customHeldRepo = layerRepo('legacy-custom-held', {
+        '_bmad/config.toml': '[modules.tea]\ntea_use_playwright_utils = "true"\n',
+        '_bmad/config.user.toml': '[modules.tea]\ntea_use_playwright_utils = "false"\n',
+        '_bmad/custom/config.toml': '[modules.tea]\ntea_use_playwright_utils = "true"\n',
+      });
+      const customHeld = layerRun(customHeldRepo);
+      assert(
+        customHeld.status === 0 && !customHeld.stderr.includes('Warning:'),
+        'a legacy key that a custom layer already overrode produces no warning',
+        customHeld.stderr,
+      );
+
       const sentinelRepo = path.join(tmpRoot, 'hook-env-sentinel');
       fs.mkdirSync(sentinelRepo);
       git(['init', '-b', 'main'], sentinelRepo);

@@ -1180,6 +1180,10 @@
         "path": "test",
         "recursive": false,
         "extensions": [".js"]
+      },
+      {
+        "path": "skills/bmad-tea-framework/resources/hooks",
+        "extensions": [".cjs"]
       }
     ],
     "symbols": {

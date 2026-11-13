@@ -166,6 +166,11 @@ Undocumented disabled tests produce a warning.
 Post-write and stop checks catch violations that bypassed the pre-write hook.
 If the hook itself errors, it fails open and allows the write.
 
+Two keys in `.tea/enforce-config.json` tune the checks for your project:
+
+- `excludeGlobs`: files that match a test path but should skip every rule. TEA fills it with k6 script paths when it detects k6, because `sleep()` models think time there.
+- `disabledRules`: rule IDs such as `"H1"` that the hook skips across the whole project. Say why in the commit that adds one.
+
 The skill skips hook installation on platforms without this interception point and records that in its summary.
 Run `test-review` to audit test quality on those platforms.
 

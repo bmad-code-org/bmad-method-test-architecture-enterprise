@@ -257,7 +257,8 @@ The resolved `[core]` and complete `[modules.tea]` table are supplied in the pro
 For a git-diff review, configuration comes from the selected base ref, including the default `origin/main` or the base resolved through `--pr`.
 The CLI pins that ref to a commit and reads `_bmad/config.toml`, `_bmad/custom/config.toml`, and `_bmad/custom/config.user.toml` from its Git tree with `git show`.
 Layers follow BMad structural merge rules: tables merge recursively, ordinary arrays append, keyed table arrays replace matching `code` or `id` entries, and later scalars win.
-Legacy `_bmad/tea/config.yaml` is read only when the base tree lacks `_bmad/config.toml`.
+Each layer applies when its file exists, so `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml` still apply where the installer-owned `_bmad/config.toml` is absent.
+Legacy `_bmad/tea/config.yaml` is read only when the base tree has none of the three.
 A PR that edits, adds, removes, or breaks those files therefore keeps the review settings from its base.
 Config changes take effect in later reviews after they reach the base branch.
 
@@ -274,7 +275,10 @@ Precedence, highest first:
 
 `test_stack_type` accepts `auto`, `frontend`, `backend`, `fullstack`, or `mobile`.
 The CLI prints the configuration source on stderr, including the pinned commit and repository-relative path for a base-tree review.
-Missing base config uses module defaults.
+Missing base config uses module defaults, and stderr says `tea-test-review: no config found; using module defaults`.
+With a config, stderr lists each layer file it read.
+An invalid value names the file that supplied it, so a bad `tea_pact_mcp` in `_bmad/custom/config.user.toml` is reported against that file.
+A `[modules.tea]` key in the pre-v7 `_bmad/config.user.toml` is ignored. When neither custom layer holds it, a warning on stderr names the key, and shows both values and files when `_bmad/config.toml` sets a different one.
 An invalid or unavailable base ref, an unreadable blob, a config path that is a directory or symbolic link, or malformed base config exits 2; a base-tree read never falls back to the working tree.
 The prompt overrides the skill's `resolve_config.py` activation call and subsequent config reads, so the agent uses the supplied values.
 Skill customization also uses the pinned base versions of `_bmad/custom/bmad-tea-test-review.toml` and its `.user.toml` layer, merged with trusted skill defaults. The prompt replaces `resolve_customization.py` and checkout customization reads.
@@ -284,7 +288,7 @@ Dependency-presence checks continue to read the reviewed checkout's `package.jso
 
 `step-03-quality-evaluation.md` reads the orchestration pair, probes the runtime, dispatches its four quality workers in parallel when it can launch them, and resolves to `sequential` when it cannot. Both keys are stated in the prompt because `auto` with the probe off resolves to `sequential` on every run, which would leave the parallel path unreachable. The report's `**Execution Mode**:` line records which one it resolved to.
 
-A missing config is normal: CI installs the skill without running `bmad setup tea`. Content that exists but is invalid is an error (exit 2): a `tea_use_*` value that is not a boolean or the string `"true"` or `"false"`, a `tea_pact_mcp` or `tea_execution_mode` outside its enum, unparseable TOML or YAML, a `[modules.tea]` that is not a table, or a legacy file that is not a mapping. The strings `"true"` and `"false"`, as `bmad setup` writes them, are coerced.
+A missing config is normal: CI installs the skill without running `bmad setup tea`. Content that exists but is invalid is an error (exit 2): a `tea_use_*` value that is not a boolean or the string `"true"` or `"false"`, a `tea_pact_mcp` or `tea_execution_mode` outside its enum, unparseable TOML or YAML, a `[modules]`, `[modules.tea]` or `[core]` that is not a table, or a legacy file that is not a mapping. The strings `"true"` and `"false"`, as `bmad setup` writes them, are coerced.
 
 **In CI, state what you need.** With no config and no flag, a contract-testing repo gets `tea_use_pactjs_utils: true` and loads the `pactjs-utils-*`/`pact-*` fragments, which is what a repo on those utilities wants. A repo writing raw `@pact-foundation/pact` should commit a `[modules.tea]` table in `_bmad/config.toml` or pass `--no-use-pactjs-utils`, so the review loads `contract-testing.md` and scores against the rules that repo actually follows.
 

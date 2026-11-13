@@ -112,7 +112,7 @@ const p1Coverage = priorityBreakdown.P1.percentage;
 const hasP1Requirements = (priorityBreakdown.P1.total || 0) > 0;
 const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
-// Keep rounded percentages for display. Apply thresholds to integer counts.
+// Displayed percentages round down (Math.floor), so a displayed value reaches a whole-number threshold exactly when the counts do. Apply thresholds to integer counts.
 const meetsCoverage = (covered, total, threshold) => total === 0 || covered * 100 >= threshold * total;
 const p0Met = meetsCoverage(priorityBreakdown.P0.covered, priorityBreakdown.P0.total, 100);
 const p1MinimumMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, 80);
@@ -958,7 +958,7 @@ This is the only write of report content in this step. Section 6 changes the fro
 - Requirements covered only by live evidence: {liveOnlyCoveredRequirements} (this run is capped at CONCERNS)
 {endif}
 
-⚠️ Critical Gaps: {criticalGaps.length} (P0 criteria below FULL coverage)
+⚠️ Critical Gaps: {criticalGaps} (P0 criteria below FULL coverage)
 
 {if waivers}
 🔓 Waivers Filed: {waivers.filed} ({waivers.valid} valid, {waivers.invalid} invalid). None applied; the decision above is the derived one.
