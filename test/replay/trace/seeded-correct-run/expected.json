@@ -37,7 +37,7 @@
     "",
     "Arithmetic is 40 checks: inventory covered, total and pct (3); total, covered and pct for P0 to P3 (12);",
     "four risk_summary counts (4); criteria_covered and tests for six levels (12); tests.files and",
-    "tests.cases (2); the five internal pct-equals-round checks (5); and recommendations naming AC-2 and AC-8,",
+    "tests.cases (2); the five internal pct-equals-floor checks (5); and recommendations naming AC-2 and AC-8,",
     "the critical and partial buckets (2). The summary carries 7 of 10 at 70%, P0 1 of 2 at 50%, P1 5 of 5,",
     "P2 1 of 2 at 50%, P3 0 of 1 at 0%, critical_open 1 and low_open 1, e2e 3 tests over 3 criteria, api 6",
     "over 6, unit 1 over 1, 4 files and 10 cases, all of which the criteria recompute to. All 40 pass.",

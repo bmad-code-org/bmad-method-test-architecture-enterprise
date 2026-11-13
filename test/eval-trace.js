@@ -1832,7 +1832,7 @@ function pctCheck(field, expected, actual, tolerance) {
  * those recommendations from the same buckets risk_summary counts.
  *
  * The internal group checks the report against itself: every percentage it prints must
- * be the rounding of the counts it prints beside them. A run whose counts are right and
+ * be the floor of the counts it prints beside them. A run whose counts are right and
  * whose percentage is not has a calculation defect the ground truth cannot see.
  */
 function scoreArithmetic(summary, expected, tolerance) {

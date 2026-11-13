@@ -12,7 +12,7 @@
     "scoring them would add three more failures for the same misjudgment.",
     "",
     "The artifacts are CONSTRUCTED. The summary is internally consistent with the run's own wrong judgment:",
-    "every percentage is the rounding of the counts beside it, so the internal pct checks pass and only the",
+    "every percentage is the floor of the counts beside it, so the internal pct checks pass and only the",
     "comparisons against the ground truth fail."
   ],
   "id": "seeded-ac2-title-matched",
@@ -44,7 +44,7 @@
     "truth is 1 (1). Treating the AC-2 test as evidence adds one api test and one api criterion:",
     "by_level.api.criteria_covered 7 against 6 and by_level.api.tests 7 against 6 fail (2), and tests.cases",
     "11 against 10 fails (1); tests.files stays 4 because the test is in a file already counted. The five",
-    "internal pct checks pass because 8/10 and 2/2 round to what the summary prints. recommendations name",
+    "internal pct checks pass because 8/10 and 2/2 floor to what the summary prints. recommendations name",
     "AC-8 through the partial-coverage entry and AC-2 through the live re-record entry, which still names",
     "AC-2 as its requirement, so both pass. 8 failed, 32 passed.",
     "",

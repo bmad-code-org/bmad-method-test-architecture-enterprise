@@ -4,7 +4,9 @@
  * [workflow.red] and [workflow.ci] tables, and the cleanup then migration path.
  *
  * Needs a BMAD core checkout. Set BMAD_CORE_DIR to its root (the folder holding
- * skills/ and tools/). Without it the suite reports a skip, so the npm test
+ * skills/ and tools/). Core groups skills into one folder per module
+ * (skills/<module>/<skill>/); the older flat skills/<skill>/ layout is accepted
+ * too, because the CI job tracks a moving branch. Without it the suite reports a skip, so the npm test
  * chain stays self-contained; the `bmad-core-compat` CI job sets it.
  */
 const assert = require('node:assert/strict');
@@ -21,11 +23,33 @@ if (!coreDir) {
   console.log('skip: set BMAD_CORE_DIR to a BMAD core checkout to run the customization surface suite');
   process.exit(0);
 }
-if (!fs.existsSync(path.join(coreDir, 'skills', 'bmad', 'scripts', 'setup.py'))) {
-  console.error(`BMAD_CORE_DIR=${coreDir} has no skills/bmad/scripts/setup.py; a set variable must point at a BMAD core checkout`);
+
+// Core's skill roots: skills/ itself in the flat layout, or each skills/<module>/
+// folder in the grouped layout. The bmad skill is the folder holding scripts/setup.py.
+function locateCore(dir) {
+  const skillsDir = path.join(dir, 'skills');
+  const hasSetup = (folder) => fs.existsSync(path.join(folder, 'scripts', 'setup.py'));
+  if (!fs.existsSync(skillsDir)) return null;
+  if (hasSetup(path.join(skillsDir, 'bmad'))) return { roots: [skillsDir], bmad: path.join(skillsDir, 'bmad') };
+  const roots = fs
+    .readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(skillsDir, entry.name))
+    .sort();
+  const home = roots.find((root) => hasSetup(path.join(root, 'bmad')));
+  return home ? { roots, bmad: path.join(home, 'bmad') } : null;
+}
+
+const core = locateCore(coreDir);
+if (!core) {
+  console.error(
+    `BMAD_CORE_DIR=${coreDir} has no skills/bmad/scripts/setup.py or skills/<module>/bmad/scripts/setup.py; a set variable must point at a BMAD core checkout`,
+  );
   process.exit(1);
 }
-const coreSkills = path.join(coreDir, 'skills');
+const coreRoots = core.roots;
+const coreBmad = core.bmad;
+const coreRootArgs = [teaSkills, ...coreRoots].flatMap((root) => ['--root', root]);
 
 const tempRoots = [];
 process.on('exit', () => {
@@ -64,17 +88,7 @@ function resolve(project, skill, key) {
 function setupProject() {
   const project = tempDir('tea-surfaces-');
   run('git', ['init', '-q', project]);
-  const base = [
-    path.join(coreSkills, 'bmad', 'scripts', 'setup.py'),
-    '--project-root',
-    project,
-    '--skill',
-    path.join(coreSkills, 'bmad'),
-    '--root',
-    teaSkills,
-    '--root',
-    coreSkills,
-  ];
+  const base = [path.join(coreBmad, 'scripts', 'setup.py'), '--project-root', project, '--skill', coreBmad, ...coreRootArgs];
   const questions = py(base[0], [...base.slice(1), '--list-config-questions']);
   const modules = {};
   for (const question of questions) (modules[question.module] ??= []).push(question);
@@ -114,7 +128,7 @@ check('setup status on a TEA 2.x upgrade lists the retired skills and offers no 
   run('git', ['init', '-q', project]);
   const skills = path.join(project, '.claude', 'skills');
   fs.mkdirSync(skills, { recursive: true });
-  for (const root of [coreSkills, teaSkills]) {
+  for (const root of [...coreRoots, teaSkills]) {
     for (const name of fs.readdirSync(root)) fs.cpSync(path.join(root, name), path.join(skills, name), { recursive: true });
   }
   const old = ['automate', 'evaluate', 'framework', 'nfr', 'test-design', 'test-review', 'trace', 'atdd', 'ci'].map(
@@ -162,17 +176,7 @@ check('cleanup deletes the old stems, then the migration restores them from the 
   fs.mkdirSync(custom, { recursive: true });
   fs.writeFileSync(path.join(custom, 'bmad-tea-atdd.toml'), ATDD_TEAM);
   fs.writeFileSync(path.join(custom, 'bmad-tea-ci.toml'), CI_TEAM);
-  const migrate = [
-    path.join(coreSkills, 'bmad', 'scripts', 'migrate_v6.py'),
-    '--project-root',
-    project,
-    '--skill',
-    path.join(coreSkills, 'bmad'),
-    '--root',
-    teaSkills,
-    '--root',
-    coreSkills,
-  ];
+  const migrate = [path.join(coreBmad, 'scripts', 'migrate_v6.py'), '--project-root', project, '--skill', coreBmad, ...coreRootArgs];
   const report = py(migrate[0], migrate.slice(1));
   assert.ok(JSON.stringify(report.unused_customizations).includes('bmad-tea-atdd.toml'), 'cleanup lists the atdd stem as unused');
   py(migrate[0], [...migrate.slice(1), '--clean']);

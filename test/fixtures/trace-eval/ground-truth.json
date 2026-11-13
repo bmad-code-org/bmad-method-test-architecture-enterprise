@@ -18,7 +18,7 @@
     "tolerance of 2 would reach it, which is why the value is 1.",
     "",
     "coveragePercentTolerance is 0. The skill computes every percentage as",
-    "Math.round(covered / total * 100) in step-04 section 4, so the expected value is exact",
+    "Math.floor((covered * 100) / total) in step-04 section 4, so the expected value is exact",
     "integer arithmetic and a tolerance would only hide a real miscalculation. The harness must",
     "recompute the expected percentages from criteria[].trueCoverage rather than trusting the",
     "numbers typed into coverageArithmetic. The typed numbers are there so the two can be",
@@ -106,7 +106,7 @@
     "liveDispositionRules": {
       "file": "skills/bmad-tea-trace/steps-c/step-02-discover-tests.md",
       "section": "1b. Load Recorded Live Verification Results",
-      "lines": "59-204",
+      "lines": "61-215",
       "rule": "Only a live record with a unique id, a known requirement_id, status pass, and a source_sha matching the commit under trace counts as coverage. Every other outcome is recorded as a blocker and counts as nothing."
     },
     "liveBlockerSeverity": {
@@ -118,14 +118,14 @@
     "coverageStatusEnum": {
       "file": "skills/bmad-tea-trace/checklist.md",
       "section": "Coverage Classification",
-      "lines": "73-83",
+      "lines": "81-100",
       "rule": "FULL is all scenarios validated at the appropriate level or levels. PARTIAL is some coverage with missing edge cases or levels. NONE is no coverage at any level. UNIT-ONLY is only unit tests. INTEGRATION-ONLY is only API or component tests."
     },
     "coverageArithmetic": {
       "file": "skills/bmad-tea-trace/steps-c/step-04-analyze-gaps.md",
       "section": "4. Calculate Coverage Statistics",
-      "lines": "476-503",
-      "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.round(covered / total * 100), and a priority with no criteria resolves to 100."
+      "lines": "508-538",
+      "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.floor((covered * 100) / total), and a priority with no criteria resolves to 100."
     },
     "singleLevelFullPrecedent": {
       "file": "skills/bmad-tea-trace/resources/traceability-matrix.example.md",
@@ -136,19 +136,19 @@
     "waiverContract": {
       "file": "skills/bmad-tea-trace/trace-template.md",
       "section": "Waiver Details (For WAIVED only)",
-      "lines": "495-529",
+      "lines": "542-576",
       "rule": "A waiver must carry a business justification, a named approver with a role, an approval date, an expiry date that does not carry into the next release, a monitoring plan, and a remediation plan with a fix target, a due date, an owner, and a verification step."
     },
     "waiverScenarios": {
       "file": "skills/bmad-tea-trace/checklist.md",
       "section": "Waiver Scenarios",
-      "lines": "583-603",
+      "lines": "602-622",
       "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
     },
     "decisionIntegrity": {
       "file": "skills/bmad-tea-trace/checklist.md",
       "section": "Decision Integrity",
-      "lines": "484-491",
+      "lines": "503-510",
       "rule": "P0 coverage below 100% produces FAIL. Fresh live failures cap a passing decision at CONCERNS. Filed waivers are validated and reported separately without changing the derived decision."
     },
     "p0IsSecurityCritical": {
@@ -406,7 +406,7 @@
         "overall": {
           "full": 7,
           "total": 10,
-          "formula": "round(7 / 10 * 100)",
+          "formula": "floor(7 * 100 / 10)",
           "expectedPct": 70
         },
         "priority": {
@@ -417,7 +417,7 @@
             ],
             "full": 1,
             "total": 2,
-            "formula": "round(1 / 2 * 100)",
+            "formula": "floor(1 * 100 / 2)",
             "expectedPct": 50
           },
           "P1": {
@@ -430,7 +430,7 @@
             ],
             "full": 5,
             "total": 5,
-            "formula": "round(5 / 5 * 100)",
+            "formula": "floor(5 * 100 / 5)",
             "expectedPct": 100
           },
           "P2": {
@@ -440,7 +440,7 @@
             ],
             "full": 1,
             "total": 2,
-            "formula": "round(1 / 2 * 100)",
+            "formula": "floor(1 * 100 / 2)",
             "expectedPct": 50
           },
           "P3": {
@@ -449,7 +449,7 @@
             ],
             "full": 0,
             "total": 1,
-            "formula": "round(0 / 1 * 100)",
+            "formula": "floor(0 * 100 / 1)",
             "expectedPct": 0
           }
         },
@@ -784,7 +784,7 @@
         "overall": {
           "full": 5,
           "total": 5,
-          "formula": "round(5 / 5 * 100)",
+          "formula": "floor(5 * 100 / 5)",
           "expectedPct": 100
         },
         "priority": {
@@ -795,7 +795,7 @@
             ],
             "full": 2,
             "total": 2,
-            "formula": "round(2 / 2 * 100)",
+            "formula": "floor(2 * 100 / 2)",
             "expectedPct": 100
           },
           "P1": {
@@ -805,7 +805,7 @@
             ],
             "full": 2,
             "total": 2,
-            "formula": "round(2 / 2 * 100)",
+            "formula": "floor(2 * 100 / 2)",
             "expectedPct": 100
           },
           "P2": {
@@ -814,7 +814,7 @@
             ],
             "full": 1,
             "total": 1,
-            "formula": "round(1 / 1 * 100)",
+            "formula": "floor(1 * 100 / 1)",
             "expectedPct": 100
           },
           "P3": {

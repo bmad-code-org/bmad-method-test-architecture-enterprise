@@ -918,24 +918,36 @@ function acquireLock(lock, customRoot, recovered) {
   for (let attempt = 0; ; attempt++) {
     try {
       fs.mkdirSync(lock, { mode: 0o700 });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw new Error(`Cannot lock ${customRoot} for migration: ${error.message}`);
+      takeOverStaleLock(lock, customRoot, recovered, attempt);
+      continue;
+    }
+    try {
       fs.writeFileSync(
         path.join(lock, LOCK_OWNER),
         `${JSON.stringify({ pid: process.pid, hostname: os.hostname(), started_at: new Date().toISOString() })}\n`,
       );
-      return;
     } catch (error) {
-      if (error.code !== 'EEXIST') throw new Error(`Cannot lock ${customRoot} for migration: ${error.message}`);
-      const owner = readLockOwner(lock);
-      if (attempt > 0 || !owner || owner.hostname !== os.hostname() || !processIsGone(owner.pid)) {
-        throw new Error(lockHeldMessage(lock, customRoot, owner));
-      }
-      const leftovers = leftoverFiles(customRoot, owner.pid);
-      const removed = leftovers.filter((file) => file.endsWith('.tmp'));
-      for (const file of removed) fs.rmSync(file, { force: true });
+      // An ownerless lock could never be recovered automatically, so give the directory back before failing.
       fs.rmSync(lock, { recursive: true, force: true });
-      recovered.push({ lock, owner, removed, backups: leftovers.filter((file) => file.endsWith('.bak')) });
+      throw new Error(`Cannot record the migration lock owner in ${lock}: ${error.message}`);
     }
+    return;
   }
+}
+
+/** Clear a lock whose same-host owner process is gone, with its temp files; any other existing lock is an error. */
+function takeOverStaleLock(lock, customRoot, recovered, attempt) {
+  const owner = readLockOwner(lock);
+  if (attempt > 0 || !owner || owner.hostname !== os.hostname() || !processIsGone(owner.pid)) {
+    throw new Error(lockHeldMessage(lock, customRoot, owner));
+  }
+  const leftovers = leftoverFiles(customRoot, owner.pid);
+  const removed = leftovers.filter((file) => file.endsWith('.tmp'));
+  for (const file of removed) fs.rmSync(file, { force: true });
+  fs.rmSync(lock, { recursive: true, force: true });
+  recovered.push({ lock, owner, removed, backups: leftovers.filter((file) => file.endsWith('.bak')) });
 }
 
 function releaseLock(lock) {

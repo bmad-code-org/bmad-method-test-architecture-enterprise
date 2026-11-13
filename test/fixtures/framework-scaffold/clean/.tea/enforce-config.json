@@ -8,5 +8,5 @@
   "maxFileLines": 1000,
   "stopScanWindowSeconds": 900,
   "maxScannedFiles": 5000,
-  "hookSha256": "cd24ab0dda42cd12b92c1be4a090a93f55f3c71f0525369ce5103f0ec2f3a7c5"
+  "hookSha256": "7dc74e08ef328cdc639f0c9d4324c419e8c55edfa634c77bc39cb691c527942d"
 }

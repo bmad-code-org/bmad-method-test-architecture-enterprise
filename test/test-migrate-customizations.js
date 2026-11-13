@@ -881,6 +881,26 @@ test('a lock left by a dead process on this host is recovered and its temp files
   });
 });
 
+test('a lock whose owner record cannot be written is removed so the next run is not blocked', () => {
+  withProject(({ root, custom }) => {
+    const lock = path.join(custom, '.tea-migration.lock');
+    write(path.join(custom, 'bmad-testarch-nfr.toml'), '[workflow]\non_complete="keep"\n');
+    const original = fs.writeFileSync;
+    fs.writeFileSync = (file, ...rest) => {
+      if (file === path.join(lock, 'owner.json')) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+      return original.call(fs, file, ...rest);
+    };
+    try {
+      assert.throws(() => migrate(root), /Cannot record the migration lock owner.*ENOSPC/);
+    } finally {
+      fs.writeFileSync = original;
+    }
+    assert.equal(fs.existsSync(lock), false);
+    migrate(root);
+    assert.equal(read(path.join(custom, 'bmad-tea-nfr.toml')), '[workflow]\non_complete="keep"\n');
+  });
+});
+
 test('a lock held by a live process, another host, or no owner record keeps blocking', () => {
   withProject(({ root, custom }) => {
     const lock = path.join(custom, '.tea-migration.lock');
