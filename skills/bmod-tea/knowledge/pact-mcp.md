@@ -23,7 +23,7 @@ Use the SmartBear MCP server to give TEA live, read-only knowledge of a PactFlow
 
 Every Pact tool the server registers carries the `contract-testing_` prefix. Clients add their own server prefix in front, so Claude Code shows `mcp__smartbear__contract-testing_can_i_deploy` for a server registered as `smartbear`. Match on the `contract-testing_` part.
 
-`@smartbear/mcp` 0.44.0 registers 104 `contract-testing_*` tools. 61 carry `readOnlyHint: true`, 15 carry `destructiveHint: true`, and the rest write to the workspace: publishing, recording deployments, webhooks, secrets, labels, environments, and an `admin_*` family that manages users, roles, teams, system accounts and API tokens. Names change between server releases, so read them from the session's tool list rather than from memory.
+`@smartbear/mcp` 0.44.0 registers 104 `contract-testing_*` tools. 60 carry `readOnlyHint: true`, 15 carry `destructiveHint: true`, and the rest write to the workspace: publishing, recording deployments, webhooks, secrets, labels, environments, and an `admin_*` family that manages users, roles, teams, system accounts and API tokens. Names change between server releases, so read them from the session's tool list rather than from memory.
 
 ## Tools TEA Calls
 
