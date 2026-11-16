@@ -2,36 +2,68 @@
 
 ## Principle
 
-Use the SmartBear MCP server to enable AI agent interaction with PactFlow/Pact Broker during contract testing workflows. The MCP server provides tools for generating pact tests, fetching provider states, reviewing test quality, and checking deployment safety — all accessible through the Model Context Protocol.
+Use the SmartBear MCP server to give TEA live, read-only knowledge of a PactFlow or Pact Broker workspace: which provider states exist, which pacticipants depend on a provider, what the verification matrix says, and whether a version can deploy. TEA writes, reviews and gates contract tests itself; the broker supplies facts those decisions rest on.
 
 ## Rationale
 
 ### Why MCP for contract testing?
 
-- **Live broker queries**: AI agents can fetch existing provider states, verification results, and deployment status directly from PactFlow
-- **Test generation assistance**: MCP tools generate consumer and provider tests based on existing contracts, OpenAPI specs, or templates
-- **Automated review**: MCP-powered review checks tests against best practices without manual inspection
-- **Deployment safety**: `can-i-deploy` checks integrated into agent workflows for real-time compatibility verification
+- **Live broker queries**: provider states, verification results, deployed versions and the integration network come straight from the workspace instead of being guessed from consumer code
+- **Deployment safety**: `can-i-deploy` and the matrix can be queried while designing a pipeline or diagnosing a failed gate
+- **Blast radius**: the pacticipant network shows every consumer of a provider, which feeds risk scoring in test design
 
 ### When TEA uses it
 
-- **test-design workflow**: Fetch existing provider states to understand current contract landscape
-- **automate workflow**: Generate pact tests using broker knowledge and existing contracts
-- **test-review workflow**: Review pact tests against best practices with automated feedback
-- **ci workflow**: Reference can-i-deploy and matrix tools for pipeline guidance
+- **test-design workflow**: provider states and the pacticipant network inform contract scope and risk
+- **automate workflow**: existing provider states and exact pacticipant names shape generated consumer tests
+- **test-review workflow**: provider states and verification results check that reviewed tests match the broker
+- **ci workflow**: can-i-deploy, matrix and deployed-version queries inform pipeline gates and failure diagnosis
 
-## Available Tools
+## Tool Names
 
-| #   | Tool                      | Description                                                             | When Used             |
-| --- | ------------------------- | ----------------------------------------------------------------------- | --------------------- |
-| 1   | **Generate Pact Tests**   | Create consumer/provider tests from code, OpenAPI, or templates         | automate workflow     |
-| 2   | **Fetch Provider States** | List all provider states from broker for a given consumer-provider pair | test-design, automate |
-| 3   | **Review Pact Tests**     | Analyze tests against contract testing best practices                   | test-review           |
-| 4   | **Can I Deploy**          | Check deployment safety via broker verification matrix                  | ci workflow           |
-| 5   | **Matrix**                | Query consumer-provider verification matrix                             | ci, test-design       |
-| 6   | **PactFlow AI Status**    | Check AI credits and permissions (PactFlow Cloud only)                  | diagnostics           |
-| 7   | **Metrics - All**         | Workspace-wide contract testing metrics                                 | reporting             |
-| 8   | **Metrics - Team**        | Team-level adoption statistics (PactFlow Cloud only)                    | reporting             |
+Every Pact tool the server registers carries the `contract-testing_` prefix. Clients add their own server prefix in front, so Claude Code shows `mcp__smartbear__contract-testing_can_i_deploy` for a server registered as `smartbear`. Match on the `contract-testing_` part.
+
+`@smartbear/mcp` 0.44.0 registers 104 `contract-testing_*` tools. 61 carry `readOnlyHint: true`, 15 carry `destructiveHint: true`, and the rest write to the workspace: publishing, recording deployments, webhooks, secrets, labels, environments, and an `admin_*` family that manages users, roles, teams, system accounts and API tokens. Names change between server releases, so read them from the session's tool list rather than from memory.
+
+## Tools TEA Calls
+
+All of these are read-only.
+
+| Tool                                                                | Purpose                                                                    | Used in                            |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------- |
+| `contract-testing_get_provider_states`                              | Provider states already defined for a provider                             | test-design, automate, test-review |
+| `contract-testing_list_pacticipants`                                | Exact pacticipant names as registered                                      | automate, ci                       |
+| `contract-testing_get_pacticipant_network`                          | Every consumer and provider connected to a pacticipant                     | test-design (risk, blast radius)   |
+| `contract-testing_list_integrations`                                | All consumer-provider pairs in the workspace                               | test-design                        |
+| `contract-testing_get_pacts_for_verification`                       | Pacts a provider build would verify for given selectors                    | ci, test-review                    |
+| `contract-testing_can_i_deploy`                                     | Whether a version is safe to deploy to an environment                      | ci                                 |
+| `contract-testing_matrix`                                           | Verification results between consumer and provider versions                | ci, test-review                    |
+| `contract-testing_list_environments`                                | Environment names and UUIDs                                                | ci                                 |
+| `contract-testing_get_currently_deployed_versions`                  | What runs in an environment now                                            | ci                                 |
+| `contract-testing_get_currently_supported_versions`                 | Released versions still supported (mobile apps, libraries)                 | ci                                 |
+| `contract-testing_get_metrics`, `contract-testing_get_team_metrics` | Workspace and team adoption figures (team metrics are PactFlow Cloud only) | reporting                          |
+
+List tools page their results: `contract-testing_get_provider_states`, `contract-testing_get_pacticipant_network` and `contract-testing_get_currently_deployed_versions` return 5 rows per page by default. Raise `pageSize` or follow `pageNumber` until a page comes back short; reading only the first page silently drops provider states and consumers. `contract-testing_matrix` takes `latestby: "cvpv"` for a two-selector query and `"cvp"` for one.
+
+## Safety Rules
+
+### Read-only by default
+
+TEA calls only tools whose `readOnlyHint` is true. Publishing contracts, recording deployments or releases, creating or deleting pacticipants, branches, environments, webhooks, secrets or labels, executing webhooks, and every `admin_*` tool change shared state that other teams' pipelines depend on. Those belong in CI, driven by the Pact CLI or the pipeline the ci workflow generates.
+
+TEA calls a write tool only when the user asks for that specific change in the current conversation, names the target, and confirms. A workflow step never decides to write on its own, and a headless run never writes.
+
+Recommend a read-only API token for agent use. A read/write token exposes every write and `admin_*` tool to the agent session.
+
+### PactFlow AI tools need an explicit request
+
+`contract-testing_generate_pact_tests` and `contract-testing_review_pact_tests` are PactFlow Cloud features. Each call sends the supplied code, specs or test files to the hosted service and spends the workspace's PactFlow AI credits. TEA generates and reviews contract tests with its own knowledge fragments, so it does not call either tool unless the user asks for PactFlow AI output.
+
+When the user does ask:
+
+- Fetch provider states first and pass them in, so generated tests reuse existing state names.
+- Treat the output as a draft. It must still pass the provider scrutiny checklist in `contract-testing.md` and, when `tea_use_pactjs_utils` is active, the substitutions in `pactjs-utils-mandate.md`.
+- On a 401 or a credit error, call `contract-testing_check_pactflow_ai_entitlements` once and report what it says.
 
 ## Installation
 
@@ -132,41 +164,45 @@ Add to `.vscode/mcp.json` (note: uses `servers` key, not `mcpServers`):
 
 ## Pattern Examples
 
-### Example 1: Fetching Provider States During Test Design
-
-When designing contract tests, use MCP to query existing provider states:
+### Example 1: Provider States During Test Design
 
 ```text
-# Agent queries SmartBear MCP during test-design workflow:
-# → Fetch Provider States for consumer="movie-web", provider="SampleMoviesAPI"
-# ← Returns: ["movie with id 1 exists", "no movies exist", "user is authenticated"]
+# → contract-testing_get_provider_states  provider="SampleMoviesAPI"
+# ← ["movie with id 1 exists", "no movies exist", "user is authenticated"]
 #
-# Agent uses this to generate comprehensive consumer tests covering all states
+# Consumer tests reuse these names exactly; a new state is proposed to the provider team, never invented silently.
 ```
 
-### Example 2: Reviewing Pact Tests
-
-During test-review workflow, use MCP to evaluate test quality:
+### Example 2: Blast Radius for Risk Scoring
 
 ```text
-# Agent submits test file to SmartBear MCP Review tool:
-# → Review Pact Tests with test file content
-# ← Returns: feedback on matcher usage, state coverage, interaction naming
+# → contract-testing_get_pacticipant_network  pacticipantName="SampleMoviesAPI"
+# ← consumers: movie-web, movie-mobile, recommendations-service
 #
-# Agent incorporates feedback into review report
+# A breaking change to this provider touches three consumers; impact scores reflect that.
 ```
 
-### Example 3: Can I Deploy Check in CI
-
-During CI workflow design, reference the can-i-deploy tool:
+### Example 3: Diagnosing a Failed can-i-deploy
 
 ```text
-# Agent generates CI pipeline with can-i-deploy gate:
-# → Can I Deploy: pacticipant="SampleMoviesAPI", version="${GITHUB_SHA}", to="production"
-# ← Returns: { ok: true/false, reason: "..." }
+# → contract-testing_can_i_deploy  pacticipant="movie-web" version="${GITHUB_SHA}" environment="production"
+# ← ok: false, "no verified pact between movie-web and the version of SampleMoviesAPI in production"
 #
-# Agent designs pipeline to block deployment if can-i-deploy fails
+# → contract-testing_list_environments                       (find the production UUID)
+# → contract-testing_get_currently_deployed_versions         environmentId=<uuid>
+# → contract-testing_matrix  q=[{pacticipant:"movie-web", version:"${GITHUB_SHA}"},
+#                               {pacticipant:"SampleMoviesAPI", environment:"production"}]
+#                            latestby="cvpv"
 ```
+
+Read the matrix result:
+
+| Matrix result                                                      | Meaning                                                    | Fix                                                                             |
+| ------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| No row                                                             | The deployed provider never verified this consumer version | Add `{ deployedOrReleased: true }` to the provider's consumer version selectors |
+| Row whose verification result is `success: false`                  | Verification ran and failed: a real contract break         | Fix the consumer expectation or the provider                                    |
+| Row whose verification result is `success: true`, gate still fails | Another integration of the same pacticipant is unverified  | Repeat the matrix query for each integration                                    |
+| Provider version absent from the environment                       | The deployment was never recorded                          | Record it from the deploy pipeline with `pact-broker record-deployment`         |
 
 ## When the Tools Are Not Reachable
 
@@ -174,7 +210,7 @@ During CI workflow design, reference the can-i-deploy tool:
 
 ### The probe is a tool-list check, never a broker call
 
-Reachability means **the SmartBear MCP tools are present in this session's tool list**. Nothing else. Do not call `Can I Deploy`, `Matrix`, or any other tool to discover whether the broker answers: a missing server is instant and free to detect, while a misconfigured or unreachable broker is a network round trip that can hang the step. The two failure modes have very different costs and only the free one is worth probing for.
+Reachability means **at least one tool whose name contains `contract-testing_` is present in this session's tool list**. Nothing else. Do not call `contract-testing_can_i_deploy`, `contract-testing_matrix`, or any other tool to discover whether the broker answers: a missing server is instant and free to detect, while a misconfigured or unreachable broker is a network round trip that can hang the step. The two failure modes have very different costs and only the free one is worth probing for.
 
 Credentials are likewise not probed. `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN` being unset is a reason the first real tool call will fail, not a reason to make one.
 
@@ -210,14 +246,15 @@ Everything above applies to the tools in this fragment only. It has no bearing o
 - **Per-project install recommended**: Different projects may target different PactFlow tenants — match TEA's per-project config philosophy
 - **Env vars are project-specific**: `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN` vary by project/team
 - **Node.js 20+ required**: SmartBear MCP server requires Node.js 20 or higher
-- **PactFlow Cloud features**: Some tools (AI Status, Team Metrics) are only available with PactFlow Cloud, not self-hosted Pact Broker
+- **PactFlow Cloud features**: PactFlow AI generation and review, bi-directional contract testing queries, team metrics and the `admin_*` tools need PactFlow Cloud; a self-hosted Pact Broker exposes the rest
+- **Read-only token for agents**: a read/write token hands every write and admin tool to the session
 - **Complements pactjs-utils**: MCP provides broker interaction during design/review; pactjs-utils provides runtime utilities for test code
 
 ## Related Fragments
 
 - `pactjs-utils-overview.md` — runtime utilities that pact tests import
 - `pactjs-utils-provider-verifier.md` — verifier options that reference broker config
-- `pact-broker-webhooks.md` — PactFlow → GitHub webhook auth pattern and staleness monitoring; `Metrics - All` / `Matrix` MCP tools are useful here for dashboards
+- `pact-broker-webhooks.md` — PactFlow → GitHub webhook auth pattern and staleness monitoring; `contract-testing_get_metrics` and `contract-testing_matrix` are useful here for dashboards
 - `contract-testing.md` — foundational contract testing patterns
 
 ## Anti-Patterns
@@ -234,9 +271,16 @@ Everything above applies to the tools in this fragment only. It has no bearing o
 ```text
 # ✅ Use MCP during planning and review:
 # - Fetch provider states to inform test design
-# - Generate test scaffolds from existing contracts
-# - Review tests for best practice compliance
-# - Check can-i-deploy during CI pipeline design
+# - Map the pacticipant network for risk scoring
+# - Check can-i-deploy and the matrix during CI pipeline design and failure diagnosis
 ```
 
-_Source: SmartBear MCP documentation, PactFlow developer docs._
+### Wrong: Letting an agent write to the broker
+
+```text
+# ❌ Agent calls contract-testing_publish_consumer_contracts or contract-testing_record_deployment
+#    from a workstation. The broker now holds a version no pipeline built, and can-i-deploy answers for it.
+# ✅ Publishing and deployment records come from CI, with the commit SHA and branch of the build.
+```
+
+_Source: SmartBear MCP documentation, PactFlow developer docs, and the tool list of `@smartbear/mcp` 0.44.0 read over MCP `tools/list`._

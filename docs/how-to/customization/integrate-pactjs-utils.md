@@ -213,7 +213,8 @@ Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH` before applying t
 `tea_pact_mcp` is enabled by default.
 TEA uses the broker only when the SmartBear MCP tools are reachable.
 
-When the tools are reachable, TEA uses broker data for provider states, the verification matrix, and `can-i-deploy`.
+When the tools are reachable, TEA uses broker data for provider states, the pacticipant network, the verification matrix, and `can-i-deploy`.
+TEA reads from the broker and does not write to it: publishing contracts and recording deployments stay in CI.
 Otherwise it continues using provider source or an OpenAPI spec and records the unavailable broker.
 It labels inferred provider states with their source.
 
