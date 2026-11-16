@@ -32,7 +32,7 @@ Apply pactjs-utils conventions from the loaded fragments (`pactjs-utils-overview
 - **Consumer `package.json`**: generate both `test:pact:consumer` (determinism gate calling `scripts/check-pact-determinism.sh`) and `test:pact:consumer:run` (inner vitest invocation).
 - **Publish script**: `scripts/publish-pact.sh` normalizes interactions with `jq -S '.interactions |= sort_by(...)'` before `pact-broker publish`.
 
-Gate broker calls on `pact_mcp_reachable`, not on `pact_mcp`. The mode says the user allows a broker; the probe result says whether one answered. When `pact_mcp_reachable` is `true`, use the SmartBear MCP tools (Fetch Provider States, Generate Pact Tests) to inform generation. When it is `false`, take provider states from `pact_fallback_source` and say so in the output. Do not probe again: Step 1 already did, once.
+Gate broker calls on `pact_mcp_reachable`, not on `pact_mcp`. The mode says the user allows a broker; the probe result says whether one answered. When `pact_mcp_reachable` is `true`, use the read-only SmartBear MCP tools (`contract-testing_get_provider_states`, `contract-testing_list_pacticipants`) to inform generation. Call `contract-testing_generate_pact_tests` only when the user asked for PactFlow AI output: it sends code to the hosted service and spends workspace credits (`pact-mcp.md` § PactFlow AI tools need an explicit request). When it is `false`, take provider states from `pact_fallback_source` and say so in the output. Do not probe again: Step 1 already did, once.
 
 ---
 
@@ -218,7 +218,7 @@ The seven points to verify for each interaction:
 
 6. **Graceful degradation** when provider source is not accessible (follows the canonical four-step protocol from `contract-testing.md`):
    1. **OpenAPI/Swagger spec available**: Use the spec as the source of truth for response shapes, status codes, and field names
-   2. **Pact Broker available** (when `pact_mcp` is `"mcp"` in `subagentContext.config`): Use SmartBear MCP tools to fetch existing provider states and verified interactions as reference
+   2. **Pact Broker available** (when `pact_mcp_reachable` is `true` in `subagentContext.config`): Use the read-only SmartBear MCP tools to fetch existing provider states and verified interactions as reference
    3. **Neither available**: Generate from consumer types but use the TODO form of the mandatory comment: `// Provider endpoint: TODO — provider source not accessible, verify manually`. Set `provider_scrutiny: "pending"` in output JSON
    4. **Never silently guess**: Document all assumptions in the scrutiny evidence block
 

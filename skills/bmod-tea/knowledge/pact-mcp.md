@@ -197,12 +197,13 @@ Add to `.vscode/mcp.json` (note: uses `servers` key, not `mcpServers`):
 
 Read the matrix result:
 
-| Matrix result                                                      | Meaning                                                    | Fix                                                                             |
-| ------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| No row                                                             | The deployed provider never verified this consumer version | Add `{ deployedOrReleased: true }` to the provider's consumer version selectors |
-| Row whose verification result is `success: false`                  | Verification ran and failed: a real contract break         | Fix the consumer expectation or the provider                                    |
-| Row whose verification result is `success: true`, gate still fails | Another integration of the same pacticipant is unverified  | Repeat the matrix query for each integration                                    |
-| Provider version absent from the environment                       | The deployment was never recorded                          | Record it from the deploy pipeline with `pact-broker record-deployment`         |
+| Matrix result                                                      | Meaning                                                                      | Fix                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No row, consumer version is new                                    | No provider build has verified this pact yet                                 | Trigger verification on pact publish with a `contract_requiring_verification_published` webhook (`pact-broker-webhooks.md`), and make the provider's selectors include the consumer's branch |
+| No row, provider is the one deploying                              | The provider never verified the consumer versions already in the environment | Add `{ deployedOrReleased: true }` to the provider's consumer version selectors                                                                                                              |
+| Row whose verification result is `success: false`                  | Verification ran and failed: a real contract break                           | Fix the consumer expectation or the provider                                                                                                                                                 |
+| Row whose verification result is `success: true`, gate still fails | Another integration of the same pacticipant is unverified                    | Repeat the matrix query for each integration                                                                                                                                                 |
+| Provider version absent from the environment                       | The deployment was never recorded                                            | Record it from the deploy pipeline with `pact-broker record-deployment`                                                                                                                      |
 
 ## When the Tools Are Not Reachable
 
