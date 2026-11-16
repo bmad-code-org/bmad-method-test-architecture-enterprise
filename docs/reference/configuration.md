@@ -256,7 +256,10 @@ Pact MCP strategy for broker interaction during contract testing skills.
 
 **Setup question:** `Use the SmartBear MCP for PactFlow or a Pact Broker?`
 
-Controls whether TEA can use SmartBear MCP tools for provider-state discovery, Pact test review assistance, and can-i-deploy/matrix guidance.
+Controls whether TEA can query a PactFlow or Pact Broker workspace through the SmartBear MCP for provider states, the pacticipant network, the verification matrix and `can-i-deploy`.
+TEA calls only read-only broker tools.
+It never publishes contracts, records deployments or changes workspace settings unless you ask for that change and confirm it.
+PactFlow AI test generation and review spend workspace credits, so TEA calls them only when you ask.
 
 Each broker-dependent step checks once whether SmartBear MCP tools are available in the session.
 When they are unavailable, it follows `pact-mcp`'s fallback: provider source, then an OpenAPI spec, then the confidence gate if the needed facts remain unknown.
@@ -280,7 +283,7 @@ npm install -g @smartbear/mcp    # Node.js 20+ required
 **Required broker env vars:**
 
 - `PACT_BROKER_BASE_URL` (for example `https://{tenant}.pactflow.io`)
-- `PACT_BROKER_TOKEN` (or username/password for basic auth)
+- `PACT_BROKER_TOKEN` (or username/password for basic auth). Use a read-only token: a read/write token gives the agent session every write and admin tool the server registers.
 
 **Related:**
 
