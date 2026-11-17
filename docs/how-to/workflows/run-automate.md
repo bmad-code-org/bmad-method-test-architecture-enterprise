@@ -679,21 +679,30 @@ For tests of implemented features, use [Automate](/docs/how-to/workflows/run-aut
 
 On BMad v7, `bmad-build` writes a story's acceptance criteria into its plan when the build starts. Red mode reads them there when the ticket has only a `Verify:` line.
 
-To run red mode for one story, stop the build at its plan checkpoint with **Approve and stop**, run red mode for the story's ref (`1.2`), then run `bmad-build` again. It implements the story and turns the tests green.
+Red mode saves each acceptance test skipped, and the build finds the tests through its plan. To run red mode for one story:
 
-To run it in every build of a ticket with acceptance criteria, set the `before_implement` hook in `_bmad/custom/bmad-build.toml`, and in `bmad-build-auto.toml` for unattended builds:
+1. Stop the build at its plan checkpoint with **Approve and stop**.
+2. Run red mode for the story's ref (`1.2`).
+3. Add the test files to the plan's Code Map, a task that unskips each test and sees it fail before the code it covers is written, and a command to Verification that runs them. The ATDD checklist lists the files.
+4. Run `bmad-build` again. It implements the story and turns the tests green.
+
+To run it in every build of a ticket, set the `before_implement` hook in `_bmad/custom/bmad-build.toml`, and in `bmad-build-auto.toml` for unattended builds:
 
 ```toml
 [workflow]
 before_implement = """
-When {plan_file} names a `ticket` and lists acceptance criteria, run
-bmad-tea-automate in red mode for that ticket. Add the test files it writes
-to the plan's Code Map, add a task that turns them green, and add a command
-to Verification that runs them.
+When {plan_file} names a `ticket`, run bmad-tea-automate in red mode for
+that ticket. It saves each acceptance test skipped. Add the test files to
+the plan's Code Map, a task that unskips each test and sees it fail before
+the code it covers is written, and a command to Verification that runs
+them. A oneshot plan has no Code Map or tasks: add the Verification command
+and unskip each test the same way while implementing.
 """
 ```
 
-The build runs it after planning and before any code changes, and again when a review loopback reverts the code. Builds without a ticket or acceptance criteria skip red mode.
+The build runs it after planning and before any code changes, and again when a review loopback reverts the code. Builds without a ticket skip red mode.
+
+The hook needs a `bmad-build` that declares `before_implement`. An older one stops with `sets keys bmad-build does not declare: workflow.before_implement`; update BMad before you add the hook.
 
 <a id="red-prerequisites"></a>
 
