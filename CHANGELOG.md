@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Automate red-mode guide and TEA's help explain how red mode fits a BMad v7 build: when a ticket has only a `Verify:` line, run red mode at the build's plan checkpoint, or set `bmad-build`'s `before_implement` hook so every build of a ticket writes failing acceptance tests first.
+
 ### Fixed
 
 - The `pact-mcp` knowledge fragment names the SmartBear MCP tools as the server registers them (`contract-testing_*`), so the reachability probe looks for a real tool name. It now limits TEA to read-only broker tools, asks for an explicit request before PactFlow AI generation or review spends credits, adds pacticipant-network blast radius for test design, a `can-i-deploy` failure diagnosis, and the paging that list tools need (5 rows per page by default).
