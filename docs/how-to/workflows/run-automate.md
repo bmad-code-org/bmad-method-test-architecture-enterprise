@@ -673,6 +673,28 @@ TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked int
 
 For tests of implemented features, use [Automate](/docs/how-to/workflows/run-automate.md).
 
+<a id="red-with-bmad-build"></a>
+
+### With BMad Build
+
+On BMad v7, `bmad-build` writes a story's acceptance criteria into its plan when the build starts. Red mode reads them there when the ticket has only a `Verify:` line.
+
+To run red mode for one story, stop the build at its plan checkpoint with **Approve and stop**, run red mode for the story's ref (`1.2`), then run `bmad-build` again. It implements the story and turns the tests green.
+
+To run it in every build of a ticket with acceptance criteria, set the `before_implement` hook in `_bmad/custom/bmad-build.toml`, and in `bmad-build-auto.toml` for unattended builds:
+
+```toml
+[workflow]
+before_implement = """
+When {plan_file} names a `ticket` and lists acceptance criteria, run
+bmad-tea-automate in red mode for that ticket. Add the test files it writes
+to the plan's Code Map, add a task that turns them green, and add a command
+to Verification that runs them.
+"""
+```
+
+The build runs it after planning and before any code changes, and again when a review loopback reverts the code. Builds without a ticket or acceptance criteria skip red mode.
+
 <a id="red-prerequisites"></a>
 
 ### Prerequisites
