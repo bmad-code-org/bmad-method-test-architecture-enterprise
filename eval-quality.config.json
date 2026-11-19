@@ -1257,6 +1257,14 @@
           "reason": "a field of an eval-quality evidence artifact that holds its CONCERNS or PASS rung"
         },
         {
+          "token": "coverageGaps",
+          "reason": "the field of an eval-quality evidence artifact that lists each coverage rule's satisfaction and the waiver that covers it"
+        },
+        {
+          "token": "waiverId",
+          "reason": "the field of an eval-quality evidence artifact's coverage gap that names the contract waiver covering it, null when none does"
+        },
+        {
           "token": "productionVerdict",
           "reason": "the field of an eval-quality evidence artifact that holds the verdict of production-mode records"
         },
