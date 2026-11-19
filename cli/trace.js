@@ -5,9 +5,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
-const { captureLiveResults, assertLiveSourceRevision } = require('./lib/trace-live');
-const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
+const { captureLiveResults, currentSourceSha, gitHead } = require('./lib/trace-live');
+const { neutralizeWorkflowCommands } = require('./lib/safe-log');
 const {
+  WorkflowError,
+  RUN_FAILURE_CLASSES,
+  addAgentOptions,
+  projectPath,
+  readInput,
+  resolveWorkflowSkill,
+  headlessPrompt,
+  runWithEvidence,
+} = require('./lib/workflow-cli');
+const {
+  PCT_RULE,
   sourceOracleLedger,
   epicTicketSources,
   requirementOracle,
@@ -16,6 +27,8 @@ const {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  classifyTraceRejection,
+  withFullSourceSha,
   publishTraceOutputs,
 } = require('./lib/trace-command');
 
@@ -23,7 +36,9 @@ const NAME = 'tea-trace';
 
 function parser() {
   const command = new Command().name(NAME).description('Trace requirements to existing tests and emit a coverage gate.');
-  addAgentOptions(command);
+  addAgentOptions(command, {
+    retryHelp: 'additional attempts after a transport failure, a timeout, or rejected agent output, from 0 to 3',
+  });
   return command
     .option('--project-root <path>', 'consuming project root', process.cwd())
     .option('--target <path>', 'story, epic, or requirements document, relative to project root')
@@ -101,11 +116,42 @@ function execute(options, registerOutputGuard = () => {}) {
     if (!stat.isFile()) throw new Error(`Trace input must be a regular file: ${file}`);
     return { file, real: fs.realpathSync(file), mode: stat.mode, dev: stat.dev, ino: stat.ino, bytes: fs.readFileSync(file) };
   });
+  // One revision snapshot serves live evidence and every integrity check. Git's own HEAD wins when
+  // it resolves, so a lost .git can never pass by matching a CI fallback revision.
+  const startGitHead = gitHead(projectRoot);
+  const startRevision = startGitHead || currentSourceSha(projectRoot);
   const liveCapture = captureLiveResults(
     liveResults,
     projectRoot,
     levels.includes('live') || options.collectionMode === 'runtime_manifest',
+    startRevision,
   );
+  // A moved revision or a changed input compromises the run itself; no retry can repair either.
+  const assertRunIntegrity = () => {
+    if (startGitHead ? gitHead(projectRoot) !== startGitHead : currentSourceSha(projectRoot) !== startRevision)
+      throw new WorkflowError(
+        'environment-parser',
+        liveCapture
+          ? 'Trace source revision changed during the run; rerun with current live evidence.'
+          : 'Trace source revision changed during the run; the agent must not move the project HEAD.',
+      );
+    for (const input of heldInputs) {
+      const changed = input.missing
+        ? fs.existsSync(input.file)
+        : !fs.existsSync(input.file) ||
+          (() => {
+            const stat = fs.statSync(input.file);
+            return (
+              fs.realpathSync(input.file) !== input.real ||
+              stat.mode !== input.mode ||
+              stat.dev !== input.dev ||
+              stat.ino !== input.ino ||
+              !fs.readFileSync(input.file).equals(input.bytes)
+            );
+          })();
+      if (changed) throw new WorkflowError('environment-parser', `Trace agent changed a supplied input: ${input.file}`);
+    }
+  };
   const assertOutputPaths = () => {
     for (const [name, file] of Object.entries(destinations)) {
       projectPath(projectRoot, file, `trace ${name}`);
@@ -129,20 +175,36 @@ function execute(options, registerOutputGuard = () => {}) {
     fs.mkdirSync(path.dirname(options.json), { recursive: true });
     if (options.agent !== 'none' && fs.existsSync(options.json)) fs.unlinkSync(options.json);
   }
-  const result = runWithEvidence({
+  const run = {
     name: NAME,
     projectRoot,
     evidenceRoot: options.evidenceDir,
     options,
-    prepare({ attemptDir }) {
+    prepare({ attemptDir, previousRejection }) {
       const paths = tracePaths(attemptDir, target.runKey);
+      // An empty frozen ledger would tell the agent to preserve nothing, which the validator rejects.
+      const ledgerLines =
+        oracleLedger.length > 0
+          ? [
+              `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
+            ]
+          : [
+              'No source oracle ledger is frozen for this run. Build the Step 1 oracleLedger from the source documents, or from the selected tests for a synthetic oracle. It must contain at least one entry.',
+            ];
+      // The CLI's own check message, reduced to one line; this attempt writes to its own directory below.
+      const retryLines = previousRejection
+        ? [
+            `The CLI rejected attempt ${previousRejection.attempt}'s output with this validation message: ${JSON.stringify(previousRejection.message)}. Write this attempt's artifacts so they pass that check.`,
+          ]
+        : [];
       const prompt = headlessPrompt({
         skillRoot,
         projectRoot,
         resolvedConfig,
         requestLines: [
           'Execute both trace phases, finishing Step 5. Use deterministic gate decisions.',
-          `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
+          ...retryLines,
+          ...ledgerLines,
           'Persist Step 1 oracleLedger in matrix YAML frontmatter as an array of {id, requirement, priority, source} records. Assign priorities only where the source leaves them unspecified.',
           ...requirementLines,
           `The only trace target for this run is ${target.document ? JSON.stringify(target.document) : `the project (${target.runScope})`}.`,
@@ -154,6 +216,7 @@ function execute(options, registerOutputGuard = () => {}) {
           `Resolve {live_results_input} to ${JSON.stringify(liveResults)} and {waiver_register_input} to ${JSON.stringify(waiverRegister)}. These are inputs in the original project artifact root.`,
           `Resolve {collection_mode} to ${JSON.stringify(options.collectionMode)}, {coverage_levels} to ${JSON.stringify([...new Set(levels)].join(','))}, {allow_gate} to ${allowGate}, and {decision_mode} to "deterministic".`,
           'Resolve {coverage_basis} and {summary_confidence} to auto, then persist the concrete values selected by Step 1.',
+          PCT_RULE,
           `Write the matrix to ${JSON.stringify(paths.matrix)} and the schema 0.3.x summary to ${JSON.stringify(paths.summary)}.`,
           `Resolve {outputFile} and {default_output_file} to ${JSON.stringify(paths.matrix)}, {e2e_trace_summary_output} to ${JSON.stringify(paths.summary)}, and {gate_decision_output} to ${JSON.stringify(paths.gate)}.`,
           'Write the gate JSON when this run is eligible. Omit gate fields and the gate file when this run evaluates no gate.',
@@ -164,45 +227,54 @@ function execute(options, registerOutputGuard = () => {}) {
       });
       return { prompt, paths };
     },
+    afterAgent: assertRunIntegrity,
     validate({ paths }) {
-      assertLiveSourceRevision(liveCapture, projectRoot);
-      for (const input of heldInputs) {
-        const changed = input.missing
-          ? fs.existsSync(input.file)
-          : !fs.existsSync(input.file) ||
-            (() => {
-              const stat = fs.statSync(input.file);
-              return (
-                fs.realpathSync(input.file) !== input.real ||
-                stat.mode !== input.mode ||
-                stat.dev !== input.dev ||
-                stat.ino !== input.ino ||
-                !fs.readFileSync(input.file).equals(input.bytes)
-              );
-            })();
-        if (changed) throw new Error(`Trace agent changed a supplied input: ${input.file}`);
+      try {
+        return validateTraceOutputs({
+          paths,
+          target,
+          collectionMode: options.collectionMode,
+          allowGate,
+          oracleLedger,
+          requireOracleLedger: true,
+          liveCapture,
+          requireLiveManifest: true,
+          tickets,
+        });
+      } catch (error) {
+        throw classifyTraceRejection(error);
       }
-      return validateTraceOutputs({
-        paths,
-        target,
-        collectionMode: options.collectionMode,
-        allowGate,
-        oracleLedger,
-        requireOracleLedger: true,
-        liveCapture,
-        requireLiveManifest: true,
-        tickets,
-      });
     },
-  });
+  };
+  let result;
+  try {
+    result = runWithEvidence(run);
+  } catch (error) {
+    // Whatever the exit class, an absent matrix or summary means the agent's own words explain the failure.
+    if (error.attemptDir) {
+      const written = tracePaths(error.attemptDir, target.runKey);
+      error.missingArtifacts = ['matrix', 'summary'].filter((name) => {
+        try {
+          fs.lstatSync(written[name]);
+          return false;
+        } catch (statError) {
+          return statError.code === 'ENOENT';
+        }
+      });
+    }
+    throw error;
+  }
   if (result.dryRun) return { exitCode: 0, prompt: result.context.prompt, evidence: result.runDir };
   let summary;
   try {
     assertOutputPaths();
-    assertLiveSourceRevision(liveCapture, projectRoot);
-    summary = publishTraceOutputs(result.value, destinations);
+    assertRunIntegrity();
+    // Only the verified start snapshot of Git's own HEAD may replace an abbreviation; a CI fallback never does.
+    const value = { ...result.value, summary: withFullSourceSha(result.value.summary, startGitHead) };
+    summary = publishTraceOutputs(value, destinations);
   } catch (error) {
     error.runDir = result.runDir;
+    error.attempts = result.attempts;
     throw error;
   }
   const status = summary.gate_status ?? null;
@@ -220,7 +292,47 @@ function execute(options, registerOutputGuard = () => {}) {
       evidence: result.runDir,
       attempts: result.attempts.length,
     },
+    attemptRecords: result.attempts,
   };
+}
+
+/** A failed command result; attempt records, when an agent ran, carry only bounded diagnostics. */
+function failedPayload(reason, evidence, attempts) {
+  return {
+    schema_version: '0.1.0',
+    status: 'failed',
+    reason,
+    evidence,
+    ...(attempts
+      ? {
+          attempts: attempts.length,
+          attempt_results: attempts.map((record) => ({
+            attempt: record.attempt,
+            status: record.status,
+            failure_class: record.failureClass ?? null,
+            message: record.diagnostic ?? null,
+          })),
+        }
+      : {}),
+  };
+}
+
+/** JSON whose console copy cannot issue a CI workflow command; parsing it recovers the exact text. */
+function consoleJson(text) {
+  return text.replaceAll('::', String.raw`:\u003a`).replaceAll('##[', String.raw`#\u0023[`);
+}
+
+/** The failure message, plus the agent's own last words when it never wrote a required artifact. */
+function failureReason(error) {
+  // A parser rejection quotes agent-written text; its CLI-authored form stands in for it outside evidence.
+  const message = error.rejection ?? error.message;
+  if (!error.missingArtifacts?.length || !error.agentTail) return message;
+  const { stdout, stderr } = error.agentTail;
+  return [
+    message.replace(/\.$/, ''),
+    stdout.trim() ? `agent stdout tail: ${stdout.trim()}` : 'agent stdout was empty',
+    ...(stderr.trim() ? [`agent stderr tail: ${stderr.trim()}`] : []),
+  ].join('; ');
 }
 
 function main(argv = process.argv) {
@@ -239,12 +351,14 @@ function main(argv = process.argv) {
     });
   } catch (error) {
     if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') return 0;
-    const failedRun = ['environment-parser', 'environment-transport', 'environment-timeout'].includes(error.failureClass);
+    const failedRun = RUN_FAILURE_CLASSES.includes(error.failureClass);
     result = {
       exitCode: failedRun ? 3 : 2,
-      payload: { schema_version: '0.1.0', status: 'failed', reason: error.message, evidence: error.runDir ?? null },
+      payload: failedPayload(failureReason(error), error.runDir ?? null, error.attempts),
+      attemptRecords: error.attempts,
     };
-    process.stderr.write(`${NAME}: ${error.message}\n`);
+    // A parser rejection's raw message quotes agent-written text; attempt.json keeps it.
+    process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.rejection ?? error.message)}\n`);
   }
   if (result.prompt) {
     process.stdout.write(`${result.prompt}\n`);
@@ -256,13 +370,14 @@ function main(argv = process.argv) {
     } catch (error) {
       result = {
         exitCode: 2,
-        payload: { schema_version: '0.1.0', status: 'failed', reason: error.message, evidence: result.payload?.evidence ?? null },
+        payload: failedPayload(error.message, result.payload?.evidence ?? null, result.attemptRecords),
       };
-      process.stderr.write(`${NAME}: ${error.message}\n`);
+      process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.message)}\n`);
     }
     const text = `${JSON.stringify(result.payload, null, 2)}\n`;
     if (options?.json && (result.exitCode !== 2 || outputGuardPassed)) fs.writeFileSync(options.json, text, 'utf8');
-    process.stdout.write(text);
+    // The saved result keeps exact diagnostics; the console copy cannot issue CI workflow commands.
+    process.stdout.write(consoleJson(text));
   }
   return result.exitCode;
 }

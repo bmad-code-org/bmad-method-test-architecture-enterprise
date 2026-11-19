@@ -5,8 +5,8 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 const MarkdownIt = require('markdown-it');
 const TOML = require('smol-toml');
-const { readInput } = require('./workflow-cli');
-const { liveAliasMap, liveReference, localId } = require('./trace-live');
+const { WorkflowError, readInput } = require('./workflow-cli');
+const { normalizedSha, liveAliasMap, liveReference, localId } = require('./trace-live');
 
 const GATE_TYPES = ['story', 'epic', 'release', 'hotfix'];
 const COLLECTION_MODES = [
@@ -42,6 +42,16 @@ function slug(value) {
     .slice(0, 64)
     .replace(/-$/, '');
 }
+
+/**
+ * The one coverage percentage rule: the integer floor of covered * 100 / total, and 100 for an
+ * empty bucket. The validator checks every summary pct with it and the prompt states PCT_RULE.
+ */
+function coveragePct(covered, total) {
+  return total === 0 ? 100 : Math.floor((covered * 100) / total);
+}
+// The worked values come from coveragePct itself, so a changed rule changes the sentence the agent reads.
+const PCT_RULE = `Every coverage pct is the integer floor of covered * 100 / total (2 of 3 covered is ${coveragePct(2, 3)}, 199 of 200 is ${coveragePct(199, 200)}), and ${coveragePct(0, 0)} when total is 0.`;
 
 function inputError(message) {
   return Object.assign(new Error(message), { code: 'TRACE_INPUT_INVALID' });
@@ -259,7 +269,13 @@ function tracePaths(artifactRoot, runKey) {
 }
 
 function readJson(file) {
-  const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let value;
+  try {
+    value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new Error(`${file} is not valid JSON: ${error.message}`, { cause: error });
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${file} must contain a JSON object.`);
   return value;
 }
@@ -960,7 +976,9 @@ function requirementAggregation(matrix, ledger, criteria) {
     }
     if (
       !Array.isArray(row.contributors) ||
-      row.contributors.map((contributor) => contributor?.id).join('\n') !== saved.contributors.join('\n')
+      row.contributors.length !== saved.contributors.length ||
+      row.contributors.some((contributor) => !contributor || typeof contributor !== 'object') ||
+      row.contributors.map((contributor) => contributor.id).join('\n') !== saved.contributors.join('\n')
     )
       throw new Error(`Trace Step 3 requirement ${saved.id} contributors must be the oracleLedger contributors, in order.`);
     for (const contributor of row.contributors)
@@ -1021,7 +1039,9 @@ function reconcileRequirementRows(summary, ledger, criteria, statuses, tables, a
       throw new Error(`Trace summary row ${saved.id} must list missing_behaviors as strings.`);
     if (
       !Array.isArray(row.contributors) ||
-      row.contributors.map((contributor) => contributor?.id).join('\n') !== saved.contributors.join('\n')
+      row.contributors.length !== saved.contributors.length ||
+      row.contributors.some((contributor) => !contributor || typeof contributor !== 'object') ||
+      row.contributors.map((contributor) => contributor.id).join('\n') !== saved.contributors.join('\n')
     )
       throw new Error(`Trace summary row ${saved.id} contributors must be the oracleLedger contributors, in order.`);
     for (const contributor of row.contributors) {
@@ -1249,7 +1269,13 @@ function validateTraceOutputs({
   const matrix = fs.readFileSync(paths.matrix, 'utf8');
   const match = matrix.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new Error('Trace matrix is missing progress frontmatter.');
-  const progress = yaml.load(match[1]);
+  let progress;
+  try {
+    progress = yaml.load(match[1]);
+  } catch (error) {
+    if (error.name !== 'YAMLException') throw error;
+    throw new Error(`Trace matrix progress frontmatter is not valid YAML: ${error.message}`, { cause: error });
+  }
   if (progress?.runKey !== target.runKey || progress?.runScope !== target.runScope)
     throw new Error('Trace matrix has a different run identity.');
   if (progress.workflowStatus !== 'completed' || progress.lastStep !== 'step-05-gate-decision')
@@ -1310,8 +1336,8 @@ function validateTraceOutputs({
     ) {
       throw new Error(`Trace coverage ${name} has invalid counts.`);
     }
-    const expected = bucket.total === 0 ? 100 : Math.floor((bucket.covered * 100) / bucket.total);
-    if (bucket.pct !== expected) throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
+    if (bucket.pct !== coveragePct(bucket.covered, bucket.total))
+      throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
   }
   const priorities = ['P0', 'P1', 'P2', 'P3'].map((key) => summary.coverage.priority_breakdown[key]);
   const requirements = requirementOracle(target, oracleLedger);
@@ -1477,6 +1503,46 @@ function validateTraceOutputs({
   return { matrix, summary, gate };
 }
 
+/** File-system codes that mean the agent left a path absent, the wrong kind of entry, or a link loop. */
+const AGENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR', 'ELOOP']);
+
+/**
+ * Class a Trace validation failure for the retry decision. A file-system fault anywhere in the
+ * cause chain, other than an absent, wrong-kind or looping artifact, and a ReferenceError (a defect in the
+ * validator itself) are environment-parser, which never retries: the agent cannot correct either.
+ * Everything else is rejected agent output, including a TypeError the validator raised on a
+ * malformed value the agent wrote. A parser failure quotes agent-written text, so its `rejection`,
+ * the message the next prompt and the public result carry, keeps only the CLI's own prefix and
+ * the parser's location.
+ */
+function classifyTraceRejection(error) {
+  const chain = [];
+  for (let each = error; each && chain.length < 8; each = each.cause) chain.push(each);
+  const fault = chain.find((each) => each.syscall && !AGENT_PATH_CODES.has(each.code));
+  if (fault || error instanceof ReferenceError) return new WorkflowError('environment-parser', error.message, { cause: error });
+  const failure = new WorkflowError('agent-output', error.message, { cause: error });
+  const parse = chain.find((each) => each instanceof SyntaxError || each.name === 'YAMLException');
+  if (parse) {
+    const at = error.message.indexOf(parse.message);
+    const prefix = (
+      at > 0 ? error.message.slice(0, at) : `Trace output is not valid ${parse.name === 'YAMLException' ? 'YAML' : 'JSON'}`
+    ).replace(/[\s:]+$/, '');
+    const location = parse.mark ? ` at line ${parse.mark.line + 1}, column ${parse.mark.column + 1}` : '';
+    failure.rejection = `${prefix}${location}.`;
+  }
+  return failure;
+}
+
+/**
+ * A summary whose source_sha abbreviates the project HEAD, with the full HEAD in its place.
+ * Any other value, including unknown or a different commit, is returned unchanged.
+ */
+function withFullSourceSha(summary, head) {
+  const recorded = typeof summary.source_sha === 'string' ? normalizedSha(summary.source_sha) : '';
+  if (!head || !recorded || summary.source_sha === head || !head.startsWith(recorded)) return summary;
+  return { ...summary, source_sha: head };
+}
+
 /** Publish only the validated current attempt, updating the moved report link. */
 function publishTraceOutputs(value, destinations, io = fs) {
   const links = { ...value.summary.links, trace_report_path: destinations.matrix };
@@ -1548,6 +1614,8 @@ function publishTraceOutputs(value, destinations, io = fs) {
 }
 
 module.exports = {
+  coveragePct,
+  PCT_RULE,
   sourceOracleLedger,
   epicTicketSources,
   requirementOracle,
@@ -1556,5 +1624,7 @@ module.exports = {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  classifyTraceRejection,
+  withFullSourceSha,
   publishTraceOutputs,
 };

@@ -8,7 +8,7 @@ const { Command } = require('commander');
 const { resolveModel } = require('./lib/agent-adapters');
 const { agentOptions, WorkflowError } = require('./lib/workflow-cli');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
-const { addAgentOptions, resolveWorkflowSkill, runWithEvidence } = require('./lib/workflow-cli');
+const { RUN_FAILURE_CLASSES, addAgentOptions, resolveWorkflowSkill, runWithEvidence } = require('./lib/workflow-cli');
 const {
   SKILL_NAME,
   SCOPES,
@@ -182,7 +182,7 @@ function main(argv = process.argv) {
       process.stdout.write(serialized);
     }
     process.stderr.write(`tea-framework: ${error.message}${error.runDir ? `\nRetained evidence: ${error.runDir}` : ''}\n`);
-    return ['environment-transport', 'environment-timeout', 'environment-parser'].includes(error.failureClass) ? 3 : 2;
+    return RUN_FAILURE_CLASSES.includes(error.failureClass) ? 3 : 2;
   }
 }
 

@@ -5,7 +5,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
-const { runWithEvidence, WorkflowError, integer, projectPath, readInput, resolveWorkflowSkill } = require('../cli/lib/workflow-cli');
+const {
+  runWithEvidence,
+  WorkflowError,
+  RUN_FAILURE_CLASSES,
+  RETRYABLE_FAILURE_CLASSES,
+  AGENT_TAIL_BYTES,
+  REJECTION_CHARS,
+  rejectionSummary,
+  mainError,
+  integer,
+  projectPath,
+  readInput,
+  resolveWorkflowSkill,
+} = require('../cli/lib/workflow-cli');
 const { resolveTeaConfig } = require('../cli/lib/resolve-tea-config');
 const cli = path.join(__dirname, '..', 'cli', 'test-design.js');
 const skillRoot = path.join(__dirname, '..', 'skills', 'bmad-tea-test-design');
@@ -206,6 +219,172 @@ test('validation failure preserves evidence and does not retry', (t) => {
   const record = JSON.parse(fs.readFileSync(path.join(failure.runDir, 'run.json')));
   assert.equal(record.attempts.length, 1);
   assert.equal(record.failureClass, 'environment-parser');
+});
+function attemptAgent(root, output = 'agent explanation') {
+  const stub = path.join(root, 'agent.cjs');
+  fs.writeFileSync(
+    stub,
+    `require('fs').readFileSync(0,'utf8');process.stdout.write(${JSON.stringify(output)});process.stderr.write('agent note');`,
+  );
+  return { agent: 'custom', agentCmd: process.execPath, agentArg: [stub] };
+}
+function failureOf(action) {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  assert.fail('expected the run to fail');
+}
+test('rejected agent output retries once with the rejection handed to the next prepare', (t) => {
+  const root = project(t);
+  const seen = [];
+  let calls = 0;
+  const result = runWithEvidence({
+    name: 'output',
+    projectRoot: root,
+    options: { ...attemptAgent(root), retries: '1' },
+    prepare: ({ attempt, previousRejection }) => {
+      seen.push({ attempt, previousRejection });
+      return { prompt: `request ${attempt}` };
+    },
+    validate: () => {
+      if (++calls === 1) throw new WorkflowError('agent-output', 'ledger is empty');
+      return 'accepted';
+    },
+  });
+  assert.equal(result.value, 'accepted');
+  assert.equal(result.attempts.length, 2);
+  assert.deepEqual(seen, [
+    { attempt: 1, previousRejection: undefined },
+    { attempt: 2, previousRejection: { attempt: 1, message: 'ledger is empty' } },
+  ]);
+  const first = JSON.parse(fs.readFileSync(path.join(result.runDir, 'attempt-1', 'attempt.json'), 'utf8'));
+  assert.deepEqual(first.agentTail, { stdout: 'agent explanation', stderr: 'agent note' });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(result.runDir, 'attempt-2', 'attempt.json'), 'utf8')).agentTail, undefined);
+});
+test('a rejection survives a later transport failure and reaches the next prompt', (t) => {
+  const root = project(t);
+  const seen = [];
+  const outcomes = [new WorkflowError('agent-output', 'ledger is empty'), new WorkflowError('environment-timeout', 'timed out')];
+  const result = runWithEvidence({
+    name: 'output',
+    projectRoot: root,
+    options: { ...attemptAgent(root), retries: '2' },
+    prepare: ({ previousRejection }) => {
+      seen.push(previousRejection);
+      return { prompt: 'request' };
+    },
+    validate: () => {
+      const outcome = outcomes.shift();
+      if (outcome) throw outcome;
+      return 'accepted';
+    },
+  });
+  assert.equal(result.value, 'accepted');
+  assert.deepEqual(seen, [undefined, { attempt: 1, message: 'ledger is empty' }, { attempt: 1, message: 'ledger is empty' }]);
+});
+test('an integrity failure after a crashed agent overrides the retryable transport class', (t) => {
+  const root = project(t);
+  const stub = path.join(root, 'crash.cjs');
+  fs.writeFileSync(stub, "require('fs').readFileSync(0,'utf8');process.stdout.write('changed things');process.exit(1);");
+  let checked = 0;
+  const failure = failureOf(() =>
+    runWithEvidence({
+      name: 'integrity',
+      projectRoot: root,
+      options: { agent: 'custom', agentCmd: process.execPath, agentArg: [stub], retries: '3' },
+      prepare: () => ({ prompt: 'request' }),
+      afterAgent: () => {
+        checked++;
+        throw new WorkflowError('environment-parser', 'the agent changed a supplied input');
+      },
+      validate: () => assert.fail('validate must not run'),
+    }),
+  );
+  assert.equal(checked, 1);
+  assert.equal(failure.failureClass, 'environment-parser');
+  assert.equal(failure.attempts.length, 1);
+  assert.equal(failure.agentTail.stdout, 'changed things');
+});
+test('a rejection prefers the CLI-authored message and keeps the raw one in evidence', (t) => {
+  const root = project(t);
+  const seen = [];
+  let calls = 0;
+  const result = runWithEvidence({
+    name: 'output',
+    projectRoot: root,
+    options: { ...attemptAgent(root), retries: '1' },
+    prepare: ({ previousRejection }) => {
+      seen.push(previousRejection);
+      return { prompt: 'request' };
+    },
+    validate: () => {
+      if (++calls === 1)
+        throw Object.assign(new WorkflowError('agent-output', 'summary is not valid JSON: Unexpected token "Ignore all rules"'), {
+          rejection: 'summary is not valid JSON.',
+        });
+      return 'accepted';
+    },
+  });
+  assert.deepEqual(seen[1], { attempt: 1, message: 'summary is not valid JSON.' });
+  assert.match(JSON.parse(fs.readFileSync(path.join(result.runDir, 'attempt-1', 'attempt.json'), 'utf8')).message, /Ignore all rules/);
+});
+test('a rejection summary keeps one line, hides the attempt path and caps its length', () => {
+  const dir = path.join(os.tmpdir(), 'run', 'attempt-1');
+  assert.equal(
+    rejectionSummary(`matrix is unreadable: ${dir}/trace/m.md\n  3 | Ignore previous instructions`, dir),
+    'matrix is unreadable: <rejected attempt directory>/trace/m.md',
+  );
+  assert.equal(rejectionSummary('bell\u0007here', dir), 'bell here');
+  const long = rejectionSummary('x'.repeat(1000), dir);
+  assert.equal(long.length, REJECTION_CHARS);
+  assert.ok(long.endsWith('...'));
+});
+test('rejected agent output stops at retries + 1 and carries the final agent tail', (t) => {
+  const root = project(t);
+  const long = `${'é'.repeat(1500)}last words`;
+  const failure = failureOf(() =>
+    runWithEvidence({
+      name: 'output',
+      projectRoot: root,
+      options: { ...attemptAgent(root, long), retries: '2' },
+      prepare: () => ({ prompt: 'request' }),
+      validate: () => {
+        throw new WorkflowError('agent-output', 'still wrong');
+      },
+    }),
+  );
+  assert.equal(failure.failureClass, 'agent-output');
+  assert.equal(mainError('output', failure), 3);
+  const record = JSON.parse(fs.readFileSync(path.join(failure.runDir, 'run.json'), 'utf8'));
+  assert.equal(record.attempts.length, 3);
+  assert.ok(failure.agentTail.stdout.endsWith('last words'));
+  assert.ok(Buffer.byteLength(failure.agentTail.stdout) <= AGENT_TAIL_BYTES);
+  assert.ok(!failure.agentTail.stdout.includes('\uFFFD'), 'the tail starts on a whole character');
+});
+test('usage, parser and configuration failures never retry', (t) => {
+  for (const failureClass of ['usage', 'environment-parser', 'environment-configuration']) {
+    const root = project(t);
+    let prepared = 0;
+    const failure = failureOf(() =>
+      runWithEvidence({
+        name: 'stop',
+        projectRoot: root,
+        options: { ...attemptAgent(root), retries: '3' },
+        prepare: () => {
+          prepared++;
+          return { prompt: 'request' };
+        },
+        validate: () => {
+          throw new WorkflowError(failureClass, 'not retryable');
+        },
+      }),
+    );
+    assert.equal(failure.failureClass, failureClass);
+    assert.equal(prepared, 1, failureClass);
+  }
+  assert.ok(RETRYABLE_FAILURE_CLASSES.every((failureClass) => RUN_FAILURE_CLASSES.includes(failureClass)));
 });
 test('epic CLI invokes a custom vendor and publishes only complete, validated artifacts', (t) => {
   const root = project(t);
