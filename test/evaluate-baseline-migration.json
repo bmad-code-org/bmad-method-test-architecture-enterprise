@@ -1,0 +1,139 @@
+{
+  "kind": "evidence-schema-migration",
+  "sourceCommit": "73f53387e276e8cbdfd8d177c87a864d26fa0ecf",
+  "targetExecution": "none; no target, model or eval-quality score calls",
+  "evidenceSchema": {
+    "from": 4,
+    "to": 5
+  },
+  "edit": "Each evidence artifact gains waiverId null on every coverage gap and schemaVersion 5, the evidence eval-quality 10.0.0 writes for a contract that declares no waiver; every digest that covers a migrated file is recomputed, and run.json, baseline.json and strength-aggregate.json name 10.0.0 as the scoring engine.",
+  "verification": "The pr replay of each baseline (test:evaluate-pr-*, test:evaluate-ci-gates, test:evaluate-ci-repositories:*) scores its records on 10.0.0 and reproduces every evidence artifact, score record and strength aggregate byte for byte.",
+  "baselines": [
+    {
+      "evaluation": "test/evaluations/bmad-tea-evaluate",
+      "acceptedRun": "20261014T121538011Z-f4b4471a",
+      "scoreInvocation": "20261106T112015440Z-82179f4c",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:f30231783bc4db0de4bbfcd392a4cdc13051cf784e2b8849bccb32d28216f680",
+      "acceptedManifestDigest": "sha256:f0c7f4faa693f95c172fef548c26f2dcd98448f04c442c1d47883a56aca97d59"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-api/evals/grader",
+      "acceptedRun": "20261009T005647810Z-30949961",
+      "scoreInvocation": "20261106T112017305Z-e8609c91",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:fa0bf2f3816f4e0ee3f101512c368f913674948305aad0cbe1cf06af413a28e1",
+      "acceptedManifestDigest": "sha256:03587fcc15e2b2824e0229b062ffae9259e4a50a13c8b11a18a48437bb016687"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-authoring/ai-feature/evaluation",
+      "acceptedRun": "20261009T005655023Z-f097f145",
+      "scoreInvocation": "20261106T112017835Z-a10a4387",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:6089df412fa8732e9a7d396796c5950e640279e90a9bf5f83a30f0fc41ea7f93",
+      "acceptedManifestDigest": "sha256:f6cf42a0de94a2867cd8146c4e09f06d33a900b424d6cc43b525c1d21ca73f56"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-authoring/test-review/evaluation",
+      "acceptedRun": "20261009T005402966Z-ef26f29d",
+      "scoreInvocation": "20261106T112019950Z-2bbdf8d7",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:a5377fd9156a358c8d5264a51e296f654e72018648e8e368fffdf96451eb870f",
+      "acceptedManifestDigest": "sha256:205247c86e116b23ec55bb2c6f75ec6ccf7b5c5cd674394054e1abcc5c81e11e"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-ci-repos/nightly-deploy/evals/answer-grade",
+      "acceptedRun": "20261009T010109929Z-0b7fb5b6",
+      "scoreInvocation": "20261106T112022313Z-36ca7cba",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:a94711cd411f6435489215a00f2d43922e9f1a9e04965665a23689bbb4fd8142",
+      "acceptedManifestDigest": "sha256:9d3b836a2686da092b6a776baf7db124174bde2b04bd5347fe801b761343d07e"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-ci-repos/tagged-release/evals/answer-grade",
+      "acceptedRun": "20261009T005926416Z-03a9bbcf",
+      "scoreInvocation": "20261106T112024382Z-bb8e1355",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:fe51124d5d9fee16f120306e26e89cb8e57000edeb33e3190ff0962d80ff3e34",
+      "acceptedManifestDigest": "sha256:ab0e41c70e90a3ca69940d0d7bb10a3d510623dfb04ef92e53884a86d80900ea"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-gap-loop/after/evaluation",
+      "acceptedRun": "20261009T005507406Z-3edf4069",
+      "scoreInvocation": "20261106T112026453Z-13233b3b",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:f7d3bebddde7c73a580c52d75521f819f61a552b7926dbab8af55a1c20e0541c",
+      "acceptedManifestDigest": "sha256:37f513d96c69d5a16c226d4e8f0a4a6545b9f4cb42670a7da4f923471db217a6"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-learn/evaluation",
+      "acceptedRun": "20261009T005612271Z-9e44caff",
+      "scoreInvocation": "20261106T112028643Z-2467c63a",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:9a07c8a65b563a6d912ee5443bd9ed4591b9b80c6d9a69cde9d774bd0268d343",
+      "acceptedManifestDigest": "sha256:2106b03180ae6de67151aaea421e3946fc37132b3ee51d8ddc876771b534b053"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-mcp/evals/grader",
+      "acceptedRun": "20261009T005314850Z-b3c531c0",
+      "scoreInvocation": "20261106T112029519Z-ee48bbcb",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:cad53acf9dd8c63e9c797418d24dac4777b4356b02221d118c62800420f898dc",
+      "acceptedManifestDigest": "sha256:15acfd471e49e6bd0e1c7bded5071673a5a792ae80fe1c68b8f46c264e0c5640"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-promptfoo/evals/summary",
+      "acceptedRun": "20261009T005341512Z-0da75397",
+      "scoreInvocation": "20261106T112029941Z-a4df17b7",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:eceef21944bebd9d04a4ed27aab5c280affb3e2555845f600297ce549bbd4d82",
+      "acceptedManifestDigest": "sha256:60e2c7d361840d522fd07f5d2e5f00b8ffaec455056dabfd3a28cbd286631de0"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-tool-use-agent/evals/tool-use",
+      "acceptedRun": "20261009T005332982Z-eef62f19",
+      "scoreInvocation": "20261106T112030386Z-eb907371",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:807ad98524d855b140fac1a42e39b8d7253d4efdeea0a7cbe99c3a07f2eb8022",
+      "acceptedManifestDigest": "sha256:3faf3c185973cfa3f92526ea01192a5316eed9415d22722df3d5b1ce7000eefe"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-tutorial/evaluation",
+      "acceptedRun": "20261009T005856077Z-6de24e2c",
+      "scoreInvocation": "20261106T112030822Z-3f61ae08",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:c0d42a43a1780ccc3b1ed9f200e69af615eb41553ff6ff7f13a6018e4766ead4",
+      "acceptedManifestDigest": "sha256:119460c3b7076b4aae84129c393b8b7859d1ce75e75e7a508425674c4bf3416d"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate-workflow/evals/records",
+      "acceptedRun": "20261009T005326769Z-7152b40f",
+      "scoreInvocation": "20261106T112031399Z-f5e2936e",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:affd8c1bf849b4cb11ca1267c0d090f117abd5dfff92d32260b639050e88ad4d",
+      "acceptedManifestDigest": "sha256:4a5d8fe2562940e979664043445e33924ccf7d459c626a318dad66e6e14b684e"
+    },
+    {
+      "evaluation": "test/fixtures/evaluate/mutation/evals/verdict-ci",
+      "acceptedRun": "20261009T005920865Z-82cd576c",
+      "scoreInvocation": "20261106T112031823Z-18d4f3cf",
+      "originalScoringEngine": "9.0.0",
+      "scoringEngine": "10.0.0",
+      "sourceManifestDigest": "sha256:c6038c104b6a927a4411cfed2cf2dae936c9f07d7eeafd8613451ccd6b669390",
+      "acceptedManifestDigest": "sha256:164d2fa89e1ee312cd203205e4278f973b625d8ad1f261ba06e5b633311f29d2"
+    }
+  ]
+}

@@ -21,7 +21,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { loadEngine } = require('../cli/lib/evaluate/engine');
+const { loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { mountRefusal, mountsOutsideAllowlist } = require('../cli/lib/evaluate/isolation-allowlist');
 
 const BASELINE = path.join(__dirname, 'fixtures', 'evaluate-authoring', 'ai-feature', 'evaluation', 'baseline');
@@ -127,6 +127,8 @@ async function main() {
       privateManifest: null,
       corpusDigest: read('trial-sets.json').corpusDigest,
       port: undefined,
+      // The scoring instant a contract waiver's expiry is tested against (eval-quality 10.0.0), read as the CLI reads it.
+      clock: (await loadAdapters()).createSystemClockAdapter(),
     };
     const scored = async (observedMounts, allowedMounts) => {
       const { ladder } = await engine.runScore({

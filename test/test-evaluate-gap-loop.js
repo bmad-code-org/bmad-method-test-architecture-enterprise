@@ -16,6 +16,7 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { recordObservation } = require('../cli/lib/evaluate/records');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { currentEvidence } = require('./lib/evaluate-current-evidence');
 const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -960,7 +961,12 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
       artifact,
     );
     run(ENGINE, args);
-    sameBytes(artifact, path.join(replay, 'scores', scoreId, set.probeId, 'evidence-artifact.json'), `${runName} ${set.probeId} score`);
+    // The capture keeps the evidence its run wrote; the engine's output is compared with it under eval-quality's own migrations.
+    const captured = await currentEvidence(
+      path.join(replay, 'scores', scoreId, set.probeId, 'evidence-artifact.json'),
+      path.join(replay, index.contract),
+    );
+    assert.ok(fs.readFileSync(artifact).equals(captured), `${runName} ${set.probeId} score differs from committed evidence`);
     const evidence = readJson(artifact);
     assert.equal(evidence.contractVerdict, expectedVerdict);
     assert.equal(evidence.exitCode, 0);

@@ -39,7 +39,7 @@ Four companion reference pages hold the detail behind the commands, and a link t
 
 - Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-tea-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` and `tea-skill-runner` bins.
   The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...` and `npm exec --prefix evals -- tea-skill-runner ...`, run from the project root.
-- `eval-quality` 8.0.0 or later, a devDependency of the same private `package.json`.
+- `eval-quality` 10.0.0 or later, a devDependency of the same private `package.json`.
   TEA declares it as an optional peer dependency, so a project that installs TEA only for its other skills never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -877,6 +877,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The call records hold the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so a replay of the same records writes them again; the one file left out is the invocation's own `score.json` summary, which names the replay's invocation id.
   The stage exits pass through.
   When they are 0 or 2 and a file differs, is missing or is extra, the check exits 13, evaluation evidence drift.
+  A contract waiver that expired after the accept puts its gap back in the verdict, so the replay drifts until the next accept.
   A changed control leg in an observation makes eval-quality's own preflight exit 3, which passes through.
   The scratch directory, which also holds the staging directories of every engine call `ci` makes, is removed with its private parent however `ci` ends, a signal included; a `ci` killed with SIGKILL leaves them, and the next `ci` over the same evaluation folder removes the parent once the owner named in the scratch directory's owner file is gone.
   A parent of another evaluation folder, or of an owner that still runs, stays.
@@ -889,6 +890,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The replay still runs against the baseline's own snapshot, with the baseline's floors, so an edit to the floors since the accept is a stale baseline.
   Re-record the baseline with `compare --accept` in a reviewed pull request.
 - CONCERNS is read from `contractVerdict` in the evidence artifact and is a warning: exit 0, a warning line and a `warn` row.
+  A gap an unexpired contract waiver covers keeps its `waiverId` in `coverageGaps` and raises no CONCERNS.
   The replay, the gameability arm and every scored live run (`twin-run`, `held-out`, `judge-calibration`, `strength-comparison`) read it from the latest score of their run.
 
 ### The live tiers

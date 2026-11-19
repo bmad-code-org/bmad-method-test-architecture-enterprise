@@ -89,7 +89,7 @@ Open `runs/<invocationId>/ci.json` first. It records the tier, every check's exi
 
 Distinguish these cases:
 
-- **Replay drift, exit 13:** Replaying the baseline no longer reproduces its saved evidence. Investigate the difference.
+- **Replay drift, exit 13:** Replaying the baseline no longer reproduces its saved evidence. Investigate the difference. An expired contract waiver is one cause: renew it or close its gap, then accept again.
 - **Stale baseline:** Current contract, corpus, scoring policy or strength floors differ from the accepted snapshot. This warns on `pr` and blocks `release` with exit 11. Replay still uses the baseline's own snapshot.
 - **Weak live strength:** A class below its floor warns on `scheduled` and blocks `release` with exit 2. A strength regression reported by `strength-comparison` warns on both tiers.
 - **CONCERNS:** The scored verdict is a warning, including on release. A zero CI exit therefore does not necessarily mean every contract verdict is PASS.

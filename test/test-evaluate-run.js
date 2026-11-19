@@ -3733,6 +3733,21 @@ async function checkHeldDiagnostics() {
     );
     restore();
     check((await held.reproduce(firstSet)).exitCode === 0, 'the re-score of an unchanged run is not exit 0');
+    // The re-score reads its scoring instant (eval-quality 10.0.0 tests a waiver's expiry against it) from the clock it holds,
+    // once per set; a clock that cannot answer is a fault of the score, exit 5, like any port the engine reads.
+    const reads = [];
+    const clock = { read: async (request) => (reads.push(request), { now: '2026-11-19T00:00:00Z' }) };
+    const clocked = await holdScoreInputs({ runDirectory, index, record: record(), engine, clock }).reproduce(firstSet);
+    check(
+      clocked.exitCode === 0 && clocked.artifact !== null && reads.length === 1,
+      `the re-score with an injected clock exited ${clocked.exitCode} after ${reads.length} clock reads; expected exit 0 after one read`,
+    );
+    const broken = { read: async () => ({ now: 'not a timestamp' }) };
+    const unclocked = await holdScoreInputs({ runDirectory, index, record: record(), engine, clock: broken }).reproduce(firstSet);
+    check(
+      unclocked.exitCode === 5 && unclocked.artifact === null,
+      `the re-score with a clock that answers no instant is ${JSON.stringify(unclocked)}; expected no artifact and exit 5`,
+    );
 
     // A probe the engine rejects: the held bytes give a qualification failure line and an Invalid basis. A clean score
     // passes the engine's exit 3 through, and the lines the re-score gives are the ones the CLI printed.

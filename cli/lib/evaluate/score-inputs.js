@@ -35,6 +35,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { loadAdapters } = require('./engine');
 const { BEHAVIOR_ID, named, oraclesListed, sameOracles } = require('./partition');
 
 /** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
@@ -133,6 +134,7 @@ class HeldInputs {
   #read;
   #accepted;
   #designate;
+  #clock;
 
   /**
    * @param {object} options
@@ -144,6 +146,8 @@ class HeldInputs {
    *   `eval-quality score --designated-oracle` for (Story 1.110): `partition.js` `bothViewDesignation`, which names an oracle only for
    *   a probe of a both run under a `partitionPlan` whose behavior the both view lists with several. The CLI call's arguments and the
    *   in-process score both read it through `designation`, so they cannot disagree.
+   * @param {{ read: Function } | null} [options.clock] the `ClockPort` the in-process score reads its scoring instant from (eval-quality
+   *   10.0.0 tests a contract waiver's `expiresAt` against it). Null is the engine's system-clock adapter, the one its CLI wires.
    */
   constructor({
     engine,
@@ -152,8 +156,10 @@ class HeldInputs {
     read = null,
     accepted = 'the regular file the input check accepted',
     designate = () => NO_DESIGNATION,
+    clock = null,
   }) {
     this.#engine = engine;
+    this.#clock = clock;
     this.#read = read;
     this.#accepted = accepted;
     this.#designate = designate;
@@ -342,6 +348,9 @@ class HeldInputs {
       return { artifact: null, exitCode: USAGE_EXIT, lines: null };
     }
     const { oracleId } = this.designation(set);
+    // The CLI reads the scoring instant from the system clock, so the re-score reads it through the same adapter, made once per
+    // held set. An engine whose adapters cannot load is unavailable, not a fault of the held bytes, so it throws past the catch.
+    this.#clock ??= (await loadAdapters()).createSystemClockAdapter();
     try {
       const { artifact, ladder, qualification } = await this.#engine.runScore({
         record: records,
@@ -356,6 +365,9 @@ class HeldInputs {
         corpusDigest: this.index.corpusDigest,
         ...(oracleId === null ? {} : { designatedOracleId: oracleId }),
         port: undefined,
+        // The instant a contract waiver's `expiresAt` is tested against. The CLI and this score each read the clock once and the
+        // engine's CLI takes no instant, so a waiver that expires between the two reads makes them disagree and the caller refuses.
+        clock: this.#clock,
         signal: new AbortController().signal,
       });
       const lines = qualification.failures.map(
@@ -407,9 +419,10 @@ class HeldInputs {
  * @param {object} options.record the parsed `run.json`
  * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
  * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
+ * @param {{ read: Function } | null} [options.clock] see `HeldInputs`
  * @returns {HeldInputs}
  */
-function holdScoreInputs({ runDirectory, index, record, engine, designate }) {
+function holdScoreInputs({ runDirectory, index, record, engine, designate, clock = null }) {
   const entries = scoreInputList({ runDirectory, index, record }).map((input) => {
     try {
       const bytes = regularFileBytes(input.file);
@@ -420,7 +433,7 @@ function holdScoreInputs({ runDirectory, index, record, engine, designate }) {
       return { ...input, exists: error.code !== 'ENOENT', bytes: null, error: error.message, digest: null };
     }
   });
-  return new HeldInputs({ engine, index, entries, designate });
+  return new HeldInputs({ engine, index, entries, designate, clock });
 }
 
 /**
