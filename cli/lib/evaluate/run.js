@@ -127,7 +127,7 @@ const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
 const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
-const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
+const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs, scoringInstant } = require('./score-inputs');
 const { gitAccessOf, makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -1760,6 +1760,8 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest, desi
       probeId: probe.probeId,
       set,
       designate,
+      // Read once per attempt: the call's `--scored-at` and the in-process re-score test waivers against this one instant.
+      scoredAt: await scoringInstant(),
     });
   } catch (error) {
     if (!(error instanceof AttemptInputError)) throw error;

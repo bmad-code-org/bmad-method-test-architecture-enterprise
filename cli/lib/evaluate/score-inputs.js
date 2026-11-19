@@ -16,6 +16,10 @@
  *   - `changedSince` reads every input again after an engine call and names the
  *     first one that changed, stopped being a regular file or appeared (a
  *     manifest absent at the check and present afterwards counts).
+ *   - `scoringInstant` reads the instant a contract waiver's `expiresAt` is
+ *     tested against once, and the held inputs hand that one instant to the CLI
+ *     call (`--scored-at`) and to the in-process score (a fixed clock), so a
+ *     waiver expiring between two clock reads cannot make them disagree.
  *   - `reproduce` scores the held bytes in process, the way the CLI scores a
  *     probe, and returns what the CLI should have done with them: the artifact
  *     bytes it stages (null when none), the exit it takes and the diagnostic
@@ -35,7 +39,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { loadAdapters } = require('./engine');
+const { EngineUnavailableError, loadAdapters } = require('./engine');
 const { BEHAVIOR_ID, named, oraclesListed, sameOracles } = require('./partition');
 
 /** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
@@ -125,6 +129,31 @@ function scoreInputList({ runDirectory, index, record }) {
   return inputs;
 }
 
+/**
+ * The scoring instant of one `score` command: `given` when the caller names one (a replay scores at the instant its
+ * baseline recorded), otherwise the engine's system clock, read once. `eval-quality` 10.1.0 added `score --scored-at`
+ * and `createFixedClockAdapter`; an older engine has neither, so it is refused as unavailable here, before any call.
+ *
+ * @param {string | null} [given] an RFC 3339 UTC timestamp
+ * @returns {Promise<string>}
+ * @throws {TypeError} when `given` is not a timestamp the engine accepts
+ */
+async function scoringInstant(given = null) {
+  const adapters = await loadAdapters();
+  if (typeof adapters.createFixedClockAdapter !== 'function') {
+    throw new EngineUnavailableError(
+      new Error('the installed eval-quality has no createFixedClockAdapter, so its score takes no --scored-at (added in 10.1.0)'),
+    );
+  }
+  if (given !== null) {
+    // The engine's own check: a value it would refuse as `--scored-at` is refused here.
+    adapters.createFixedClockAdapter(given);
+    return given;
+  }
+  const { now } = await adapters.createSystemClockAdapter().read({}, new AbortController().signal);
+  return now;
+}
+
 /** What `designate` answers when a probe asks the engine for no oracle of its own. */
 const NO_DESIGNATION = Object.freeze({ oracleId: null, problem: null });
 
@@ -146,8 +175,9 @@ class HeldInputs {
    *   `eval-quality score --designated-oracle` for (Story 1.110): `partition.js` `bothViewDesignation`, which names an oracle only for
    *   a probe of a both run under a `partitionPlan` whose behavior the both view lists with several. The CLI call's arguments and the
    *   in-process score both read it through `designation`, so they cannot disagree.
-   * @param {{ read: Function } | null} [options.clock] the `ClockPort` the in-process score reads its scoring instant from (eval-quality
-   *   10.0.0 tests a contract waiver's `expiresAt` against it). Null is the engine's system-clock adapter, the one its CLI wires.
+   * @param {string | null} options.scoredAt the scoring instant (`scoringInstant`) a contract waiver's `expiresAt` is tested against: the
+   *   CLI call gets it as `--scored-at` and the in-process score as a fixed clock, so the two score at one instant. Null is a replay of a
+   *   baseline whose calls were handed no instant: the call gets no `--scored-at` and each side reads the system clock, as it was scored.
    */
   constructor({
     engine,
@@ -156,10 +186,13 @@ class HeldInputs {
     read = null,
     accepted = 'the regular file the input check accepted',
     designate = () => NO_DESIGNATION,
-    clock = null,
+    scoredAt,
   }) {
+    if (scoredAt !== null && typeof scoredAt !== 'string') {
+      throw new TypeError('HeldInputs needs the scoring instant of its score command (scoredAt), or null for an unpinned replay');
+    }
     this.#engine = engine;
-    this.#clock = clock;
+    this.scoredAt = scoredAt;
     this.#read = read;
     this.#accepted = accepted;
     this.#designate = designate;
@@ -270,6 +303,7 @@ class HeldInputs {
     args.push('--evaluator-configuration', pathOf(this.index.evaluatorConfiguration));
     const { oracleId } = this.designation(set);
     if (oracleId !== null) args.push('--designated-oracle', oracleId);
+    if (this.scoredAt !== null) args.push('--scored-at', this.scoredAt);
     args.push('--out', out);
     return args;
   }
@@ -348,9 +382,11 @@ class HeldInputs {
       return { artifact: null, exitCode: USAGE_EXIT, lines: null };
     }
     const { oracleId } = this.designation(set);
-    // The CLI reads the scoring instant from the system clock, so the re-score reads it through the same adapter, made once per
-    // held set. An engine whose adapters cannot load is unavailable, not a fault of the held bytes, so it throws past the catch.
-    this.#clock ??= (await loadAdapters()).createSystemClockAdapter();
+    // The CLI scores at `--scored-at`, so the re-score reads the same instant through the engine's fixed clock, made once; an
+    // unpinned replay reads the system clock as its CLI call does. An engine whose adapters cannot load is unavailable, not a fault
+    // of the held bytes, so it throws past the catch.
+    const adapters = this.#clock === undefined ? await loadAdapters() : null;
+    this.#clock ??= this.scoredAt === null ? adapters.createSystemClockAdapter() : adapters.createFixedClockAdapter(this.scoredAt);
     try {
       const { artifact, ladder, qualification } = await this.#engine.runScore({
         record: records,
@@ -365,8 +401,7 @@ class HeldInputs {
         corpusDigest: this.index.corpusDigest,
         ...(oracleId === null ? {} : { designatedOracleId: oracleId }),
         port: undefined,
-        // The instant a contract waiver's `expiresAt` is tested against. The CLI and this score each read the clock once and the
-        // engine's CLI takes no instant, so a waiver that expires between the two reads makes them disagree and the caller refuses.
+        // The instant a contract waiver's `expiresAt` is tested against: the one the CLI call was handed as `--scored-at`.
         clock: this.#clock,
         signal: new AbortController().signal,
       });
@@ -419,10 +454,10 @@ class HeldInputs {
  * @param {object} options.record the parsed `run.json`
  * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
  * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
- * @param {{ read: Function } | null} [options.clock] see `HeldInputs`
+ * @param {string} options.scoredAt see `HeldInputs`
  * @returns {HeldInputs}
  */
-function holdScoreInputs({ runDirectory, index, record, engine, designate, clock = null }) {
+function holdScoreInputs({ runDirectory, index, record, engine, designate, scoredAt }) {
   const entries = scoreInputList({ runDirectory, index, record }).map((input) => {
     try {
       const bytes = regularFileBytes(input.file);
@@ -433,7 +468,7 @@ function holdScoreInputs({ runDirectory, index, record, engine, designate, clock
       return { ...input, exists: error.code !== 'ENOENT', bytes: null, error: error.message, digest: null };
     }
   });
-  return new HeldInputs({ engine, index, entries, designate, clock });
+  return new HeldInputs({ engine, index, entries, designate, scoredAt });
 }
 
 /**
@@ -451,10 +486,11 @@ function holdScoreInputs({ runDirectory, index, record, engine, designate, clock
  * @param {string} options.probeId
  * @param {{ records: string[], manifestFile: string }} options.set the attempt's sealed set: its record files and isolation manifest, run-relative
  * @param {(probe: object) => { oracleId: string|null, problem: string|null, listed?: string[]|null }} [options.designate] see `HeldInputs`
+ * @param {string} options.scoredAt see `HeldInputs`
  * @returns {HeldInputs}
  * @throws {AttemptInputError} naming the first input that is not what the runtime wrote
  */
-function holdAttemptInputs({ read, engine, corpusDigest, probeId, set, designate }) {
+function holdAttemptInputs({ read, engine, corpusDigest, probeId, set, designate, scoredAt }) {
   const index = {
     ...RUN_FILES,
     corpusDigest,
@@ -469,7 +505,7 @@ function holdAttemptInputs({ read, engine, corpusDigest, probeId, set, designate
     }
     return { ...input, exists: true, bytes, error: null, digest: engine.digestBytes(bytes) };
   });
-  return new HeldInputs({ engine, index, entries, read, accepted: 'the file the runtime wrote', designate });
+  return new HeldInputs({ engine, index, entries, read, accepted: 'the file the runtime wrote', designate, scoredAt });
 }
 
 /** The probe file a run writes for `probeId`. */
@@ -487,4 +523,5 @@ module.exports = {
   holdScoreInputs,
   regularFileBytes,
   scoreInputList,
+  scoringInstant,
 };

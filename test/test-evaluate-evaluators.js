@@ -3437,6 +3437,8 @@ async function checkHeldAttemptInputsUnit() {
   };
   check(names.probe === 'probes/P-002.probe.json', `the attempt's probe file is ${names.probe}`);
   const corpusDigest = `sha256:${'a'.repeat(64)}`;
+  // The instant the call's `--scored-at` and the in-process re-score test waivers against.
+  const SCORED_AT = '2026-11-19T12:00:00Z';
   const hold = (writer) =>
     holdAttemptInputs({
       read: (relative) => writer.read(relative),
@@ -3444,6 +3446,7 @@ async function checkHeldAttemptInputsUnit() {
       corpusDigest,
       probeId,
       set: { records: [names.record], manifestFile: names.manifest },
+      scoredAt: SCORED_AT,
     });
   const make = (label) => {
     const writer = RunDirectory.create(runs, label);
@@ -3481,6 +3484,8 @@ async function checkHeldAttemptInputsUnit() {
           writer.pathOf(names.manifest),
           '--evaluator-configuration',
           writer.pathOf(names.configuration),
+          '--scored-at',
+          SCORED_AT,
           '--out',
           '/scratch/out.json',
         ]),
@@ -3501,6 +3506,7 @@ async function checkHeldAttemptInputsUnit() {
       corpusDigest,
       probeId,
       set: { records: [names.record, second], manifestFile: names.manifest },
+      scoredAt: SCORED_AT,
     });
     const [set] = held.index.trialSets;
     const args = held.scoreArguments({ pathOf: (relative) => several.pathOf(relative), set, out: '/scratch/out.json' });

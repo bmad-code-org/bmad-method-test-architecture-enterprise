@@ -2522,6 +2522,60 @@ function checkReplayComparisonSet() {
 }
 
 /**
+ * The replay scores at the instant the baseline was scored, the `--scored-at` its call records hold, so a contract waiver that
+ * expired after the accept reads as no drift. Each case rewrites that value in the baseline's call records, reseals the
+ * baseline's manifest over the rewritten bytes as an accept would, and runs the `pr` tier:
+ *   - every call moved to one other instant: the replay is handed that instant and writes the same records, exit 0 (revert:
+ *     reading the clock writes another instant, so the records differ and the replay exits 13);
+ *   - no call names one, a baseline accepted before TeA passed `--scored-at`: the replay passes none either, exit 0;
+ *   - the calls name different instants: no one instant reproduces them, so the replay reads the clock and exits 13.
+ */
+async function checkReplayScoringInstant() {
+  const engine = await loadEngine();
+  const instantLine = /("--scored-at",\n\s*)"[^"]+"/;
+  const rewrite = (folder, edit) => {
+    for (const probeId of ['P-001', 'P-002']) {
+      const file = path.join(scoreDirectory(folder), probeId, 'score.json');
+      const before = fs.readFileSync(file, 'utf8');
+      assert.match(before, instantLine, `${probeId}: the fixture baseline's call names no --scored-at`);
+      fs.writeFileSync(file, edit(before, probeId));
+    }
+    baselines.resealBaseline(folder, engine);
+  };
+  const replayRow = (folder) => rowOf(latestCi(folder).json, 'replay');
+
+  const moved = copyFixture('verdict', 'instant-moved');
+  rewrite(moved, (text) => text.replace(instantLine, '$1"2020-02-29T23:59:59.5Z"'));
+  const pinned = ci(moved, 'pr');
+  assert.equal(pinned.status, 0, pinned.output);
+  assert.equal(replayRow(moved).exit, 0);
+  for (const probeId of ['P-001', 'P-002']) {
+    const { argv } = read(path.join(latestCi(moved).directory, 'replay', 'scores', probeId, 'score.json'));
+    assert.equal(
+      argv[argv.indexOf('--scored-at') + 1],
+      '2020-02-29T23:59:59.5Z',
+      `${probeId}: the replay was not handed the recorded instant`,
+    );
+  }
+
+  const legacy = copyFixture('verdict', 'instant-legacy');
+  rewrite(legacy, (text) => text.replace(/\n\s*"--scored-at",\n\s*"[^"]+",/, ''));
+  const unpinned = ci(legacy, 'pr');
+  assert.equal(unpinned.status, 0, unpinned.output);
+  const { argv } = read(path.join(latestCi(legacy).directory, 'replay', 'scores', 'P-001', 'score.json'));
+  assert.equal(argv.includes('--scored-at'), false, 'the replay of a baseline that recorded no instant was handed one');
+
+  const split = copyFixture('verdict', 'instant-split');
+  rewrite(split, (text, probeId) =>
+    text.replace(instantLine, `$1"${probeId === 'P-001' ? '2020-01-01T00:00:00Z' : '2021-01-01T00:00:00Z'}"`),
+  );
+  const drifted = ci(split, 'pr');
+  assert.equal(drifted.status, 13, drifted.output);
+  assert.match(drifted.stdout, /replay: \[drift\] scores\/P-001\/score\.json: the replay produced sha256:/);
+  assert.deepEqual([replayRow(split).exit, replayRow(split).class], [13, 'evaluation evidence drift']);
+}
+
+/**
  * A baseline accepted from a run whose score exits 2 (P-003 missed, a FAIL `compare --accept` admits): the replay
  * reproduces it and passes the 2 through, and a baseline byte that differs makes the same replay exit 13, which applies
  * over an exit of 2 as well as over 0 (revert: applying 13 over exit 0 alone leaves the drifted row at 2). The project
@@ -5175,6 +5229,7 @@ async function main() {
     { name: 'the ci run directory holds no machine path', run: checkCiRunHoldsNoMachinePath, group: 'gates' },
     { name: 'the ci run directory after a failing port and a stale baseline', run: checkCiRunHoldsNoMachinePathOnFailure, group: 'gates' },
     { name: 'the replay comparison set', run: checkReplayComparisonSet, group: 'gates' },
+    { name: 'the replay scoring instant', run: checkReplayScoringInstant, group: 'gates' },
     { name: 'a replay stage that exits 2', run: checkReplayStageExit, group: 'gates' },
     { name: 'baseline integrity', run: checkBaselineIntegrity, group: 'gates' },
     { name: 'baseline floors', run: checkBaselineFloors, group: 'gates' },

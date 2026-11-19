@@ -39,7 +39,7 @@ Four companion reference pages hold the detail behind the commands, and a link t
 
 - Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-tea-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` and `tea-skill-runner` bins.
   The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...` and `npm exec --prefix evals -- tea-skill-runner ...`, run from the project root.
-- `eval-quality` 10.0.0 or later, a devDependency of the same private `package.json`.
+- `eval-quality` 10.1.0 or later, a devDependency of the same private `package.json`.
   TEA declares it as an optional peer dependency, so a project that installs TEA only for its other skills never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -653,6 +653,7 @@ An isolation manifest that is absent is passed on as absent and never filled in,
 
 A probe the run refused has no trial set; `score` prints each one with its reason and records them under `refused` in its aggregate `score.json`, and its exit does not change.
 Then `eval-quality score` runs once per probe, with every trial's `--record`, the set's `--isolation-manifest`, the run's `--evaluator-configuration` and the run's corpus digest, with `--designated-oracle` for a probe of a both run under a `partitionPlan` whose behavior the both view lists with several oracles and whose own partition's view lists exactly one (see [Held-out probes and partition plans](/docs/reference/tea-evaluate-manifest.md#held-out-probes-and-partition-plans)), and writes the evidence artifact to the private staging file `--out` names (see [Score output integrity](/docs/explanation/why-evaluate-confines-the-target.md#score-output-integrity)).
+`score` reads the clock once and hands every call that instant as `--scored-at`; the invocation's `score.json` records it as `scoredAt`.
 Each call goes to `runs/<invocationId>/scores/<scoreInvocationId>/<probeId>/`: `score.json` (its executable, argv in the forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), exit code, stdout and stderr, kept whether or not an evidence artifact was emitted) and `evidence-artifact.json` when there is one, with `score.json` beside the probes summarizing each call's exit.
 The same run directory receives `partitions.json` and `gap-view.json`.
 Both group scored probes under `development` and `held-out`; each available outcome is copied from the probe's evidence artifact.
@@ -877,7 +878,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The call records hold the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so a replay of the same records writes them again; the one file left out is the invocation's own `score.json` summary, which names the replay's invocation id.
   The stage exits pass through.
   When they are 0 or 2 and a file differs, is missing or is extra, the check exits 13, evaluation evidence drift.
-  A contract waiver that expired after the accept puts its gap back in the verdict, so the replay drifts until the next accept.
+  The replay scores at the `--scored-at` the baseline's call records hold; an expired waiver drifts only a baseline that holds none.
   A changed control leg in an observation makes eval-quality's own preflight exit 3, which passes through.
   The scratch directory, which also holds the staging directories of every engine call `ci` makes, is removed with its private parent however `ci` ends, a signal included; a `ci` killed with SIGKILL leaves them, and the next `ci` over the same evaluation folder removes the parent once the owner named in the scratch directory's owner file is gone.
   A parent of another evaluation folder, or of an owner that still runs, stays.

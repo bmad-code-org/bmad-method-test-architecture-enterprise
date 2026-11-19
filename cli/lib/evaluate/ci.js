@@ -98,7 +98,7 @@ const { textNeutralizer } = require('./recorded-paths');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { runRunCommand } = require('./run');
 const { runScoreCommand } = require('./score');
-const { regularFileBytes } = require('./score-inputs');
+const { regularFileBytes, scoringInstant } = require('./score-inputs');
 const {
   cleanUpOnSignal,
   heldPrivateRoot,
@@ -1120,6 +1120,46 @@ function recordedDesignations(baseline) {
 }
 
 /**
+ * The instant the baseline was scored at: the `--scored-at` argument its accepted score invocation handed every probe's call, read
+ * from the call records the way `recordedDesignations` reads a designation. A replay scored at that instant tests each contract
+ * waiver's `expiresAt` where the baseline did, so a waiver that has expired since does not read as drift. Null when no record names
+ * one, which is a baseline scored before TeA passed `--scored-at`: the replay then scores it as it was scored, with no `--scored-at`
+ * and the system clock. Null as well when the records disagree or the value is not a timestamp the engine accepts; the replay's call
+ * records then differ from the baseline's, and that difference is evidence drift.
+ *
+ * @returns {Promise<string | null>}
+ */
+async function recordedScoringInstant(baseline) {
+  const directory = path.join(baseline.directory, 'scores', baseline.manifest.scoreInvocationId);
+  let entries;
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const instants = new Set();
+  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+    try {
+      const { argv } = JSON.parse(regularFileBytes(path.join(directory, entry.name, 'score.json')).toString('utf8'));
+      const at = Array.isArray(argv) ? argv.indexOf('--scored-at') : -1;
+      instants.add(at !== -1 && typeof argv[at + 1] === 'string' ? argv[at + 1] : null);
+    } catch {
+      instants.add(null);
+    }
+  }
+  if (instants.size !== 1) return null;
+  const [instant] = instants;
+  if (instant === null) return null;
+  try {
+    return await scoringInstant(instant);
+  } catch (error) {
+    // The engine refused the recorded value; an engine that is unavailable is reported as such.
+    if (!(error instanceof TypeError)) throw error;
+    return null;
+  }
+}
+
+/**
  * `score` over the placed baseline in the scratch copy; every file it wrote is copied to `replay/scores/`. The produced
  * subtree is the one `scores/` entry that is new after the call, so no entry already there (the accepted one, or a
  * planted one) is ever read as produced. The call's staging directories live in the scratch directory.
@@ -1131,6 +1171,7 @@ function replayScore(context, baseline) {
     const before = new Set(scoreInvocations(scratch.runDirectory) ?? []);
     const outcome = await runScoreCommand(scratch.folder, {
       designations: recordedDesignations(baseline),
+      scoredAt: await recordedScoringInstant(baseline),
       run: scratch.acceptedRun,
       env: context.env,
       stagingRoot: scratch.stagingRoot,

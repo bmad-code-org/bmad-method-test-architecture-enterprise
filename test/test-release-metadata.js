@@ -10,7 +10,7 @@
  * - the release job that mints the GitHub App token and runs `git push` runs no tests, mints the token before checkout,
  *   and waits on the reused quality workflow (an installation token expires after an hour; the chain runs longer)
  * - the stable release sets only npm `latest`, and nothing in the publish workflow publishes or moves `next`
- * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 10.0.0)
+ * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 10.1.0)
  *   are declared, and package-lock.json's root entry carries the same
  *
  * Usage: node test/test-release-metadata.js
@@ -190,11 +190,11 @@ if (!commitStep?.run?.includes('skills/bmod-tea/bmod.toml')) {
 }
 
 // Evaluate's runtime: the bin, and eval-quality as an optional peer no older
-// than 10.0.0. The lockfile's root entry mirrors package.json, so a manifest
+// than 10.1.0. The lockfile's root entry mirrors package.json, so a manifest
 // edit that skipped `npm install` is caught here too.
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '10.0.0';
+const ENGINE_FLOOR = '10.1.0';
 const lockRoot = packageLock.packages?.[''] ?? {};
 
 const evaluateBin = packageJson.bin?.[EVALUATE_BIN];

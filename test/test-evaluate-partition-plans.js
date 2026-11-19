@@ -332,6 +332,7 @@ try {
           { relative: 'held-probe.json', bytes: Buffer.from(JSON.stringify({ probeId: 'P-003', behaviorId })) },
         ],
         designate: () => ({ oracleId: null, problem: null, listed: undefined, ...answer }),
+        scoredAt: '2026-11-19T12:00:00Z',
       }).designationFindings();
     const messagesOf = (findings) => findings.map(({ message }) => message);
     assert.deepEqual(drift({ sealed: ['O-002', 'O-101'], answer: { listed: ['O-002', 'O-101'] } }), [], 'the same list was refused');
