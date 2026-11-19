@@ -127,7 +127,14 @@ const { CREDENTIALS_FILE, textNeutralizer } = require('./recorded-paths');
 const { mountRefusal, mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
-const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs, scoringInstant } = require('./score-inputs');
+const {
+  AttemptInputError,
+  RUN_FILES,
+  attemptProbeFile,
+  holdAttemptInputs,
+  scoringClockAdapters,
+  scoringInstant,
+} = require('./score-inputs');
 const { gitAccessOf, makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -1890,6 +1897,8 @@ async function qualifyEvaluator(context) {
   });
   // The policy an attempt is scored with is the one the trial sets carry, so it is in the run directory before the first score.
   if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
+  // Every attempt is scored at an instant the engine pins; an engine that cannot is refused before the first trial spends anything.
+  await scoringClockAdapters();
   const report = { attempts, minimumAgreement, arms: [] };
   for (const arm of arms) {
     const expected = expectedOutcome(arm);

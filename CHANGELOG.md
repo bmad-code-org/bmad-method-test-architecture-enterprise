@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The `ci` replay scores a baseline at the instant it was scored, the `--scored-at` its call records hold, so a contract waiver that expired after the accept no longer reads as evidence drift (exit 13). A baseline accepted before this release holds no instant and replays as before, reading the clock, until it is accepted again.
+- The `ci` replay scores a baseline at the instant it was scored, the `--scored-at` its call records hold, so a contract waiver that expired after the accept no longer reads as evidence drift (exit 13). A baseline that holds no instant, one an earlier TeA accepted on 10.1.0, replays as before, reading the clock, until it is accepted again; a baseline another engine measured is re-accepted on 10.1.0 as for any engine upgrade.
 
 ## [4.2.0] - 2026-11-19
 

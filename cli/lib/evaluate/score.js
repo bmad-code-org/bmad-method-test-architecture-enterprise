@@ -128,7 +128,7 @@ const { createArtifactValidator } = require('./records');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { TRIAL_SETS_NAME } = require('./run');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
-const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes, scoringInstant } = require('./score-inputs');
+const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes, scoringClockAdapters, scoringInstant } = require('./score-inputs');
 const {
   WorkspaceRefusal,
   cleanUpOnSignal,
@@ -550,6 +550,8 @@ async function runScoreCommand(
 
   const engine = await loadEngine();
   // One instant for the whole invocation, read before any call: every probe's CLI call and in-process re-score test waivers against it.
+  // An engine that predates `--scored-at` is refused here, pinned or not, before any call.
+  await scoringClockAdapters();
   let scoredAt = null;
   try {
     if (givenInstant !== null) scoredAt = await scoringInstant(givenInstant ?? null);

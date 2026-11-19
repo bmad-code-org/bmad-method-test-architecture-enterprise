@@ -130,21 +130,32 @@ function scoreInputList({ runDirectory, index, record }) {
 }
 
 /**
- * The scoring instant of one `score` command: `given` when the caller names one (a replay scores at the instant its
- * baseline recorded), otherwise the engine's system clock, read once. `eval-quality` 10.1.0 added `score --scored-at`
- * and `createFixedClockAdapter`; an older engine has neither, so it is refused as unavailable here, before any call.
+ * The engine's adapters, refused as unavailable when the engine predates `score --scored-at` and `createFixedClockAdapter`
+ * (eval-quality 10.1.0). Every path that scores asks this first, pinned or not, so an older engine is refused before any
+ * call or evaluator trial runs.
  *
- * @param {string | null} [given] an RFC 3339 UTC timestamp
- * @returns {Promise<string>}
- * @throws {TypeError} when `given` is not a timestamp the engine accepts
+ * @returns {Promise<Record<string, unknown>>}
  */
-async function scoringInstant(given = null) {
+async function scoringClockAdapters() {
   const adapters = await loadAdapters();
   if (typeof adapters.createFixedClockAdapter !== 'function') {
     throw new EngineUnavailableError(
       new Error('the installed eval-quality has no createFixedClockAdapter, so its score takes no --scored-at (added in 10.1.0)'),
     );
   }
+  return adapters;
+}
+
+/**
+ * The scoring instant of one `score` command: `given` when the caller names one (a replay scores at the instant its
+ * baseline recorded), otherwise the engine's system clock, read once.
+ *
+ * @param {string | null} [given] an RFC 3339 UTC timestamp
+ * @returns {Promise<string>}
+ * @throws {TypeError} when `given` is not a timestamp the engine accepts
+ */
+async function scoringInstant(given = null) {
+  const adapters = await scoringClockAdapters();
   if (given !== null) {
     // The engine's own check: a value it would refuse as `--scored-at` is refused here.
     adapters.createFixedClockAdapter(given);
@@ -385,7 +396,7 @@ class HeldInputs {
     // The CLI scores at `--scored-at`, so the re-score reads the same instant through the engine's fixed clock, made once; an
     // unpinned replay reads the system clock as its CLI call does. An engine whose adapters cannot load is unavailable, not a fault
     // of the held bytes, so it throws past the catch.
-    const adapters = this.#clock === undefined ? await loadAdapters() : null;
+    const adapters = this.#clock === undefined ? await scoringClockAdapters() : null;
     this.#clock ??= this.scoredAt === null ? adapters.createSystemClockAdapter() : adapters.createFixedClockAdapter(this.scoredAt);
     try {
       const { artifact, ladder, qualification } = await this.#engine.runScore({
@@ -523,5 +534,6 @@ module.exports = {
   holdScoreInputs,
   regularFileBytes,
   scoreInputList,
+  scoringClockAdapters,
   scoringInstant,
 };

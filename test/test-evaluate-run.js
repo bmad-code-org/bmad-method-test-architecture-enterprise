@@ -3739,7 +3739,16 @@ async function checkHeldDiagnostics() {
     check((await held.reproduce(firstSet)).exitCode === 0, 'the re-score of an unchanged run is not exit 0');
     // One scoring instant per score command (eval-quality 10.1.0 `--scored-at`): the CLI call is handed it and the in-process re-score
     // scores at it through the engine's fixed clock, so a waiver expiring between two clock reads cannot make the two disagree.
-    const pinned = holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: '2026-11-19T12:00:00.5Z' });
+    // The engine is wrapped so the case reads the clock the re-score was handed (revert: a re-score on the system clock answers now).
+    let rescoreClock = null;
+    const recording = {
+      ...engine,
+      runScore: async (options) => {
+        rescoreClock = options.clock;
+        return engine.runScore(options);
+      },
+    };
+    const pinned = holdScoreInputs({ runDirectory, index, record: record(), engine: recording, scoredAt: '2026-11-19T12:00:00.5Z' });
     const pinnedArgs = pinned.scoreArguments({ pathOf: (relative) => relative, set: firstSet, out: 'out.json' });
     check(
       JSON.stringify(pinnedArgs.slice(-4)) === JSON.stringify(['--scored-at', '2026-11-19T12:00:00.5Z', '--out', 'out.json']),
@@ -3750,6 +3759,8 @@ async function checkHeldDiagnostics() {
       pinnedScore.exitCode === 0 && pinnedScore.artifact !== null,
       `the re-score at a held instant is ${JSON.stringify(pinnedScore)}; expected exit 0 and an artifact`,
     );
+    const rescoredAt = rescoreClock === null ? null : (await rescoreClock.read({}, new AbortController().signal)).now;
+    check(rescoredAt === '2026-11-19T12:00:00.5Z', `the re-score's clock answers ${JSON.stringify(rescoredAt)}, not the held instant`);
     let unheld = null;
     try {
       holdScoreInputs({ runDirectory, index, record: record(), engine });
