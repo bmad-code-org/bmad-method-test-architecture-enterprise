@@ -121,10 +121,12 @@ function execute(options, registerOutputGuard = () => {}) {
     projectRoot,
     levels.includes('live') || options.collectionMode === 'runtime_manifest',
   );
+  // Git's own HEAD when it resolves one, so a lost .git can never pass by matching a CI fallback revision.
+  const startGitHead = gitHead(projectRoot);
   const startRevision = liveCapture ? liveCapture.currentSha : currentSourceSha(projectRoot);
   // A moved revision or a changed input compromises the run itself; no retry can repair either.
   const assertRunIntegrity = () => {
-    if (currentSourceSha(projectRoot) !== startRevision)
+    if (startGitHead ? gitHead(projectRoot) !== startGitHead : currentSourceSha(projectRoot) !== startRevision)
       throw new WorkflowError(
         'environment-parser',
         liveCapture
@@ -270,6 +272,7 @@ function execute(options, registerOutputGuard = () => {}) {
     summary = publishTraceOutputs(value, destinations);
   } catch (error) {
     error.runDir = result.runDir;
+    error.attempts = result.attempts;
     throw error;
   }
   const status = summary.gate_status ?? null;
@@ -287,15 +290,44 @@ function execute(options, registerOutputGuard = () => {}) {
       evidence: result.runDir,
       attempts: result.attempts.length,
     },
+    attemptRecords: result.attempts,
   };
+}
+
+/** A failed command result; attempt records, when an agent ran, carry only bounded diagnostics. */
+function failedPayload(reason, evidence, attempts) {
+  return {
+    schema_version: '0.1.0',
+    status: 'failed',
+    reason,
+    evidence,
+    ...(attempts
+      ? {
+          attempts: attempts.length,
+          attempt_results: attempts.map((record) => ({
+            attempt: record.attempt,
+            status: record.status,
+            failure_class: record.failureClass ?? null,
+            message: record.diagnostic ?? null,
+          })),
+        }
+      : {}),
+  };
+}
+
+/** JSON whose console copy cannot issue a CI workflow command; parsing it recovers the exact text. */
+function consoleJson(text) {
+  return text.replaceAll('::', String.raw`:\u003a`).replaceAll('##[', String.raw`#\u0023[`);
 }
 
 /** The failure message, plus the agent's own last words when it never wrote a required artifact. */
 function failureReason(error) {
-  if (!error.missingArtifacts?.length || !error.agentTail) return error.message;
+  // A parser rejection quotes agent-written text; its CLI-authored form stands in for it outside evidence.
+  const message = error.rejection ?? error.message;
+  if (!error.missingArtifacts?.length || !error.agentTail) return message;
   const { stdout, stderr } = error.agentTail;
   return [
-    error.message.replace(/\.$/, ''),
+    message.replace(/\.$/, ''),
     stdout.trim() ? `agent stdout tail: ${stdout.trim()}` : 'agent stdout was empty',
     ...(stderr.trim() ? [`agent stderr tail: ${stderr.trim()}`] : []),
   ].join('; ');
@@ -320,23 +352,8 @@ function main(argv = process.argv) {
     const failedRun = RUN_FAILURE_CLASSES.includes(error.failureClass);
     result = {
       exitCode: failedRun ? 3 : 2,
-      payload: {
-        schema_version: '0.1.0',
-        status: 'failed',
-        reason: failureReason(error),
-        evidence: error.runDir ?? null,
-        ...(error.attempts
-          ? {
-              attempts: error.attempts.length,
-              attempt_results: error.attempts.map((record) => ({
-                attempt: record.attempt,
-                status: record.status,
-                failure_class: record.failureClass ?? null,
-                message: record.message ?? null,
-              })),
-            }
-          : {}),
-      },
+      payload: failedPayload(failureReason(error), error.runDir ?? null, error.attempts),
+      attemptRecords: error.attempts,
     };
     process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.message)}\n`);
   }
@@ -350,14 +367,14 @@ function main(argv = process.argv) {
     } catch (error) {
       result = {
         exitCode: 2,
-        payload: { schema_version: '0.1.0', status: 'failed', reason: error.message, evidence: result.payload?.evidence ?? null },
+        payload: failedPayload(error.message, result.payload?.evidence ?? null, result.attemptRecords),
       };
       process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.message)}\n`);
     }
     const text = `${JSON.stringify(result.payload, null, 2)}\n`;
     if (options?.json && (result.exitCode !== 2 || outputGuardPassed)) fs.writeFileSync(options.json, text, 'utf8');
     // The saved result keeps exact diagnostics; the console copy cannot issue CI workflow commands.
-    process.stdout.write(neutralizeWorkflowCommands(text));
+    process.stdout.write(consoleJson(text));
   }
   return result.exitCode;
 }

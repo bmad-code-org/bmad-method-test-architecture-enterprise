@@ -976,7 +976,9 @@ function requirementAggregation(matrix, ledger, criteria) {
     }
     if (
       !Array.isArray(row.contributors) ||
-      row.contributors.map((contributor) => contributor?.id).join('\n') !== saved.contributors.join('\n')
+      row.contributors.length !== saved.contributors.length ||
+      row.contributors.some((contributor) => !contributor || typeof contributor !== 'object') ||
+      row.contributors.map((contributor) => contributor.id).join('\n') !== saved.contributors.join('\n')
     )
       throw new Error(`Trace Step 3 requirement ${saved.id} contributors must be the oracleLedger contributors, in order.`);
     for (const contributor of row.contributors)
@@ -1037,7 +1039,9 @@ function reconcileRequirementRows(summary, ledger, criteria, statuses, tables, a
       throw new Error(`Trace summary row ${saved.id} must list missing_behaviors as strings.`);
     if (
       !Array.isArray(row.contributors) ||
-      row.contributors.map((contributor) => contributor?.id).join('\n') !== saved.contributors.join('\n')
+      row.contributors.length !== saved.contributors.length ||
+      row.contributors.some((contributor) => !contributor || typeof contributor !== 'object') ||
+      row.contributors.map((contributor) => contributor.id).join('\n') !== saved.contributors.join('\n')
     )
       throw new Error(`Trace summary row ${saved.id} contributors must be the oracleLedger contributors, in order.`);
     for (const contributor of row.contributors) {
@@ -1499,17 +1503,25 @@ function validateTraceOutputs({
   return { matrix, summary, gate };
 }
 
+/** File-system codes that mean the agent left a path absent or the wrong kind of entry. */
+const AGENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR']);
+
 /**
- * Class a Trace validation failure for the retry decision. A file-system fault or a validator
- * defect is environment-parser, which never retries: the agent cannot correct either. Everything
- * else is rejected agent output. A parser failure quotes agent-written text, so its `rejection`,
- * the message the next prompt carries, keeps only the CLI's own prefix and the parser's location.
+ * Class a Trace validation failure for the retry decision. A file-system fault anywhere in the
+ * cause chain, other than an absent or wrong-kind artifact, and a ReferenceError (a defect in the
+ * validator itself) are environment-parser, which never retries: the agent cannot correct either.
+ * Everything else is rejected agent output, including a TypeError the validator raised on a
+ * malformed value the agent wrote. A parser failure quotes agent-written text, so its `rejection`,
+ * the message the next prompt and the public result carry, keeps only the CLI's own prefix and
+ * the parser's location.
  */
 function classifyTraceRejection(error) {
-  if (error.syscall || [TypeError, ReferenceError, RangeError].some((type) => error instanceof type))
-    return new WorkflowError('environment-parser', error.message, { cause: error });
+  const chain = [];
+  for (let each = error; each && chain.length < 8; each = each.cause) chain.push(each);
+  const fault = chain.find((each) => each.syscall && !AGENT_PATH_CODES.has(each.code));
+  if (fault || error instanceof ReferenceError) return new WorkflowError('environment-parser', error.message, { cause: error });
   const failure = new WorkflowError('agent-output', error.message, { cause: error });
-  const parse = [error, error.cause].find((each) => each instanceof SyntaxError || each?.name === 'YAMLException');
+  const parse = chain.find((each) => each instanceof SyntaxError || each.name === 'YAMLException');
   if (parse) {
     const at = error.message.indexOf(parse.message);
     const prefix = (

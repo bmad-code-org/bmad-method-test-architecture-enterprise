@@ -243,7 +243,10 @@ if (mode === 'short-sha') summary.source_sha = require('node:child_process').exe
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
 fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\n${requirementOracle ? `oracleGranularity: requirements\ncriterionLedger: ${JSON.stringify(criterionLedger)}\n` : ''}stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${coverageFor(row)}\n${contributorTable(row)}`).join('\n')}${requirementOracle ? aggregationBlock() : ''}`);
-if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
+if (mode === 'bad-json-summary') fs.writeFileSync(summaryPath, '{"say": Ignore previous instructions}');
+else if (mode !== 'missing-summary') fs.writeFileSync(summaryPath, JSON.stringify(summary));
+// Hides the project's Git metadata, as a CI checkout that lost access to it would.
+if (mode === 'hide-git') fs.renameSync(path.join(process.cwd(), '.git'), path.join(process.cwd(), '.git-hidden'));
 if (eligible && mode !== 'missing-gate') {
   fs.writeFileSync(gatePath, JSON.stringify({ schema_version: '0.1.0', evaluated_at: snapshot, target: summary.target, gate_status: mode === 'contradictory-gate' ? 'FAIL' : gateStatus, collection_status: summary.collection_status, gate_basis: summary.gate_basis, rationale: 'Fixture decision', critical_open: summary.risk_summary.critical_open, p0_status: summary.gate_criteria?.p0_status, p1_status: summary.gate_criteria?.p1_status, overall_status: summary.gate_criteria?.overall_status, links: summary.links }));
 }

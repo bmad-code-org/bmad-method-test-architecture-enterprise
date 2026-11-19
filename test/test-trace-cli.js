@@ -22,6 +22,7 @@ const {
   publishTraceOutputs,
 } = require('../cli/lib/trace-command');
 const { liveAliasMap, liveReference } = require('../cli/lib/trace-live');
+const { WorkflowError } = require('../cli/lib/workflow-cli');
 
 const cli = path.join(__dirname, '..', 'cli', 'trace.js');
 const agent = path.join(__dirname, 'fixtures', 'trace-cli-agent.js');
@@ -720,7 +721,14 @@ try {
   check('validation failures retry only when the agent can correct them, quoting no parser excerpt', () => {
     const io = Object.assign(new Error('EACCES: permission denied, open matrix.md'), { syscall: 'open', code: 'EACCES' });
     assert.equal(classifyTraceRejection(io).failureClass, 'environment-parser');
-    assert.equal(classifyTraceRejection(new TypeError('cannot read properties of undefined')).failureClass, 'environment-parser');
+    assert.equal(classifyTraceRejection(new ReferenceError('validator is not defined')).failureClass, 'environment-parser');
+    assert.equal(classifyTraceRejection(new TypeError('cannot read properties of null')).failureClass, 'agent-output');
+    const wrapped = new Error('current attempt matrix is unreadable: m.md', {
+      cause: new WorkflowError('usage', 'unreadable', { cause: io }),
+    });
+    assert.equal(classifyTraceRejection(wrapped).failureClass, 'environment-parser');
+    const absent = Object.assign(new Error('ENOENT: no such file or directory, open gate.json'), { syscall: 'open', code: 'ENOENT' });
+    assert.equal(classifyTraceRejection(absent).failureClass, 'agent-output');
     const plain = classifyTraceRejection(new Error('Trace criterion AC-1 table and detail disagree.'));
     assert.equal(plain.failureClass, 'agent-output');
     assert.equal(plain.rejection, undefined);
@@ -1363,6 +1371,10 @@ try {
     const result = run('partial-publication', ['--json', 'result.json']);
     assert.equal(result.status, 2, result.stderr);
     assert.ok(result.payload.evidence);
+    assert.deepEqual(
+      result.payload.attempt_results.map((each) => [each.attempt, each.status]),
+      [[1, 'completed']],
+    );
     assert.ok(!fs.existsSync(json));
     assert.ok(!fs.existsSync(path.join(root, 'artifacts', 'trace', 'traceability-matrix-epic-4.md')));
     fs.rmdirSync(path.join(root, 'artifacts', 'trace', 'e2e-trace-summary-epic-4.json'));
@@ -1541,6 +1553,44 @@ try {
     assert.match(folder.payload.reason, /must name a regular file/);
     assert.doesNotMatch(folder.payload.reason, /agent stdout/);
     assert.equal(recovered.payload.attempts, 2);
+  });
+  check('a missing gate and malformed JSON retry as agent output, and public records quote no excerpt', () => {
+    const gate = run('missing-gate', ['--retries', '1']);
+    assert.equal(gate.status, 3, gate.stderr);
+    assert.deepEqual(
+      gate.payload.attempt_results.map((each) => each.failure_class),
+      ['agent-output', 'agent-output'],
+    );
+    const json = run('bad-json-summary', ['--retries', '1']);
+    assert.equal(json.status, 3, json.stderr);
+    assert.equal(json.payload.attempts, 2);
+    for (const record of json.payload.attempt_results) assert.match(record.message, /e2e-trace-summary-epic-4\.json is not valid JSON\.$/);
+    assert.doesNotMatch(json.payload.reason, /Ignore previous instructions/);
+    assert.match(json.payload.reason, /is not valid JSON\.$/);
+    const raw = JSON.parse(fs.readFileSync(path.join(json.payload.evidence, 'attempt-1', 'attempt.json'), 'utf8'));
+    assert.match(raw.message, /Unexpected token/);
+  });
+  check('console JSON escapes workflow command markers and parses back to exact paths', () => {
+    const result = run('pass', ['--output-dir', 'reports::2026']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(!result.stdout.includes('::'), 'no raw command marker on the console');
+    assert.match(result.payload.artifacts.matrix, /reports::2026\/trace\/traceability-matrix-epic-4\.md$/);
+    fs.rmSync(path.join(root, 'reports::2026'), { recursive: true, force: true });
+  });
+  check('a project that loses its Git metadata mid-run cannot pass on a matching CI revision', () => {
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const previous = process.env.GITHUB_SHA;
+    process.env.GITHUB_SHA = head;
+    try {
+      const result = run('hide-git', ['--retries', '2']);
+      assert.equal(result.status, 3, result.stderr);
+      assert.match(result.payload.reason, /source revision changed during the run/);
+      assert.equal(result.payload.attempts, 1);
+    } finally {
+      if (previous === undefined) delete process.env.GITHUB_SHA;
+      else process.env.GITHUB_SHA = previous;
+      if (fs.existsSync(path.join(root, '.git-hidden'))) fs.renameSync(path.join(root, '.git-hidden'), path.join(root, '.git'));
+    }
   });
   check('a target without a criteria table freezes no empty ledger', () => {
     fs.writeFileSync(path.join(root, 'docs', 'bullet-sources.md'), '# Export\n\nSources:\n\n- the export API\n- the admin guide\n');
@@ -2459,6 +2509,15 @@ try {
         'summary row drops a contributor',
         (value) => summaryRow(value, 'shop--e1--R2').contributors.pop(),
         /summary row shop--e1--R2 contributors must be the oracleLedger contributors/,
+      ],
+      [
+        'a contributorless requirement lists a null contributor',
+        (value) => {
+          const rows = value.summary.oracle.rows.filter((row) => row.kind === 'requirement' && row.contributors.length === 0);
+          assert.ok(rows.length > 0, 'the fixture has a contributorless requirement');
+          for (const row of rows) row.contributors = [null];
+        },
+        /summary row shop--e1--R\d+ contributors must be the oracleLedger contributors/,
       ],
       [
         'matrix contributor table disagrees',

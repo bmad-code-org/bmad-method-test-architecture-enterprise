@@ -35,15 +35,14 @@ function streamTail(text) {
 /** Characters of a rejection message handed to the next attempt. */
 const REJECTION_CHARS = 300;
 /**
- * A rejection message safe to hand the next attempt: its first line only, so a parser's quoted
- * snippet of agent-written text never reaches the prompt, with the rejected attempt's own
- * directory named generically, control characters removed, and a fixed length cap.
+ * A failure message safe to repeat outside local evidence: its first line only, so a parser's
+ * quoted snippet of agent-written text never travels, control characters removed, and a fixed
+ * length cap. Given attemptDir, the rejected attempt's own directory is named generically, for a
+ * prompt that must not send the next attempt back into it.
  */
 function rejectionSummary(message, attemptDir) {
   const firstLine = String(message ?? '').split(/[\n\r\u2028\u2029]/, 1)[0];
-  const text = firstLine
-    .split(attemptDir)
-    .join('<rejected attempt directory>')
+  const text = (attemptDir ? firstLine.split(attemptDir).join('<rejected attempt directory>') : firstLine)
     .replaceAll(/[\p{Cc}\p{Cf}]/gu, ' ')
     .trim();
   return text.length > REJECTION_CHARS ? `${text.slice(0, REJECTION_CHARS - 3)}...` : text;
@@ -255,6 +254,8 @@ function runWithEvidence({
       elapsedMs: Date.now() - started,
       status: failure ? 'failed' : invocation.agent === 'none' ? 'prompt-only' : 'completed',
       ...failure,
+      // The bounded message a public result may repeat; the raw one stays in this local record.
+      diagnostic: failure ? rejectionSummary(lastError.rejection ?? failure.message) : undefined,
       // Undefined on success or silence, so JSON records omit it.
       agentTail: failure && (stdout || stderr) ? { stdout: streamTail(stdout), stderr: streamTail(stderr) } : undefined,
       ...(context?.prompt ? { promptSha256: crypto.createHash('sha256').update(context.prompt).digest('hex') } : {}),
