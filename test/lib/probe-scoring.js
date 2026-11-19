@@ -1807,6 +1807,9 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
     policy,
     privateManifest: null,
     corpusDigest,
+    // eval-quality 10.0.0 reads the scoring instant a contract waiver's expiry is tested against through this port; the CLI wires
+    // the same system-clock adapter.
+    clock: (await import('eval-quality/adapters')).createSystemClockAdapter(),
     signal,
   });
 
