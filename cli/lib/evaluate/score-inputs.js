@@ -35,6 +35,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { loadAdapters } = require('./engine');
 const { BEHAVIOR_ID, named, oraclesListed, sameOracles } = require('./partition');
 
 /** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
@@ -356,6 +357,10 @@ class HeldInputs {
         corpusDigest: this.index.corpusDigest,
         ...(oracleId === null ? {} : { designatedOracleId: oracleId }),
         port: undefined,
+        // The CLI reads the scoring instant a contract waiver's `expiresAt` is tested against from the system clock
+        // (eval-quality 10.0.0), so the re-score reads the same clock through the same adapter. A waiver that expires
+        // between the call's read and this one makes the two disagree, and the caller refuses the call.
+        clock: (await loadAdapters()).createSystemClockAdapter(),
         signal: new AbortController().signal,
       });
       const lines = qualification.failures.map(

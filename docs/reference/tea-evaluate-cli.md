@@ -39,7 +39,7 @@ Four companion reference pages hold the detail behind the commands, and a link t
 
 - Node.js 22.20 or later, with TEA installed in the evaluations folder (the `evaluations_folder` setting in `_bmad/custom/bmad-tea-evaluate.toml`, `evals` by default and in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` and `tea-skill-runner` bins.
   The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...` and `npm exec --prefix evals -- tea-skill-runner ...`, run from the project root.
-- `eval-quality` 8.0.0 or later, a devDependency of the same private `package.json`.
+- `eval-quality` 10.0.0 or later, a devDependency of the same private `package.json`.
   TEA declares it as an optional peer dependency, so a project that installs TEA only for its other skills never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 

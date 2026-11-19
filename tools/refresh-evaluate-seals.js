@@ -92,6 +92,7 @@ async function main() {
     if (hadPrevious) fs.renameSync(retired, destination);
     throw error;
   }
+  if (hadPrevious) fs.rmSync(retired, { recursive: true });
   console.log(`generated ${generated.size} engine ${engine.VERSION} seals for ${originals.length} immutable captures`);
 }
 
