@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-19
+
 ### Changed
 
 - TeA adopts eval-quality 10.0.0. The `eval-quality` peer floor moves from 8.0.0 to 10.0.0 in `package.json`, the lockfile and the publish guard. 10.0.0 applies a contract's waivers to its coverage gaps: a waived gap stays in the evidence artifact with the waiver's id in a new required `waiverId`, and leaves the CONCERNS verdict. Evidence artifacts move to schema version 5, and an older engine cannot read them. TeA's contracts declare no waiver, so every gap keeps `waiverId: null` and every verdict is unchanged.
