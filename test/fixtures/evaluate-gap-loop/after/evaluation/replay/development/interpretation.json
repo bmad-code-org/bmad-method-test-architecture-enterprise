@@ -4,7 +4,7 @@
     "status": "copied",
     "reason": null,
     "path": "runs/20261004T200734374Z-09e17fd9/scores/20261004T200806345Z-dca429e4/strength-aggregate.json",
-    "digest": "sha256:728dd0d94ba556719fac674e2cc5c48b4fabfc37e044fcb4929e6116c5d8f20a",
+    "digest": "sha256:45c191e5a27e5b39bb0a9b024c509d158a0c36adda9a81ee7c8bf4fe72c1f3d9",
     "floors": "runs/20261004T200734374Z-09e17fd9/scores/20261004T200806345Z-dca429e4/strength-floors.json",
     "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
   },

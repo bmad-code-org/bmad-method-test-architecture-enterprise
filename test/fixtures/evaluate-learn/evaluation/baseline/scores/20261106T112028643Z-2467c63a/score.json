@@ -53,16 +53,16 @@
     "exitCode": 0,
     "call": "runs/20261009T005612271Z-9e44caff/scores/20261106T112028643Z-2467c63a/aggregate-strength.json",
     "aggregate": "runs/20261009T005612271Z-9e44caff/scores/20261106T112028643Z-2467c63a/strength-aggregate.json",
-    "aggregateDigest": "sha256:4188e6aaadd744ef6a892233b1f7bd7e2081da32d437e51c3f90377537b13377",
+    "aggregateDigest": "sha256:3d9da468f82682195d8a7090c0ae3deec1b1fa0232108a258f3b1bbc3542da50",
     "floors": "runs/20261009T005612271Z-9e44caff/scores/20261106T112028643Z-2467c63a/strength-floors.json",
     "floorsDigest": "sha256:d73acf92f4a82da6c73c44f8f99504bdf7feeddafca72ada3d503d812b04d728",
     "evidenceDigests": {
-      "P-001": "sha256:88c24024efc9cc3542ce79c324763c41408fee5b4a6b139141a88ba0999edd53",
-      "P-004": "sha256:19fe7a48ff8796f206947dd206509b2b0a41a6ca2073defffb6782726d4d33bb",
-      "P-002": "sha256:abd492f08547aa4c49181550e4169fa5b9575a38eb551090216901f27fa2de65",
-      "P-003": "sha256:d75e8f84c951f080e50fbce9350aa89ad5a10b2efd8bcbb8bd1a0e984bd3e8ad",
-      "P-005": "sha256:e3302c3fceeb15bc23a9c9ce461e208f85397d4937c4b7ab2e181058c8208b7a",
-      "P-006": "sha256:c4e5a9cbc336df2cf1bac8f82a01480e2ab2d7140e363b0df67081881e6db118"
+      "P-001": "sha256:412aca31f738c6726dbac4f7fffaafa6c0ca81c45028148e7a8d37507bdf31ec",
+      "P-004": "sha256:9c5cf13ab84bb7bf9e1e4e53b5bb70f982eb71c104085da2719986b21c415eed",
+      "P-002": "sha256:a22a708e75518a81a122d8d77b34bf341591e75defe2f2829e5d001b940c3bba",
+      "P-003": "sha256:47bfbfed76bfd4da2bed48f160743297cb3fff3cddc49527172a98277fbd5e24",
+      "P-005": "sha256:809dcbe26039046a9428815a29bd88d13f95fbd4a8a67a832f1993288d131203",
+      "P-006": "sha256:1f58f69a3ce758fa7cab0e346c3561cdb79478c95c99a1a8b173205b2d4738db"
     }
   },
   "refused": [],

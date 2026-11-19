@@ -25,12 +25,12 @@
     "exitCode": 0,
     "call": "runs/20261009T005647810Z-30949961/scores/20261106T112017305Z-e8609c91/aggregate-strength.json",
     "aggregate": "runs/20261009T005647810Z-30949961/scores/20261106T112017305Z-e8609c91/strength-aggregate.json",
-    "aggregateDigest": "sha256:f352affb9e67a5509790d8a4689d4b94d2cfa96efb0991087d84b392d437e033",
+    "aggregateDigest": "sha256:726d8f0983d5481c4bb957e0fb1815af3e819ab08b0c92ac445f4c1a11f1adb0",
     "floors": "runs/20261009T005647810Z-30949961/scores/20261106T112017305Z-e8609c91/strength-floors.json",
     "floorsDigest": "sha256:d73acf92f4a82da6c73c44f8f99504bdf7feeddafca72ada3d503d812b04d728",
     "evidenceDigests": {
-      "P-001": "sha256:d38d96bba7fc12698a11435d171acabc51544fd06ed34d4e693c6ebb24ce2a75",
-      "P-002": "sha256:6e7a97211baeca7d2a4604b4a6683c5b40eb6db83c58b905f62863fcd11e251f"
+      "P-001": "sha256:b46c4a51b787460e3482d5ff3b3f18c2cdbdfe7158804c15711f97253c5b6061",
+      "P-002": "sha256:e8ec891b4fac3af52565c6a92cc12b5fcc08ca0edc99bd1abd86f8482511fe46"
     }
   },
   "refused": [],

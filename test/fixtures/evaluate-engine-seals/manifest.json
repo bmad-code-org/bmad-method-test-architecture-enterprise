@@ -1,7 +1,7 @@
 {
   "command": "node tools/refresh-evaluate-seals.js --source 0b1363c82b63a86ae57a0a265171c66810aedf5a",
   "sourceCommit": "0b1363c82b63a86ae57a0a265171c66810aedf5a",
-  "engineVersion": "9.0.0",
+  "engineVersion": "10.0.0",
   "purpose": "Current-engine seal expectations; original captured evidence remains immutable.",
   "allowedChange": "Evaluator direction wording only; contract and every other sealed field unchanged.",
   "files": {

@@ -25,12 +25,12 @@
     "exitCode": 0,
     "call": "runs/20261009T005326769Z-7152b40f/scores/20261106T112031399Z-f5e2936e/aggregate-strength.json",
     "aggregate": "runs/20261009T005326769Z-7152b40f/scores/20261106T112031399Z-f5e2936e/strength-aggregate.json",
-    "aggregateDigest": "sha256:33037b4984d698217216bd12fa109750d71fa4939c32c83530b4a3503504ad48",
+    "aggregateDigest": "sha256:a021629534a7dd8497aa0aae98aa5622f9bb1a3f573922b8c8fb60071eae6e67",
     "floors": "runs/20261009T005326769Z-7152b40f/scores/20261106T112031399Z-f5e2936e/strength-floors.json",
     "floorsDigest": "sha256:d73acf92f4a82da6c73c44f8f99504bdf7feeddafca72ada3d503d812b04d728",
     "evidenceDigests": {
-      "P-001": "sha256:2a0d7d18ec2df1f4ba9ee1b73ddc186ea9b2fa0fd52071cebd5ff9164bac9e85",
-      "P-002": "sha256:70e6eb766f14d71345dc3778e6c6861e9fd3c29290df135647002a0322372759"
+      "P-001": "sha256:2bd4cfc4c5ab8e12b9b17edb948fbd8214aaf856697486b5aadbbd1bd2936618",
+      "P-002": "sha256:c326356d664e8432e753d3df6876caea6366580674b966d461ebb0aff228ddf3"
     }
   },
   "refused": [],
