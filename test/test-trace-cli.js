@@ -729,6 +729,8 @@ try {
     assert.equal(classifyTraceRejection(wrapped).failureClass, 'environment-parser');
     const absent = Object.assign(new Error('ENOENT: no such file or directory, open gate.json'), { syscall: 'open', code: 'ENOENT' });
     assert.equal(classifyTraceRejection(absent).failureClass, 'agent-output');
+    const loop = Object.assign(new Error('ELOOP: too many symbolic links, realpath matrix.md'), { syscall: 'realpath', code: 'ELOOP' });
+    assert.equal(classifyTraceRejection(new Error('unreadable', { cause: loop })).failureClass, 'agent-output');
     const plain = classifyTraceRejection(new Error('Trace criterion AC-1 table and detail disagree.'));
     assert.equal(plain.failureClass, 'agent-output');
     assert.equal(plain.rejection, undefined);
@@ -1547,7 +1549,9 @@ try {
     const forged = run('workflow-command-output', ['--json', 'result.json']);
     assert.equal(forged.status, 3, forged.stderr);
     assert.ok(!forged.stdout.includes('::error::'), 'the console copy neutralizes workflow commands');
-    assert.match(JSON.parse(fs.readFileSync(path.join(root, 'result.json'), 'utf8')).reason, /::error::forged annotation/);
+    const saved = JSON.parse(fs.readFileSync(path.join(root, 'result.json'), 'utf8')).reason;
+    assert.match(saved, /::error::forged annotation/);
+    assert.equal(forged.payload.reason, saved, 'the console JSON parses back to the exact diagnostic');
     const folder = run('matrix-directory');
     assert.equal(folder.status, 3, folder.stderr);
     assert.match(folder.payload.reason, /must name a regular file/);
@@ -1566,16 +1570,20 @@ try {
     assert.equal(json.payload.attempts, 2);
     for (const record of json.payload.attempt_results) assert.match(record.message, /e2e-trace-summary-epic-4\.json is not valid JSON\.$/);
     assert.doesNotMatch(json.payload.reason, /Ignore previous instructions/);
+    assert.doesNotMatch(json.stderr, /Ignore previous instructions/);
     assert.match(json.payload.reason, /is not valid JSON\.$/);
     const raw = JSON.parse(fs.readFileSync(path.join(json.payload.evidence, 'attempt-1', 'attempt.json'), 'utf8'));
     assert.match(raw.message, /Unexpected token/);
   });
   check('console JSON escapes workflow command markers and parses back to exact paths', () => {
-    const result = run('pass', ['--output-dir', 'reports::2026']);
+    const result = run('pass', ['--output-dir', 'reports##[2026']);
     assert.equal(result.status, 0, result.stderr);
-    assert.ok(!result.stdout.includes('::'), 'no raw command marker on the console');
-    assert.match(result.payload.artifacts.matrix, /reports::2026\/trace\/traceability-matrix-epic-4\.md$/);
-    fs.rmSync(path.join(root, 'reports::2026'), { recursive: true, force: true });
+    assert.ok(!result.stdout.includes('##['), 'no raw command marker on the console');
+    assert.equal(
+      result.payload.artifacts.matrix,
+      path.join(fs.realpathSync(root), 'reports##[2026', 'trace', 'traceability-matrix-epic-4.md'),
+    );
+    fs.rmSync(path.join(root, 'reports##[2026'), { recursive: true, force: true });
   });
   check('a project that loses its Git metadata mid-run cannot pass on a matching CI revision', () => {
     const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();

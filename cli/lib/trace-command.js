@@ -1503,12 +1503,12 @@ function validateTraceOutputs({
   return { matrix, summary, gate };
 }
 
-/** File-system codes that mean the agent left a path absent or the wrong kind of entry. */
-const AGENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR']);
+/** File-system codes that mean the agent left a path absent, the wrong kind of entry, or a link loop. */
+const AGENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR', 'ELOOP']);
 
 /**
  * Class a Trace validation failure for the retry decision. A file-system fault anywhere in the
- * cause chain, other than an absent or wrong-kind artifact, and a ReferenceError (a defect in the
+ * cause chain, other than an absent, wrong-kind or looping artifact, and a ReferenceError (a defect in the
  * validator itself) are environment-parser, which never retries: the agent cannot correct either.
  * Everything else is rejected agent output, including a TypeError the validator raised on a
  * malformed value the agent wrote. A parser failure quotes agent-written text, so its `rejection`,

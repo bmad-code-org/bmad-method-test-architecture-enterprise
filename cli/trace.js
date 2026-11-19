@@ -116,14 +116,16 @@ function execute(options, registerOutputGuard = () => {}) {
     if (!stat.isFile()) throw new Error(`Trace input must be a regular file: ${file}`);
     return { file, real: fs.realpathSync(file), mode: stat.mode, dev: stat.dev, ino: stat.ino, bytes: fs.readFileSync(file) };
   });
+  // One revision snapshot serves live evidence and every integrity check. Git's own HEAD wins when
+  // it resolves, so a lost .git can never pass by matching a CI fallback revision.
+  const startGitHead = gitHead(projectRoot);
+  const startRevision = startGitHead || currentSourceSha(projectRoot);
   const liveCapture = captureLiveResults(
     liveResults,
     projectRoot,
     levels.includes('live') || options.collectionMode === 'runtime_manifest',
+    startRevision,
   );
-  // Git's own HEAD when it resolves one, so a lost .git can never pass by matching a CI fallback revision.
-  const startGitHead = gitHead(projectRoot);
-  const startRevision = liveCapture ? liveCapture.currentSha : currentSourceSha(projectRoot);
   // A moved revision or a changed input compromises the run itself; no retry can repair either.
   const assertRunIntegrity = () => {
     if (startGitHead ? gitHead(projectRoot) !== startGitHead : currentSourceSha(projectRoot) !== startRevision)
@@ -355,7 +357,8 @@ function main(argv = process.argv) {
       payload: failedPayload(failureReason(error), error.runDir ?? null, error.attempts),
       attemptRecords: error.attempts,
     };
-    process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.message)}\n`);
+    // A parser rejection's raw message quotes agent-written text; attempt.json keeps it.
+    process.stderr.write(`${NAME}: ${neutralizeWorkflowCommands(error.rejection ?? error.message)}\n`);
   }
   if (result.prompt) {
     process.stdout.write(`${result.prompt}\n`);

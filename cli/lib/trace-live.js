@@ -35,8 +35,11 @@ function currentSourceSha(projectRoot) {
   return git(projectRoot, 'rev-parse', '--is-inside-work-tree').status === 0 ? '' : normalizedSha(process.env.GITHUB_SHA);
 }
 
-/** Hold the original manifest before the vendor runs. Invalid evidence stays unreadable. */
-function captureLiveResults(file, projectRoot, enabled) {
+/**
+ * Hold the original manifest before the vendor runs. Invalid evidence stays unreadable. Pass
+ * currentSha when the caller already sampled the revision, so every check reuses one snapshot.
+ */
+function captureLiveResults(file, projectRoot, enabled, currentSha = currentSourceSha(projectRoot)) {
   if (!enabled || !fs.existsSync(file)) return;
   let manifest;
   try {
@@ -52,7 +55,7 @@ function captureLiveResults(file, projectRoot, enabled) {
   } catch {
     manifest = null;
   }
-  return { manifest, currentSha: currentSourceSha(projectRoot) };
+  return { manifest, currentSha };
 }
 
 /** Fail when HEAD moved since capture; pass head when the caller already read it. */
