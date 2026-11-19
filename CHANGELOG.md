@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-11-19
+
 ### Changed
 
 - TeA adopts eval-quality 10.1.0. The `eval-quality` peer floor moves from 10.0.0 to 10.1.0 in `package.json`, the lockfile and the publish guard: 10.1.0 adds `score --scored-at` and the `createFixedClockAdapter` clock, which TeA now relies on. An older engine is reported unavailable before any call.
