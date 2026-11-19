@@ -269,8 +269,8 @@ function execute(options, registerOutputGuard = () => {}) {
   try {
     assertOutputPaths();
     assertRunIntegrity();
-    // Only Git's own full object ID may replace an abbreviation; a CI fallback revision never does.
-    const value = { ...result.value, summary: withFullSourceSha(result.value.summary, gitHead(projectRoot)) };
+    // Only the verified start snapshot of Git's own HEAD may replace an abbreviation; a CI fallback never does.
+    const value = { ...result.value, summary: withFullSourceSha(result.value.summary, startGitHead) };
     summary = publishTraceOutputs(value, destinations);
   } catch (error) {
     error.runDir = result.runDir;
