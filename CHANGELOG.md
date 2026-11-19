@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `tea-trace --retries` now also retries rejected agent output: a missing matrix or summary, or one that fails validation. Each retry runs in a fresh attempt directory, and its prompt starts with the previous rejection message. A changed input, a moved Git revision, and invalid invocations still stop after one attempt, and an exhausted budget still exits 3.
+- 4.0.1 changed Trace's coverage `pct` check from rounding to the integer floor of `covered * 100 / total` (100 for an empty bucket) in a patch release. That was a contract change: a caller that rounded started failing validation. The Trace prompt now states the rule, and the prompt and the validator share one function.
+
+### Fixed
+
+- `tea-trace` no longer hands the agent `Frozen source oracle ledger: []` when the target has no criteria table. It asks the agent to build a nonempty ledger instead, so an agent that obeyed the prompt no longer fails with `oracleLedger must be a nonempty array`.
+- A failed workflow attempt keeps the last 2 KB of the agent's standard output and error in `attempt.json` as `agentTail`. When the Trace agent writes no matrix or summary, the failed result's `reason` quotes that tail.
+- `tea-trace` publishes the full project HEAD when the agent's summary abbreviates `source_sha`.
+
 ## [4.0.2] - 2026-11-17
 
 ### Changed

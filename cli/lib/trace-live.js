@@ -136,4 +136,4 @@ function liveReference(capture, aliases) {
   };
 }
 
-module.exports = { captureLiveResults, assertLiveSourceRevision, liveAliasMap, liveReference, localId };
+module.exports = { currentSourceSha, captureLiveResults, assertLiveSourceRevision, liveAliasMap, liveReference, localId };

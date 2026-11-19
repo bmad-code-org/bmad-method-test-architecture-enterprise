@@ -14,7 +14,8 @@ const matrixPath = capture(`Resolve \\{outputFile\\} and \\{default_output_file\
 const summaryPath = capture(`\\{e2e_trace_summary_output\\} to (${quoted})`);
 const gatePath = capture(`\\{gate_decision_output\\} to (${quoted})`);
 const identity = JSON.parse(prompt.match(/Resolved identity: (\{.*\})\. Preserve/)[1]);
-const sourceLedger = JSON.parse(prompt.match(/Frozen source oracle ledger: (\[.*\])\. Preserve/)[1]);
+// Without a frozen ledger the prompt asks the agent to build one; this agent builds the example row.
+const sourceLedger = JSON.parse(prompt.match(/Frozen source oracle ledger: (\[.*\])\. Preserve/)?.[1] ?? '[]');
 let ledger = (sourceLedger.length ? sourceLedger : [{id: 'AC-1', requirement: 'Example', priority: 'P0', source: 'caller'}]).map(row => ({...row, priority: row.priority ?? 'P0'}));
 if (mode === 'missing-source-criterion') ledger = ledger.slice(0, 1);
 if (mode === 'source-text-drift') ledger[0].requirement = 'Example';
@@ -51,6 +52,12 @@ if (mode === 'retry' && attempt === 1) {
   process.exit(1);
 }
 if (mode === 'fail-agent') process.exit(1);
+// Exits cleanly after explaining itself, without writing the matrix or summary.
+if (mode === 'missing-matrix' || (mode === 'missing-matrix-once' && attempt === 1)) {
+  process.stdout.write('I could not find the requirements document, so I stopped before Step 1.\n');
+  process.stderr.write('agent warning: no criteria\n');
+  process.exit(0);
+}
 let gateStatus = mode === 'gap' ? 'FAIL' : ['concerns', 'fresh-failure-concerns', 'manifest-concerns'].includes(mode) ? 'CONCERNS' : 'PASS';
 const pct = ['gap', 'wrong-verdict'].includes(mode) ? 0 : 100;
 const inventory = { total: ledger.length, covered: pct === 0 ? 0 : ledger.length, pct };
@@ -213,6 +220,7 @@ if (mode === 'bad-collection') summary.collection_status = 'UNKNOWN';
 if (mode === 'automated-waiver') summary.gate_status = 'WAIVED';
 if (mode === 'missing-criteria') delete summary.gate_criteria;
 if (mode === 'summary-requirements-granularity') summary.oracle.granularity = 'requirements';
+if (mode === 'short-sha') summary.source_sha = require('node:child_process').execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { encoding: 'utf8' }).trim();
 fs.mkdirSync(path.dirname(matrixPath), { recursive: true });
 const progress = mode === 'incomplete' ? 'in-progress' : 'completed';
 fs.writeFileSync(matrixPath, `---\nrunKey: ${identity.runKey}\nrunScope: ${identity.runScope}\nworkflowStatus: ${progress}\nlastStep: step-05-gate-decision\noracleLedger: ${JSON.stringify(ledger)}\n${requirementOracle ? `oracleGranularity: requirements\ncriterionLedger: ${JSON.stringify(criterionLedger)}\n` : ''}stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-map-criteria, step-04-analyze-gaps, step-05-gate-decision]\n---\n\n# Trace\n\n${ledger.map(row => `### ${mode === 'matrix-priority-heading' ? `${row.id} (${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-compact-priority-heading' ? `${row.id}(${row.priority}): ${row.requirement.replaceAll(/\s+/g, ' ')}` : mode === 'matrix-trailing-priority' ? `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')}` : `${row.id}: ${row.requirement.replaceAll(/\s+/g, ' ')} (${row.priority})`}\n\n- **Coverage:** ${coverageFor(row)}\n${contributorTable(row)}`).join('\n')}${requirementOracle ? aggregationBlock() : ''}`);
@@ -240,6 +248,9 @@ if (mode === 'late-artifact-pair') {
   fs.writeFileSync(published, '# Agent-created matrix sentinel');
   fs.linkSync(published, path.join(path.dirname(published), path.basename(summaryPath)));
 }
+// Obeys a frozen empty ledger literally on its first attempt, or always for the exhausted-budget case.
+if ((mode === 'empty-ledger-once' && attempt === 1) || mode === 'empty-ledger-always')
+  fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(/^oracleLedger:.*$/m, 'oracleLedger: []'));
 if (mode === 'matrix-contradiction') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace('FULL', 'NONE'));
 if (mode === 'matrix-missing-priority') fs.writeFileSync(matrixPath, fs.readFileSync(matrixPath, 'utf8').replace(' (P0)', ''));
 if (mode === 'matrix-duplicate') fs.appendFileSync(matrixPath, '\n### AC-1: Duplicate (P0)\n\n- **Coverage:** FULL\n');

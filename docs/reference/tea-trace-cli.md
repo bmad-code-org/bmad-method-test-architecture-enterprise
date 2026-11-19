@@ -55,15 +55,15 @@ Existing Test Design and NFR documents are read from the same artifact root.
 Choose `codex`, `claude`, `agy`, `custom`, or `none`.
 A live run uses the agent CLI's existing session; [Test Review CLI prerequisites](/docs/reference/tea-test-review-cli.md#prerequisites) describe agent setup.
 
-| Option                | Meaning                                                                  |
-| --------------------- | ------------------------------------------------------------------------ |
-| `--model <name>`      | Model override; not accepted with `custom` or `none`.                    |
-| `--agent-cmd <path>`  | Override the executable; required for `custom`.                          |
-| `--agent-arg <arg>`   | Pass an extra agent argument. Repeat as needed.                          |
-| `--env-pass <NAME>`   | Pass an environment variable. Repeat as needed.                          |
-| `--timeout-ms <n>`    | Timeout per attempt, default `1200000`.                                  |
-| `--retries <n>`       | Additional transport or timeout attempts, default `1`, maximum `3`.      |
-| `--skill-root <path>` | Use an explicit Trace skill directory with sibling `bmod-tea/knowledge`. |
+| Option                | Meaning                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--model <name>`      | Model override; not accepted with `custom` or `none`.                                                   |
+| `--agent-cmd <path>`  | Override the executable; required for `custom`.                                                         |
+| `--agent-arg <arg>`   | Pass an extra agent argument. Repeat as needed.                                                         |
+| `--env-pass <NAME>`   | Pass an environment variable. Repeat as needed.                                                         |
+| `--timeout-ms <n>`    | Timeout per attempt, default `1200000`.                                                                 |
+| `--retries <n>`       | Additional attempts after a transport failure, a timeout, or rejected output, default `1`, maximum `3`. |
+| `--skill-root <path>` | Use an explicit Trace skill directory with sibling `bmod-tea/knowledge`.                                |
 
 Claude and Codex default to an adapter model and Agy to its session model. A `custom` runner takes its model via `--agent-arg` ([details](/docs/reference/tea-test-review-cli.md#which-model-does-the-reviewing)).
 
@@ -71,6 +71,19 @@ Claude and Codex default to an adapter model and Agy to its session model. A `cu
 Each retry uses a fresh attempt directory.
 Reports must be independent files inside that attempt; links to old or external reports fail validation.
 Invalid or incomplete output retains diagnostic evidence.
+
+A retry also follows rejected output: a missing matrix or summary, or one that fails validation.
+The next attempt's prompt starts with the rejection message, so the agent knows what to correct.
+A changed input file, a moved Git revision, or an invalid invocation stops the run without a retry.
+Each failed attempt's `attempt.json` keeps the last 2 KB of the agent's standard output and error as `agentTail`.
+When the agent writes no matrix or summary, the failed result's `reason` quotes that tail too.
+
+When the target has no criteria table or `AC-`, `FR-`, `NFR-` or `REQ-` claims, the CLI freezes no oracle ledger.
+The prompt then asks the agent to build a nonempty ledger from the source documents, or from the selected tests for a synthetic oracle.
+
+Every coverage `pct` is the integer floor of `covered * 100 / total`, and `100` for an empty bucket.
+The prompt states this rule, and validation applies the same function.
+A summary whose `source_sha` is an abbreviation of the project's Git HEAD publishes with the full SHA.
 
 ## Outputs and exit codes
 
@@ -92,7 +105,7 @@ The result prints artifact and evidence paths to standard output.
 | `0`  | PASS, accepted CONCERNS, coverage without a gate, or prompt inspection.                               |
 | `1`  | FAIL, or CONCERNS with `--fail-on concerns`.                                                          |
 | `2`  | Invalid configuration, input, unavailable agent, rejected output path, or report publication failure. |
-| `3`  | Agent execution failed or current artifacts failed validation.                                        |
+| `3`  | Agent execution failed, or the last attempt's artifacts failed validation after every retry.          |
 
 Before the agent runs, the CLI snapshots supplied inputs and the consuming Git revision.
 It checks input bytes, identity, permissions, and paths again before publication.

@@ -5,9 +5,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 const { resolveTeaConfig } = require('./lib/resolve-tea-config');
-const { captureLiveResults, assertLiveSourceRevision } = require('./lib/trace-live');
-const { addAgentOptions, projectPath, readInput, resolveWorkflowSkill, headlessPrompt, runWithEvidence } = require('./lib/workflow-cli');
+const { captureLiveResults, assertLiveSourceRevision, currentSourceSha } = require('./lib/trace-live');
 const {
+  WorkflowError,
+  RUN_FAILURE_CLASSES,
+  addAgentOptions,
+  projectPath,
+  readInput,
+  resolveWorkflowSkill,
+  headlessPrompt,
+  runWithEvidence,
+} = require('./lib/workflow-cli');
+const {
+  PCT_RULE,
   sourceOracleLedger,
   epicTicketSources,
   requirementOracle,
@@ -16,6 +26,7 @@ const {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  withFullSourceSha,
   publishTraceOutputs,
 } = require('./lib/trace-command');
 
@@ -23,7 +34,9 @@ const NAME = 'tea-trace';
 
 function parser() {
   const command = new Command().name(NAME).description('Trace requirements to existing tests and emit a coverage gate.');
-  addAgentOptions(command);
+  addAgentOptions(command, {
+    retryHelp: 'additional attempts after a transport failure, a timeout, or rejected agent output, from 0 to 3',
+  });
   return command
     .option('--project-root <path>', 'consuming project root', process.cwd())
     .option('--target <path>', 'story, epic, or requirements document, relative to project root')
@@ -134,15 +147,29 @@ function execute(options, registerOutputGuard = () => {}) {
     projectRoot,
     evidenceRoot: options.evidenceDir,
     options,
-    prepare({ attemptDir }) {
+    prepare({ attemptDir, previousFailure }) {
       const paths = tracePaths(attemptDir, target.runKey);
+      // An empty frozen ledger would tell the agent to preserve nothing, which the validator rejects.
+      const ledgerLines =
+        oracleLedger.length > 0
+          ? [
+              `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
+            ]
+          : [
+              'No source oracle ledger is frozen for this run. Build the Step 1 oracleLedger from the source documents, or from the selected tests for a synthetic oracle. It must contain at least one entry.',
+            ];
+      const retryLines =
+        previousFailure?.failureClass === 'agent-output'
+          ? [`The previous attempt was rejected: ${previousFailure.message.replace(/\.?$/, '.')} Correct it in this attempt.`]
+          : [];
       const prompt = headlessPrompt({
         skillRoot,
         projectRoot,
         resolvedConfig,
         requestLines: [
           'Execute both trace phases, finishing Step 5. Use deterministic gate decisions.',
-          `Frozen source oracle ledger: ${JSON.stringify(oracleLedger)}. Preserve its requirement text, source references, identities, and explicit priorities in Step 1 and the final matrix.`,
+          ...retryLines,
+          ...ledgerLines,
           'Persist Step 1 oracleLedger in matrix YAML frontmatter as an array of {id, requirement, priority, source} records. Assign priorities only where the source leaves them unspecified.',
           ...requirementLines,
           `The only trace target for this run is ${target.document ? JSON.stringify(target.document) : `the project (${target.runScope})`}.`,
@@ -154,6 +181,7 @@ function execute(options, registerOutputGuard = () => {}) {
           `Resolve {live_results_input} to ${JSON.stringify(liveResults)} and {waiver_register_input} to ${JSON.stringify(waiverRegister)}. These are inputs in the original project artifact root.`,
           `Resolve {collection_mode} to ${JSON.stringify(options.collectionMode)}, {coverage_levels} to ${JSON.stringify([...new Set(levels)].join(','))}, {allow_gate} to ${allowGate}, and {decision_mode} to "deterministic".`,
           'Resolve {coverage_basis} and {summary_confidence} to auto, then persist the concrete values selected by Step 1.',
+          PCT_RULE,
           `Write the matrix to ${JSON.stringify(paths.matrix)} and the schema 0.3.x summary to ${JSON.stringify(paths.summary)}.`,
           `Resolve {outputFile} and {default_output_file} to ${JSON.stringify(paths.matrix)}, {e2e_trace_summary_output} to ${JSON.stringify(paths.summary)}, and {gate_decision_output} to ${JSON.stringify(paths.gate)}.`,
           'Write the gate JSON when this run is eligible. Omit gate fields and the gate file when this run evaluates no gate.',
@@ -165,7 +193,12 @@ function execute(options, registerOutputGuard = () => {}) {
       return { prompt, paths };
     },
     validate({ paths }) {
-      assertLiveSourceRevision(liveCapture, projectRoot);
+      // A moved revision or a changed input means the run itself is compromised; a retry cannot repair either.
+      try {
+        assertLiveSourceRevision(liveCapture, projectRoot);
+      } catch (error) {
+        throw new WorkflowError('environment-parser', error.message, { cause: error });
+      }
       for (const input of heldInputs) {
         const changed = input.missing
           ? fs.existsSync(input.file)
@@ -180,19 +213,24 @@ function execute(options, registerOutputGuard = () => {}) {
                 !fs.readFileSync(input.file).equals(input.bytes)
               );
             })();
-        if (changed) throw new Error(`Trace agent changed a supplied input: ${input.file}`);
+        if (changed) throw new WorkflowError('environment-parser', `Trace agent changed a supplied input: ${input.file}`);
       }
-      return validateTraceOutputs({
-        paths,
-        target,
-        collectionMode: options.collectionMode,
-        allowGate,
-        oracleLedger,
-        requireOracleLedger: true,
-        liveCapture,
-        requireLiveManifest: true,
-        tickets,
-      });
+      try {
+        return validateTraceOutputs({
+          paths,
+          target,
+          collectionMode: options.collectionMode,
+          allowGate,
+          oracleLedger,
+          requireOracleLedger: true,
+          liveCapture,
+          requireLiveManifest: true,
+          tickets,
+        });
+      } catch (error) {
+        // Rejected agent output: the next attempt starts fresh and hears why this one failed.
+        throw Object.assign(new WorkflowError('agent-output', error.message, { cause: error }), { code: error.code });
+      }
     },
   });
   if (result.dryRun) return { exitCode: 0, prompt: result.context.prompt, evidence: result.runDir };
@@ -200,7 +238,8 @@ function execute(options, registerOutputGuard = () => {}) {
   try {
     assertOutputPaths();
     assertLiveSourceRevision(liveCapture, projectRoot);
-    summary = publishTraceOutputs(result.value, destinations);
+    const value = { ...result.value, summary: withFullSourceSha(result.value.summary, currentSourceSha(projectRoot)) };
+    summary = publishTraceOutputs(value, destinations);
   } catch (error) {
     error.runDir = result.runDir;
     throw error;
@@ -223,6 +262,17 @@ function execute(options, registerOutputGuard = () => {}) {
   };
 }
 
+/** The failure message, plus the agent's own last words when it never wrote a required artifact. */
+function failureReason(error) {
+  if (error.code !== 'TRACE_ARTIFACT_MISSING' || !error.agentTail) return error.message;
+  const { stdout, stderr } = error.agentTail;
+  return [
+    error.message,
+    stdout.trim() ? `agent stdout tail: ${stdout.trim()}` : 'agent stdout was empty',
+    ...(stderr.trim() ? [`agent stderr tail: ${stderr.trim()}`] : []),
+  ].join('; ');
+}
+
 function main(argv = process.argv) {
   const command = parser();
   command.exitOverride();
@@ -239,10 +289,10 @@ function main(argv = process.argv) {
     });
   } catch (error) {
     if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') return 0;
-    const failedRun = ['environment-parser', 'environment-transport', 'environment-timeout'].includes(error.failureClass);
+    const failedRun = RUN_FAILURE_CLASSES.includes(error.failureClass);
     result = {
       exitCode: failedRun ? 3 : 2,
-      payload: { schema_version: '0.1.0', status: 'failed', reason: error.message, evidence: error.runDir ?? null },
+      payload: { schema_version: '0.1.0', status: 'failed', reason: failureReason(error), evidence: error.runDir ?? null },
     };
     process.stderr.write(`${NAME}: ${error.message}\n`);
   }

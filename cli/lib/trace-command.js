@@ -43,6 +43,15 @@ function slug(value) {
     .replace(/-$/, '');
 }
 
+/**
+ * The one coverage percentage rule: the integer floor of covered * 100 / total, and 100 for an
+ * empty bucket. The validator checks every summary pct with it and the prompt states PCT_RULE.
+ */
+function coveragePct(covered, total) {
+  return total === 0 ? 100 : Math.floor((covered * 100) / total);
+}
+const PCT_RULE = 'Every coverage pct is the integer floor of covered * 100 / total, and 100 when total is 0.';
+
 function inputError(message) {
   return Object.assign(new Error(message), { code: 'TRACE_INPUT_INVALID' });
 }
@@ -1242,7 +1251,8 @@ function validateTraceOutputs({
     try {
       readInput(attemptRoot, file, `current attempt ${name}`);
     } catch (error) {
-      throw new Error(error.message, { cause: error });
+      // The agent did not write a required artifact; callers report its own output alongside.
+      throw Object.assign(new Error(error.message, { cause: error }), { code: 'TRACE_ARTIFACT_MISSING' });
     }
     if (fs.statSync(file).nlink !== 1) throw new Error(`Current attempt ${name} must be an independent regular artifact.`);
   }
@@ -1310,8 +1320,8 @@ function validateTraceOutputs({
     ) {
       throw new Error(`Trace coverage ${name} has invalid counts.`);
     }
-    const expected = bucket.total === 0 ? 100 : Math.floor((bucket.covered * 100) / bucket.total);
-    if (bucket.pct !== expected) throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
+    if (bucket.pct !== coveragePct(bucket.covered, bucket.total))
+      throw new Error(`Trace coverage ${name} percentage does not match its counts.`);
   }
   const priorities = ['P0', 'P1', 'P2', 'P3'].map((key) => summary.coverage.priority_breakdown[key]);
   const requirements = requirementOracle(target, oracleLedger);
@@ -1477,6 +1487,16 @@ function validateTraceOutputs({
   return { matrix, summary, gate };
 }
 
+/**
+ * A summary whose source_sha abbreviates the project HEAD, with the full HEAD in its place.
+ * Any other value, including unknown or a different commit, is returned unchanged.
+ */
+function withFullSourceSha(summary, head) {
+  const recorded = typeof summary.source_sha === 'string' ? summary.source_sha.trim().toLowerCase() : '';
+  if (!head || !/^[0-9a-f]{7,}$/.test(recorded) || recorded === head || !head.startsWith(recorded)) return summary;
+  return { ...summary, source_sha: head };
+}
+
 /** Publish only the validated current attempt, updating the moved report link. */
 function publishTraceOutputs(value, destinations, io = fs) {
   const links = { ...value.summary.links, trace_report_path: destinations.matrix };
@@ -1548,6 +1568,8 @@ function publishTraceOutputs(value, destinations, io = fs) {
 }
 
 module.exports = {
+  coveragePct,
+  PCT_RULE,
   sourceOracleLedger,
   epicTicketSources,
   requirementOracle,
@@ -1556,5 +1578,6 @@ module.exports = {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  withFullSourceSha,
   publishTraceOutputs,
 };

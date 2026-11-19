@@ -9,12 +9,15 @@ const { createHash } = require('node:crypto');
 const { gunzipSync } = require('node:zlib');
 const yaml = require('js-yaml');
 const {
+  coveragePct,
+  PCT_RULE,
   sourceOracleLedger,
   epicTicketSources,
   requirementOracle,
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  withFullSourceSha,
   publishTraceOutputs,
 } = require('../cli/lib/trace-command');
 const { liveAliasMap, liveReference } = require('../cli/lib/trace-live');
@@ -696,6 +699,34 @@ function check(name, action) {
 }
 
 try {
+  check('the shared pct rule floors, maps an empty bucket to 100, and matches the skill and the prompt sentence', () => {
+    const cases = [
+      [0, 0, 100],
+      [1, 3, 33],
+      [2, 3, 66],
+      [99, 100, 99],
+      [100, 100, 100],
+      [199, 200, 99],
+    ];
+    for (const [covered, total, pct] of cases) assert.equal(coveragePct(covered, total), pct, `${covered}/${total}`);
+    const step = fs.readFileSync(path.join(__dirname, '..', 'skills', 'bmad-tea-trace', 'steps-c', 'step-04-analyze-gaps.md'), 'utf8');
+    const source = /^const safePct = (.+);$/m.exec(step)?.[1];
+    assert.ok(source, 'Step 4 defines safePct');
+    const safePct = new Function(`return ${source};`)();
+    for (const [covered, total] of cases) assert.equal(safePct(covered, total), coveragePct(covered, total), `Step 4 ${covered}/${total}`);
+    assert.match(PCT_RULE, /integer floor of covered \* 100 \/ total, and 100 when total is 0/);
+  });
+  check('an abbreviated source_sha expands only when it prefixes the project HEAD', () => {
+    const head = 'abcdef0123456789abcdef0123456789abcdef01';
+    assert.equal(withFullSourceSha({ source_sha: 'abcdef0' }, head).source_sha, head);
+    assert.equal(withFullSourceSha({ source_sha: 'ABCDEF01' }, head).source_sha, head);
+    for (const value of ['abcdef', 'unknown', 'bbcdef0', head, 42]) {
+      const summary = { source_sha: value };
+      assert.equal(withFullSourceSha(summary, head), summary, String(value));
+    }
+    const summary = { source_sha: 'abcdef0' };
+    assert.equal(withFullSourceSha(summary, ''), summary);
+  });
   check('source oracle ignores unrelated labels and merges matching table and detail claims', () => {
     const source = [
       '# Epic-4: Export',
@@ -1371,6 +1402,105 @@ try {
     const first = path.join(result.payload.evidence, 'attempt-1', 'trace', 'e2e-trace-summary-epic-4.json');
     assert.deepEqual(JSON.parse(fs.readFileSync(first, 'utf8')), { stale: true });
     assert.equal(JSON.parse(fs.readFileSync(result.payload.artifacts.summary, 'utf8')).gate_status, 'PASS');
+  });
+  check('rejected agent output retries in a fresh directory and tells the next attempt why', () => {
+    fs.unlinkSync(path.join(root, 'agent-attempts.json'));
+    const result = run('empty-ledger-once', ['--retries', '1']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.payload.attempts, 2);
+    const first = JSON.parse(fs.readFileSync(path.join(result.payload.evidence, 'attempt-1', 'attempt.json'), 'utf8'));
+    assert.equal(first.failureClass, 'agent-output');
+    assert.match(first.message, /oracleLedger must be a nonempty array/);
+    const prompts = [1, 2].map((attempt) =>
+      fs.readFileSync(path.join(result.payload.evidence, `attempt-${attempt}`, 'prompt.txt'), 'utf8'),
+    );
+    assert.doesNotMatch(prompts[0], /previous attempt was rejected/);
+    assert.match(
+      prompts[1],
+      /The previous attempt was rejected: Trace Step 1 oracleLedger must be a nonempty array\. Correct it in this attempt\./,
+    );
+    assert.match(result.stderr, /attempt 1 failed as agent-output; retrying/);
+  });
+  check('an exhausted retry budget exits 3 and lists every attempt', () => {
+    const result = run('empty-ledger-always', ['--retries', '2']);
+    assert.equal(result.status, 3, result.stderr);
+    assert.match(result.payload.reason, /oracleLedger must be a nonempty array/);
+    const record = JSON.parse(fs.readFileSync(path.join(result.payload.evidence, 'run.json'), 'utf8'));
+    assert.equal(record.failureClass, 'agent-output');
+    assert.deepEqual(
+      record.attempts.map((attempt) => [attempt.attempt, attempt.failureClass]),
+      [
+        [1, 'agent-output'],
+        [2, 'agent-output'],
+        [3, 'agent-output'],
+      ],
+    );
+  });
+  check('a supplied-input change and an invalid invocation never retry', () => {
+    const file = path.join(root, 'docs', 'epic-4-export.md');
+    const original = fs.readFileSync(file);
+    try {
+      const result = run('mutated-source', ['--retries', '3']);
+      assert.equal(result.status, 3, result.stderr);
+      assert.match(result.payload.reason, /changed a supplied input/);
+      const record = JSON.parse(fs.readFileSync(path.join(result.payload.evidence, 'run.json'), 'utf8'));
+      assert.deepEqual(
+        record.attempts.map((attempt) => attempt.failureClass),
+        ['environment-parser'],
+      );
+    } finally {
+      fs.writeFileSync(file, original);
+    }
+    const before = fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8');
+    assert.equal(run('pass', ['--retries', '3', '--collection-mode', 'guess']).status, 2);
+    assert.equal(fs.readFileSync(path.join(root, 'agent-attempts.json'), 'utf8'), before);
+  });
+  check('a missing matrix reports the agent output and retries as rejected output', () => {
+    const missing = run('missing-matrix', ['--json', 'result.json']);
+    assert.equal(missing.status, 3, missing.stderr);
+    assert.match(missing.payload.reason, /current attempt matrix is unreadable/);
+    assert.match(missing.payload.reason, /agent stdout tail: I could not find the requirements document/);
+    assert.match(missing.payload.reason, /agent stderr tail: agent warning: no criteria/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'result.json'), 'utf8')).reason, missing.payload.reason);
+    const attempt = JSON.parse(fs.readFileSync(path.join(missing.payload.evidence, 'attempt-1', 'attempt.json'), 'utf8'));
+    assert.equal(attempt.failureClass, 'agent-output');
+    assert.match(attempt.agentTail.stdout, /could not find the requirements document/);
+    fs.unlinkSync(path.join(root, 'agent-attempts.json'));
+    const recovered = run('missing-matrix-once', ['--retries', '1']);
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.equal(recovered.payload.attempts, 2);
+  });
+  check('a target without a criteria table freezes no empty ledger', () => {
+    fs.writeFileSync(path.join(root, 'docs', 'bullet-sources.md'), '# Export\n\nSources:\n\n- the export API\n- the admin guide\n');
+    try {
+      const args = ['--target', 'docs/bullet-sources.md', '--gate-type', 'release', '--target-id', 'r1'];
+      const prompt = spawnSync(process.execPath, [cli, '--project-root', root, ...args, '--agent', 'none'], { encoding: 'utf8' });
+      assert.equal(prompt.status, 0, prompt.stderr);
+      assert.doesNotMatch(prompt.stdout, /Frozen source oracle ledger/);
+      assert.match(prompt.stdout, /No source oracle ledger is frozen for this run\. Build the Step 1 oracleLedger/);
+      assert.match(prompt.stdout, /at least one entry/);
+      const result = run('pass', args);
+      assert.equal(result.status, 0, result.stderr);
+      const frozen = spawnSync(process.execPath, [cli, '--project-root', root, '--target', 'docs/epic-4-export.md', '--agent', 'none'], {
+        encoding: 'utf8',
+      });
+      assert.match(frozen.stdout, /Frozen source oracle ledger: \[\{"id":"AC-1"/);
+      assert.doesNotMatch(frozen.stdout, /No source oracle ledger is frozen/);
+    } finally {
+      fs.unlinkSync(path.join(root, 'docs', 'bullet-sources.md'));
+    }
+  });
+  check('the prompt states the coverage pct rule the validator enforces', () => {
+    const prompt = spawnSync(process.execPath, [cli, '--project-root', root, '--target', 'docs/epic-4-export.md', '--agent', 'none'], {
+      encoding: 'utf8',
+    });
+    assert.ok(prompt.stdout.split('\n').includes(PCT_RULE), 'prompt carries the shared pct sentence');
+  });
+  check('an abbreviated source_sha publishes as the full project HEAD', () => {
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const result = run('short-sha');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(fs.readFileSync(result.payload.artifacts.summary, 'utf8')).source_sha, head);
   });
   check('failed reruns preserve published reports until a valid replacement is ready', () => {
     assert.equal(run('pass').status, 0);
