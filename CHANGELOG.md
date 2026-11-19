@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-11-19
+
 ### Changed
 
 - `tea-trace --retries` now also retries rejected agent output: a missing matrix or summary, or one that fails validation. Each retry runs in a fresh attempt directory, and its run instructions quote the first line of the latest rejection message, without any agent-written text a parser error excerpts. A missing gate file retries as rejected output. A changed input, a moved Git revision, a file-system fault such as a permission error, and invalid invocations still stop after one attempt; the CLI now checks inputs and the revision after every agent exit, including a crash or timeout, and checks the revision even without a live-results manifest. An exhausted budget still exits 3, and the failed result lists every attempt in `attempt_results`, including after a publication failure, with the first line of each message.
