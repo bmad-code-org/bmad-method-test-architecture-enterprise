@@ -877,7 +877,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The call records hold the path forms of [Paths in the records](/docs/reference/tea-evaluate-evidence.md#paths-in-the-records), so a replay of the same records writes them again; the one file left out is the invocation's own `score.json` summary, which names the replay's invocation id.
   The stage exits pass through.
   When they are 0 or 2 and a file differs, is missing or is extra, the check exits 13, evaluation evidence drift.
-  eval-quality scores against the current time, so a contract waiver that expires after the baseline was accepted puts its coverage gap back in the verdict and the replay reports drift; renew the waiver or close the gap, then accept a new baseline.
+  A contract waiver that expired after the accept puts its gap back in the verdict, so the replay drifts until the next accept.
   A changed control leg in an observation makes eval-quality's own preflight exit 3, which passes through.
   The scratch directory, which also holds the staging directories of every engine call `ci` makes, is removed with its private parent however `ci` ends, a signal included; a `ci` killed with SIGKILL leaves them, and the next `ci` over the same evaluation folder removes the parent once the owner named in the scratch directory's owner file is gone.
   A parent of another evaluation folder, or of an owner that still runs, stays.
@@ -890,7 +890,7 @@ Validation exits 10 (and `check` reports the same findings) for: a `tier` and a 
   The replay still runs against the baseline's own snapshot, with the baseline's floors, so an edit to the floors since the accept is a stale baseline.
   Re-record the baseline with `compare --accept` in a reviewed pull request.
 - CONCERNS is read from `contractVerdict` in the evidence artifact and is a warning: exit 0, a warning line and a `warn` row.
-  A coverage gap that an unexpired contract waiver covers stays in the evidence artifact's `coverageGaps` with the waiver's `waiverId` and does not raise CONCERNS.
+  A gap an unexpired contract waiver covers keeps its `waiverId` in `coverageGaps` and raises no CONCERNS.
   The replay, the gameability arm and every scored live run (`twin-run`, `held-out`, `judge-calibration`, `strength-comparison`) read it from the latest score of their run.
 
 ### The live tiers

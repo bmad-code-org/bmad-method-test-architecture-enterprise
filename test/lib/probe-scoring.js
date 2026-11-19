@@ -116,6 +116,7 @@ const {
   sealedRunRecord,
   validateArtifact,
 } = require('./eval-quality-inputs');
+const { clockPort } = require('./clock');
 const { publishedMember } = require('./vocabularies');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -1807,9 +1808,9 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
     policy,
     privateManifest: null,
     corpusDigest,
-    // eval-quality 10.0.0 reads the scoring instant a contract waiver's expiry is tested against through this port; the CLI wires
-    // the same system-clock adapter.
-    clock: (await import('eval-quality/adapters')).createSystemClockAdapter(),
+    // eval-quality 10.0.0 tests a contract waiver's expiry against the instant this port reads: the harness's own clock, so a
+    // scripted run (`TEA_CLOCK_FIXTURE`) scores waivers at the same instant it records.
+    clock: await clockPort(),
     signal,
   });
 

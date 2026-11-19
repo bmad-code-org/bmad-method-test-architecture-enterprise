@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { currentEvidence } = require('./lib/evaluate-current-evidence');
 const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -373,7 +374,7 @@ function heldOutOnlyInputs(folder, heldOut) {
   return privateWitnesses;
 }
 
-function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
+async function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
   const replay = path.join(folder, 'replay', runName);
   const runRecord = readJson(path.join(replay, 'run.json'));
   if (runName === 'development') {
@@ -566,7 +567,12 @@ function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
       artifact,
     );
     run(ENGINE, args);
-    sameBytes(artifact, path.join(scores, scoreId, set.probeId, 'evidence-artifact.json'), `${runName} ${set.probeId} score`);
+    // The capture keeps the evidence its run wrote; the engine's output is compared with it under eval-quality's own migrations.
+    const captured = await currentEvidence(
+      path.join(scores, scoreId, set.probeId, 'evidence-artifact.json'),
+      path.join(replay, index.contract),
+    );
+    assert.ok(fs.readFileSync(artifact).equals(captured), `${runName} ${set.probeId} score differs from committed evidence`);
     const evidence = readJson(artifact);
     const probe = readJson(path.join(folder, set.probe.replace(/^probes\//, 'probes/')));
     assert.equal(evidence.contractVerdict, 'PASS', `${runName} ${set.probeId} verdict`);
@@ -661,7 +667,7 @@ async function checkSuite(kind, out) {
     sameBytes(compiled, path.join(replay, 'eval-contract.json'), `${kind} ${runName} compile`);
     sameBytes(sealed, await refreshedSeal(path.join(replay, 'sealed-evaluator-brief.json')), `${kind} ${runName} seal`);
     const expectedProbeIds = runName === 'held-out' ? heldOut : authoredProbeIds.filter((id) => !heldOut.includes(id));
-    runReplay(folder, runName, out, expectedProbeIds, heldOutOnly);
+    await runReplay(folder, runName, out, expectedProbeIds, heldOutOnly);
   }
   if (kind === 'ai-feature') {
     const notes = fs.readFileSync(path.join(fixture, 'completion-notes.md'), 'utf8');

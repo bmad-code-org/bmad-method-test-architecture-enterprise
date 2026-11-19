@@ -39,14 +39,14 @@
     "exitCode": 0,
     "call": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/aggregate-strength.json",
     "aggregate": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/strength-aggregate.json",
-    "aggregateDigest": "sha256:4f23c8ca9cf4fe1c184a36f04ad96a38fafbb78fab17de941d1becc8b98d69fd",
+    "aggregateDigest": "sha256:8f2f06cca2d0d0335e98cefaa677cfc6af22badfe3e92758e223f01dc6f5b0f8",
     "floors": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/strength-floors.json",
     "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6",
     "evidenceDigests": {
-      "P-010": "sha256:5624a04540f6ad91df70cb409424507cdb8ec9793dd64ef4c4a433cc34fab6ba",
-      "P-011": "sha256:c29e3848cca95401491f8963e31b7ead992784f0e2a285b3106aa3ed985908d9",
-      "P-012": "sha256:b13c3ad15e494f34eb7b8ac6f7b4e3ab03f5230cb9d19663869a73ec12f244ff",
-      "P-013": "sha256:21120e560139c111cb715989b876099dd5d696f69a0b9a502bd4d6726d6d16e4"
+      "P-010": "sha256:4eab434a23944572519a946cbf570a467ee5ffc5104adc7a85bf2c6445436df9",
+      "P-011": "sha256:9e9368701ab3d384d7848961b1f12cbcd255d3cceabbee7d43d803ddea52a2c8",
+      "P-012": "sha256:7942ee8ca4ed6328deb7501c32421ac76ce44c1eb4ba3af015f0a8c1fce71115",
+      "P-013": "sha256:91ca7e5e3ef28093c48202f75a0ef06b36e4302eaffbccfd22238184da06705e"
     }
   },
   "refused": [],

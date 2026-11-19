@@ -16,6 +16,7 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { recordObservation } = require('../cli/lib/evaluate/records');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
+const { currentEvidence } = require('./lib/evaluate-current-evidence');
 const { refreshedSeal } = require('./lib/evaluate-refreshed-seal');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -320,13 +321,13 @@ function checkBlockedBlindSessions() {
       'r2',
       '20260929T041030384Z-f42b06f1',
       '20260929T041118138Z-95557dd4',
-      '88cb6888eb45035e6c845599f403dcf46eab4f57129a0d7b819c5ed5bd274441',
+      'cddeb8df160bc0aa1dfa4deecd830b4c83f56314025ef0bd41239e526f1a4b4f',
     ],
     [
       'r3',
       '20260929T042912394Z-58dfda95',
       '20260929T042952889Z-e93cfbe1',
-      '69d612e20b3e9760dd42098e72b0f275b22b0802f742beefc85d52634137a75f',
+      '6992635fbb71fea20341633b8c63f301c12afacfa090637948aa2cca6b4d77e5',
     ],
   ];
   for (const [name, runId, scoreId, artifactHash] of sessions) {
@@ -361,7 +362,7 @@ function checkBlockedBlindSessions() {
 
 function checkBlindDiscovery() {
   const file = path.join(FIXTURE, 'blind/r4-discovery-score.json');
-  assert.equal(sha256(file), '10d9c027f61dff655310d2343ebb002b7c3c20d3335a023385f0e3231cad66da');
+  assert.equal(sha256(file), 'b7b4c84e7cc88195ad212651f706743c99f66f93dedef81cd394403890ba4a58');
   const scored = readJson(file);
   assert.equal(scored.runId, '20260929T043419685Z-5d865dcf-P-009');
   assert.equal(scored.contractVerdict, 'PASS');
@@ -382,7 +383,7 @@ function checkBlindDiscovery() {
 
 function checkIntermediateDevelopment() {
   const artifact = path.join(FIXTURE, 'blind/intermediate-development-score.json');
-  assert.equal(sha256(artifact), 'f6aeb4fea518b9fac72b2c05c312519cbf8d79fe3da93c3a2af458bf7b9eeb2b');
+  assert.equal(sha256(artifact), '1826019ede41e901faf2a197f89ac1c425171abee8f61477a22775c4515fcbfa');
   const scored = readJson(artifact);
   assert.equal(scored.runId, '20260929T035801825Z-b5cb51ff-P-009');
   assert.equal(scored.scoredProbeId, 'P-009');
@@ -512,13 +513,7 @@ async function checkBeforeDiagnostics() {
   );
   assert.equal(coverage[0].satisfied, false);
   assert.equal(coverage[0].severity, 'critical');
-  assert.equal(coverage[0].waiverId, null);
-  // The diagnostic is a blind-session input pinned by digest in blind-inputs.json, so it keeps the schema-4 gap the session
-  // was shown; the schema-5 evidence adds only `waiverId`, null because the contract declares no waiver.
-  assert.deepEqual(
-    readJson(path.join(folder, 'replay/coverage-diagnostic.json')),
-    coverage.map(({ waiverId: _waiverId, ...gap }) => gap),
-  );
+  assert.deepEqual(readJson(path.join(folder, 'replay/coverage-diagnostic.json')), coverage);
 
   const stopped = readJson(path.join(folder, 'replay/development-stopped/run.json'));
   const firstStop = readJson(path.join(folder, 'replay/development-stopped/qualification/P-007/mutated-fail.json'));
@@ -966,7 +961,12 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
       artifact,
     );
     run(ENGINE, args);
-    sameBytes(artifact, path.join(replay, 'scores', scoreId, set.probeId, 'evidence-artifact.json'), `${runName} ${set.probeId} score`);
+    // The capture keeps the evidence its run wrote; the engine's output is compared with it under eval-quality's own migrations.
+    const captured = await currentEvidence(
+      path.join(replay, 'scores', scoreId, set.probeId, 'evidence-artifact.json'),
+      path.join(replay, index.contract),
+    );
+    assert.ok(fs.readFileSync(artifact).equals(captured), `${runName} ${set.probeId} score differs from committed evidence`);
     const evidence = readJson(artifact);
     assert.equal(evidence.contractVerdict, expectedVerdict);
     assert.equal(evidence.exitCode, 0);
