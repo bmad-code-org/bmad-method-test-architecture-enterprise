@@ -848,7 +848,8 @@ async function scoreInputFindings({ folder, runDirectory, index, record, engine 
       finding(TRIAL_SETS_NAME, 'schema', message),
     );
   }
-  const held = holdRunInputs({ folder, runDirectory, index, record, engine });
+  // Only the input checks run here and no score call is made, so no scoring instant is read.
+  const held = holdRunInputs({ folder, runDirectory, index, record, engine, scoredAt: null });
   const found = await inputFindings({ folder, runDirectory, index, record, engine, held });
   if (found.length === 0) {
     try {

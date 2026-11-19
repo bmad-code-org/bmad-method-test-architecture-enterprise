@@ -283,6 +283,9 @@ const {
 const { scratchDirectories } = require('./lib/scratch-directories');
 const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 
+/** The scoring instant a test's held inputs hand `--scored-at` and the in-process re-score. */
+const SCORED_AT = '2026-11-19T12:00:00Z';
+
 const Ajv = AjvModule.default ?? AjvModule;
 
 /** The Seatbelt profile of a wrapped call: the argument after the `-p` that follows the `env -u NODE_V8_COVERAGE` and `sandbox-exec` prefix. */
@@ -3399,7 +3402,7 @@ async function checkHeldInputs() {
   const [, indexBytes] = originals[2];
   try {
     // The module over the real run: what is held reproduces each persisted artifact, and the check finds a change.
-    const heldInputs = holdScoreInputs({ runDirectory, index, record, engine });
+    const heldInputs = holdScoreInputs({ runDirectory, index, record, engine, scoredAt: SCORED_AT });
     for (const set of index.trialSets) {
       const reproduced = await heldInputs.reproduce(set);
       const persisted = path.join(secondDirectory, set.probeId, 'evidence-artifact.json');
@@ -3453,7 +3456,7 @@ async function checkHeldInputs() {
     // A manifest absent at the check holds as absent: no file is handed to the engine, the held bytes give no artifact,
     // and a file that appears afterwards is named.
     fs.rmSync(manifestFile);
-    const withoutManifest = holdScoreInputs({ runDirectory, index, record, engine });
+    const withoutManifest = holdScoreInputs({ runDirectory, index, record, engine, scoredAt: SCORED_AT });
     check(withoutManifest.exists(secondSet.isolationManifest) === false, 'an absent manifest was held as present');
     const invalidWithout = await withoutManifest.reproduce(secondSet);
     check(
@@ -3700,7 +3703,7 @@ async function checkHeldDiagnostics() {
   try {
     // The library refuses the held bytes with a structural failure (exit 4), a runtime fault or any other error (exit 5),
     // and a private-storage manifest reference is a usage error (exit 64) the CLI raises before it scores.
-    const held = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const held = holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT });
     const refusing = (error) =>
       holdScoreInputs({
         runDirectory,
@@ -3712,6 +3715,7 @@ async function checkHeldDiagnostics() {
             throw error;
           },
         },
+        scoredAt: SCORED_AT,
       });
     for (const [label, error, exitCode] of [
       ['a structural failure', new engine.StructuralFailure('binding-cycle', 'EvalContract', 'refused'), 4],
@@ -3726,27 +3730,57 @@ async function checkHeldDiagnostics() {
     }
     const privateRecord = path.join(runDirectory, firstSet.records[0]);
     editJson(privateRecord, (value) => (value.isolationManifestArtifact.storage = 'private'));
-    const usage = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(firstSet);
+    const usage = await holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT }).reproduce(firstSet);
     check(
       usage.artifact === null && usage.exitCode === 64 && usage.lines === null,
       `the re-score of a private-storage manifest reference is ${JSON.stringify(usage)}; expected no artifact, exit 64 and no lines`,
     );
     restore();
     check((await held.reproduce(firstSet)).exitCode === 0, 'the re-score of an unchanged run is not exit 0');
-    // The re-score reads its scoring instant (eval-quality 10.0.0 tests a waiver's expiry against it) from the clock it holds,
-    // once per set; a clock that cannot answer is a fault of the score, exit 5, like any port the engine reads.
-    const reads = [];
-    const clock = { read: async (request) => (reads.push(request), { now: '2026-11-19T00:00:00Z' }) };
-    const clocked = await holdScoreInputs({ runDirectory, index, record: record(), engine, clock }).reproduce(firstSet);
+    // One scoring instant per score command (eval-quality 10.1.0 `--scored-at`): the CLI call is handed it and the in-process re-score
+    // scores at it through the engine's fixed clock, so a waiver expiring between two clock reads cannot make the two disagree.
+    // The engine is wrapped so the case reads the clock the re-score was handed (revert: a re-score on the system clock answers now).
+    let rescoreClock = null;
+    const recording = {
+      ...engine,
+      runScore: async (options) => {
+        rescoreClock = options.clock;
+        return engine.runScore(options);
+      },
+    };
+    const pinned = holdScoreInputs({ runDirectory, index, record: record(), engine: recording, scoredAt: '2026-11-19T12:00:00.5Z' });
+    const pinnedArgs = pinned.scoreArguments({ pathOf: (relative) => relative, set: firstSet, out: 'out.json' });
     check(
-      clocked.exitCode === 0 && clocked.artifact !== null && reads.length === 1,
-      `the re-score with an injected clock exited ${clocked.exitCode} after ${reads.length} clock reads; expected exit 0 after one read`,
+      JSON.stringify(pinnedArgs.slice(-4)) === JSON.stringify(['--scored-at', '2026-11-19T12:00:00.5Z', '--out', 'out.json']),
+      `the call arguments end ${JSON.stringify(pinnedArgs.slice(-4))}; expected the held instant as --scored-at before --out`,
     );
-    const broken = { read: async () => ({ now: 'not a timestamp' }) };
-    const unclocked = await holdScoreInputs({ runDirectory, index, record: record(), engine, clock: broken }).reproduce(firstSet);
+    const pinnedScore = await pinned.reproduce(firstSet);
     check(
-      unclocked.exitCode === 5 && unclocked.artifact === null,
-      `the re-score with a clock that answers no instant is ${JSON.stringify(unclocked)}; expected no artifact and exit 5`,
+      pinnedScore.exitCode === 0 && pinnedScore.artifact !== null,
+      `the re-score at a held instant is ${JSON.stringify(pinnedScore)}; expected exit 0 and an artifact`,
+    );
+    const rescoredAt = rescoreClock === null ? null : (await rescoreClock.read({}, new AbortController().signal)).now;
+    check(rescoredAt === '2026-11-19T12:00:00.5Z', `the re-score's clock answers ${JSON.stringify(rescoredAt)}, not the held instant`);
+    let unheld = null;
+    try {
+      holdScoreInputs({ runDirectory, index, record: record(), engine });
+    } catch (error) {
+      unheld = error;
+    }
+    check(unheld instanceof TypeError, 'held inputs built without a scoring instant were accepted');
+    const { scoringInstant } = require('../cli/lib/evaluate/score-inputs');
+    check((await scoringInstant('2026-11-19T12:00Z')) === '2026-11-19T12:00Z', 'a given scoring instant was not kept as given');
+    let refusedInstant = null;
+    try {
+      await scoringInstant('2026-11-19T12:00:00+01:00');
+    } catch (error) {
+      refusedInstant = error;
+    }
+    check(refusedInstant instanceof TypeError, 'a scoring instant with a numeric offset was accepted');
+    const read = await scoringInstant();
+    check(
+      typeof read === 'string' && read.endsWith('Z') && Math.abs(Date.parse(read) - Date.now()) < 60_000,
+      `the scoring instant read from the system clock is ${JSON.stringify(read)}`,
     );
 
     // A probe the engine rejects: the held bytes give a qualification failure line and an Invalid basis. A clean score
@@ -3770,7 +3804,7 @@ async function checkHeldDiagnostics() {
         printed.some((line) => line.startsWith('eval-quality: invalid: ')),
       `the rejected probe's call printed ${JSON.stringify(printed)}; expected a qualification failure line and an Invalid basis line`,
     );
-    const rejectedRun = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const rejectedRun = holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT });
     const reproduced = await rejectedRun.reproduce(firstSet);
     check(
       reproduced.exitCode === 3 &&
@@ -3813,7 +3847,7 @@ async function checkHeldDiagnostics() {
         `the call over a mount ${label} did not name the mount: ${JSON.stringify(call?.stderr)}`,
       );
       if (mount.includes('\n')) {
-        const given = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(secondSet);
+        const given = await holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT }).reproduce(secondSet);
         check(
           given.lines.some((line) => line.includes('\n')),
           `the re-score of a mount with a newline gave ${JSON.stringify(given.lines)}; expected a line that carries it`,
@@ -3868,7 +3902,13 @@ async function checkHeldAggregate() {
       `the clean aggregate is ${JSON.stringify(cleanSummary?.strengthAggregate)}`,
     );
     if (cleanDirectory !== null) {
-      const held = holdScoreInputs({ runDirectory, index, record: readJson(path.join(runDirectory, 'run.json')), engine });
+      const held = holdScoreInputs({
+        runDirectory,
+        index,
+        record: readJson(path.join(runDirectory, 'run.json')),
+        engine,
+        scoredAt: SCORED_AT,
+      });
       const reproduced = held.reproduceAggregate({
         evidence: index.trialSets.map((set) => fs.readFileSync(path.join(cleanDirectory, set.probeId, 'evidence-artifact.json'))),
         floors: fs.readFileSync(path.join(cleanDirectory, 'strength-floors.json')),
@@ -3893,6 +3933,7 @@ async function checkHeldAggregate() {
         index,
         record: readJson(path.join(runDirectory, 'run.json')),
         engine,
+        scoredAt: SCORED_AT,
       }).reproduceAggregate({
         evidence: index.trialSets.map((set) => fs.readFileSync(path.join(cleanDirectory, set.probeId, 'evidence-artifact.json'))),
         floors: fs.readFileSync(path.join(cleanDirectory, 'strength-floors.json')),

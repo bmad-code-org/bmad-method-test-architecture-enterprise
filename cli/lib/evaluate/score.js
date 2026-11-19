@@ -128,7 +128,7 @@ const { createArtifactValidator } = require('./records');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { TRIAL_SETS_NAME } = require('./run');
 const { heldRefusal, stagedArtifact } = require('./held-refusal');
-const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes } = require('./score-inputs');
+const { DIAGNOSTIC_PREFIX, holdScoreInputs, regularFileBytes, scoringClockAdapters, scoringInstant } = require('./score-inputs');
 const {
   WorkspaceRefusal,
   cleanUpOnSignal,
@@ -283,13 +283,13 @@ function phaseSnapshotProblems(run, contract) {
  * through this one function, so the call's arguments and the in-process check hold the same designation. A designation that cannot be
  * derived is a finding of the input check, and no score call runs.
  */
-function holdRunInputs({ folder, runDirectory, index, record, engine, designations = null }) {
+function holdRunInputs({ folder, runDirectory, index, record, engine, scoredAt, designations = null }) {
   let designate;
   if (designations !== null) {
     // A replay reproduces a baseline: each probe is scored under the oracle the baseline's own call record handed it, and the folder is
     // not read, so a folder that changed since is the stale-baseline rule's to report and no designation finding is.
     designate = (probe) => ({ oracleId: designations.get(probe?.probeId) ?? null, problem: null, listed: undefined });
-    return holdScoreInputs({ runDirectory, index, record, engine, designate });
+    return holdScoreInputs({ runDirectory, index, record, engine, designate, scoredAt });
   }
   try {
     designate = loadBothViewDesignation({ folder, partition: record?.partition, heldOutProbes: record?.heldOutProbes });
@@ -297,7 +297,7 @@ function holdRunInputs({ folder, runDirectory, index, record, engine, designatio
     if (!(error instanceof PartitionPlanError)) throw error;
     designate = () => ({ oracleId: null, problem: error.message });
   }
-  return holdScoreInputs({ runDirectory, index, record, engine, designate });
+  return holdScoreInputs({ runDirectory, index, record, engine, designate, scoredAt });
 }
 
 /** Every finding in the held inputs of the run directory, before any engine call. */
@@ -502,9 +502,17 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
  *   caller that removes that directory itself however it ends (`tea-evaluate ci`'s replay, whose directory sits beneath its
  *   own private parent); the call then makes no private parent of its own. A call without one makes its parent beneath the
  *   user's private root (`workspace.js` `makePrivateParent`) and removes it at its end
+ * @param {Map<string, string> | null} [options.designations] the oracle each probe is scored under, by probe ID, for a replay
+ * @param {string | null} [options.scoredAt] the RFC 3339 UTC instant every probe's waivers are tested against (`eval-quality score
+ *   --scored-at`), for a replay that scores at the instant its baseline recorded. Null is a replay of a baseline whose calls were
+ *   handed no instant, scored the way it was: no `--scored-at`, and the system clock. Absent, the engine's system clock is read once
+ *   and that instant is used for every probe of the invocation
  * @returns {Promise<ScoreOutcome>}
  */
-async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot, designations = null } = {}) {
+async function runScoreCommand(
+  folder,
+  { run: invocationId, env = process.env, log = () => {}, stagingRoot, designations = null, scoredAt: givenInstant } = {},
+) {
   const located = runDirectoryFor(folder, invocationId);
   if (located.wiring !== undefined)
     return new ScoreOutcome({ exitCode: WIRING, message: located.wiring, runDirectory: located.directory ?? null });
@@ -541,7 +549,21 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
 
   const engine = await loadEngine();
-  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine, designations });
+  // One instant for the whole invocation, read before any call: every probe's CLI call and in-process re-score test waivers against it.
+  // An engine that predates `--scored-at` is refused here, pinned or not, before any call.
+  await scoringClockAdapters();
+  let scoredAt = null;
+  try {
+    if (givenInstant !== null) scoredAt = await scoringInstant(givenInstant ?? null);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return new ScoreOutcome({
+      exitCode: AUTHORING,
+      runDirectory,
+      message: `the scoring instant ${JSON.stringify(givenInstant)} is not an RFC 3339 UTC timestamp eval-quality accepts; no score call ran`,
+    });
+  }
+  const held = holdRunInputs({ folder, runDirectory, index, record: located.record, engine, scoredAt, designations });
   const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine, held });
   if (findings.length === 0) {
     const contract = held.json(index.contract);
@@ -1120,6 +1142,7 @@ async function scoreProbes({
     writer.writeJson(`${scoreRelative}/score.json`, {
       invocationId: scoreInvocationId,
       run: index.invocationId,
+      scoredAt: held.scoredAt,
       exitCode,
       scores,
       strengthAggregate,

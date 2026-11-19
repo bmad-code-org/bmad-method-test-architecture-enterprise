@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- TeA adopts eval-quality 10.1.0. The `eval-quality` peer floor moves from 10.0.0 to 10.1.0 in `package.json`, the lockfile and the publish guard: 10.1.0 adds `score --scored-at` and the `createFixedClockAdapter` clock, which TeA now relies on. An older engine is reported unavailable before any call.
+- TeA's fourteen accepted baselines are re-measured on 10.1.0 with `tools/refresh-evaluate-baselines.js` over their original sealed observations, with no target or model run: every evidence artifact and strength decision is unchanged, the strength aggregates and manifests name 10.1.0, and each probe's call record now carries the `--scored-at` its replay scores at. `test/evaluate-baseline-refresh.json` records this remeasurement; the 9.0.0 one it held is in the source commit's history. The current-engine seal expectations record 10.1.0, whose seals are unchanged.
+- `tea-evaluate score` reads the clock once per invocation and hands that instant to every `eval-quality score` call as `--scored-at` and to the in-process re-score as a fixed clock, so a contract waiver that expires between two clock reads can no longer make a correct call look mismatched (exit 12). Each evaluator attempt's call in `tea-evaluate run` does the same. The invocation's `score.json` records the instant as `scoredAt`, and every call record's argv carries it.
+
+### Fixed
+
+- The `ci` replay scores a baseline at the instant it was scored, the `--scored-at` its call records hold, so a contract waiver that expired after the accept no longer reads as evidence drift (exit 13). A baseline that holds no instant, one an earlier TeA accepted on 10.1.0, replays as before, reading the clock, until it is accepted again; a baseline another engine measured is re-accepted on 10.1.0 as for any engine upgrade.
+
 ## [4.2.0] - 2026-11-19
 
 ### Changed

@@ -449,15 +449,16 @@ async function main() {
         const produced = fs.readFileSync(path.join(runDirectory, 'scores', scores[1], probeId, 'evidence-artifact.json'));
         const accepted = fs.readFileSync(path.join(baseline, 'scores', manifest.scoreInvocationId, probeId, 'evidence-artifact.json'));
         assert.equal(produced.equals(accepted), true, `the replay of ${probeId} did not reproduce the accepted evidence bytes`);
-        // The call records hold neutral path forms, so the replay writes the accepted call's bytes again too.
+        // The call records hold neutral path forms, so the replay writes the accepted call's record again too. A plain `score`
+        // reads the clock for its `--scored-at` (the `ci` replay is the one that reuses the baseline's), so that value is the
+        // one difference allowed: both calls carry one, and with the accepted instant in its place the records are equal.
         const callRecord = path.join(probeId, 'score.json');
-        assert.equal(
-          fs
-            .readFileSync(path.join(runDirectory, 'scores', scores[1], callRecord))
-            .equals(fs.readFileSync(path.join(baseline, 'scores', manifest.scoreInvocationId, callRecord))),
-          true,
-          `the replay of ${probeId} did not reproduce the accepted call record`,
-        );
+        const replayedCall = read(path.join(runDirectory, 'scores', scores[1], callRecord));
+        const acceptedCall = read(path.join(baseline, 'scores', manifest.scoreInvocationId, callRecord));
+        const instantAt = (call) => call.argv.indexOf('--scored-at') + 1;
+        assert.ok(instantAt(replayedCall) > 0 && instantAt(acceptedCall) > 0, `a call of ${probeId} was handed no --scored-at`);
+        replayedCall.argv[instantAt(replayedCall)] = acceptedCall.argv[instantAt(acceptedCall)];
+        assert.deepEqual(replayedCall, acceptedCall, `the replay of ${probeId} did not reproduce the accepted call record`);
       }
       assert.equal(
         fs
