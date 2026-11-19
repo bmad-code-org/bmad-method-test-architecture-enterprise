@@ -15,14 +15,24 @@ const shaMatches = (left, right) => {
 };
 const asString = (value) => (typeof value === 'string' ? value.trim() : '');
 
-/** Resolve the consuming working tree independently of agent-authored metadata. */
-function currentSourceSha(projectRoot) {
+function git(projectRoot, ...args) {
   const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) delete env[key];
-  const git = (...args) => spawnSync('git', ['-C', projectRoot, ...args], { encoding: 'utf8', env });
-  const head = git('rev-parse', '--verify', 'HEAD');
-  if (head.status === 0) return normalizedSha(head.stdout);
-  return git('rev-parse', '--is-inside-work-tree').status === 0 ? '' : normalizedSha(process.env.GITHUB_SHA);
+  return spawnSync('git', ['-C', projectRoot, ...args], { encoding: 'utf8', env });
+}
+
+/** The project's own full Git object ID for HEAD, or '' when Git does not resolve one. */
+function gitHead(projectRoot) {
+  const head = git(projectRoot, 'rev-parse', '--verify', 'HEAD');
+  const sha = head.status === 0 ? normalizedSha(head.stdout) : '';
+  return sha.length === 40 || sha.length === 64 ? sha : '';
+}
+
+/** Resolve the consuming working tree independently of agent-authored metadata; outside Git, the CI revision. */
+function currentSourceSha(projectRoot) {
+  const head = gitHead(projectRoot);
+  if (head) return head;
+  return git(projectRoot, 'rev-parse', '--is-inside-work-tree').status === 0 ? '' : normalizedSha(process.env.GITHUB_SHA);
 }
 
 /** Hold the original manifest before the vendor runs. Invalid evidence stays unreadable. */
@@ -45,9 +55,10 @@ function captureLiveResults(file, projectRoot, enabled) {
   return { manifest, currentSha: currentSourceSha(projectRoot) };
 }
 
-function assertLiveSourceRevision(capture, projectRoot) {
+/** Fail when HEAD moved since capture; pass head when the caller already read it. */
+function assertLiveSourceRevision(capture, projectRoot, head) {
   if (!capture) return;
-  if (currentSourceSha(projectRoot) !== capture.currentSha)
+  if ((head ?? currentSourceSha(projectRoot)) !== capture.currentSha)
     throw new Error('Trace source revision changed during the run; rerun with current live evidence.');
 }
 
@@ -136,4 +147,13 @@ function liveReference(capture, aliases) {
   };
 }
 
-module.exports = { currentSourceSha, captureLiveResults, assertLiveSourceRevision, liveAliasMap, liveReference, localId };
+module.exports = {
+  normalizedSha,
+  gitHead,
+  currentSourceSha,
+  captureLiveResults,
+  assertLiveSourceRevision,
+  liveAliasMap,
+  liveReference,
+  localId,
+};

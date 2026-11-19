@@ -53,6 +53,25 @@ if (mode === 'retry' && attempt === 1) {
 }
 if (mode === 'fail-agent') process.exit(1);
 // Exits cleanly after explaining itself, without writing the matrix or summary.
+// Breaks run integrity, then fails as a transport error: the CLI must not retry.
+if (mode === 'mutate-then-crash') {
+  fs.appendFileSync(identity.document, '\nChanged before crashing.\n');
+  process.exit(1);
+}
+if (mode === 'commit-then-missing') {
+  require('node:child_process').execFileSync('git', ['-c', 'user.name=agent', '-c', 'user.email=agent@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'agent moved HEAD']);
+  process.exit(0);
+}
+if (mode === 'explain-and-crash' || mode === 'workflow-command-output') {
+  process.stdout.write(mode === 'explain-and-crash' ? 'The target names no requirements, so I stopped.\n' : '::error::forged annotation\n');
+  process.exit(mode === 'explain-and-crash' ? 1 : 0);
+}
+if (mode === 'matrix-directory') {
+  fs.mkdirSync(matrixPath, { recursive: true });
+  fs.writeFileSync(summaryPath, '{}');
+  process.stdout.write('I made a folder.\n');
+  process.exit(0);
+}
 if (mode === 'missing-matrix' || (mode === 'missing-matrix-once' && attempt === 1)) {
   process.stdout.write('I could not find the requirements document, so I stopped before Step 1.\n');
   process.stderr.write('agent warning: no criteria\n');

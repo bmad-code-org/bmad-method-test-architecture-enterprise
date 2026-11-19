@@ -73,10 +73,14 @@ Reports must be independent files inside that attempt; links to old or external 
 Invalid or incomplete output retains diagnostic evidence.
 
 A retry also follows rejected output: a missing matrix or summary, or one that fails validation.
-The next attempt's prompt starts with the rejection message, so the agent knows what to correct.
-A changed input file, a moved Git revision, or an invalid invocation stops the run without a retry.
+The next attempt's run instructions quote the first line of the latest rejection message, so the agent knows what to correct.
+A parser rejection is quoted without the agent-written text it excerpts.
+A changed input file, a moved Git revision, a file-system fault, or an invalid invocation stops the run without a retry.
+The CLI checks inputs and the revision after every agent exit, including one that crashed or timed out.
+A failed result lists every attempt in `attempt_results`, with its status, failure class and message.
 Each failed attempt's `attempt.json` keeps the last 2 KB of the agent's standard output and error as `agentTail`.
-When the agent writes no matrix or summary, the failed result's `reason` quotes that tail too.
+When the agent leaves no matrix or summary, the failed result's `reason` quotes that tail too, whatever the exit.
+The console copy of the result neutralizes GitHub Actions workflow commands; the `--json` file keeps the exact text.
 
 When the target has no criteria table or `AC-`, `FR-`, `NFR-` or `REQ-` claims, the CLI freezes no oracle ledger.
 The prompt then asks the agent to build a nonempty ledger from the source documents, or from the selected tests for a synthetic oracle.

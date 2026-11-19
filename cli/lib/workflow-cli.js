@@ -32,6 +32,22 @@ function streamTail(text) {
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start++;
   return bytes.subarray(start).toString('utf8');
 }
+/** Characters of a rejection message handed to the next attempt. */
+const REJECTION_CHARS = 300;
+/**
+ * A rejection message safe to hand the next attempt: its first line only, so a parser's quoted
+ * snippet of agent-written text never reaches the prompt, with the rejected attempt's own
+ * directory named generically, control characters removed, and a fixed length cap.
+ */
+function rejectionSummary(message, attemptDir) {
+  const firstLine = String(message ?? '').split(/[\n\r\u2028\u2029]/, 1)[0];
+  const text = firstLine
+    .split(attemptDir)
+    .join('<rejected attempt directory>')
+    .replaceAll(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .trim();
+  return text.length > REJECTION_CHARS ? `${text.slice(0, REJECTION_CHARS - 3)}...` : text;
+}
 const collect = (value, previous) => [...previous, value];
 /** Parse a bounded whole decimal without accepting partial or unsafe values. */
 function integer(value, name, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
@@ -159,11 +175,18 @@ function jsonFile(target, value) {
 }
 /**
  * Execute one workflow with fresh, retained per-attempt evidence.
- * prepare({attemptDir,attempt,previousFailure}) returns {prompt,...context}; previousFailure is
- * {failureClass,message} for the attempt before a retry, otherwise undefined.
- * validate({attemptDir,attempt,stdout,stderr,...context}) returns any caller result.
+ * prepare({attemptDir,attempt,previousRejection}) returns {prompt,...context}. previousRejection is
+ * {attempt,message} for the latest earlier attempt rejected as agent-output, kept across later
+ * transport failures and timeouts, with message reduced by rejectionSummary; otherwise undefined.
+ * afterAgent({attemptDir,attempt,...context}), when given, runs after every agent exit, failed or not,
+ * before the exit is classified; it throws a non-retryable WorkflowError when the agent broke run
+ * integrity, so a transport failure or timeout cannot hide a changed input from the retry decision.
+ * validate({attemptDir,attempt,stdout,stderr,...context}) returns any caller result. A thrown
+ * agent-output WorkflowError may carry `rejection`, a CLI-authored message the next prompt quotes
+ * in place of the raw one, which then stays in attempt evidence only.
  * Callbacks are synchronous. The result includes value, context, runDir, attemptDir, attempts and dryRun.
- * A thrown failure carries runDir and agentTail ({stdout,stderr}, the last bytes of the final attempt).
+ * A thrown failure carries runDir, attemptDir (the final attempt), attempts, and agentTail
+ * ({stdout,stderr}, the last bytes of the final attempt).
  */
 function runWithEvidence({
   name,
@@ -171,6 +194,7 @@ function runWithEvidence({
   evidenceRoot = '.tea-runs',
   options,
   prepare,
+  afterAgent,
   validate,
   capabilities = ['scoped-artifact-writes'],
 }) {
@@ -188,7 +212,7 @@ function runWithEvidence({
   const startedAt = new Date().toISOString();
   const attempts = [];
   let lastError;
-  let previousFailure;
+  let previousRejection;
   for (let attempt = 1; attempt <= invocation.retries + 1; attempt++) {
     const attemptDir = path.join(runDir, `attempt-${attempt}`);
     fs.mkdirSync(attemptDir);
@@ -199,18 +223,21 @@ function runWithEvidence({
     let failure;
     const started = Date.now();
     try {
-      context = prepare({ attemptDir, attempt, previousFailure });
+      context = prepare({ attemptDir, attempt, previousRejection });
       if (!context || typeof context.prompt !== 'string' || !context.prompt.trim())
         throw new WorkflowError('usage', 'prepare must return a nonempty prompt');
       fs.writeFileSync(path.join(attemptDir, 'prompt.txt'), context.prompt, { flag: 'wx' });
       if (invocation.agent !== 'none') {
+        let agentFailure;
         try {
           ({ stdout, stderr } = runAgent(context.prompt, { ...invocation, capabilities }));
         } catch (error) {
           stdout = error.stdout || '';
           stderr = error.stderr || '';
-          throw new WorkflowError(classOfAgentError(error), error.message, { cause: error });
+          agentFailure = new WorkflowError(classOfAgentError(error), error.message, { cause: error });
         }
+        afterAgent?.({ ...context, attemptDir, attempt });
+        if (agentFailure) throw agentFailure;
         try {
           value = validate({ ...context, attemptDir, attempt, stdout, stderr });
         } catch (error) {
@@ -249,8 +276,11 @@ function runWithEvidence({
       return { value, context, runDir, attemptDir, attempts, dryRun: invocation.agent === 'none' };
     }
     lastError.agentTail = record.agentTail ?? { stdout: '', stderr: '' };
+    lastError.attemptDir = attemptDir;
+    lastError.attempts = attempts;
     if (!RETRYABLE_FAILURE_CLASSES.includes(failure.failureClass) || attempt > invocation.retries) break;
-    previousFailure = failure;
+    if (failure.failureClass === 'agent-output')
+      previousRejection = { attempt, message: rejectionSummary(lastError.rejection ?? failure.message, attemptDir) };
     process.stderr.write(`${name}: attempt ${attempt} failed as ${failure.failureClass}; retrying in a fresh artifact directory\n`);
   }
   jsonFile(path.join(runDir, 'run.json'), {
@@ -278,6 +308,8 @@ module.exports = {
   RUN_FAILURE_CLASSES,
   RETRYABLE_FAILURE_CLASSES,
   AGENT_TAIL_BYTES,
+  REJECTION_CHARS,
+  rejectionSummary,
   integer,
   addAgentOptions,
   agentOptions,

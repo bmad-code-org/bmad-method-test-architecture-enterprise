@@ -5,8 +5,8 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 const MarkdownIt = require('markdown-it');
 const TOML = require('smol-toml');
-const { readInput } = require('./workflow-cli');
-const { liveAliasMap, liveReference, localId } = require('./trace-live');
+const { WorkflowError, readInput } = require('./workflow-cli');
+const { normalizedSha, liveAliasMap, liveReference, localId } = require('./trace-live');
 
 const GATE_TYPES = ['story', 'epic', 'release', 'hotfix'];
 const COLLECTION_MODES = [
@@ -50,7 +50,8 @@ function slug(value) {
 function coveragePct(covered, total) {
   return total === 0 ? 100 : Math.floor((covered * 100) / total);
 }
-const PCT_RULE = 'Every coverage pct is the integer floor of covered * 100 / total, and 100 when total is 0.';
+// The worked values come from coveragePct itself, so a changed rule changes the sentence the agent reads.
+const PCT_RULE = `Every coverage pct is the integer floor of covered * 100 / total (2 of 3 covered is ${coveragePct(2, 3)}, 199 of 200 is ${coveragePct(199, 200)}), and ${coveragePct(0, 0)} when total is 0.`;
 
 function inputError(message) {
   return Object.assign(new Error(message), { code: 'TRACE_INPUT_INVALID' });
@@ -268,7 +269,13 @@ function tracePaths(artifactRoot, runKey) {
 }
 
 function readJson(file) {
-  const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let value;
+  try {
+    value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new Error(`${file} is not valid JSON: ${error.message}`, { cause: error });
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${file} must contain a JSON object.`);
   return value;
 }
@@ -1251,15 +1258,20 @@ function validateTraceOutputs({
     try {
       readInput(attemptRoot, file, `current attempt ${name}`);
     } catch (error) {
-      // The agent did not write a required artifact; callers report its own output alongside.
-      throw Object.assign(new Error(error.message, { cause: error }), { code: 'TRACE_ARTIFACT_MISSING' });
+      throw new Error(error.message, { cause: error });
     }
     if (fs.statSync(file).nlink !== 1) throw new Error(`Current attempt ${name} must be an independent regular artifact.`);
   }
   const matrix = fs.readFileSync(paths.matrix, 'utf8');
   const match = matrix.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new Error('Trace matrix is missing progress frontmatter.');
-  const progress = yaml.load(match[1]);
+  let progress;
+  try {
+    progress = yaml.load(match[1]);
+  } catch (error) {
+    if (error.name !== 'YAMLException') throw error;
+    throw new Error(`Trace matrix progress frontmatter is not valid YAML: ${error.message}`, { cause: error });
+  }
   if (progress?.runKey !== target.runKey || progress?.runScope !== target.runScope)
     throw new Error('Trace matrix has a different run identity.');
   if (progress.workflowStatus !== 'completed' || progress.lastStep !== 'step-05-gate-decision')
@@ -1488,12 +1500,34 @@ function validateTraceOutputs({
 }
 
 /**
+ * Class a Trace validation failure for the retry decision. A file-system fault or a validator
+ * defect is environment-parser, which never retries: the agent cannot correct either. Everything
+ * else is rejected agent output. A parser failure quotes agent-written text, so its `rejection`,
+ * the message the next prompt carries, keeps only the CLI's own prefix and the parser's location.
+ */
+function classifyTraceRejection(error) {
+  if (error.syscall || [TypeError, ReferenceError, RangeError].some((type) => error instanceof type))
+    return new WorkflowError('environment-parser', error.message, { cause: error });
+  const failure = new WorkflowError('agent-output', error.message, { cause: error });
+  const parse = [error, error.cause].find((each) => each instanceof SyntaxError || each?.name === 'YAMLException');
+  if (parse) {
+    const at = error.message.indexOf(parse.message);
+    const prefix = (
+      at > 0 ? error.message.slice(0, at) : `Trace output is not valid ${parse.name === 'YAMLException' ? 'YAML' : 'JSON'}`
+    ).replace(/[\s:]+$/, '');
+    const location = parse.mark ? ` at line ${parse.mark.line + 1}, column ${parse.mark.column + 1}` : '';
+    failure.rejection = `${prefix}${location}.`;
+  }
+  return failure;
+}
+
+/**
  * A summary whose source_sha abbreviates the project HEAD, with the full HEAD in its place.
  * Any other value, including unknown or a different commit, is returned unchanged.
  */
 function withFullSourceSha(summary, head) {
-  const recorded = typeof summary.source_sha === 'string' ? summary.source_sha.trim().toLowerCase() : '';
-  if (!head || !/^[0-9a-f]{7,}$/.test(recorded) || recorded === head || !head.startsWith(recorded)) return summary;
+  const recorded = typeof summary.source_sha === 'string' ? normalizedSha(summary.source_sha) : '';
+  if (!head || !recorded || summary.source_sha === head || !head.startsWith(recorded)) return summary;
   return { ...summary, source_sha: head };
 }
 
@@ -1578,6 +1612,7 @@ module.exports = {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  classifyTraceRejection,
   withFullSourceSha,
   publishTraceOutputs,
 };
