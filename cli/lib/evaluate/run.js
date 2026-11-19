@@ -301,6 +301,9 @@ function runRunCommand(
         });
       }
       const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
+      // Every score the run makes is pinned to an instant, so an engine that cannot pin one is refused before calibration, a
+      // qualification attempt or a trial spends anything.
+      await scoringClockAdapters();
       let layer;
       try {
         layer = readEvaluatorLayer({
@@ -1897,8 +1900,6 @@ async function qualifyEvaluator(context) {
   });
   // The policy an attempt is scored with is the one the trial sets carry, so it is in the run directory before the first score.
   if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
-  // Every attempt is scored at an instant the engine pins; an engine that cannot is refused before the first trial spends anything.
-  await scoringClockAdapters();
   const report = { attempts, minimumAgreement, arms: [] };
   for (const arm of arms) {
     const expected = expectedOutcome(arm);
