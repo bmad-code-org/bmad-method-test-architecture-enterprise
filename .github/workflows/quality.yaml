@@ -282,6 +282,9 @@ jobs:
       # weight can move any of them to any shard.
       - name: Install actionlint
         timeout-minutes: 5
+        # The token moves the downloads off the shared runners' unauthenticated GitHub rate limit, which answered 429.
+        env:
+          INSTALL_ACTIONLINT_GITHUB_TOKEN: ${{ github.token }}
         run: |
           bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"
           sudo mv "$RUNNER_TEMP/actionlint-bin/actionlint" /usr/local/bin/
