@@ -679,30 +679,31 @@ For tests of implemented features, use [Automate](/docs/how-to/workflows/run-aut
 
 On BMad v7, `bmad-build` writes a story's acceptance criteria into its plan when the build starts. Red mode reads them there when the ticket has only a `Verify:` line.
 
-Red mode saves each acceptance test skipped, and the build finds the tests through its plan. To run red mode for one story:
+Red mode saves each acceptance test skipped, and the build finds the tests through its plan. Use the full build route to run red mode for one story:
 
 1. Stop the build at its plan checkpoint with **Approve and stop**.
 2. Run red mode for the story's ref (`1.2`).
 3. Add the test files to the plan's Code Map, a task that unskips each test and sees it fail before the code it covers is written, and a command to Verification that runs them. The ATDD checklist lists the files.
 4. Run `bmad-build` again. It implements the story and turns the tests green.
 
-To run it in every build of a ticket, set the `before_implement` hook in `_bmad/custom/bmad-build.toml`, and in `bmad-build-auto.toml` for unattended builds:
+To run red mode automatically on ticket builds, set `route = "full"` under `[workflow]` in `_bmad/custom/bmad-build.toml` or `_bmad/custom/bmad-build-auto.toml` for unattended builds. The full route runs `implementation_handoff` after planning.
 
-```toml
-[workflow]
-before_implement = """
-When {plan_file} names a `ticket`, run bmad-tea-automate in red mode for
-that ticket. It saves each acceptance test skipped. Add the test files to
-the plan's Code Map, a task that unskips each test and sees it fail before
-the code it covers is written, and a command to Verification that runs
-them. A oneshot plan has no Code Map or tasks: add the Verification command
-and unskip each test the same way while implementing.
-"""
+Copy `implementation_handoff` from the installed build skill's `customize.toml` into the same `[workflow]` table, or use your team's existing handoff. If your configuration already has `before_implement`, remove that key when you move its instructions.
+
+Insert these instructions at the start of the handoff string, before it dispatches implementation:
+
+```text
+If {plan_file} names a `ticket`, do the following before dispatch:
+
+1. Run bmad-tea-automate in red mode for the ticket. Reuse existing test
+   scaffolds on resume and regenerate any a review loopback removed.
+2. List the test files in the plan's Code Map and add their run command to
+   Verification.
+3. For each scaffold, add or update a task to activate the skipped test,
+   confirm it fails for the missing behavior, then make it pass.
+
+Leave the frozen intent unchanged.
 ```
-
-The build runs it after planning and before any code changes, and again when a review loopback reverts the code. Builds without a ticket skip red mode.
-
-The hook needs a `bmad-build` that declares `before_implement`. An older one stops with `sets keys bmad-build does not declare: workflow.before_implement`; update BMad before you add the hook.
 
 <a id="red-prerequisites"></a>
 
