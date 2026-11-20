@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-11-20
+
 ### Fixed
 
 - The Automate red-mode guide and TEA help use BMad v7's existing `workflow.implementation_handoff` on the full build route. The guide shows how to move an earlier `before_implement` override.
