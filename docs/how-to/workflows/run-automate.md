@@ -677,20 +677,19 @@ For tests of implemented features, use [Automate](/docs/how-to/workflows/run-aut
 
 ### With BMad Build
 
-On BMad v7, `bmad-build` writes a story's acceptance criteria into its plan when the build starts. Red mode reads them there when the ticket has only a `Verify:` line.
+When a BMad v7 ticket has only a `Verify:` line, red mode reads the acceptance criteria from the build plan.
 
-Red mode saves each acceptance test skipped, and the build finds the tests through its plan. Use the full build route to run red mode for one story:
+For one story, set `route = "full"` and run `bmad-build`:
 
-1. Stop the build at its plan checkpoint with **Approve and stop**.
-2. Run red mode for the story's ref (`1.2`).
-3. Add the test files to the plan's Code Map, a task that unskips each test and sees it fail before the code it covers is written, and a command to Verification that runs them. The ATDD checklist lists the files.
-4. Run `bmad-build` again. It implements the story and turns the tests green.
+1. At the plan checkpoint, choose **Approve and stop**.
+2. Run red mode for the story ref (`1.2`).
+3. Add the test files from the ATDD checklist to the plan's Code Map. Add a task to unskip each test and confirm it fails before coding. Add the test command to Verification.
+4. Resume `bmad-build` to implement the story and pass the tests.
 
-To run red mode automatically on ticket builds, set `route = "full"` under `[workflow]` in `_bmad/custom/bmad-build.toml` or `_bmad/custom/bmad-build-auto.toml` for unattended builds. The full route runs `implementation_handoff` after planning.
+For automatic red mode, set `route = "full"` under `[workflow]` in `_bmad/custom/bmad-build.toml` or `_bmad/custom/bmad-build-auto.toml`.
+In the same table, copy `implementation_handoff` from the installed skill's `customize.toml` or edit your existing override. Move any `before_implement` instructions into the handoff and remove that key.
 
-Copy `implementation_handoff` from the installed build skill's `customize.toml` into the same `[workflow]` table, or use your team's existing handoff. If your configuration already has `before_implement`, remove that key when you move its instructions.
-
-Insert these instructions at the start of the handoff string, before it dispatches implementation:
+Prepend this to the handoff string:
 
 ```text
 If {plan_file} names a `ticket`, do the following before dispatch:
