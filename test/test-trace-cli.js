@@ -3441,25 +3441,56 @@ try {
     assert.match(result.stdout, /Resolved identity:.*epic-4/);
     assert.equal(fs.readFileSync(file, 'utf8'), before);
   });
-  check("Trace's git reads the user's global safe.directory entries, in order, and nothing from the repository", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-safe-'));
-    const globalConfig = path.join(home, 'gitconfig');
-    fs.writeFileSync(globalConfig, '[safe]\n\tdirectory = /srv/one\n\tdirectory = /srv/two dir\n');
-    const saved = process.env.GIT_CONFIG_GLOBAL;
+  /** Runs fn with the system and global Git config pointed at the given files, so the host's own config stays out. */
+  function withGitConfig({ system, global }, fn) {
+    const saved = { GIT_CONFIG_SYSTEM: process.env.GIT_CONFIG_SYSTEM, GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL };
     try {
-      process.env.GIT_CONFIG_GLOBAL = globalConfig;
-      assert.deepEqual(
-        safeDirectories().filter((value) => value.startsWith('/srv/')),
-        ['/srv/one', '/srv/two dir'],
-      );
-      fs.writeFileSync(globalConfig, '');
-      assert.deepEqual(
-        safeDirectories().filter((value) => value.startsWith('/srv/')),
-        [],
-      );
+      process.env.GIT_CONFIG_SYSTEM = system;
+      process.env.GIT_CONFIG_GLOBAL = global;
+      return fn();
     } finally {
-      if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-      else process.env.GIT_CONFIG_GLOBAL = saved;
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  check("Trace's git reads the user's system and global safe.directory entries, in order, and nothing from the repository", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-safe-'));
+    const systemConfig = path.join(home, 'system-gitconfig');
+    const globalConfig = path.join(home, 'gitconfig');
+    fs.writeFileSync(systemConfig, '[safe]\n\tdirectory = /srv/system\n');
+    fs.writeFileSync(globalConfig, '[safe]\n\tdirectory = /srv/one\n\tdirectory = /srv/two dir\n');
+    try {
+      withGitConfig({ system: systemConfig, global: globalConfig }, () => {
+        assert.deepEqual(safeDirectories(), ['/srv/system', '/srv/one', '/srv/two dir']);
+        fs.writeFileSync(systemConfig, '');
+        fs.writeFileSync(globalConfig, '');
+        assert.deepEqual(safeDirectories(), []);
+      });
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  check('safe.directory entries in included config files count, and a value with a newline stays one entry', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-safe-include-'));
+    const systemConfig = path.join(home, 'system-gitconfig');
+    const globalConfig = path.join(home, 'gitconfig');
+    const included = path.join(home, 'trusted.inc');
+    fs.writeFileSync(systemConfig, '');
+    fs.writeFileSync(included, '[safe]\n\tdirectory = /srv/included\n');
+    // "\n" inside a quoted value is a newline: one path, never the "*" wildcard on a line of its own.
+    fs.writeFileSync(
+      globalConfig,
+      `[safe]\n\tdirectory = /srv/before\n[include]\n\tpath = ${included}\n[safe]\n\tdirectory = "/srv/team\\n*"\n\tdirectory =\n`,
+    );
+    try {
+      withGitConfig({ system: systemConfig, global: globalConfig }, () => {
+        assert.deepEqual(safeDirectories(), ['/srv/before', '/srv/included', '/srv/team\n*', '']);
+      });
+    } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
   });
@@ -3471,9 +3502,13 @@ try {
       const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-owner-'));
       const repo = path.join(home, 'repo');
       const globalConfig = path.join(home, 'gitconfig');
+      const systemConfig = path.join(home, 'system-gitconfig');
       fs.writeFileSync(globalConfig, '');
-      const saved = { global: process.env.GIT_CONFIG_GLOBAL, sha: process.env.GITHUB_SHA };
+      fs.writeFileSync(systemConfig, '');
+      const saved = { global: process.env.GIT_CONFIG_GLOBAL, system: process.env.GIT_CONFIG_SYSTEM, sha: process.env.GITHUB_SHA };
       try {
+        // The host's system config could trust the repository (safe.directory=*) and hide the untrusted case.
+        process.env.GIT_CONFIG_SYSTEM = systemConfig;
         process.env.GIT_CONFIG_GLOBAL = globalConfig;
         delete process.env.GITHUB_SHA;
         spawnSync('git', ['init', '-q', repo]);
@@ -3489,6 +3524,7 @@ try {
       } finally {
         for (const [key, value] of [
           ['GIT_CONFIG_GLOBAL', saved.global],
+          ['GIT_CONFIG_SYSTEM', saved.system],
           ['GITHUB_SHA', saved.sha],
         ]) {
           if (value === undefined) delete process.env[key];

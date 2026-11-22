@@ -22,15 +22,22 @@ const REPOSITORY_ENV = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMO
  * The `safe.directory` entries of the user's system and global Git config, in the order Git reads them. Git honors
  * this key only from protected config, so a checkout owned by another user (a container job, where
  * `actions/checkout` adds the entry globally) is refused once that config is hidden. Read in the user's normal
- * environment, outside any repository, so the repository's own config cannot add one.
+ * environment, outside any repository, so the repository's own config cannot add one, and through the files those
+ * scopes include, as Git reads them.
  */
 function safeDirectories() {
   const env = { ...process.env };
   for (const key of REPOSITORY_ENV) delete env[key];
   const values = [];
   for (const scope of ['--system', '--global']) {
-    const result = spawnSync('git', ['config', scope, '--get-all', 'safe.directory'], { encoding: 'utf8', env, cwd: os.tmpdir() });
-    if (result.status === 0 && result.stdout) values.push(...result.stdout.replace(/\n$/, '').split('\n'));
+    // --includes: a scoped read skips include.path files unless asked, and plain Git reads them. -z: a value may hold
+    // a newline, so values are NUL-terminated; an empty value (which resets the list) is kept.
+    const result = spawnSync('git', ['config', scope, '--includes', '-z', '--get-all', 'safe.directory'], {
+      encoding: 'utf8',
+      env,
+      cwd: os.tmpdir(),
+    });
+    if (result.status === 0 && result.stdout) values.push(...result.stdout.split('\0').slice(0, -1));
   }
   return values;
 }
