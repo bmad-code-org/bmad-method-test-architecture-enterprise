@@ -9980,10 +9980,11 @@ async function runTests() {
         );
       }
       assert(
-        selectBackend({ PATH: '' }, 'win32') === null &&
-          selectBackend({ PATH: '' }, 'linux') === 'chmod' &&
-          selectBackend({ PATH: '' }, 'darwin') === 'chmod',
-        'Windows has no isolation backend, while macOS and Linux always fall back to chmod',
+        // An explicit non-root uid: the platform rule is what the reference states; root's refusal is asserted in Suite 6.
+        selectBackend({ PATH: '' }, 'win32', 1000) === null &&
+          selectBackend({ PATH: '' }, 'linux', 1000) === 'chmod' &&
+          selectBackend({ PATH: '' }, 'darwin', 1000) === 'chmod',
+        'Windows has no isolation backend, while macOS and Linux fall back to chmod for a non-root user',
       );
       assert(
         /Windows:\*\* no backend exists/.test(reference) && /falls back to `chmod`/.test(reference),
