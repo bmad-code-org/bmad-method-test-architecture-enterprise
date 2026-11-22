@@ -21,7 +21,7 @@ const {
   withFullSourceSha,
   publishTraceOutputs,
 } = require('../cli/lib/trace-command');
-const { liveAliasMap, liveReference } = require('../cli/lib/trace-live');
+const { currentSourceSha, gitHead, liveAliasMap, liveReference, safeDirectories } = require('../cli/lib/trace-live');
 const { WorkflowError } = require('../cli/lib/workflow-cli');
 
 const cli = path.join(__dirname, '..', 'cli', 'trace.js');
@@ -3441,6 +3441,63 @@ try {
     assert.match(result.stdout, /Resolved identity:.*epic-4/);
     assert.equal(fs.readFileSync(file, 'utf8'), before);
   });
+  check("Trace's git reads the user's global safe.directory entries, in order, and nothing from the repository", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-safe-'));
+    const globalConfig = path.join(home, 'gitconfig');
+    fs.writeFileSync(globalConfig, '[safe]\n\tdirectory = /srv/one\n\tdirectory = /srv/two dir\n');
+    const saved = process.env.GIT_CONFIG_GLOBAL;
+    try {
+      process.env.GIT_CONFIG_GLOBAL = globalConfig;
+      assert.deepEqual(
+        safeDirectories().filter((value) => value.startsWith('/srv/')),
+        ['/srv/one', '/srv/two dir'],
+      );
+      fs.writeFileSync(globalConfig, '');
+      assert.deepEqual(
+        safeDirectories().filter((value) => value.startsWith('/srv/')),
+        [],
+      );
+    } finally {
+      if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = saved;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  // Git refuses a repository another user owns unless protected config lists it in safe.directory, which is what
+  // container CI does. Making such a repository needs chown, so this runs as root only.
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    check("Trace reads HEAD of a checkout another user owns when the user's global config trusts it, as plain git does", () => {
+      const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-owner-'));
+      const repo = path.join(home, 'repo');
+      const globalConfig = path.join(home, 'gitconfig');
+      fs.writeFileSync(globalConfig, '');
+      const saved = { global: process.env.GIT_CONFIG_GLOBAL, sha: process.env.GITHUB_SHA };
+      try {
+        process.env.GIT_CONFIG_GLOBAL = globalConfig;
+        delete process.env.GITHUB_SHA;
+        spawnSync('git', ['init', '-q', repo]);
+        spawnSync('git', ['-C', repo, '-c', 'user.email=a@b.c', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'x']);
+        const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+        spawnSync('chown', ['-R', 'nobody', repo]);
+        assert.equal(gitHead(repo), '', 'an untrusted checkout of another owner has no readable HEAD');
+        fs.writeFileSync(globalConfig, `[safe]\n\tdirectory = ${repo}\n`);
+        assert.equal(gitHead(repo), head);
+        assert.equal(currentSourceSha(repo), head);
+        process.env.GITHUB_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+        assert.equal(currentSourceSha(repo), head, 'HEAD, not the CI fallback revision');
+      } finally {
+        for (const [key, value] of [
+          ['GIT_CONFIG_GLOBAL', saved.global],
+          ['GITHUB_SHA', saved.sha],
+        ]) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+    });
+  }
   process.stdout.write(`${checks} trace CLI checks passed.\n`);
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

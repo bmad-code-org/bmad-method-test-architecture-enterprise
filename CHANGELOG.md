@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tea-trace` reads HEAD of a checkout owned by another user, such as a container CI job, when the user's global or system Git config trusts it with `safe.directory`, as `actions/checkout` does. Trace's Git calls still ignore the rest of that config, but now pass its `safe.directory` entries on, so live evidence no longer turns stale or unverifiable there and the agent's recorded revision is no longer rejected.
+
 ## [4.3.1] - 2026-11-20
 
 ### Fixed
