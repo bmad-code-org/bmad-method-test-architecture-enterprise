@@ -505,7 +505,7 @@ Supervision governs process lifetime. It does not restrict filesystem writes.
 
 With isolation on, the agent may read the project but cannot modify the tree under review. It writes only the report, the verdict, and the temp files the skill's own subagent steps declare.
 
-- **macOS and Linux:** the CLI uses `sandbox-exec` on macOS or `bwrap` on Linux when the tool is installed, and otherwise falls back to `chmod`. The fallback clears the project's write permission bits for the run and restores them afterward. It is weaker than an OS sandbox, because a process owned by the same user can change permission bits.
+- **macOS and Linux:** the CLI uses `sandbox-exec` on macOS or `bwrap` on Linux when the tool is installed, and otherwise falls back to `chmod`. The fallback clears the project's write permission bits for the run and restores them afterward. It is weaker than an OS sandbox, because a process owned by the same user can change permission bits. Root ignores permission bits, so the fallback is never used as root: a container job that runs as root needs `bwrap` installed, or a non-root user, to be isolated.
 - **Windows:** no backend exists. The Job Object above supervises process lifetime only.
 - **When it applies:** CI requests isolation by default (`CI` set). If no backend is available, the run prints a warning and continues without filesystem isolation. Pass `--isolate` explicitly to exit 2 in that case instead, or `--no-isolate` to turn isolation off.
 
