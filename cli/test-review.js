@@ -1813,7 +1813,9 @@ async function runReview(session) {
       }
       if (error.code === 'AGENT_FAILED' || error.code === 'REPORT_MISSING' || error.code === 'REPORT_UNPARSEABLE') {
         if (error.code === 'AGENT_FAILED') printAgentFailureDiagnostics(error, options.agent);
-        if (attempt < retries) {
+        // A run someone stopped (Ctrl-C, a cancelled CI job) is not a transient failure: a retry would start the agent again.
+        const stopped = ['SIGINT', 'SIGTERM', 'SIGHUP'].includes(error.stoppedBy);
+        if (attempt < retries && !stopped) {
           console.error(`tea-test-review: ${error.message}`);
           const retryNotice = `attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`;
           console.error(`tea-test-review: ${retryNotice}`);
@@ -1824,7 +1826,7 @@ async function runReview(session) {
           }
           continue;
         }
-        fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
+        fail(EXIT.AGENT_OR_PARSE_ERROR, stopped ? `${error.message} Not retried: the run was stopped.` : error.message);
       }
       if (error.code === 'ISOLATION_ERROR' || error.code === 'AGENT_NOT_FOUND') {
         fail(EXIT.ENV_ERROR, error.message);

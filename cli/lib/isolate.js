@@ -13,12 +13,16 @@
  *      writes on the writable paths and their parents, and ALWAYS restores in a
  *      finally from a permission-bit snapshot taken before the lock, so the tree
  *      comes back with its exact original modes. A restore failure prints a loud
- *      warning but never masks the run result.
+ *      warning but never masks the run result. While the tree is locked, SIGINT,
+ *      SIGTERM and SIGHUP cannot end the process before that restore, and a lock
+ *      marker in the temp directory lets the next isolated run restore a tree
+ *      that a SIGKILL left locked.
  *
  * TEA_TEST_REVIEW_ISOLATION (sandbox-exec|bwrap|chmod|none) overrides backend
  * selection; it exists so tests can force the chmod fallback on any platform.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -240,12 +244,88 @@ function restoreModes(projectRoot, modes) {
   }
 }
 
+// Signals that end a run from outside (Ctrl-C, a cancelled CI job, a closed terminal). Node's default for each is
+// to exit at once, which would skip the restore and leave the whole tree, .git included, read-only.
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
+/** The locks this process holds now: project root to restore function. */
+const heldLocks = new Map();
+let stopHandlersInstalled = false;
+
+/**
+ * Keep a stop signal from killing the process while a tree is locked. The agent runs under spawnSync, so a handler
+ * runs only once that returns: by then the supervisor, which gets the same signal, has stopped the agent and
+ * withIsolation's finally has restored the tree. If a lock is still held when the handler runs, it restores it.
+ * Either way it then re-raises the signal with Node's default action, so the process ends as the signal asked.
+ */
+function installStopHandlers() {
+  if (stopHandlersInstalled) return;
+  stopHandlersInstalled = true;
+  const onStop = (signal) => {
+    for (const restore of heldLocks.values()) restore();
+    for (const name of STOP_SIGNALS) process.removeListener(name, onStop);
+    stopHandlersInstalled = false;
+    process.kill(process.pid, signal);
+  };
+  for (const name of STOP_SIGNALS) process.on(name, onStop);
+}
+
+/** Where the lock marker for projectRoot lives: outside the locked tree, one per project. */
+function lockMarkerPath(projectRoot) {
+  let root = path.resolve(projectRoot);
+  try {
+    root = fs.realpathSync(root);
+  } catch {
+    // the literal path still names one marker
+  }
+  const digest = crypto.createHash('sha256').update(root).digest('hex').slice(0, 16);
+  return path.join(os.tmpdir(), `tea-test-review-lock-${digest}.json`);
+}
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+/**
+ * Restore a tree an earlier chmod-isolated run left locked: it was killed in a way no handler could catch (SIGKILL,
+ * a lost container). Its marker holds the permission snapshot. A marker of a process still running is left alone.
+ *
+ * @returns {boolean} Whether a lock was found and restored.
+ */
+function recoverInterruptedLock(projectRoot) {
+  const marker = lockMarkerPath(projectRoot);
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(marker, 'utf8'));
+  } catch {
+    return false;
+  }
+  if (!record || record.projectRoot !== path.resolve(projectRoot) || processAlive(record.pid)) return false;
+  try {
+    restoreModes(projectRoot, Array.isArray(record.modes) ? new Map(record.modes) : null);
+    fs.rmSync(marker, { force: true });
+  } catch (error) {
+    console.error(
+      `tea-test-review WARNING: a previous run left ${projectRoot} read-only and restoring it failed: ${error.message}. ` +
+        'Restore manually with: chmod -R u+w <path>',
+    );
+    return false;
+  }
+  console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${record.pid}) left on ${projectRoot}.`);
+  return true;
+}
+
 /**
  * Lock projectRoot (chmod -R a-w) while keeping the requested artifact paths
  * writable. Only paths inside the project root need unlocking; the root itself
  * stays locked so the agent cannot create new top-level entries.
  */
-function prepareChmodLock(projectRoot, writablePaths) {
+function prepareChmodLock(projectRoot, writablePaths, onSnapshot = () => {}) {
   const root = path.resolve(projectRoot);
   const insidePaths = writablePaths.map((entry) => path.resolve(entry)).filter((entry) => entry !== root && isInside(root, entry));
   // Snapshot phase: the artifact parent directories must exist before the tree
@@ -264,6 +344,13 @@ function prepareChmodLock(projectRoot, writablePaths) {
     }
   }
   const modes = snapshotModes(projectRoot);
+  // The marker is written before the lock, so no moment exists where the tree is locked and nothing records how to undo it.
+  fs.writeFileSync(
+    lockMarkerPath(projectRoot),
+    JSON.stringify({ projectRoot: root, pid: process.pid, modes: modes === null ? null : [...modes] }),
+    'utf8',
+  );
+  onSnapshot(modes);
   runChmod(['-R', 'a-w', projectRoot]);
   for (const entry of insidePaths) {
     if (fs.existsSync(entry)) {
@@ -287,6 +374,7 @@ function prepareChmodLock(projectRoot, writablePaths) {
  * @returns {any} fn's return value.
  */
 function withIsolation(projectRoot, writablePaths, fn) {
+  recoverInterruptedLock(projectRoot);
   const backend = selectBackend();
   if (backend === null) {
     return fn({ agentCwd: projectRoot, spawnPrefix: [] });
@@ -312,23 +400,42 @@ function withIsolation(projectRoot, writablePaths, fn) {
     }
   }
 
-  const modes = prepareChmodLock(projectRoot, writablePaths);
-  try {
-    return fn({ agentCwd: projectRoot, spawnPrefix: [] });
-  } finally {
+  const root = path.resolve(projectRoot);
+  let released = false;
+  let locking = false;
+  let modes = null;
+  const release = () => {
+    if (released) return;
+    released = true;
+    heldLocks.delete(root);
+    if (!locking) return; // nothing was locked, so there is nothing to undo
     try {
       restoreModes(projectRoot, modes);
+      fs.rmSync(lockMarkerPath(projectRoot), { force: true });
     } catch (error) {
       console.error(
         `tea-test-review WARNING: failed to restore write permissions under ${projectRoot}: ${error.message}. ` +
           'Restore manually with: chmod -R u+w <path>',
       );
     }
+  };
+  installStopHandlers();
+  heldLocks.set(root, release);
+  try {
+    prepareChmodLock(projectRoot, writablePaths, (snapshot) => {
+      modes = snapshot;
+      locking = true;
+    });
+    return fn({ agentCwd: projectRoot, spawnPrefix: [] });
+  } finally {
+    release();
   }
 }
 
 module.exports = {
   withIsolation,
+  lockMarkerPath,
+  recoverInterruptedLock,
   isolationAvailable,
   selectBackend,
   buildSandboxProfile,

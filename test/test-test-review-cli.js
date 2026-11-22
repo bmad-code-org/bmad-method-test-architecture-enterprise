@@ -106,7 +106,15 @@ const {
 } = require('../cli/lib/changed-tests');
 const { resolveSkill, resolvePackagedSkill } = require('../cli/lib/resolve-skill');
 const { buildPrompt } = require('../cli/lib/build-prompt');
-const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable } = require('../cli/lib/isolate');
+const {
+  buildSandboxProfile,
+  buildBwrapPrefix,
+  selectBackend,
+  isolationAvailable,
+  lockMarkerPath,
+  recoverInterruptedLock,
+  withIsolation,
+} = require('../cli/lib/isolate');
 const { runAgent, buildMinimalEnv, executableFound } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel, strongestCapability } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('../cli/lib/resolve-tea-config');
@@ -251,6 +259,54 @@ function runGitEnvironmentProbe() {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+}
+
+/**
+ * Starts the CLI in its own process group on a stub agent that blocks, waits
+ * for the CLI's first heartbeat line, then sends `signal` to the whole group,
+ * the way Ctrl-C or a cancelled CI job does. Resolves with how the CLI ended.
+ */
+function stopCliDuringAgent(args, env, signal, { waitForBeatMs = 10_000, endWithinMs = 15_000 } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    });
+    let stderr = '';
+    let stopped = false;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ...result, stopped, stderr });
+    };
+    const killGroup = (name) => {
+      try {
+        process.kill(-child.pid, name);
+      } catch {
+        // the group is already gone
+      }
+    };
+    child.stdout.resume();
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+      if (!stopped && stderr.includes('agent still running')) {
+        stopped = true;
+        killGroup(signal);
+        setTimeout(() => {
+          killGroup('SIGKILL');
+          finish({ status: null, signal: null, timedOut: true });
+        }, endWithinMs);
+      }
+    });
+    child.on('close', (status, endSignal) => finish({ status, signal: endSignal, timedOut: false }));
+    setTimeout(() => {
+      if (stopped) return;
+      killGroup('SIGKILL');
+      finish({ status: null, signal: null, timedOut: true });
+    }, waitForBeatMs);
+  });
 }
 
 /**
@@ -2987,6 +3043,103 @@ async function runTests() {
           `${error.code}: ${error.message}`,
         );
       }
+      // A chmod lock that a SIGKILL (or a lost container) left behind is undone by the next run from its marker,
+      // and only once the process that took it is gone.
+      if (process.platform === 'win32') {
+        skip('an interrupted chmod lock is recovered from its marker', 'chmod isolation is POSIX-only');
+      } else {
+        const lockedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-interrupted-lock-'));
+        const lockedFile = path.join(lockedRoot, 'checkout.spec.ts');
+        fs.writeFileSync(lockedFile, "test('checkout', () => {});\n");
+        fs.chmodSync(lockedFile, 0o644);
+        const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
+        const writeMarker = (pid) =>
+          fs.writeFileSync(
+            lockMarkerPath(lockedRoot),
+            JSON.stringify({
+              projectRoot: path.resolve(lockedRoot),
+              pid,
+              modes: [
+                [lockedRoot, 0o755],
+                [lockedFile, 0o644],
+              ],
+            }),
+          );
+        const modeOf = (entry) => fs.statSync(entry).mode & 0o777;
+        try {
+          fs.chmodSync(lockedFile, 0o444);
+          writeMarker(process.pid);
+          assert(
+            recoverInterruptedLock(lockedRoot) === false && modeOf(lockedFile) === 0o444 && fs.existsSync(lockMarkerPath(lockedRoot)),
+            "a lock marker of a process still running is left alone: that run's own restore is still to come",
+            `mode=${modeOf(lockedFile).toString(8)}`,
+          );
+          writeMarker(deadPid);
+          const originalError = console.error;
+          let notice = '';
+          console.error = (line) => (notice += `${line}\n`);
+          let recovered;
+          try {
+            recovered = recoverInterruptedLock(lockedRoot);
+          } finally {
+            console.error = originalError;
+          }
+          assert(
+            recovered === true && modeOf(lockedFile) === 0o644 && !fs.existsSync(lockMarkerPath(lockedRoot)),
+            "the next run restores the modes an interrupted run's marker recorded, and removes the marker",
+            `recovered=${recovered} mode=${modeOf(lockedFile).toString(8)} notice=${notice}`,
+          );
+          assert(notice.includes(`pid ${deadPid}`), 'recovering an interrupted lock says which run left it', notice);
+          assert(recoverInterruptedLock(lockedRoot) === false, 'with no marker there is nothing to recover');
+        } finally {
+          fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
+          fs.chmodSync(lockedFile, 0o644);
+          fs.rmSync(lockedRoot, { recursive: true, force: true });
+        }
+      }
+
+      // While withIsolation holds a chmod lock, its marker records it and stop signals are handled, so a SIGTERM cannot
+      // end the process before the finally restores the tree. Root ignores the mode bits, so this runs unprivileged.
+      if (process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0)) {
+        skip('withIsolation records and releases a chmod lock', 'needs POSIX and a non-root user');
+      } else {
+        const heldRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-held-lock-'));
+        const heldFile = path.join(heldRoot, 'checkout.spec.ts');
+        fs.writeFileSync(heldFile, "test('checkout', () => {});\n");
+        const previousBackend = process.env.TEA_TEST_REVIEW_ISOLATION;
+        process.env.TEA_TEST_REVIEW_ISOLATION = 'chmod';
+        let during = null;
+        try {
+          withIsolation(heldRoot, [path.join(heldRoot, 'out', 'test-review.md')], () => {
+            let marker = null;
+            try {
+              marker = JSON.parse(fs.readFileSync(lockMarkerPath(heldRoot), 'utf8'));
+            } catch {
+              // marker stays null
+            }
+            during = { marker, sigterm: process.listenerCount('SIGTERM'), sigint: process.listenerCount('SIGINT') };
+          });
+        } finally {
+          if (previousBackend === undefined) delete process.env.TEA_TEST_REVIEW_ISOLATION;
+          else process.env.TEA_TEST_REVIEW_ISOLATION = previousBackend;
+        }
+        assert(
+          during && during.marker && during.marker.pid === process.pid && Array.isArray(during.marker.modes),
+          'a held chmod lock has a marker naming this process and the permission snapshot',
+          JSON.stringify(during),
+        );
+        assert(during && during.sigterm > 0 && during.sigint > 0, 'stop-signal handlers are installed while the chmod lock is held');
+        let writable = false;
+        try {
+          fs.appendFileSync(heldFile, '// after\n');
+          writable = true;
+        } catch {
+          writable = false;
+        }
+        assert(writable && !fs.existsSync(lockMarkerPath(heldRoot)), 'releasing the chmod lock restores the tree and removes the marker');
+        fs.rmSync(heldRoot, { recursive: true, force: true });
+      }
+
       // Under an isolation wrapper (sandbox-exec, bwrap) the wrapper's own exec is what fails, so the missing agent is
       // named before anything starts, and a failing agent by its own command.
       const wrapper = ['/bin/sh', '-c', 'exec "$0" "$@"'];
@@ -5860,6 +6013,56 @@ async function runTests() {
         skip('chmod isolation copies root-level artifacts back', reason);
         skip('chmod isolation restores exact permission bits', reason);
         skip('chmod isolation restores permissions after a report-parse failure', reason);
+      }
+
+      // Ctrl-C or a cancelled CI job sends the whole process group a stop signal while the agent runs. The run ends
+      // without a retry, and under chmod isolation the tree is writable again and no lock marker is left behind.
+      // Only the chmod backend keeps the CLI alive through the signal (bwrap and sandbox-exec need no restore), so only
+      // there could a retry start the agent again.
+      if (chmodTestable) {
+        const stopRoot = path.join(tmpRoot, 'stopped-project');
+        fs.cpSync(isoRoot, stopRoot, { recursive: true });
+        fs.mkdirSync(path.join(stopRoot, 'tests'), { recursive: true });
+        fs.writeFileSync(path.join(stopRoot, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
+        const stopped = await stopCliDuringAgent(
+          [
+            '--files',
+            'tests/checkout.spec.ts',
+            '--project-root',
+            stopRoot,
+            '--output',
+            'out/test-review.md',
+            '--agent-cmd',
+            stubAgent,
+            '--retries',
+            '2',
+            '--isolate',
+            ...stubPass('STUB_DELAY_MS'),
+          ],
+          { STUB_DELAY_MS: '20000', TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2', TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+          'SIGTERM',
+        );
+        assert(
+          stopped.stopped && !stopped.timedOut && (stopped.status === 3 || stopped.signal === 'SIGTERM'),
+          'a run whose process group gets SIGTERM ends promptly, as a failed or signalled run',
+          `status=${stopped.status} signal=${stopped.signal} timedOut=${stopped.timedOut} stderr=${stopped.stderr}`,
+        );
+        assert(
+          !stopped.stderr.includes('retrying') && !stopped.stderr.includes('attempt 1 of'),
+          'a run stopped by SIGTERM is not retried, even with --retries 2',
+          stopped.stderr,
+        );
+        let stopRestored = false;
+        try {
+          fs.writeFileSync(path.join(stopRoot, 'probe-after-stop.txt'), 'writable\n');
+          stopRestored = true;
+        } catch {
+          stopRestored = false;
+        }
+        assert(stopRestored, 'chmod isolation: a run stopped by SIGTERM restores write permissions before it ends');
+        assert(!fs.existsSync(lockMarkerPath(stopRoot)), 'chmod isolation: a run stopped by SIGTERM leaves no lock marker');
+      } else {
+        skip('a run stopped by SIGTERM is not retried and leaves the tree unlocked', isRoot ? 'running as root' : 'platform unsupported');
       }
 
       // Platform-independent: an invalid override must exit 2 (not silently run
