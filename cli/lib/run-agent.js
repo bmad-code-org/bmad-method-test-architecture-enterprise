@@ -309,6 +309,8 @@ function agentAnswer({ outcome, stdout, stderr }, { command: spawned, agentComma
     throw withStreams(error);
   }
 
+  // An agent that exits 0 after a stop still ran under one: a caller must not retry what was cancelled.
+  if (typeof outcome.stoppedBy === 'string') return { stdout: stdout || '', stderr: stderr || '', stoppedBy: outcome.stoppedBy };
   return { stdout: stdout || '', stderr: stderr || '' };
 }
 

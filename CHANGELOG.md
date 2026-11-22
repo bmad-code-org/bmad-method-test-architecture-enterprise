@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A `tea-test-review` run under `chmod` isolation that is stopped by SIGINT, SIGTERM or SIGHUP (Ctrl-C, a cancelled CI job) restores the project's write permissions before it exits, and is not retried. A run killed by SIGKILL leaves a lock marker, and the next run on that project restores the permissions from it (#514).
+- A `tea-test-review` run under `chmod` isolation that is stopped by SIGINT, SIGTERM or SIGHUP (Ctrl-C, a cancelled CI job) restores the project's write permissions before it exits, and is not retried. A run killed by SIGKILL leaves a lock marker in an owner-only per-user directory, and the next run on that project restores the permissions from it before anything else. A second `chmod` run on a project that is still locked exits 2 instead of locking it again (#514).
 
 ## [4.3.1] - 2026-11-20
 
