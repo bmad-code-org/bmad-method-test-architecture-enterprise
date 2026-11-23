@@ -48,6 +48,17 @@ const FAULT_EXIT = 5;
 const USAGE_EXIT = 64;
 /** Every diagnostic line of the eval-quality CLI starts with this. */
 const DIAGNOSTIC_PREFIX = 'eval-quality: ';
+const DIAGNOSTIC_SHORT_ESCAPES = { '\n': String.raw`\n`, '\r': String.raw`\r`, '\t': String.raw`\t` };
+// eslint-disable-next-line no-control-regex
+const DIAGNOSTIC_CONTROLS = /[\u0000-\u001F\u007F-\u009F]/gu;
+
+/** Match eval-quality's 10.1.1 rendering before comparing an in-process diagnostic with stderr. */
+function diagnosticValue(value) {
+  return value.replaceAll(
+    DIAGNOSTIC_CONTROLS,
+    (character) => DIAGNOSTIC_SHORT_ESCAPES[character] ?? String.raw`\u` + character.codePointAt(0).toString(16).padStart(4, '0'),
+  );
+}
 
 /** The run directory's files that have one fixed name: the compiled contract, the policy, the preflight verdict and the evaluator configuration. */
 const RUN_FILES = Object.freeze({
@@ -417,9 +428,9 @@ class HeldInputs {
         signal: new AbortController().signal,
       });
       const lines = qualification.failures.map(
-        (failure) => `${DIAGNOSTIC_PREFIX}${failure.code}: ${failure.artifactPath}: ${failure.detail}`,
+        (failure) => `${DIAGNOSTIC_PREFIX}${failure.code}: ${diagnosticValue(failure.artifactPath)}: ${diagnosticValue(failure.detail)}`,
       );
-      if (ladder.verdict === null) lines.push(...ladder.basis.map((reason) => `${DIAGNOSTIC_PREFIX}invalid: ${reason}`));
+      if (ladder.verdict === null) lines.push(...ladder.basis.map((reason) => `${DIAGNOSTIC_PREFIX}invalid: ${diagnosticValue(reason)}`));
       return {
         artifact: artifact === null ? null : Buffer.from(this.#engine.serializeArtifact(artifact, 'EvidenceArtifact'), 'utf8'),
         exitCode: ladder.exitCode,

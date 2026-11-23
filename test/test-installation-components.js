@@ -545,7 +545,7 @@ async function runTests() {
           assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
           assert(
             skillContent.includes(
-              `resolve_customization.py --skill {skill-root} --project-root {project-root} --key ${dirName === 'bmad-tea-automate' ? '{workflow-key}' : 'workflow'}`,
+              `uv run "{project-root}/_bmad/scripts/resolve_customization.py" --skill "{skill-root}" --project-root "{project-root}" --key ${dirName === 'bmad-tea-automate' ? '{workflow-key}' : 'workflow'}`,
             ),
             `${dirName}/SKILL.md resolves the selected workflow customization block`,
           );
@@ -1269,13 +1269,16 @@ async function runTests() {
 
       const skillContent = await fs.readFile(path.join(workflowDir, 'SKILL.md'), 'utf8');
       assert(
-        skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
+        skillContent.includes(
+          'uv run "{project-root}/_bmad/scripts/resolve_customization.py" --skill "{skill-root}" --project-root "{project-root}" --key workflow',
+        ),
         `${dirName}/SKILL.md resolves the workflow customization block`,
       );
       assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
       assert(
-        skillContent.includes('resolve_config.py --project-root {project-root} --key core --key modules.tea') &&
-          skillContent.includes('bmad setup tea'),
+        skillContent.includes(
+          'uv run "{project-root}/_bmad/scripts/resolve_config.py" --project-root "{project-root}" --key core --key modules.tea',
+        ) && skillContent.includes('bmad setup tea'),
         `${dirName}/SKILL.md loads TEA config through resolve_config.py and points at bmad setup tea`,
       );
 

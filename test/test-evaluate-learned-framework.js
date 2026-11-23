@@ -649,6 +649,10 @@ function splitPairOracle(linked) {
       behavior.id = 'B-003';
       behavior.oracles = ['O-003'];
       contract.behaviors.push(behavior);
+      const manifestFile = path.join(evaluation, 'evaluation.json');
+      const manifest = read(manifestFile);
+      manifest.heldOutCoverageExclusions = { 'B-003': 'The linked pair is exercised by the development run in this fixture.' };
+      fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
     }
     fs.writeFileSync(file, `${JSON.stringify(contract, null, 2)}\n`);
   };

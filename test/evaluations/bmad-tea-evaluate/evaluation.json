@@ -64,6 +64,11 @@
   "heldOutProbes": [
     "P-003"
   ],
+  "heldOutCoverageExclusions": {
+    "B-002": "Web interface classification was measured in development.",
+    "B-003": "Exit table completeness was measured in development.",
+    "B-004": "Requests without a usable exit were measured in development."
+  },
   "trials": 5,
   "tiers": [
     "pr"
