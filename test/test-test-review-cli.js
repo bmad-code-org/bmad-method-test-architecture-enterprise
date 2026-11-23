@@ -106,7 +106,7 @@ const {
 } = require('../cli/lib/changed-tests');
 const { resolveSkill, resolvePackagedSkill } = require('../cli/lib/resolve-skill');
 const { buildPrompt } = require('../cli/lib/build-prompt');
-const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable } = require('../cli/lib/isolate');
+const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable, noBackendReason } = require('../cli/lib/isolate');
 const { runAgent, buildMinimalEnv, executableFound } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel, strongestCapability } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('../cli/lib/resolve-tea-config');
@@ -2507,7 +2507,10 @@ async function runTests() {
       );
 
       assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'none' }, 'darwin') === null, 'backend override "none" disables isolation');
-      assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'darwin') === 'chmod', 'backend override "chmod" forces the fallback');
+      assert(
+        selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'darwin', 501) === 'chmod',
+        'backend override "chmod" forces the fallback',
+      );
       // A recognized backend name that is wrong for this platform (bwrap is
       // linux-only) must fail closed, not silently degrade to "no isolation":
       // that would run the agent unsandboxed while logging nothing distinct
@@ -2532,9 +2535,36 @@ async function runTests() {
           `${error.code}: ${error.message}`,
         );
       }
-      assert(selectBackend({ PATH: '' }, 'darwin') === 'chmod', 'darwin without sandbox-exec on PATH falls back to chmod');
-      assert(selectBackend({ PATH: '' }, 'linux') === 'chmod', 'linux without bwrap on PATH falls back to chmod');
-      assert(selectBackend({}, 'win32') === null, 'win32 has no isolation backend');
+      assert(selectBackend({ PATH: '' }, 'darwin', 501) === 'chmod', 'darwin without sandbox-exec on PATH falls back to chmod');
+      assert(selectBackend({ PATH: '' }, 'linux', 1000) === 'chmod', 'linux without bwrap on PATH falls back to chmod');
+      assert(selectBackend({}, 'win32', null) === null, 'win32 has no isolation backend');
+      // Root ignores permission bits, so the chmod fallback would isolate nothing (#515): root gets no backend, and the
+      // documented path applies (a warning in CI, exit 2 with --isolate), with a reason that names the fix.
+      assert(selectBackend({ PATH: '' }, 'linux', 0) === null, 'linux as root without bwrap has no backend: chmod cannot restrict root');
+      assert(
+        selectBackend({ PATH: '' }, 'darwin', 0) === null,
+        'darwin as root without sandbox-exec has no backend: chmod cannot restrict root',
+      );
+      try {
+        selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'linux', 0);
+        assert(false, 'backend override "chmod" as root throws rather than running the agent unrestricted');
+      } catch (error) {
+        assert(
+          error.code === 'ISOLATION_ERROR' && error.message.includes('root') && error.message.includes('bwrap'),
+          'backend override "chmod" as root throws ISOLATION_ERROR saying root ignores the lock and naming bwrap',
+          `${error.code}: ${error.message}`,
+        );
+      }
+      assert(
+        noBackendReason('linux', 0).includes('root') && noBackendReason('linux', 0).includes('bubblewrap'),
+        'the no-backend reason as root says chmod cannot isolate root and names bubblewrap',
+        noBackendReason('linux', 0),
+      );
+      assert(
+        noBackendReason('win32', null) === 'no isolation backend (sandbox-exec, bwrap, chmod) is available on this platform',
+        'the no-backend reason off root is unchanged',
+        noBackendReason('win32', null),
+      );
       assert(typeof isolationAvailable() === 'boolean', 'isolationAvailable() returns a boolean');
 
       const minimalEnv = buildMinimalEnv(['EXTRA_ONE'], { PATH: '/usr/bin', HOME: '/home/x', EXTRA_ONE: '1', SECRET_TOKEN: 'nope' });
@@ -9977,10 +10007,11 @@ async function runTests() {
         );
       }
       assert(
-        selectBackend({ PATH: '' }, 'win32') === null &&
-          selectBackend({ PATH: '' }, 'linux') === 'chmod' &&
-          selectBackend({ PATH: '' }, 'darwin') === 'chmod',
-        'Windows has no isolation backend, while macOS and Linux always fall back to chmod',
+        // An explicit non-root uid: the platform rule is what the reference states; root's refusal is asserted in Suite 6.
+        selectBackend({ PATH: '' }, 'win32', 1000) === null &&
+          selectBackend({ PATH: '' }, 'linux', 1000) === 'chmod' &&
+          selectBackend({ PATH: '' }, 'darwin', 1000) === 'chmod',
+        'Windows has no isolation backend, while macOS and Linux fall back to chmod for a non-root user',
       );
       assert(
         /Windows:\*\* no backend exists/.test(reference) && /falls back to `chmod`/.test(reference),
