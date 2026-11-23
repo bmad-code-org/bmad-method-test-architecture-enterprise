@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require eval-quality 10.1.1 for escaped CLI diagnostics.
 - The `oracle-count` rule also holds a zero-action defect probe's behavior to exactly one oracle, as it already did for defect and gameability probes.
 
+### Fixed
+
+- Quote paths in BMad resolver commands so TeA works in checkouts with spaces.
+
 ## [4.3.1] - 2026-11-20
 
 ### Fixed

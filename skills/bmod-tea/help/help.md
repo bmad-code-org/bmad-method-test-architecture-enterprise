@@ -35,7 +35,7 @@ The story's status is never TEA's to change. Red mode hands its tests to the bui
 
 ## Where things land
 
-Every workflow writes under the test artifacts folder, chosen at setup as `modules.tea.test_artifacts`, which can sit outside the output folder. To see what TEA has run, resolve it with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.tea.test_artifacts` and look in these folders inside it:
+Every workflow writes under the test artifacts folder, chosen at setup as `modules.tea.test_artifacts`, which can sit outside the output folder. To see what TEA has run, resolve it with `uv run "{project-root}/_bmad/scripts/resolve_config.py" --project-root "{project-root}" --key modules.tea.test_artifacts` and look in these folders inside it:
 
 | Folder                               | Written by                                                                                                                  |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
