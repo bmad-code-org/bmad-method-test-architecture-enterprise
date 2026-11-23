@@ -49,7 +49,7 @@ const ASSERTION_TEXT = /\b(?:assert\w*|expect|should|verify)\b/i;
 // Files that set up what tests read: fixtures, hooks, helpers, factories.
 const SUPPORT_FILE =
   /(?:conftest|fixtures?|helpers?|support|setup|factor(?:y|ies)|mocks?|stubs?|test[-_]?utils?)\b|(?:^|\/)(?:tests?|specs?|__tests__|e2e|cypress|playwright)\//i;
-const CODE_FILE = /\.(?:py|js|jsx|mjs|cjs|ts|tsx|java|kt|rb|go|cs|php|swift|rs)$/;
+const CODE_FILE = /\.(?:py|js|jsx|mjs|cjs|ts|tsx|mts|cts|java|kt|rb|go|cs|php|swift|rs)$/;
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
@@ -161,21 +161,30 @@ function isTestSupportFile(file) {
 function getDiffEvidence({ base, projectRoot, files, contextFiles = [] }) {
   // Paths come back from git relative to the repository root, and the project root can be a
   // subdirectory of it, so every pathspec and file read is anchored at the top level.
-  const topLevel = runGit(['rev-parse', '--show-toplevel'], { base, projectRoot }).trim() || projectRoot;
-  const addedOutput = runGitDiff(['--name-only', '--diff-filter=A', '-z', `${base}...HEAD`, '--'], {
-    base,
-    projectRoot,
-  });
-  const addedFiles = new Set(addedOutput.split('\0').filter(Boolean));
+  const context = { base, projectRoot };
+  const topLevel = runGit(['rev-parse', '--show-toplevel'], context).trim() || projectRoot;
+  const rawDiff = runGitDiff(['--raw', '--no-abbrev', '--find-renames', '--diff-filter=AR', '-z', `${base}...HEAD`, '--'], context);
+  const fields = rawDiff.split('\0');
+  const addedFiles = new Set();
+  const renamedBlobs = new Map();
+  for (let i = 0; i < fields.length - 1; ) {
+    // Raw records carry both modes, both object IDs, status, old path and, for a rename, new path.
+    const [before, after, status] = fields[i++].split(' ').slice(2);
+    const oldPath = fields[i++];
+    if (status === 'A') addedFiles.add(oldPath);
+    else if (status.startsWith('R')) renamedBlobs.set(fields[i++], { before, after });
+  }
 
+  const patchOptions = ['--unified=0', '--no-color', '--no-ext-diff'];
   const evidenceFor = (file) => {
-    const patch = runGitDiff(
-      ['--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=d', `${base}...HEAD`, '--', `:(top,literal)${file}`],
-      {
-        base,
-        projectRoot,
-      },
-    );
+    const rename = renamedBlobs.get(file);
+    let patch;
+    if (rename) {
+      // Diff the exact pair Git found. The old path may now name a directory with unrelated edits.
+      patch = rename.before === rename.after ? '' : runGitDiff([...patchOptions, rename.before, rename.after, '--'], context);
+    } else {
+      patch = runGitDiff([...patchOptions, '--diff-filter=d', `${base}...HEAD`, '--', `:(top,literal)${file}`], context);
+    }
     return {
       fileStatus: addedFiles.has(file) ? 'added' : 'modified',
       changedRanges: changedRanges(patch),

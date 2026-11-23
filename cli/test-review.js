@@ -704,23 +704,23 @@ async function runReview(session) {
     .option('--no-isolate', 'disable filesystem isolation (default: isolated when CI is set, otherwise off)')
     .option(
       '--use-playwright-utils',
-      'force tea_use_playwright_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
+      'force tea_use_playwright_utils on, overriding the resolved [modules.tea] value (default when nothing states it: true)',
     )
-    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding the resolved [modules.tea] value')
     .option(
       '--use-pactjs-utils',
-      'force tea_use_pactjs_utils on, overriding [modules.tea] in _bmad/config.toml (default when nothing states it: true)',
+      'force tea_use_pactjs_utils on, overriding the resolved [modules.tea] value (default when nothing states it: true)',
     )
-    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding [modules.tea] in _bmad/config.toml')
+    .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding the resolved [modules.tea] value')
     .option(
       '--pact-mcp <mode>',
-      `force tea_pact_mcp, overriding [modules.tea] in _bmad/config.toml (${PACT_MCP_VALUES.join('|')}; default: mcp)`,
+      `force tea_pact_mcp, overriding the resolved [modules.tea] value (${PACT_MCP_VALUES.join('|')}; default: mcp)`,
     )
     .option(
       '--execution-mode <mode>',
-      `force tea_execution_mode, overriding [modules.tea] in _bmad/config.toml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
+      `force tea_execution_mode, overriding the resolved [modules.tea] value (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
     )
-    .option('--capability-probe', 'force tea_capability_probe on, overriding [modules.tea] in _bmad/config.toml (default: true)')
+    .option('--capability-probe', 'force tea_capability_probe on, overriding the resolved [modules.tea] value (default: true)')
     .option('--no-capability-probe', 'force tea_capability_probe off, so the requested execution mode is honored strictly');
 
   program.exitOverride();
