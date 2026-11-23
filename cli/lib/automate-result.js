@@ -9,10 +9,10 @@ const { projectPath } = require('./workflow-cli');
 const { generatedInventory, reconcileInventory } = require('./automate-inventory');
 const { UNIT_CHECK_KIND, normalizeUnitReport, unitReportRunner } = require('./unit-runners');
 
-const UNUSABLE_CRITERIA_POLICIES = ['halt', 'skip-and-report'];
+const UNUSABLE_CRITERIA_POLICIES = new Set(['halt', 'skip-and-report']);
 
 function unusableCriteriaPolicy(value = 'halt', label = 'workflow.red.unusable_criteria') {
-  if (!UNUSABLE_CRITERIA_POLICIES.includes(value)) throw new Error(`${label} must be halt or skip-and-report`);
+  if (!UNUSABLE_CRITERIA_POLICIES.has(value)) throw new Error(`${label} must be halt or skip-and-report`);
   return value;
 }
 
@@ -213,9 +213,9 @@ function skippedRedCriteria(checkpoint, text, settings, operation, inventory) {
     const active = new Set([...registry.keys()].filter((id) => !excluded.has(id)));
     for (const test of inventory.tests) {
       const [id, ...extra] = test.titlePath.at(-1).match(/\bAC-\d+\b/g) ?? [];
-      if (extra.length || !active.delete(id)) throw new Error('Red scaffold titles must map one-to-one to testable criteria');
+      if (extra.length > 0 || !active.delete(id)) throw new Error('Red scaffold titles must map one-to-one to testable criteria');
     }
-    if (active.size) throw new Error('Red scaffold inventory omits a testable criterion');
+    if (active.size > 0) throw new Error('Red scaffold inventory omits a testable criterion');
   }
   return excluded.size;
 }
