@@ -3139,6 +3139,17 @@ async function runTests() {
             `result=${planted} mode=${modeOf(lockedFile).toString(8)}`,
           );
 
+          // A marker is only ever published whole, so an empty or torn file is not taken for a dead run's and is
+          // never removed: a run creating its marker at that moment keeps it.
+          for (const content of ['', '{"projectRoot":']) {
+            fs.writeFileSync(lockMarkerPath(lockedRoot), content, { mode: 0o600 });
+            assert(
+              recoverInterruptedLock(lockedRoot) === false && fs.readFileSync(lockMarkerPath(lockedRoot), 'utf8') === content,
+              `an ${content === '' ? 'empty' : 'incomplete'} lock marker is left in place, not treated as stale`,
+            );
+          }
+          fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
+
           // A marker reached through a symbolic link is never read.
           fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
           const decoy = path.join(lockedParent, 'decoy.json');
@@ -6173,6 +6184,64 @@ async function runTests() {
           'an agent that exits 0 when stopped, without a report, is not retried',
           `status=${cleanStop.status} signal=${cleanStop.signal} timedOut=${cleanStop.timedOut} stderr=${cleanStop.stderr}`,
         );
+
+        // Runs that start on the same project at the same moment: one holds the lock at a time, the others fail
+        // naming the holder, and the project ends with every original mode and no marker.
+        const raceRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-lock-race-')));
+        const raceWritable = path.join(raceRoot, 'writable.ts');
+        const raceReadOnly = path.join(raceRoot, 'read-only.ts');
+        fs.writeFileSync(raceWritable, 'export {};\n');
+        fs.writeFileSync(raceReadOnly, 'export {};\n');
+        fs.chmodSync(raceWritable, 0o644);
+        fs.chmodSync(raceReadOnly, 0o444);
+        const rootMode = fs.statSync(raceRoot).mode & 0o7777;
+        const startAt = Date.now() + 1500;
+        const racer = `
+          const { withIsolation } = require(${JSON.stringify(path.join(repoRoot, 'cli', 'lib', 'isolate.js'))});
+          while (Date.now() < ${startAt}) {}
+          try {
+            withIsolation(${JSON.stringify(raceRoot)}, [], () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200));
+            process.stdout.write('locked');
+          } catch (error) {
+            process.stdout.write(error.code === 'ISOLATION_ERROR' && error.message.includes('holds the chmod lock') ? 'busy' : 'ERROR ' + error.message);
+          }
+        `;
+        const racers = await Promise.all(
+          Array.from(
+            { length: 8 },
+            () =>
+              new Promise((resolve) => {
+                const child = spawn(process.execPath, ['-e', racer], {
+                  env: { ...process.env, TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+                let out = '';
+                child.stdout.on('data', (chunk) => (out += chunk));
+                child.stderr.on('data', (chunk) => (out += chunk));
+                child.on('close', () => resolve(out.trim()));
+              }),
+          ),
+        );
+        const raceModes = {
+          root: fs.statSync(raceRoot).mode & 0o7777,
+          writable: fs.statSync(raceWritable).mode & 0o777,
+          readOnly: fs.statSync(raceReadOnly).mode & 0o777,
+        };
+        const leftovers = fs
+          .readdirSync(path.dirname(lockMarkerPath(raceRoot)))
+          .filter((name) => name.startsWith(path.basename(lockMarkerPath(raceRoot))));
+        assert(
+          racers.every((outcome) => outcome === 'locked' || outcome === 'busy') && racers.includes('locked'),
+          'chmod runs that start on one project at once either hold the lock or fail naming the holder',
+          JSON.stringify(racers),
+        );
+        assert(
+          raceModes.root === rootMode && raceModes.writable === 0o644 && raceModes.readOnly === 0o444 && leftovers.length === 0,
+          'after concurrent chmod runs every original mode is back and no marker or private file is left',
+          `${JSON.stringify(raceModes)} root was ${rootMode.toString(8)}; leftovers=${JSON.stringify(leftovers)}`,
+        );
+        fs.chmodSync(raceReadOnly, 0o644);
+        fs.rmSync(raceRoot, { recursive: true, force: true });
 
         // A SIGKILLed run leaves the tree locked with its marker. The next run restores it before checking that it
         // can write its outputs, so the rerun works without a manual chmod.

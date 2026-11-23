@@ -336,31 +336,48 @@ function processAlive(pid) {
 }
 
 /**
- * Read the marker at markerPath, or null. It is read only from a trusted marker directory, only as a regular file
- * this user owns (never through a link), and only when it names this project.
+ * Read a marker-format file, or null: only a regular file this user owns (never through a link), holding a complete
+ * record for this project. A marker is only ever published whole, so anything unparseable is not ours to act on.
  */
-function readMarker(markerPath, root) {
-  if (!markerDirectoryTrusted(path.dirname(markerPath))) return null;
+function readMarkerFile(file, root) {
   let text;
   try {
-    const stats = fs.lstatSync(markerPath);
+    const stats = fs.lstatSync(file);
     const uid = currentUid();
     if (!stats.isFile() || (uid !== null && stats.uid !== uid)) return null;
-    const descriptor = fs.openSync(markerPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
     try {
       text = fs.readFileSync(descriptor, 'utf8');
     } finally {
       fs.closeSync(descriptor);
     }
-  } catch {
-    return null;
-  }
-  try {
     const record = JSON.parse(text);
     return record && typeof record === 'object' && record.projectRoot === root ? record : null;
   } catch {
-    // Only the empty file a run creates before its first write can be unparseable: nothing was locked yet.
-    return text.trim() === '' ? { projectRoot: root, pid: null, locked: false, modes: null } : null;
+    return null;
+  }
+}
+
+/** Read the lock marker at markerPath, or null; it is read only from a trusted marker directory. */
+function readMarker(markerPath, root) {
+  if (!markerDirectoryTrusted(path.dirname(markerPath))) return null;
+  return readMarkerFile(markerPath, root);
+}
+
+/** A private name beside the marker, unique to this call: a file there is this process's alone. */
+function privateName(marker, kind) {
+  return `${marker}.${kind}.${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
+}
+
+/** Write a complete marker record to a new private file (never an existing one), flushed to disk. */
+function writeRecordFile(file, root, record) {
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
+  const descriptor = fs.openSync(file, flags, 0o600);
+  try {
+    fs.writeSync(descriptor, JSON.stringify({ projectRoot: root, pid: process.pid, ...record }), 0, 'utf8');
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
   }
 }
 
@@ -394,13 +411,36 @@ function recoverInterruptedLock(projectRoot) {
   const marker = lockMarkerPath(root);
   const record = readMarker(marker, root);
   if (record === null || processAlive(record.pid)) return false;
-  if (record.locked !== true) {
-    // The run ended before it locked anything: the marker is all there is to undo.
-    fs.rmSync(marker, { force: true });
+  // Claim the marker by renaming it to a private name: of runs that all saw it dead, one wins the rename, so no run
+  // can delete a marker another run has just published in its place.
+  const claim = privateName(marker, 'claim');
+  try {
+    fs.renameSync(marker, claim);
+  } catch {
+    return false; // another run claimed it first
+  }
+  const claimed = readMarkerFile(claim, root);
+  // Put a claimed marker back untouched; if a new marker was published meanwhile, that one stands.
+  const putBack = () => {
+    try {
+      fs.linkSync(claim, marker);
+    } catch {
+      // a newer marker holds the name
+    }
+    fs.rmSync(claim, { force: true });
+  };
+  if (claimed === null || processAlive(claimed.pid)) {
+    putBack(); // the rename took a marker that is not a dead run's: leave it as it was
     return false;
   }
-  const snapshot = markerSnapshot(record, root);
+  if (claimed.locked !== true) {
+    // The run ended before it locked anything: the marker is all there is to undo.
+    fs.rmSync(claim, { force: true });
+    return false;
+  }
+  const snapshot = markerSnapshot(claimed, root);
   if (snapshot === false) {
+    putBack();
     console.error(
       `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or an invalid mode. ` +
         'If the project is still read-only, restore it manually with: chmod -R u+w <path>',
@@ -409,66 +449,66 @@ function recoverInterruptedLock(projectRoot) {
   }
   try {
     restoreModes(root, snapshot);
-    fs.rmSync(marker, { force: true });
   } catch (error) {
+    putBack(); // keep the snapshot for the next attempt
     console.error(
       `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +
         'Restore manually with: chmod -R u+w <path>',
     );
     return false;
   }
-  console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${record.pid}) left on ${root}.`);
+  fs.rmSync(claim, { force: true });
+  console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${claimed.pid}) left on ${root}.`);
   return true;
 }
 
 /**
- * Take the lock marker for root before anything is snapshotted or locked: created exclusively, so a second run on
- * the same project cannot record the first run's locked modes as its own. A live holder fails this run; a dead
- * holder's lock is recovered first.
+ * Take the lock marker for root before anything is snapshotted or locked. The record is written whole to a private
+ * file and published with an exclusive hard link, so the marker either does not exist or is complete: no run ever
+ * sees an empty one, and a second run on the same project cannot record the first run's locked modes as its own.
+ * A live holder fails this run; a dead holder's lock is recovered first.
  *
  * @returns {{ write: (record: object) => void, remove: () => void }}
  */
 function acquireLockMarker(root) {
   ensureMarkerDirectory();
   const marker = lockMarkerPath(root);
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
-  let descriptor;
-  for (let attempt = 0; descriptor === undefined; attempt += 1) {
-    try {
-      descriptor = fs.openSync(marker, flags, 0o600);
-    } catch (error) {
-      if (error.code !== 'EEXIST' || attempt > 0) {
-        throw isolationError(`cannot take the chmod lock for ${root}: ${error.message}`);
-      }
-      const holder = readMarker(marker, root);
-      if (holder !== null && processAlive(holder.pid)) {
-        throw isolationError(
-          `another tea-test-review run (pid ${holder.pid}) holds the chmod lock on ${root}; wait for it to finish and rerun.`,
-        );
-      }
-      recoverInterruptedLock(root);
-      if (fs.existsSync(marker)) {
-        throw isolationError(`a chmod lock marker ${marker} could not be recovered; check ${root} and remove the marker.`);
+  const initial = privateName(marker, 'new');
+  writeRecordFile(initial, root, { locked: false, modes: null });
+  try {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        fs.linkSync(initial, marker);
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw isolationError(`cannot take the chmod lock for ${root}: ${error.message}`);
+        const holder = readMarker(marker, root);
+        if (holder !== null && processAlive(holder.pid)) {
+          throw isolationError(
+            `another tea-test-review run (pid ${holder.pid}) holds the chmod lock on ${root}; wait for it to finish and rerun.`,
+          );
+        }
+        if (attempt > 0) {
+          throw isolationError(`a chmod lock marker ${marker} could not be recovered; check ${root} and remove the marker.`);
+        }
+        recoverInterruptedLock(root);
       }
     }
+  } finally {
+    fs.rmSync(initial, { force: true });
   }
-  fs.closeSync(descriptor);
-  // Each update is written beside the marker and renamed over it, so a run killed mid-write leaves the previous
+  // Each update is written whole beside the marker and renamed over it, so a run killed mid-write leaves the previous
   // complete record, never a torn one.
   const write = (record) => {
-    const temporary = `${marker}.${process.pid}.tmp`;
-    const text = JSON.stringify({ projectRoot: root, pid: process.pid, ...record });
-    const out = fs.openSync(temporary, flags, 0o600);
+    const temporary = privateName(marker, 'tmp');
     try {
-      fs.writeSync(out, text, 0, 'utf8');
-      fs.fsyncSync(out);
+      writeRecordFile(temporary, root, record);
+      fs.renameSync(temporary, marker);
     } finally {
-      fs.closeSync(out);
+      fs.rmSync(temporary, { force: true });
     }
-    fs.renameSync(temporary, marker);
   };
   const remove = () => fs.rmSync(marker, { force: true });
-  write({ locked: false, modes: null });
   return { write, remove };
 }
 
