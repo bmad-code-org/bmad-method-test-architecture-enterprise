@@ -361,6 +361,30 @@ function run() {
     assert(found.includes(expected), `${expected} fires: ${label}`, `got [${found.join(', ')}] for ${file}`);
   }
 
+  for (const [source, rule, expectedLines] of [
+    [
+      'import { test } from "@playwright/test";\ntest["only"]("focus", () => {});\n{\n  const test = widget;\n  test["only"]("value");\n}\ntest["only"]("again", () => {});',
+      'C2',
+      [2, 7],
+    ],
+    ['import { test } from "../support/merged-fixtures";\ntest["only"]("focus", () => {});', 'C2', [2]],
+    ['import { test as verify } from "./merged-fixtures";\nverify["only"]("focus", () => {});', 'C2', [2]],
+    [
+      'import { setTimeout as wait } from "node:timers/promises";\nawait wait(ms);\nfunction exercise(wait) {\n  wait(ms);\n}\nawait wait(ms);',
+      'H1',
+      [2, 6],
+    ],
+    ['import { setTimeout as later } from "node:timers";\nawait new Promise(r => later(r, ms));', 'H1', [2]],
+    ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, ms));', 'H1', [2]],
+    ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, 0));', 'H1', []],
+    ['const later = widget;\nawait new Promise(r => later(r, ms));', 'H1', []],
+  ]) {
+    const actualLines = scan('tests/a.spec.ts', source)
+      .filter((finding) => finding.rule.id === rule)
+      .map((finding) => finding.line);
+    assert(JSON.stringify(actualLines) === JSON.stringify(expectedLines), `${rule} resolves the binding at each call`, source);
+  }
+
   assert(
     ids(scan('vitest.config.pact.ts', 'export default { test: { pool: "forks" } };\n')).includes('H6'),
     'H6 fires: pact config omits fileParallelism: false',
