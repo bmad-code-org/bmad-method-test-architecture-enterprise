@@ -46,10 +46,9 @@ async function heldRefusal({ held, set, staged, exitCode, stderr }) {
     return `the call exited ${exitCode} where the verified inputs give ${expected.exitCode} (an in-process score of the held bytes)`;
   }
   if (expected.lines !== null && exitCode !== null) {
-    // The CLI writes each line plus a newline and keeps any newline inside it (a mount path or a key can carry one), so
-    // both sides go through the same split before the prefixed pieces are compared.
+    // Held inputs reproduce single-line diagnostics with caller values escaped as the CLI renders them.
     const printed = diagnosticLines(stderr);
-    if (JSON.stringify(printed) !== JSON.stringify(diagnosticLines(expected.lines.map((line) => `${line}\n`).join('')))) {
+    if (JSON.stringify(printed) !== JSON.stringify(expected.lines)) {
       return "the call's eval-quality diagnostics differ from those the verified inputs give (an in-process score of the held bytes)";
     }
   }

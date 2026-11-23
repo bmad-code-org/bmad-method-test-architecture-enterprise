@@ -1869,9 +1869,9 @@ function checkHeldOutCoverage(report, evaluation, contract, probes) {
   if (selected.length === 0 && !isPlainObject(evaluation.partitionPlan)) return;
   const behaviors = behaviorsOf(contract);
   const required = new Set(behaviors.filter((behavior) => HELD_OUT_SEVERITIES.has(behavior.severity)).map((behavior) => behavior.id));
-  const exclusions = isPlainObject(evaluation.heldOutCoverageExclusions) ? evaluation.heldOutCoverageExclusions : {};
+  const heldOutCoverageExclusions = isPlainObject(evaluation.heldOutCoverageExclusions) ? evaluation.heldOutCoverageExclusions : {};
   if (contract !== undefined) {
-    for (const id of Object.keys(exclusions)) {
+    for (const id of Object.keys(heldOutCoverageExclusions)) {
       if (!required.has(id))
         report.add(MANIFEST_NAME, 'held-out', `heldOutCoverageExclusions names ${id}, which is not a material or critical behavior`);
     }
@@ -1885,7 +1885,8 @@ function checkHeldOutCoverage(report, evaluation, contract, probes) {
   }
   for (const behavior of behaviors) {
     if (!required.has(behavior.id) || covered.has(behavior.id)) continue;
-    if (Object.hasOwn(exclusions, behavior.id) && typeof exclusions[behavior.id] === 'string' && exclusions[behavior.id].trim()) continue;
+    const reason = heldOutCoverageExclusions[behavior.id];
+    if (typeof reason === 'string' && reason.trim()) continue;
     report.add(
       MANIFEST_NAME,
       'held-out',
