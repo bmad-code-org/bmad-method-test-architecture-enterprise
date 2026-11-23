@@ -15,11 +15,16 @@
  *      comes back with its exact original modes. A restore failure prints a loud
  *      warning but never masks the run result. Root ignores permission bits, so
  *      the fallback is never chosen for uid 0: there it would isolate nothing.
+ *      While locked, SIGINT, SIGTERM and SIGHUP cannot end the process before
+ *      that restore, and a lock
+ *      marker in the temp directory lets the next isolated run restore a tree
+ *      that a SIGKILL left locked.
  *
  * TEA_TEST_REVIEW_ISOLATION (sandbox-exec|bwrap|chmod|none) overrides backend
  * selection; it exists so tests can force the chmod fallback on any platform.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -255,7 +260,7 @@ function snapshotModes(projectRoot) {
  * Undo the lock. With a snapshot, every recorded entry goes back to its exact
  * mode; entries created during the run were never locked and are left alone.
  */
-function restoreModes(projectRoot, modes) {
+function restoreModes(projectRoot, modes, { strict = false } = {}) {
   if (modes === null) {
     runChmod(['-R', 'u+w', projectRoot]);
     return;
@@ -263,10 +268,277 @@ function restoreModes(projectRoot, modes) {
   for (const [entry, mode] of modes) {
     try {
       fs.chmodSync(entry, mode);
-    } catch {
-      // entry was removed during the run; nothing to restore
+    } catch (error) {
+      // A removed entry needs no restore. On recovery, preserve its marker
+      // if another failure made the restore incomplete.
+      if (strict && error.code !== 'ENOENT') throw error;
     }
   }
+}
+
+// Signals that end a run from outside (Ctrl-C, a cancelled CI job, a closed terminal). Node's default for each is
+// to exit at once, which would skip the restore and leave the whole tree, .git included, read-only.
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
+/** The locks this process holds now: project root to restore function. */
+const heldLocks = new Map();
+let stopHandlersInstalled = false;
+
+/**
+ * Keep a stop signal from killing the process while a tree is locked. The agent runs under spawnSync, so a handler
+ * runs only once that returns: by then the supervisor, which gets the same signal, has stopped the agent and
+ * withIsolation's finally has restored the tree. If a lock is still held when the handler runs, it restores it.
+ * Either way it then re-raises the signal with Node's default action, so the process ends as the signal asked.
+ */
+function installStopHandlers() {
+  if (stopHandlersInstalled) return;
+  stopHandlersInstalled = true;
+  const onStop = (signal) => {
+    for (const restore of heldLocks.values()) restore();
+    for (const name of STOP_SIGNALS) process.removeListener(name, onStop);
+    stopHandlersInstalled = false;
+    process.kill(process.pid, signal);
+  };
+  for (const name of STOP_SIGNALS) process.on(name, onStop);
+}
+
+/** The real path of projectRoot, so a project reached through a symlink has one identity and one marker. */
+function canonicalRoot(projectRoot) {
+  const resolved = path.resolve(projectRoot);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+/** The per-user directory the lock markers live in: in the temp directory, but only this user can enter it. */
+function markerDirectory() {
+  const uid = currentUid();
+  return path.join(os.tmpdir(), `tea-test-review-${uid === null ? 'user' : uid}`);
+}
+
+/**
+ * Whether the marker directory is one this user owns and nobody else can write: a directory (not a link), owned by
+ * this uid, with no group or other permission bits. Anything else in its place may have been planted.
+ */
+function markerDirectoryTrusted(directory) {
+  let stats;
+  try {
+    stats = fs.lstatSync(directory);
+  } catch {
+    return false;
+  }
+  const uid = currentUid();
+  return stats.isDirectory() && !stats.isSymbolicLink() && (uid === null || stats.uid === uid) && (stats.mode & 0o077) === 0;
+}
+
+/** Create the marker directory owner-only, or refuse one that is not; a planted directory must never hold a marker. */
+function ensureMarkerDirectory() {
+  const directory = markerDirectory();
+  try {
+    fs.mkdirSync(directory, { mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw isolationError(`cannot create the chmod lock directory ${directory}: ${error.message}`);
+  }
+  if (!markerDirectoryTrusted(directory)) {
+    throw isolationError(
+      `the chmod lock directory ${directory} is not a directory owned by this user with mode 0700; remove it and rerun.`,
+    );
+  }
+  return directory;
+}
+
+/** Where the lock marker for projectRoot lives: outside the locked tree, one per project, in the per-user directory. */
+function lockMarkerPath(projectRoot) {
+  const digest = crypto.createHash('sha256').update(canonicalRoot(projectRoot)).digest('hex').slice(0, 16);
+  return path.join(markerDirectory(), `lock-${digest}.json`);
+}
+
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+/**
+ * Read a marker-format file, or null: only a regular file this user owns (never through a link), holding a complete
+ * record for this project. A marker is only ever published whole, so anything unparseable is not ours to act on.
+ */
+function readMarkerFile(file, root) {
+  let text;
+  try {
+    const stats = fs.lstatSync(file);
+    const uid = currentUid();
+    if (!stats.isFile() || (uid !== null && stats.uid !== uid)) return null;
+    const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      text = fs.readFileSync(descriptor, 'utf8');
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    const record = JSON.parse(text);
+    return record && typeof record === 'object' && record.projectRoot === root ? record : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the lock marker at markerPath, or null; it is read only from a trusted marker directory. */
+function readMarker(markerPath, root) {
+  if (!markerDirectoryTrusted(path.dirname(markerPath))) return null;
+  return readMarkerFile(markerPath, root);
+}
+
+/** A private name beside the marker, unique to this call: a file there is this process's alone. */
+function privateName(marker, kind) {
+  return `${marker}.${kind}.${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
+}
+
+/** Write a complete marker record to a new private file (never an existing one), flushed to disk. */
+function writeRecordFile(file, root, record) {
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
+  const descriptor = fs.openSync(file, flags, 0o600);
+  try {
+    fs.writeSync(descriptor, JSON.stringify({ projectRoot: root, pid: process.pid, ...record }), 0, 'utf8');
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/**
+ * The snapshot a marker holds, as restoreModes takes it, when every entry is a path inside the project with a plain
+ * permission value; otherwise false, and nothing is applied.
+ */
+function markerSnapshot(record, root) {
+  if (record.modes === null) return null;
+  if (!Array.isArray(record.modes)) return false;
+  const modes = new Map();
+  for (const item of record.modes) {
+    if (!Array.isArray(item) || item.length !== 2) return false;
+    const [entry, mode] = item;
+    if (typeof entry !== 'string' || !path.isAbsolute(entry) || !isInside(root, entry)) return false;
+    if (!Number.isInteger(mode) || mode < 0 || mode > 0o7777) return false;
+    modes.set(entry, mode);
+  }
+  return modes;
+}
+
+/**
+ * Restore a tree an earlier chmod-isolated run left locked: it was killed in a way no handler could catch (SIGKILL,
+ * a lost container). Its marker holds the permission snapshot. A marker of a process still running is left alone,
+ * and one that names a path outside the project is refused rather than applied.
+ *
+ * @returns {boolean} Whether a lock was found and restored.
+ */
+function recoverInterruptedLock(projectRoot) {
+  const root = canonicalRoot(projectRoot);
+  const marker = lockMarkerPath(root);
+  const record = readMarker(marker, root);
+  if (record === null || processAlive(record.pid)) return false;
+  // Serialize stale recovery separately while leaving the original marker at
+  // its canonical name. Acquirers must keep seeing it until restoration is done.
+  const claim = `${marker}.recover`;
+  try {
+    fs.mkdirSync(claim, { mode: 0o700 });
+  } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw isolationError(`cannot claim chmod lock recovery for ${root}: ${error.message}`);
+  }
+  try {
+    // The lock may have been recovered or acquired by another process since
+    // the first read. Never restore based on a record read before the claim.
+    const claimed = readMarker(marker, root);
+    if (claimed === null || processAlive(claimed.pid)) return false;
+    if (claimed.locked !== true) {
+      fs.rmSync(marker, { force: true });
+      return false;
+    }
+    const snapshot = markerSnapshot(claimed, root);
+    if (snapshot === false) {
+      console.error(
+        `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or an invalid mode. ` +
+          'If the project is still read-only, restore it manually with: chmod -R u+w <path>',
+      );
+      return false;
+    }
+    try {
+      restoreModes(root, snapshot, { strict: true });
+    } catch (error) {
+      console.error(
+        `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +
+          'Restore manually with: chmod -R u+w <path>',
+      );
+      return false;
+    }
+    fs.rmSync(marker, { force: true });
+    console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${claimed.pid}) left on ${root}.`);
+    return true;
+  } finally {
+    fs.rmdirSync(claim);
+  }
+}
+
+/**
+ * Take the lock marker for root before anything is snapshotted or locked. The record is written whole to a private
+ * file and published with an exclusive hard link, so the marker either does not exist or is complete: no run ever
+ * sees an empty one, and a second run on the same project cannot record the first run's locked modes as its own.
+ * A live holder fails this run; a dead holder's lock is recovered first.
+ *
+ * @returns {{ write: (record: object) => void, remove: () => void }}
+ */
+function acquireLockMarker(root) {
+  ensureMarkerDirectory();
+  const marker = lockMarkerPath(root);
+  const initial = privateName(marker, 'new');
+  writeRecordFile(initial, root, { locked: false, modes: null });
+  try {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        fs.linkSync(initial, marker);
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw isolationError(`cannot take the chmod lock for ${root}: ${error.message}`);
+        const holder = readMarker(marker, root);
+        if (holder !== null && processAlive(holder.pid)) {
+          throw isolationError(
+            `another tea-test-review run (pid ${holder.pid}) holds the chmod lock on ${root}; wait for it to finish and rerun.`,
+          );
+        }
+        if (attempt > 0) {
+          const claim = `${marker}.recover`;
+          if (fs.existsSync(claim)) {
+            throw isolationError(
+              `chmod lock recovery for ${root} is already claimed at ${claim}; wait for it to finish. ` +
+                'If the recovering process was killed, make sure no recovery is running, then remove only the empty .recover directory and retry.',
+            );
+          }
+          throw isolationError(`a chmod lock marker ${marker} could not be recovered; check ${root} and remove the marker.`);
+        }
+        recoverInterruptedLock(root);
+      }
+    }
+  } finally {
+    fs.rmSync(initial, { force: true });
+  }
+  // Each update is written whole beside the marker and renamed over it, so a run killed mid-write leaves the previous
+  // complete record, never a torn one.
+  const write = (record) => {
+    const temporary = privateName(marker, 'tmp');
+    try {
+      writeRecordFile(temporary, root, record);
+      fs.renameSync(temporary, marker);
+    } finally {
+      fs.rmSync(temporary, { force: true });
+    }
+  };
+  const remove = () => fs.rmSync(marker, { force: true });
+  return { write, remove };
 }
 
 /**
@@ -274,7 +546,7 @@ function restoreModes(projectRoot, modes) {
  * writable. Only paths inside the project root need unlocking; the root itself
  * stays locked so the agent cannot create new top-level entries.
  */
-function prepareChmodLock(projectRoot, writablePaths) {
+function prepareChmodLock(projectRoot, writablePaths, marker, onSnapshot = () => {}) {
   const root = path.resolve(projectRoot);
   const insidePaths = writablePaths.map((entry) => path.resolve(entry)).filter((entry) => entry !== root && isInside(root, entry));
   // Snapshot phase: the artifact parent directories must exist before the tree
@@ -293,6 +565,10 @@ function prepareChmodLock(projectRoot, writablePaths) {
     }
   }
   const modes = snapshotModes(projectRoot);
+  // The snapshot is in the marker before the lock, so no moment exists where the tree is locked and nothing records
+  // how to undo it.
+  marker.write({ locked: true, modes: modes === null ? null : [...modes] });
+  onSnapshot(modes);
   runChmod(['-R', 'a-w', projectRoot]);
   for (const entry of insidePaths) {
     if (fs.existsSync(entry)) {
@@ -316,6 +592,7 @@ function prepareChmodLock(projectRoot, writablePaths) {
  * @returns {any} fn's return value.
  */
 function withIsolation(projectRoot, writablePaths, fn) {
+  recoverInterruptedLock(projectRoot);
   const backend = selectBackend();
   if (backend === null) {
     return fn({ agentCwd: projectRoot, spawnPrefix: [] });
@@ -341,23 +618,54 @@ function withIsolation(projectRoot, writablePaths, fn) {
     }
   }
 
-  const modes = prepareChmodLock(projectRoot, writablePaths);
-  try {
-    return fn({ agentCwd: projectRoot, spawnPrefix: [] });
-  } finally {
+  // The lock works on the project's real path, so the marker, the snapshot and the restore agree on one identity.
+  const root = canonicalRoot(projectRoot);
+  const resolved = path.resolve(projectRoot);
+  const lockedWritable = writablePaths.map((entry) => {
+    const absolute = path.resolve(entry);
+    return isInside(resolved, absolute) ? path.join(root, path.relative(resolved, absolute)) : absolute;
+  });
+  let released = false;
+  let marker = null;
+  let locking = false;
+  let modes = null;
+  const release = () => {
+    if (released) return;
+    released = true;
+    heldLocks.delete(root);
+    if (marker === null) return; // the lock was never taken
+    if (!locking) {
+      marker.remove(); // nothing was locked, so there is nothing to undo
+      return;
+    }
     try {
-      restoreModes(projectRoot, modes);
+      restoreModes(root, modes);
+      marker.remove();
     } catch (error) {
       console.error(
-        `tea-test-review WARNING: failed to restore write permissions under ${projectRoot}: ${error.message}. ` +
+        `tea-test-review WARNING: failed to restore write permissions under ${root}: ${error.message}. ` +
           'Restore manually with: chmod -R u+w <path>',
       );
     }
+  };
+  installStopHandlers();
+  heldLocks.set(root, release);
+  try {
+    marker = acquireLockMarker(root);
+    prepareChmodLock(root, lockedWritable, marker, (snapshot) => {
+      modes = snapshot;
+      locking = true;
+    });
+    return fn({ agentCwd: projectRoot, spawnPrefix: [] });
+  } finally {
+    release();
   }
 }
 
 module.exports = {
   withIsolation,
+  lockMarkerPath,
+  recoverInterruptedLock,
   isolationAvailable,
   noBackendReason,
   selectBackend,

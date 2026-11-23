@@ -106,7 +106,16 @@ const {
 } = require('../cli/lib/changed-tests');
 const { resolveSkill, resolvePackagedSkill } = require('../cli/lib/resolve-skill');
 const { buildPrompt } = require('../cli/lib/build-prompt');
-const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable, noBackendReason } = require('../cli/lib/isolate');
+const {
+  buildSandboxProfile,
+  buildBwrapPrefix,
+  selectBackend,
+  isolationAvailable,
+  noBackendReason,
+  lockMarkerPath,
+  recoverInterruptedLock,
+  withIsolation,
+} = require('../cli/lib/isolate');
 const { runAgent, buildMinimalEnv, executableFound } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel, strongestCapability } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('../cli/lib/resolve-tea-config');
@@ -251,6 +260,58 @@ function runGitEnvironmentProbe() {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+}
+
+/**
+ * Starts the CLI in its own process group on a stub agent that blocks, waits
+ * for the CLI's first heartbeat line, then sends `signal` to the whole group,
+ * the way Ctrl-C or a cancelled CI job does. Resolves with how the CLI ended.
+ */
+function stopCliDuringAgent(args, env, signal, { waitForBeatMs = 10_000, endWithinMs = 15_000 } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    });
+    let stderr = '';
+    let stopped = false;
+    let settled = false;
+    let waitTimer;
+    let endTimer;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(waitTimer);
+      clearTimeout(endTimer);
+      resolve({ ...result, stopped, stderr });
+    };
+    const killGroup = (name) => {
+      try {
+        process.kill(-child.pid, name);
+      } catch {
+        // the group is already gone
+      }
+    };
+    child.stdout.resume();
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+      if (!stopped && stderr.includes('agent still running')) {
+        stopped = true;
+        killGroup(signal);
+        endTimer = setTimeout(() => {
+          killGroup('SIGKILL');
+          finish({ status: null, signal: null, timedOut: true });
+        }, endWithinMs);
+      }
+    });
+    child.on('close', (status, endSignal) => finish({ status, signal: endSignal, timedOut: false }));
+    waitTimer = setTimeout(() => {
+      if (stopped) return;
+      killGroup('SIGKILL');
+      finish({ status: null, signal: null, timedOut: true });
+    }, waitForBeatMs);
+  });
 }
 
 /**
@@ -2945,21 +3006,6 @@ async function runTests() {
         },
         { children: [{ record: null, exitCode: 1 }], expected: 'quality' },
         { children: [{ record: { failureClass: 'none' }, exitCode: 0 }], expected: 'none' },
-        {
-          children: [
-            { record: { failureClass: 'none' }, exitCode: 0 },
-            { record: { failureClass: 'environment-transport' }, exitCode: 2 },
-          ],
-          expected: 'environment-transport',
-        },
-        {
-          children: [
-            { record: { failureClass: 'none' }, exitCode: 0 },
-            { record: { failureClass: 'environment-transport' }, exitCode: 2 },
-            { record: { failureClass: 'environment-configuration' }, exitCode: 2 },
-          ],
-          expected: 'environment-configuration',
-        },
       ];
       assert(
         childOutcomes.every(({ children, expected }) => runFailureClass(children) === expected),
@@ -2985,19 +3031,14 @@ async function runTests() {
         { cwd: repoRoot, encoding: 'utf8' },
       );
       const writtenSummary = fs.existsSync(summaryPath) ? JSON.parse(fs.readFileSync(summaryPath, 'utf8')) : null;
-      const reportedChildren = writtenSummary?.suites ?? [];
-      const reportedClasses = reportedChildren.map((child) => child.failureClass);
+      const reportedClasses = writtenSummary?.suites.map((child) => child.failureClass) ?? [];
       const expectedFailureClass = reportedClasses.includes('environment-configuration')
         ? 'environment-configuration'
         : 'environment-transport';
       assert(
         writtenSummary !== null &&
           reportedClasses.includes('environment-transport') &&
-          reportedChildren.every(
-            ({ failureClass, exitCode }) =>
-              ['none', 'environment-transport', 'environment-configuration'].includes(failureClass) &&
-              exitCodeForFailureClass(failureClass) === exitCode,
-          ) &&
+          reportedClasses.every((failureClass) => ['environment-transport', 'environment-configuration'].includes(failureClass)) &&
           reconciledRun.status === 2 &&
           writtenSummary.exitCode === reconciledRun.status &&
           exitCodeForFailureClass(writtenSummary.failureClass) === reconciledRun.status &&
@@ -3044,6 +3085,258 @@ async function runTests() {
           `${error.code}: ${error.message}`,
         );
       }
+      // A chmod lock that a SIGKILL (or a lost container) left behind is undone by the next run from its marker,
+      // and only once the process that took it is gone. The marker lives in an owner-only per-user directory and is
+      // applied only when it is this user's file and names nothing outside the project.
+      if (process.platform === 'win32') {
+        skip('an interrupted chmod lock is recovered from its marker', 'chmod isolation is POSIX-only');
+      } else {
+        const lockedParent = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-interrupted-lock-')));
+        const lockedRoot = path.join(lockedParent, 'project');
+        const outsideFile = path.join(lockedParent, 'outside.txt');
+        fs.mkdirSync(lockedRoot);
+        const lockedFile = path.join(lockedRoot, 'checkout.spec.ts');
+        fs.writeFileSync(lockedFile, "test('checkout', () => {});\n");
+        fs.writeFileSync(outsideFile, 'not part of the project\n');
+        fs.chmodSync(outsideFile, 0o600);
+        const linkedRoot = path.join(lockedParent, 'linked-project');
+        fs.symlinkSync(lockedRoot, linkedRoot);
+        const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
+        const markerDir = path.dirname(lockMarkerPath(lockedRoot));
+        fs.mkdirSync(markerDir, { recursive: true, mode: 0o700 });
+        fs.chmodSync(markerDir, 0o700);
+        const writeMarker = (
+          pid,
+          modes = [
+            [lockedRoot, 0o755],
+            [lockedFile, 0o644],
+          ],
+        ) =>
+          fs.writeFileSync(lockMarkerPath(lockedRoot), JSON.stringify({ projectRoot: lockedRoot, pid, locked: true, modes }), {
+            mode: 0o600,
+          });
+        const modeOf = (entry) => fs.statSync(entry).mode & 0o777;
+        const quietly = (fn) => {
+          const originalError = console.error;
+          let notice = '';
+          console.error = (line) => (notice += `${line}\n`);
+          try {
+            return { result: fn(), notice };
+          } finally {
+            console.error = originalError;
+          }
+        };
+        try {
+          assert(
+            lockMarkerPath(linkedRoot) === lockMarkerPath(lockedRoot) && lockMarkerPath(lockedRoot).startsWith(`${markerDir}${path.sep}`),
+            'a project reached through a symlink has the same lock marker, inside the per-user marker directory',
+            `${lockMarkerPath(linkedRoot)} vs ${lockMarkerPath(lockedRoot)}`,
+          );
+          const markerDirMode = fs.statSync(markerDir).mode & 0o777;
+          assert(markerDirMode === 0o700, 'the lock marker directory is owner-only (0700)', markerDirMode.toString(8));
+
+          fs.chmodSync(lockedFile, 0o444);
+          writeMarker(process.pid);
+          assert(
+            recoverInterruptedLock(lockedRoot) === false && modeOf(lockedFile) === 0o444 && fs.existsSync(lockMarkerPath(lockedRoot)),
+            "a lock marker of a process still running is left alone: that run's own restore is still to come",
+            `mode=${modeOf(lockedFile).toString(8)}`,
+          );
+
+          writeMarker(deadPid);
+          const recovered = quietly(() => recoverInterruptedLock(linkedRoot));
+          assert(
+            recovered.result === true && modeOf(lockedFile) === 0o644 && !fs.existsSync(lockMarkerPath(lockedRoot)),
+            "the next run restores the modes an interrupted run's marker recorded, through a symlinked root too, and removes the marker",
+            `recovered=${recovered.result} mode=${modeOf(lockedFile).toString(8)} notice=${recovered.notice}`,
+          );
+          assert(recovered.notice.includes(`pid ${deadPid}`), 'recovering an interrupted lock says which run left it', recovered.notice);
+          assert(recoverInterruptedLock(lockedRoot) === false, 'with no marker there is nothing to recover');
+
+          fs.chmodSync(lockedFile, 0o444);
+          writeMarker(deadPid);
+          const chmodForRetry = fs.chmodSync;
+          try {
+            fs.chmodSync = (entry, mode) => {
+              if (entry === lockedFile) throw Object.assign(new Error('simulated chmod failure'), { code: 'EIO' });
+              return chmodForRetry(entry, mode);
+            };
+            const failed = quietly(() => recoverInterruptedLock(lockedRoot));
+            assert(
+              failed.result === false && failed.notice.includes('simulated chmod failure') && fs.existsSync(lockMarkerPath(lockedRoot)),
+              'failed recovery keeps the original marker for retry',
+              failed.notice,
+            );
+          } finally {
+            fs.chmodSync = chmodForRetry;
+          }
+          assert(
+            quietly(() => recoverInterruptedLock(lockedRoot)).result && modeOf(lockedFile) === 0o644,
+            'a later recovery can restore from the retained marker',
+          );
+
+          // A dead marker stays visible until recovery restores every mode.
+          // Start the competing run synchronously during the first chmod,
+          // avoiding an unreliable timing race in the test itself.
+          if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
+            fs.chmodSync(lockedFile, 0o444);
+            writeMarker(deadPid);
+            const chmod = fs.chmodSync;
+            let competitor;
+            try {
+              fs.chmodSync = (entry, mode) => {
+                if (competitor === undefined) {
+                  competitor = spawnSync(
+                    process.execPath,
+                    [
+                      '-e',
+                      'try { require(process.argv[1]).withIsolation(process.argv[2], [], () => process.exit(5)); } ' +
+                        'catch (error) { console.error(error.message); process.exitCode = error.code === "ISOLATION_ERROR" ? 2 : 1; }',
+                      path.resolve(__dirname, '../cli/lib/isolate.js'),
+                      lockedRoot,
+                    ],
+                    { encoding: 'utf8', env: { ...process.env, TEA_TEST_REVIEW_ISOLATION: 'chmod' } },
+                  );
+                }
+                return chmod(entry, mode);
+              };
+              const result = quietly(() => recoverInterruptedLock(lockedRoot));
+              assert(result.result === true, 'stale-marker recovery succeeds when another run tries to acquire', result.notice);
+            } finally {
+              fs.chmodSync = chmod;
+            }
+            assert(
+              competitor?.status === 2 && competitor.stderr.includes('recovery') && modeOf(lockedFile) === 0o644,
+              'a concurrent run cannot acquire before stale-marker permission restore finishes',
+              JSON.stringify({ status: competitor?.status, stderr: competitor?.stderr, mode: modeOf(lockedFile).toString(8) }),
+            );
+          }
+
+          // A forged marker must not reach outside the project: the whole snapshot is refused, nothing is applied.
+          fs.chmodSync(lockedFile, 0o444);
+          writeMarker(deadPid, [
+            [lockedFile, 0o644],
+            [outsideFile, 0o777],
+          ]);
+          const forged = quietly(() => recoverInterruptedLock(lockedRoot));
+          assert(
+            forged.result === false && modeOf(outsideFile) === 0o600 && modeOf(lockedFile) === 0o444 && forged.notice.includes('outside'),
+            'a marker that names a path outside the project is refused and none of its modes is applied',
+            `result=${forged.result} outside=${modeOf(outsideFile).toString(8)} inside=${modeOf(lockedFile).toString(8)} notice=${forged.notice}`,
+          );
+
+          // A marker directory others can write may hold a planted marker: it is not read at all.
+          writeMarker(deadPid);
+          fs.chmodSync(markerDir, 0o777);
+          let planted;
+          try {
+            planted = recoverInterruptedLock(lockedRoot);
+          } finally {
+            fs.chmodSync(markerDir, 0o700);
+          }
+          assert(
+            planted === false && modeOf(lockedFile) === 0o444,
+            'a marker in a marker directory others can write is ignored',
+            `result=${planted} mode=${modeOf(lockedFile).toString(8)}`,
+          );
+
+          // A marker is only ever published whole, so an empty or torn file is not taken for a dead run's and is
+          // never removed: a run creating its marker at that moment keeps it.
+          for (const content of ['', '{"projectRoot":']) {
+            fs.writeFileSync(lockMarkerPath(lockedRoot), content, { mode: 0o600 });
+            assert(
+              recoverInterruptedLock(lockedRoot) === false && fs.readFileSync(lockMarkerPath(lockedRoot), 'utf8') === content,
+              `an ${content === '' ? 'empty' : 'incomplete'} lock marker is left in place, not treated as stale`,
+            );
+          }
+          fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
+
+          // A marker reached through a symbolic link is never read.
+          fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
+          const decoy = path.join(lockedParent, 'decoy.json');
+          fs.writeFileSync(decoy, JSON.stringify({ projectRoot: lockedRoot, pid: deadPid, locked: true, modes: [[lockedFile, 0o644]] }));
+          fs.symlinkSync(decoy, lockMarkerPath(lockedRoot));
+          assert(
+            recoverInterruptedLock(lockedRoot) === false && modeOf(lockedFile) === 0o444,
+            'a lock marker that is a symbolic link is ignored',
+            `mode=${modeOf(lockedFile).toString(8)}`,
+          );
+        } finally {
+          fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
+          fs.chmodSync(lockedFile, 0o644);
+          fs.rmSync(lockedParent, { recursive: true, force: true });
+        }
+      }
+
+      // While withIsolation holds a chmod lock, its marker records it and stop signals are handled, so a SIGTERM cannot
+      // end the process before the finally restores the tree. Root ignores the mode bits, so this runs unprivileged.
+      if (process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0)) {
+        skip('withIsolation records and releases a chmod lock', 'needs POSIX and a non-root user');
+      } else {
+        const heldRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-held-lock-'));
+        const heldFile = path.join(heldRoot, 'checkout.spec.ts');
+        fs.writeFileSync(heldFile, "test('checkout', () => {});\n");
+        const previousBackend = process.env.TEA_TEST_REVIEW_ISOLATION;
+        process.env.TEA_TEST_REVIEW_ISOLATION = 'chmod';
+        let during = null;
+        try {
+          withIsolation(heldRoot, [path.join(heldRoot, 'out', 'test-review.md')], () => {
+            let marker = null;
+            try {
+              marker = JSON.parse(fs.readFileSync(lockMarkerPath(heldRoot), 'utf8'));
+            } catch {
+              // marker stays null
+            }
+            during = { marker, sigterm: process.listenerCount('SIGTERM'), sigint: process.listenerCount('SIGINT') };
+          });
+        } finally {
+          if (previousBackend === undefined) delete process.env.TEA_TEST_REVIEW_ISOLATION;
+          else process.env.TEA_TEST_REVIEW_ISOLATION = previousBackend;
+        }
+        assert(
+          during && during.marker && during.marker.pid === process.pid && Array.isArray(during.marker.modes),
+          'a held chmod lock has a marker naming this process and the permission snapshot',
+          JSON.stringify(during),
+        );
+        assert(during && during.sigterm > 0 && during.sigint > 0, 'stop-signal handlers are installed while the chmod lock is held');
+        let writable = false;
+        try {
+          fs.appendFileSync(heldFile, '// after\n');
+          writable = true;
+        } catch {
+          writable = false;
+        }
+        assert(writable && !fs.existsSync(lockMarkerPath(heldRoot)), 'releasing the chmod lock restores the tree and removes the marker');
+
+        // A second run while a live run holds the lock must fail before it snapshots, keeping the first run's
+        // snapshot intact (here, this process stands in for the live holder).
+        const holderRecord = JSON.stringify({ projectRoot: fs.realpathSync(heldRoot), pid: process.pid, locked: true, modes: [] });
+        fs.writeFileSync(lockMarkerPath(heldRoot), holderRecord, { mode: 0o600 });
+        process.env.TEA_TEST_REVIEW_ISOLATION = 'chmod';
+        let secondRun = null;
+        let secondRan = false;
+        try {
+          withIsolation(heldRoot, [], () => {
+            secondRan = true;
+          });
+        } catch (error) {
+          secondRun = error;
+        } finally {
+          if (previousBackend === undefined) delete process.env.TEA_TEST_REVIEW_ISOLATION;
+          else process.env.TEA_TEST_REVIEW_ISOLATION = previousBackend;
+        }
+        assert(
+          !secondRan &&
+            secondRun?.code === 'ISOLATION_ERROR' &&
+            secondRun.message.includes(`pid ${process.pid}`) &&
+            fs.readFileSync(lockMarkerPath(heldRoot), 'utf8') === holderRecord,
+          "a second chmod run on a locked project fails naming the holder, and leaves the holder's marker unchanged",
+          `${secondRun?.code}: ${secondRun?.message}`,
+        );
+        fs.rmSync(lockMarkerPath(heldRoot), { force: true });
+        fs.rmSync(heldRoot, { recursive: true, force: true });
+      }
+
       // Under an isolation wrapper (sandbox-exec, bwrap) the wrapper's own exec is what fails, so the missing agent is
       // named before anything starts, and a failing agent by its own command.
       const wrapper = ['/bin/sh', '-c', 'exec "$0" "$@"'];
@@ -5917,6 +6210,182 @@ async function runTests() {
         skip('chmod isolation copies root-level artifacts back', reason);
         skip('chmod isolation restores exact permission bits', reason);
         skip('chmod isolation restores permissions after a report-parse failure', reason);
+      }
+
+      // Ctrl-C or a cancelled CI job sends the whole process group a stop signal while the agent runs. The run ends
+      // without a retry, and under chmod isolation the tree is writable again and no lock marker is left behind.
+      // Only the chmod backend keeps the CLI alive through the signal (bwrap and sandbox-exec need no restore), so only
+      // there could a retry start the agent again.
+      if (chmodTestable) {
+        const stopRoot = path.join(tmpRoot, 'stopped-project');
+        fs.cpSync(isoRoot, stopRoot, { recursive: true });
+        fs.mkdirSync(path.join(stopRoot, 'tests'), { recursive: true });
+        fs.writeFileSync(path.join(stopRoot, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
+        const stopped = await stopCliDuringAgent(
+          [
+            '--files',
+            'tests/checkout.spec.ts',
+            '--project-root',
+            stopRoot,
+            '--output',
+            'out/test-review.md',
+            '--agent-cmd',
+            stubAgent,
+            '--retries',
+            '2',
+            '--isolate',
+            ...stubPass('STUB_DELAY_MS'),
+          ],
+          { STUB_DELAY_MS: '20000', TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2', TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+          'SIGTERM',
+        );
+        assert(
+          stopped.stopped && !stopped.timedOut && (stopped.status === 3 || stopped.signal === 'SIGTERM'),
+          'a run whose process group gets SIGTERM ends promptly, as a failed or signalled run',
+          `status=${stopped.status} signal=${stopped.signal} timedOut=${stopped.timedOut} stderr=${stopped.stderr}`,
+        );
+        assert(
+          !stopped.stderr.includes('retrying') && !stopped.stderr.includes('attempt 1 of'),
+          'a run stopped by SIGTERM is not retried, even with --retries 2',
+          stopped.stderr,
+        );
+        let stopRestored = false;
+        try {
+          fs.writeFileSync(path.join(stopRoot, 'probe-after-stop.txt'), 'writable\n');
+          stopRestored = true;
+        } catch {
+          stopRestored = false;
+        }
+        assert(stopRestored, 'chmod isolation: a run stopped by SIGTERM restores write permissions before it ends');
+        assert(!fs.existsSync(lockMarkerPath(stopRoot)), 'chmod isolation: a run stopped by SIGTERM leaves no lock marker');
+
+        // An agent that ends cleanly (exit 0) when stopped, without a report, is still a stopped run: no retry.
+        const cleanStopRoot = path.join(tmpRoot, 'clean-stop-project');
+        fs.cpSync(stopRoot, cleanStopRoot, { recursive: true });
+        const cleanStop = await stopCliDuringAgent(
+          [
+            '--files',
+            'tests/checkout.spec.ts',
+            '--project-root',
+            cleanStopRoot,
+            '--output',
+            'out/test-review.md',
+            '--agent-cmd',
+            stubAgent,
+            '--retries',
+            '2',
+            '--isolate',
+            ...stubPass('STUB_EXIT_ON_TERM'),
+          ],
+          { STUB_EXIT_ON_TERM: '1', TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2', TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+          'SIGTERM',
+        );
+        assert(
+          cleanStop.stopped && !cleanStop.timedOut && !cleanStop.stderr.includes('retrying'),
+          'an agent that exits 0 when stopped, without a report, is not retried',
+          `status=${cleanStop.status} signal=${cleanStop.signal} timedOut=${cleanStop.timedOut} stderr=${cleanStop.stderr}`,
+        );
+
+        // Runs that start on the same project at the same moment: one holds the lock at a time, the others fail
+        // naming the holder, and the project ends with every original mode and no marker.
+        const raceRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-lock-race-')));
+        const raceWritable = path.join(raceRoot, 'writable.ts');
+        const raceReadOnly = path.join(raceRoot, 'read-only.ts');
+        fs.writeFileSync(raceWritable, 'export {};\n');
+        fs.writeFileSync(raceReadOnly, 'export {};\n');
+        fs.chmodSync(raceWritable, 0o644);
+        fs.chmodSync(raceReadOnly, 0o444);
+        const rootMode = fs.statSync(raceRoot).mode & 0o7777;
+        const startAt = Date.now() + 1500;
+        const racer = `
+          const { withIsolation } = require(${JSON.stringify(path.join(repoRoot, 'cli', 'lib', 'isolate.js'))});
+          while (Date.now() < ${startAt}) {}
+          try {
+            withIsolation(${JSON.stringify(raceRoot)}, [], () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200));
+            process.stdout.write('locked');
+          } catch (error) {
+            process.stdout.write(error.code === 'ISOLATION_ERROR' && error.message.includes('holds the chmod lock') ? 'busy' : 'ERROR ' + error.message);
+          }
+        `;
+        const racers = await Promise.all(
+          Array.from(
+            { length: 8 },
+            () =>
+              new Promise((resolve) => {
+                const child = spawn(process.execPath, ['-e', racer], {
+                  env: { ...process.env, TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+                let out = '';
+                child.stdout.on('data', (chunk) => (out += chunk));
+                child.stderr.on('data', (chunk) => (out += chunk));
+                child.on('close', () => resolve(out.trim()));
+              }),
+          ),
+        );
+        const raceModes = {
+          root: fs.statSync(raceRoot).mode & 0o7777,
+          writable: fs.statSync(raceWritable).mode & 0o777,
+          readOnly: fs.statSync(raceReadOnly).mode & 0o777,
+        };
+        const leftovers = fs
+          .readdirSync(path.dirname(lockMarkerPath(raceRoot)))
+          .filter((name) => name.startsWith(path.basename(lockMarkerPath(raceRoot))));
+        assert(
+          racers.every((outcome) => outcome === 'locked' || outcome === 'busy') && racers.includes('locked'),
+          'chmod runs that start on one project at once either hold the lock or fail naming the holder',
+          JSON.stringify(racers),
+        );
+        assert(
+          raceModes.root === rootMode && raceModes.writable === 0o644 && raceModes.readOnly === 0o444 && leftovers.length === 0,
+          'after concurrent chmod runs every original mode is back and no marker or private file is left',
+          `${JSON.stringify(raceModes)} root was ${rootMode.toString(8)}; leftovers=${JSON.stringify(leftovers)}`,
+        );
+        fs.chmodSync(raceReadOnly, 0o644);
+        fs.rmSync(raceRoot, { recursive: true, force: true });
+
+        // A SIGKILLed run leaves the tree locked with its marker. The next run restores it before checking that it
+        // can write its outputs, so the rerun works without a manual chmod.
+        const killedRoot = path.join(tmpRoot, 'killed-lock-project');
+        fs.cpSync(stopRoot, killedRoot, { recursive: true });
+        fs.mkdirSync(path.join(killedRoot, 'out'), { recursive: true });
+        const killedOut = path.join(killedRoot, 'out');
+        const killedMarker = lockMarkerPath(killedRoot);
+        fs.mkdirSync(path.dirname(killedMarker), { recursive: true, mode: 0o700 });
+        const deadHolder = spawnSync(process.execPath, ['-e', '']).pid;
+        fs.writeFileSync(
+          killedMarker,
+          JSON.stringify({
+            projectRoot: fs.realpathSync(killedRoot),
+            pid: deadHolder,
+            locked: true,
+            modes: [[fs.realpathSync(killedOut), 0o755]],
+          }),
+          { mode: 0o600 },
+        );
+        fs.chmodSync(killedOut, 0o555);
+        const rerun = runCli(
+          [
+            '--files',
+            'tests/checkout.spec.ts',
+            '--project-root',
+            killedRoot,
+            '--output',
+            'out/test-review.md',
+            '--agent-cmd',
+            stubAgent,
+            '--no-isolate',
+          ],
+          {},
+        );
+        assert(
+          rerun.status === 0 && rerun.stderr.includes(`pid ${deadHolder}`) && !fs.existsSync(killedMarker),
+          'a rerun after a SIGKILLed chmod run restores the locked output directory before its output check',
+          `status=${rerun.status} stderr=${rerun.stderr}`,
+        );
+        fs.chmodSync(killedOut, 0o755);
+      } else {
+        skip('a run stopped by SIGTERM is not retried and leaves the tree unlocked', isRoot ? 'running as root' : 'platform unsupported');
       }
 
       // Platform-independent: an invalid override must exit 2 (not silently run

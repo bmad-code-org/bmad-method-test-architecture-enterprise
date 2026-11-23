@@ -41,6 +41,8 @@
  *                      attempt and let the retry succeed.
  *   STUB_DELAY_MS      milliseconds to block before acting on STUB_MODE, so a
  *                      test can act on the CLI while its agent is running
+ *   STUB_EXIT_ON_TERM  when "1", wait (up to 20 s) and exit 0 on SIGTERM without
+ *                      writing a report: an agent that ends cleanly when stopped
  */
 
 const fs = require('node:fs');
@@ -69,6 +71,12 @@ const REPORTS = {
 if (process.argv.includes('--version')) {
   process.stdout.write('stub-agent 1.0.0\n');
   process.exit(0);
+}
+
+if (process.env.STUB_EXIT_ON_TERM === '1') {
+  process.on('SIGTERM', () => process.exit(0));
+  setTimeout(() => process.exit(0), 20_000);
+  return;
 }
 
 function readStdin() {

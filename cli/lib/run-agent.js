@@ -304,9 +304,13 @@ function agentAnswer({ outcome, stdout, stderr }, { command: spawned, agentComma
     }
     const error = new Error(`Agent "${command}" ${ending}${stopped}.`);
     error.code = 'AGENT_FAILED';
+    // The signal that asked the agent's group to stop, so a caller can tell a cancelled run from a failed one.
+    if (typeof outcome.stoppedBy === 'string') error.stoppedBy = outcome.stoppedBy;
     throw withStreams(error);
   }
 
+  // An agent that exits 0 after a stop still ran under one: a caller must not retry what was cancelled.
+  if (typeof outcome.stoppedBy === 'string') return { stdout: stdout || '', stderr: stderr || '', stoppedBy: outcome.stoppedBy };
   return { stdout: stdout || '', stderr: stderr || '' };
 }
 

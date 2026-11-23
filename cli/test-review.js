@@ -82,7 +82,7 @@ const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
 const { neutralizeWorkflowCommands } = require('./lib/safe-log');
 const { AGENT_ADAPTERS, resolveModel, resolvedModelFromAnswer, agentAnswerText } = require('./lib/agent-adapters');
-const { withIsolation, selectBackend, noBackendReason } = require('./lib/isolate');
+const { withIsolation, selectBackend, noBackendReason, recoverInterruptedLock } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { RUBRIC_VERSION, TEA_CLI_VERSION, buildReviewProvenance, skillRubricVersion } = require('./lib/review-provenance');
 const { validInterval } = require('./lib/heartbeat');
@@ -1366,6 +1366,10 @@ async function runReview(session) {
     }
   }
 
+  // A chmod-isolated run killed by SIGKILL left the tree read-only; restore it from its marker before the output
+  // checks below, which would otherwise fail on the locked directories (#514).
+  recoverInterruptedLock(projectRoot);
+
   // An output the agent cannot write fails every attempt after the paid agent run,
   // so the directories are made and checked once, up front, as an environment error.
   for (const artifact of [outputPath, jsonPath]) {
@@ -1485,6 +1489,8 @@ async function runReview(session) {
       runId: randomUUID(),
     });
 
+    // The stop signal an agent that exited 0 ran under: a report it left incomplete is a stopped run, not a retry.
+    let agentStoppedBy = null;
     const executeAgent = ({ agentCwd, spawnPrefix }) => {
       const stopHeartbeat = startHeartbeat();
       let agentResult;
@@ -1505,6 +1511,7 @@ async function runReview(session) {
         stopHeartbeat();
       }
 
+      agentStoppedBy = agentResult.stoppedBy ?? null;
       const ranModel = resolvedModelFromAnswer(options.agent, agentResult.stdout);
       if (ranModel !== null) {
         resolvedModel = ranModel;
@@ -1793,6 +1800,10 @@ async function runReview(session) {
       }
       processReport();
       return gateFailures;
+    } catch (error) {
+      // A complete report written before the stop still counts; a missing or broken one is not retried.
+      if (agentStoppedBy !== null && error && error.stoppedBy === undefined) error.stoppedBy = agentStoppedBy;
+      throw error;
     } finally {
       cleanupRunArtifacts();
     }
@@ -1813,7 +1824,9 @@ async function runReview(session) {
       }
       if (error.code === 'AGENT_FAILED' || error.code === 'REPORT_MISSING' || error.code === 'REPORT_UNPARSEABLE') {
         if (error.code === 'AGENT_FAILED') printAgentFailureDiagnostics(error, options.agent);
-        if (attempt < retries) {
+        // A run someone stopped (Ctrl-C, a cancelled CI job) is not a transient failure: a retry would start the agent again.
+        const stopped = typeof error.stoppedBy === 'string';
+        if (attempt < retries && !stopped) {
           console.error(`tea-test-review: ${error.message}`);
           const retryNotice = `attempt ${attempt + 1} of ${retries + 1} failed (exit 3); retrying.`;
           console.error(`tea-test-review: ${retryNotice}`);
@@ -1824,7 +1837,7 @@ async function runReview(session) {
           }
           continue;
         }
-        fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
+        fail(EXIT.AGENT_OR_PARSE_ERROR, stopped ? `${error.message} Not retried: the run was stopped.` : error.message);
       }
       if (error.code === 'ISOLATION_ERROR' || error.code === 'AGENT_NOT_FOUND') {
         fail(EXIT.ENV_ERROR, error.message);
