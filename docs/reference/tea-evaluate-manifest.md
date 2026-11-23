@@ -85,6 +85,22 @@ The runner sits in the evaluations folder's install (`evals/node_modules`), insi
 }
 ```
 
+## Mandatory actions
+
+A behavior that requires the target to act, such as calling a tool, writing a record or sending a reply, can fail by doing nothing.
+List such behaviors in `evaluation.json` to have `check` require proof that a missing action is caught:
+
+```json
+{
+  "mandatoryActionBehaviors": ["B-001"]
+}
+```
+
+For each listed behavior, `check` requires a zero-action defect probe: `probeClass` `zero-action`, `expectedClean: false` and a defect on that behavior, whose signature exposes the missing action.
+A clean control on the behavior does not count, since it expects a clean run.
+A listed ID the contract does not declare is a finding too.
+The field is optional and additive: a file without it checks exactly as before.
+
 ## Held-out probes and partition plans
 
 For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutProbes": ["P-002"]`.
@@ -103,6 +119,7 @@ To keep a request meant only for held-out probes out of the development partitio
 ```
 
 Without it, every partition runs the whole `contract.json` plan, and `run --partition` filters only the scored probes.
+With it, `check` also requires a held-out probe for every `material` or `critical` behavior: a defect, gameability or zero-action defect probe in `heldOutProbes` that names the behavior or seeds a defect on it. A clean control or a canary does not count, and a `low` behavior may stay in development alone.
 With it, each step is shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) or held-out (only in the held-out plan, `held-out-plan.schema.json`: `schemaVersion` 1, `interactionPlan`, `oracles`, optional `rubrics`, `waivers` and `mappings`, and `behaviorOracles`, the oracle IDs each behavior gains in the held-out view).
 The file sits directly under `corpus/held-out/`, so `corpus-index.json` digests it.
 A plan step carries no `partition` field.

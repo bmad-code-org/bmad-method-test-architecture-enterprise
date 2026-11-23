@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Evaluate pre-PR readiness checks. Under a partition plan, `tea-evaluate check` now names every material or critical behavior that no held-out defect, gameability or zero-action defect probe covers. A new optional `mandatoryActionBehaviors` field in `evaluation.json` makes `check` require a zero-action defect probe for each listed behavior; files without the field check as before.
+- Held-out and both-partition runs record a `heldOutDigest` in `run.json`. `check` prints a non-blocking warning when the newest scored held-out run no longer matches the committed held-out material.
+- The gap report template opens with a plain-language evaluation brief, and the CI guide ends with a "before you open the PR" checklist.
+
+### Changed
+
+- The `oracle-count` rule also holds a zero-action defect probe's behavior to exactly one oracle, as it already did for defect and gameability probes.
+
 ## [4.3.1] - 2026-11-20
 
 ### Fixed

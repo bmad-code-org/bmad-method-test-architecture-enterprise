@@ -25,7 +25,13 @@
  *   workspace holds read-only.
  * - `web-interface`: the contract declares an interface of kind `web`.
  * - `written-file-signature`: a defect signature addresses a file the target wrote.
- * - `oracle-count`: a behavior a defect or gameability probe discharges does not declare exactly one oracle.
+ * - `oracle-count`: a behavior a defect, gameability or zero-action defect probe discharges does not declare exactly one oracle.
+ * - `held-out` coverage: under a `partitionPlan`, a `material` or `critical` behavior that no held-out defect, gameability or
+ *   zero-action defect probe discharges (a clean control and a canary never do).
+ * - `mandatory-action`: a behavior `mandatoryActionBehaviors` lists that the contract does not declare, or that no zero-action defect
+ *   probe (`probeClass` `zero-action`, `expectedClean: false`, a defect on the behavior) covers.
+ * - Warnings (`checkWarnings`), which never change the exit: `held-out-drift`, the newest run with a completed held-out score recorded
+ *   a `heldOutDigest` the committed held-out material no longer has.
  * - `id-pattern`: a probe, defect, behavior, oracle or mutation ID is off its pattern.
  * - `qualification-digest`: a `baseline/qualification/` reference's digest does not match the file.
  * - `baseline-digest` (Story 1.90, AD-12): a file of `baseline/` digests to something other than the entry of the
@@ -154,7 +160,7 @@ const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./ca
 const { readConfiguration, recordsDirectory, verifyRecordsCalibration } = require('./records-calibration');
 const { baselineDigestFindings } = require('./baseline-digests');
 const { readPlan } = require('./ci-plan');
-const { MANIFEST_NAME } = require('./folder');
+const { MANIFEST_NAME, readFolderFile } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
 const { compileRefusals, lineNamesOperation, reportedOperations, reportsProblems } = require('./release-report');
@@ -187,6 +193,7 @@ const {
   STEP_ID,
   contractView,
   heldOutResponsePath,
+  loadContractView,
   mappingViewProblems,
   named,
   partitionPlanProblems,
@@ -199,7 +206,7 @@ const {
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
-const { CorpusIndexError, INDEX_NAME, corpusIndexProblem, unreadPaths } = require('./corpus-index');
+const { CorpusIndexError, INDEX_NAME, corpusIndexProblem, heldOutDigestOf, unreadPaths } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -207,6 +214,17 @@ const KNOWN_EVALUATION_SCHEMA_VERSIONS = [2];
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Whether a probe discharges the behaviors it names: a `defect` or `gameability` probe, or a `zero-action` probe that does not expect a
+ * clean run (a mandatory-action defect probe). A clean control and a canary test the instrument, so neither does. Every rule that asks
+ * which behaviors a probe exercises reads this one predicate: the oracle count, the held-out view's oracle count and held-out coverage.
+ */
+function dischargesBehaviors(probe) {
+  if (!isPlainObject(probe)) return false;
+  if (probe.probeClass === 'defect' || probe.probeClass === 'gameability') return true;
+  return probe.probeClass === 'zero-action' && probe.expectedClean === false && probe.qualification?.route !== 'clean-control';
 }
 
 const CONTRACT_NAME = 'contract.json';
@@ -1123,7 +1141,7 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
     );
   }
 
-  if (behaviors !== undefined && (probe.probeClass === 'defect' || probe.probeClass === 'gameability')) {
+  if (behaviors !== undefined && dischargesBehaviors(probe)) {
     const discharged = [probe.behaviorId, ...defects.map((defect) => defect?.behaviorId)].filter((id) => typeof id === 'string');
     for (const behaviorId of new Set(discharged)) {
       const behavior = behaviors.get(behaviorId);
@@ -1817,17 +1835,101 @@ async function checkProbes(report, folder, context, behaviors, mutations, regist
   return routes;
 }
 
-function checkHeldOut(report, folder, evaluation) {
-  const selected = evaluation.heldOutProbes ?? [];
-  if (!Array.isArray(selected)) return;
-  const defectsOf = (probe) =>
-    Array.isArray(probe?.defects) ? probe.defects.filter((defect) => defect !== null && typeof defect === 'object') : [];
+/** The severities of a behavior a held-out partition must exercise (AD-22): a `low` behavior may stay in development alone. */
+const HELD_OUT_SEVERITIES = new Set(['material', 'critical']);
+
+/** The defects a probe seeds, each an object. */
+function defectsOf(probe) {
+  return Array.isArray(probe?.defects) ? probe.defects.filter((defect) => defect !== null && typeof defect === 'object') : [];
+}
+
+/** The committed probes that parse, by probe ID; a file that does not parse is a `json` finding. */
+function probesById(report, folder) {
   const probes = new Map();
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     if (!entry.isFile || !PROBE_FILE.test(entry.name)) continue;
     const probe = parseInto(report, folder, `probes/${entry.name}`);
     if (typeof probe?.probeId === 'string') probes.set(probe.probeId, probe);
   }
+  return probes;
+}
+
+/** The contract's behaviors that are objects with a string ID. */
+function behaviorsOf(contract) {
+  return Array.isArray(contract?.behaviors)
+    ? contract.behaviors.filter((behavior) => isPlainObject(behavior) && typeof behavior.id === 'string')
+    : [];
+}
+
+/**
+ * Under a `partitionPlan`, every `material` or `critical` behavior has a held-out probe that discharges it (`dischargesBehaviors`), so
+ * the held-out partition scores every behavior that can fail the evaluation. The rule is the plan's: a folder that holds probes out
+ * through `heldOutProbes` alone keeps its earlier meaning, because TeA's own evaluations hold probes out that way and requalifying them
+ * takes live runs, and a development-only folder is held to nothing here.
+ */
+function checkHeldOutCoverage(report, evaluation, contract, probes) {
+  if (!isPlainObject(evaluation.partitionPlan)) return;
+  const selected = Array.isArray(evaluation.heldOutProbes) ? evaluation.heldOutProbes : [];
+  const covered = new Set();
+  for (const id of selected) {
+    const probe = probes.get(id);
+    if (!dischargesBehaviors(probe)) continue;
+    for (const behaviorId of [probe.behaviorId, ...defectsOf(probe).map((defect) => defect.behaviorId)])
+      if (typeof behaviorId === 'string') covered.add(behaviorId);
+  }
+  for (const behavior of behaviorsOf(contract)) {
+    if (!HELD_OUT_SEVERITIES.has(behavior.severity) || covered.has(behavior.id)) continue;
+    report.add(
+      MANIFEST_NAME,
+      'held-out',
+      `behavior ${behavior.id} is ${behavior.severity} and no probe in heldOutProbes exercises it; hold out a defect, gameability or zero-action defect probe of ${behavior.id} (a clean control or a canary does not count) and keep a development probe beside it`,
+    );
+  }
+}
+
+/**
+ * `mandatoryActionBehaviors`: each listed behavior is one the contract declares and has a zero-action defect probe, `probeClass`
+ * `zero-action` with `expectedClean: false` and a defect on that behavior, so a target that skips the action is caught. A folder that
+ * lists none is held to nothing more.
+ */
+function checkMandatoryActions(report, evaluation, contract, probes) {
+  const {
+    // The optional list of behaviors whose required action must be proven to happen.
+    mandatoryActionBehaviors: listed,
+  } = evaluation;
+  if (!Array.isArray(listed)) return;
+  const declared = new Set(behaviorsOf(contract).map((behavior) => behavior.id));
+  for (const behaviorId of listed) {
+    if (typeof behaviorId !== 'string') continue;
+    if (contract !== undefined && !declared.has(behaviorId)) {
+      report.add(
+        MANIFEST_NAME,
+        'mandatory-action',
+        `mandatoryActionBehaviors names behavior ${behaviorId}, which contract.json does not declare`,
+      );
+      continue;
+    }
+    const proven = [...probes.values()].some(
+      (probe) =>
+        probe.probeClass === 'zero-action' &&
+        dischargesBehaviors(probe) &&
+        defectsOf(probe).some((defect) => defect.behaviorId === behaviorId),
+    );
+    if (!proven)
+      report.add(
+        MANIFEST_NAME,
+        'mandatory-action',
+        `behavior ${behaviorId} is a mandatory action and no zero-action defect probe (probeClass zero-action, expectedClean false) seeds a defect on it; add one whose signature exposes the missing action`,
+      );
+  }
+}
+
+function checkHeldOut(report, folder, evaluation, contract) {
+  const probes = probesById(report, folder);
+  checkMandatoryActions(report, evaluation, contract, probes);
+  checkHeldOutCoverage(report, evaluation, contract, probes);
+  const selected = evaluation.heldOutProbes ?? [];
+  if (!Array.isArray(selected)) return;
   for (const id of selected) {
     const probe = probes.get(id);
     if (probe === undefined) {
@@ -1945,7 +2047,7 @@ function checkPartitionPlan(report, folder, evaluation, context, { openPlan = tr
     } catch {
       continue;
     }
-    if (!selected.includes(probe?.probeId) || (probe.probeClass !== 'defect' && probe.probeClass !== 'gameability')) continue;
+    if (!selected.includes(probe?.probeId) || !dischargesBehaviors(probe)) continue;
     const defects = Array.isArray(probe.defects) ? probe.defects : [];
     for (const behaviorId of [probe.behaviorId, ...defects.map((defect) => defect?.behaviorId)]) {
       if (typeof behaviorId === 'string') heldOutBehaviors.add(behaviorId);
@@ -2519,7 +2621,7 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision, platform);
   const routes = await checkProbes(report, folder, context, behaviors, mutations, registry, compiled, evaluation);
-  checkHeldOut(report, folder, evaluation);
+  checkHeldOut(report, folder, evaluation, context.contract);
   const openPlan = partition !== 'development';
   const planFile = evaluation.partitionPlan?.heldOutPlan;
   const heldOutUnread = openPlan || typeof planFile !== 'string' ? [] : [HELD_OUT_DIRECTORY];
@@ -2571,6 +2673,101 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   return report.findings;
 }
 
+/** A run directory's name, and a score invocation's: the runtime's flat invocation identifiers. */
+const RUN_ID = /^[A-Za-z0-9_-]+$/;
+
+/** One parsed JSON object the evaluation folder holds, read through the folder's guarded walk, or null. */
+function folderJson(folder, relative) {
+  const read = readFolderFile(folder, relative);
+  if (!read.ok) return null;
+  try {
+    const value = JSON.parse(read.bytes.toString('utf8'));
+    return isPlainObject(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a completed run holds a completed score with held-out results: its `partitions.json`, which `score` replaces only after it
+ * has written the score's `score.json`, names a score invocation whose `score.json` records this run, and lists at least one held-out
+ * row. A score that stopped part way writes neither, so it never stands in for the complete evidence before it.
+ */
+function scoredHeldOut(folder, runId) {
+  const partitions = folderJson(folder, `runs/${runId}/partitions.json`);
+  const scoreId = partitions?.scoreInvocationId;
+  if (typeof scoreId !== 'string' || !RUN_ID.test(scoreId)) return false;
+  if (!Array.isArray(partitions['held-out']) || partitions['held-out'].length === 0) return false;
+  const summary = folderJson(folder, `runs/${runId}/scores/${scoreId}/score.json`);
+  return summary?.invocationId === scoreId && summary.run === runId;
+}
+
+/** Whether every index row is a `{ path, sha256 }` pair the digest can read. */
+function wellFormedIndex(index) {
+  return (
+    Array.isArray(index) &&
+    index.every(
+      (entry) =>
+        isPlainObject(entry) && typeof entry.path === 'string' && typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/.test(entry.sha256),
+    )
+  );
+}
+
+/** Findings that leave the held-out material unreadable or unsound, so no held-out comparison is made over them. */
+const UNSOUND_FOR_DRIFT = new Set(['json', 'schema', 'stale-index', 'corpus-file', 'partition-plan', 'file-name']);
+
+/**
+ * The non-blocking warnings `check` prints after its findings, which never change its exit. One today: the newest run with a completed
+ * held-out score (`scoredHeldOut`) recorded a `heldOutDigest` the committed held-out material no longer has, so its held-out result no
+ * longer describes the committed partition. A run that records no digest (one made before the field existed, or a development run) is
+ * passed over. Nothing is compared while a finding leaves the corpus index, a probe, the contract or the held-out plan unsound, and an
+ * error while comparing ends the comparison without a warning: the warning is advice and never stands in for a finding.
+ *
+ * @param {string} folder
+ * @param {Array<{ file: string, rule: string }>} [findings] the folder's findings, from `checkEvaluation`
+ * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
+ */
+async function checkWarnings(folder, findings = []) {
+  if (findings.some((finding) => UNSOUND_FOR_DRIFT.has(finding.rule) || finding.file === INDEX_NAME)) return [];
+  try {
+    const evaluation = folderJson(folder, MANIFEST_NAME);
+    const index = (() => {
+      const read = readFolderFile(folder, INDEX_NAME);
+      return read.ok ? JSON.parse(read.bytes.toString('utf8')) : null;
+    })();
+    const heldOutProbes = Array.isArray(evaluation?.heldOutProbes) ? evaluation.heldOutProbes : [];
+    if (heldOutProbes.length === 0 || !wellFormedIndex(index)) return [];
+    const runs = path.join(folder, 'runs');
+    if (!fs.lstatSync(runs, { throwIfNoEntry: false })?.isDirectory()) return [];
+    for (const runId of fs
+      .readdirSync(runs)
+      .filter((name) => RUN_ID.test(name))
+      .sort()
+      .toReversed()) {
+      const record = folderJson(folder, `runs/${runId}/run.json`);
+      if (record?.command !== 'run' || record.completed !== true || typeof record.heldOutDigest !== 'string') continue;
+      if (!scoredHeldOut(folder, runId)) continue;
+      const current = await heldOutDigestOf({
+        index,
+        probes: [...probesById(createFindings(), folder).values()],
+        heldOutProbes,
+        contract: loadContractView({ folder, evaluation, partition: 'held-out' }).contract,
+      });
+      if (current === record.heldOutDigest) return [];
+      return [
+        {
+          file: `runs/${runId}/run.json`,
+          rule: 'held-out-drift',
+          message: `the newest scored held-out run ${runId} measured held-out material that has changed since (heldOutDigest ${record.heldOutDigest}, now ${current}), so its held-out result no longer describes the committed partition; run and score the held-out partition again before you rely on it`,
+        },
+      ];
+    }
+  } catch {
+    // Advice only: a folder the comparison cannot read is the findings' to report.
+  }
+  return [];
+}
+
 module.exports = {
   KNOWN_EVALUATION_SCHEMA_VERSIONS,
   RUNTIME_OWNED_DEFECT_FIELDS,
@@ -2578,4 +2775,5 @@ module.exports = {
   RUNTIME_OWNED_QUALIFICATION_FIELDS,
   TEA_MANIFEST,
   checkEvaluation,
+  checkWarnings,
 };

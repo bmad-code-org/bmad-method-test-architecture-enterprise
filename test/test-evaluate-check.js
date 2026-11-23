@@ -5167,6 +5167,238 @@ async function checkBaselineDigest() {
   }
 }
 
+/**
+ * `mandatoryActionBehaviors` is optional and additive. Absent, the folder checks as it always did; present, each listed behavior needs a
+ * zero-action defect probe (`probeClass` `zero-action`, `expectedClean: false`, a defect on the behavior), and a listed behavior the
+ * contract does not declare is named.
+ */
+function checkMandatoryActionBehaviors() {
+  const absent = copyValid();
+  const plain = runCli(['check', '--evaluation', absent]);
+  check(plain.status === 0, `no mandatoryActionBehaviors: check exited ${plain.status}; expected 0\n${plain.output}`);
+  check(!plain.output.includes('[mandatory-action]'), `no mandatoryActionBehaviors: check named the rule\n${plain.output}`);
+
+  const proven = copyValid();
+  editJson(proven, 'probes/P-002.probe.json', (probe) => (probe.probeClass = 'zero-action'));
+  editJson(proven, 'evaluation.json', (evaluation) => (evaluation.mandatoryActionBehaviors = ['B-001']));
+  check(runCli(['digest', '--evaluation', proven]).status === 0, 'mandatoryActionBehaviors with its probe: digest failed');
+  const withProbe = runCli(['check', '--evaluation', proven]);
+  check(
+    withProbe.status === 0,
+    `mandatoryActionBehaviors with its probe: check exited ${withProbe.status}; expected 0\n${withProbe.output}`,
+  );
+
+  const unproven = copyValid();
+  editJson(unproven, 'evaluation.json', (evaluation) => (evaluation.mandatoryActionBehaviors = ['B-001', 'B-009']));
+  const withoutProbe = runCli(['check', '--evaluation', unproven]);
+  check(withoutProbe.status === 10, `mandatoryActionBehaviors without its probe: check exited ${withoutProbe.status}; expected 10`);
+  check(
+    withoutProbe.stdout.includes(
+      'evaluation.json: [mandatory-action] behavior B-001 is a mandatory action and no zero-action defect probe (probeClass zero-action, expectedClean false) seeds a defect on it',
+    ),
+    `mandatoryActionBehaviors without its probe: no finding names B-001\n${withoutProbe.output}`,
+  );
+  check(
+    withoutProbe.stdout.includes(
+      'evaluation.json: [mandatory-action] mandatoryActionBehaviors names behavior B-009, which contract.json does not declare',
+    ),
+    `mandatoryActionBehaviors naming an undeclared behavior: no finding names B-009\n${withoutProbe.output}`,
+  );
+
+  // A clean control on the behavior proves nothing: it expects a clean run, so the rule still names the behavior.
+  const controlOnly = copyValid();
+  editJson(controlOnly, 'evaluation.json', (evaluation) => (evaluation.mandatoryActionBehaviors = ['B-001']));
+  editJson(controlOnly, 'probes/P-001.probe.json', (probe) => (probe.defects = []));
+  const control = runCli(['check', '--evaluation', controlOnly]);
+  check(
+    /\[mandatory-action\] behavior B-001 is a mandatory action/.test(control.stdout),
+    `a clean control passed as the zero-action defect probe\n${control.output}`,
+  );
+
+  // The field is held to its schema: an empty list or a value off the behavior ID pattern fails it.
+  for (const [label, value] of [
+    ['an empty list', []],
+    ['a value off the pattern', ['behavior-one']],
+  ]) {
+    const folder = copyValid();
+    editJson(folder, 'evaluation.json', (evaluation) => (evaluation.mandatoryActionBehaviors = value));
+    const result = runCli(['check', '--evaluation', folder]);
+    check(result.status === 10, `mandatoryActionBehaviors as ${label}: check exited ${result.status}; expected 10\n${result.output}`);
+    check(
+      /evaluation\.json: \[schema\] .*mandatoryActionBehaviors/.test(result.stdout),
+      `mandatoryActionBehaviors as ${label}: no schema finding\n${result.output}`,
+    );
+  }
+}
+
+/** A copy of the Story 1.51 partition-plan fixture project, and its evaluation folder. */
+function copyPartitionPlan() {
+  const project = path.join(tempDir('plan'), 'project');
+  fs.cpSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'partition-plan'), project, { recursive: true });
+  return path.join(project, 'evals', 'verdict');
+}
+
+/**
+ * Held-out coverage is a `partitionPlan` rule. A folder that holds a probe out through `heldOutProbes` alone, as TeA's own evaluations
+ * do, and a development-only folder check as before, a held-out gap included. Under a plan only a probe that discharges its behavior
+ * counts: a defect, gameability or zero-action defect probe, and never a clean control or a canary. The same predicate decides which
+ * probes the oracle count holds, so a zero-action defect probe's behavior declares exactly one oracle too.
+ */
+function checkHeldOutCoverage() {
+  const coverageLine = (behaviorId, severity) =>
+    `evaluation.json: [held-out] behavior ${behaviorId} is ${severity} and no probe in heldOutProbes exercises it`;
+  const developmentOnly = runCli(['check', '--evaluation', copyValid()]);
+  check(
+    developmentOnly.status === 0,
+    `a development-only folder: check exited ${developmentOnly.status}; expected 0\n${developmentOnly.output}`,
+  );
+
+  // Without a plan: P-002 holds B-001 out and leaves the critical B-002 with no held-out probe, which this rule does not hold.
+  const unplanned = copyValid();
+  editJson(unplanned, 'evaluation.json', (evaluation) => (evaluation.heldOutProbes = ['P-002']));
+  const gap = runCli(['check', '--evaluation', unplanned]);
+  check(gap.status === 0, `a held-out gap with no partitionPlan: check exited ${gap.status}; expected 0\n${gap.output}`);
+  check(!gap.output.includes('[held-out]'), `the held-out coverage rule ran without a partitionPlan\n${gap.output}`);
+
+  // With a plan: the fixture holds P-003 out for B-002 and keeps its low B-001 in development; raising B-001 opens the gap.
+  const planned = copyPartitionPlan();
+  const plain = runCli(['check', '--evaluation', planned]);
+  check(plain.status === 0, `the partition-plan fixture: check exited ${plain.status}; expected 0\n${plain.output}`);
+  editJson(planned, 'contract.json', (contract) => (contract.behaviors[0].severity = 'material'));
+  const plannedGap = runCli(['check', '--evaluation', planned]);
+  check(plannedGap.status === 10, `a held-out gap under a partitionPlan: check exited ${plannedGap.status}; expected 10`);
+  check(
+    plannedGap.stdout.includes(coverageLine('B-001', 'material')),
+    `no coverage finding names B-001 under a plan\n${plannedGap.output}`,
+  );
+
+  // A zero-action defect probe covers its behavior, and its behavior is held to exactly one oracle.
+  const zeroAction = copyPartitionPlan();
+  editJson(zeroAction, 'probes/P-003.probe.json', (probe) => (probe.probeClass = 'zero-action'));
+  check(runCli(['digest', '--evaluation', zeroAction]).status === 0, 'zero-action coverage: digest failed');
+  const covered = runCli(['check', '--evaluation', zeroAction]);
+  check(!covered.output.includes('[held-out]'), `a held-out zero-action defect probe left its behavior uncovered\n${covered.output}`);
+  check(covered.status === 0, `a held-out zero-action defect probe: check exited ${covered.status}; expected 0\n${covered.output}`);
+  editJson(zeroAction, 'contract.json', (contract) => (contract.behaviors[1].oracles = ['O-001', 'O-002']));
+  const twoOracles = runCli(['check', '--evaluation', zeroAction]);
+  check(
+    /probes\/P-003\.probe\.json: \[oracle-count\] behavior B-002, discharged by this zero-action probe, declares 2 oracles/.test(
+      twoOracles.stdout,
+    ),
+    `a zero-action defect probe's behavior escaped the oracle count\n${twoOracles.output}`,
+  );
+
+  // A canary tests the instrument, so holding one out covers nothing.
+  const canary = copyPartitionPlan();
+  editJson(canary, 'probes/P-003.probe.json', (probe) => (probe.probeClass = 'canary'));
+  check(runCli(['digest', '--evaluation', canary]).status === 0, 'canary coverage: digest failed');
+  const canaryGap = runCli(['check', '--evaluation', canary]);
+  check(canaryGap.status === 10, `a held-out canary: check exited ${canaryGap.status}; expected 10`);
+  check(canaryGap.stdout.includes(coverageLine('B-002', 'critical')), `a held-out canary covered its behavior\n${canaryGap.output}`);
+}
+
+/**
+ * `check` warns, and still exits 0, when the newest run with a completed held-out score recorded a `heldOutDigest` the committed
+ * held-out material no longer has. A matching digest, a run with no digest, a run whose score stopped part way and a development edit
+ * print nothing, and a corpus index the digest cannot read leaves the findings and the exit as they are.
+ */
+async function checkHeldOutDrift() {
+  const { heldOutDigestOf } = require('../cli/lib/evaluate/corpus-index');
+  const { committedProbes, loadContractView } = require('../cli/lib/evaluate/partition');
+  const folder = copyPartitionPlan();
+  const evaluation = JSON.parse(fs.readFileSync(path.join(folder, 'evaluation.json'), 'utf8'));
+  const current = async () =>
+    heldOutDigestOf({
+      index: JSON.parse(fs.readFileSync(path.join(folder, 'corpus-index.json'), 'utf8')),
+      probes: committedProbes(folder).map(({ probe }) => probe),
+      heldOutProbes: evaluation.heldOutProbes,
+      contract: loadContractView({ folder, evaluation, partition: 'held-out' }).contract,
+    });
+  /** A completed run; `score` is `complete` (score.json, then partitions.json naming it), `interrupted` (an empty score directory) or none. */
+  const plantRun = (runId, record, { score = 'complete' } = {}) => {
+    const directory = path.join(folder, 'runs', runId);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(
+      path.join(directory, 'run.json'),
+      `${JSON.stringify({ command: 'run', invocationId: runId, completed: true, partition: 'held-out', heldOutProbes: ['P-003'], ...record })}\n`,
+    );
+    const scoreId = `${runId.slice(0, 8)}T000000000Z-5c0e5c0e`;
+    if (score === 'interrupted') fs.mkdirSync(path.join(directory, 'scores', `${scoreId}-later`), { recursive: true });
+    if (score !== 'complete') return;
+    fs.mkdirSync(path.join(directory, 'scores', scoreId), { recursive: true });
+    fs.writeFileSync(
+      path.join(directory, 'scores', scoreId, 'score.json'),
+      `${JSON.stringify({ invocationId: scoreId, run: runId, exitCode: 0 })}\n`,
+    );
+    fs.writeFileSync(
+      path.join(directory, 'partitions.json'),
+      `${JSON.stringify({ scoreInvocationId: scoreId, development: [], 'held-out': [{ probeId: 'P-003' }] })}\n`,
+    );
+  };
+  const warnings = () => {
+    const result = runCli(['check', '--evaluation', folder]);
+    check(result.status === 0, `held-out drift: check exited ${result.status}; expected 0\n${result.output}`);
+    return result.stderr.split('\n').filter((line) => line.startsWith('warning: '));
+  };
+  const redigest = (label) => check(runCli(['digest', '--evaluation', folder]).status === 0, `${label}: digest failed`);
+  const editOracle = (id, text) =>
+    editJson(folder, 'contract.json', (contract) => (contract.oracles.find((oracle) => oracle.id === id).commentary = text));
+  const matching = await current();
+  plantRun('20261101T000000000Z-11111111', { heldOutDigest: matching });
+  check(warnings().length === 0, 'a scored held-out run over the current held-out material printed a warning');
+  // Newer runs with no digest, with no score, or whose only score stopped part way are passed over, and a score that stopped after a
+  // complete one leaves that run's complete evidence in force.
+  plantRun('20261102T000000000Z-22222222', {});
+  plantRun('20261103T000000000Z-33333333', { heldOutDigest: 'sha256:0000' }, { score: 'none' });
+  plantRun('20261104T000000000Z-44444444', { heldOutDigest: 'sha256:0000' }, { score: 'interrupted' });
+  fs.mkdirSync(path.join(folder, 'runs', '20261101T000000000Z-11111111', 'scores', '20261105T000000000Z-99999999'));
+  check(warnings().length === 0, 'an unscored, interrupted or digest-less run printed a warning');
+
+  // Development material moves: a development probe, and an oracle only a development-only step feeds, which the held-out view drops.
+  editJson(folder, 'probes/P-004.probe.json', (probe) => (probe.rationale = `${probe.rationale} Reworded.`));
+  editOracle('O-002', 'The development case is judged again.');
+  redigest('development edit');
+  check((await current()) === matching, 'a development edit moved the held-out digest');
+  check(warnings().length === 0, 'a development edit read as held-out drift');
+
+  // A shared oracle moves, which the held-out view keeps: the scored run no longer describes the held-out partition.
+  editOracle('O-001', 'The shared request is judged again.');
+  const moved = await current();
+  check(moved !== matching, 'a shared oracle edit left the held-out digest where it was');
+  const drift = warnings();
+  check(
+    drift.length === 1 &&
+      drift[0].startsWith(
+        'warning: runs/20261101T000000000Z-11111111/run.json: [held-out-drift] the newest scored held-out run 20261101T000000000Z-11111111 measured held-out material that has changed since',
+      ) &&
+      drift[0].includes(`now ${moved}`),
+    `a stale scored held-out run printed no drift warning\n${drift.join('\n')}`,
+  );
+  // So does a held-out probe.
+  plantRun('20261106T000000000Z-66666666', { heldOutDigest: moved, partition: 'both' });
+  check(warnings().length === 0, 'a run of both partitions over the current material printed a warning');
+  editJson(folder, 'probes/P-003.probe.json', (probe) => (probe.rationale = `${probe.rationale} Reworded.`));
+  redigest('held-out probe edit');
+  check(warnings().length === 1, 'a held-out probe edit printed no drift warning');
+
+  // A corpus index the digest cannot read is the findings' to report: check keeps its exit, its findings and its summary line.
+  const indexFile = path.join(folder, 'corpus-index.json');
+  const index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+  delete index.find((entry) => entry.path === 'probes/P-003.probe.json').sha256;
+  fs.writeFileSync(indexFile, `${JSON.stringify(index)}\n`);
+  const malformed = runCli(['check', '--evaluation', folder]);
+  check(malformed.status === 10, `a malformed corpus index: check exited ${malformed.status}; expected 10\n${malformed.output}`);
+  check(
+    /^corpus-index\.json: \[stale-index\] /m.test(malformed.stdout),
+    `a malformed corpus index: no stale-index finding\n${malformed.output}`,
+  );
+  check(/authoring defect\(s\) in /.test(malformed.stdout), `a malformed corpus index: no summary line\n${malformed.output}`);
+  check(
+    !/warning: |Error|non-canonicalizable/.test(malformed.output),
+    `a malformed corpus index: the warning ran or threw\n${malformed.output}`,
+  );
+}
+
 /** The reference names `baseline-digest` in its `check` rule list and in its `compare` section. */
 function checkBaselineDigestDocumented() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -5182,6 +5414,9 @@ function checkBaselineDigestDocumented() {
 async function main() {
   try {
     checkBaselineDigestDocumented();
+    checkMandatoryActionBehaviors();
+    checkHeldOutCoverage();
+    await checkHeldOutDrift();
     await checkBaselineDigest();
     await checkValidFixture();
     await checkRequirementsStatement();
