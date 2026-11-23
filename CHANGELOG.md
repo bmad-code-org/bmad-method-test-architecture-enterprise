@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tea-enforce` recognizes variable-delay Promise timers and aliases for Node and Python timer APIs. It permits literal zero for asynchronous yields and preserves the MSW delay exemption (#499, #500, #510).
+- `tea-enforce` reads Python and Java skip reasons from the skip annotation and catches focused JavaScript tests that use static bracket access (#501, #507).
+
 ## [4.4.3] - 2026-11-23
 
 ### Fixed

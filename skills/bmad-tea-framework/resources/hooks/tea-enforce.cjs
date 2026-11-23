@@ -99,8 +99,8 @@ const REGISTRY_PATH = 'bmad-tea-test-review/steps-c/criteria-registry.md';
  */
 const DEFAULT_CONFIG = {
   testGlobs: [
-    '**/*.spec.{ts,tsx,js,jsx,mjs,cjs}',
-    '**/*.test.{ts,tsx,js,jsx,mjs,cjs}',
+    '**/*.spec.{ts,tsx,mts,cts,js,jsx,mjs,cjs}',
+    '**/*.test.{ts,tsx,mts,cts,js,jsx,mjs,cjs}',
     '**/*.cy.{ts,tsx,js,jsx}',
     '**/*.pacttest.{ts,js}',
     '**/test_*.py',
@@ -609,7 +609,7 @@ function operandsMatch(views, ranges) {
  * where a literal is blank and cannot fake a bracket or a comma. A trailing comma
  * leaves no empty last argument.
  */
-function callArguments(stripped, from) {
+function callArguments(stripped, from, code = stripped) {
   const ranges = [];
   let depth = 0;
   let start = from;
@@ -620,7 +620,7 @@ function callArguments(stripped, from) {
       if (depth === 0) {
         if (character !== ')') return null;
         ranges.push([start, index]);
-        if (ranges.length > 1 && stripped.slice(...ranges.at(-1)).trim() === '') ranges.pop();
+        if (ranges.length > 1 && code.slice(...ranges.at(-1)).trim() === '') ranges.pop();
         return ranges;
       }
       depth -= 1;
@@ -659,7 +659,7 @@ function matchSpans(source, pattern) {
   return [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]);
 }
 
-const SKIP_TOKEN = /\.skip|\.fixme|\.Skip|xit|xdescribe|test\.todo|@Ignore|@Disabled|pytest\.mark\.skip/;
+const SKIP_TOKEN = /\.skip|\.fixme|\.Skip|xit|xdescribe|test\.todo|@(?:[\w.]+\.)?(?:Ignore|Disabled)|pytest\.mark\.skip/;
 
 /**
  * Where this line's comment starts, or -1.
@@ -737,14 +737,6 @@ function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '')
   // A whole comment line directly above.
   if (commentIndex(above, kind) === 0) return true;
 
-  // An annotation carrying its own reason string: `@pytest.mark.skip(reason="...")`
-  // and `@Disabled("...")` are the documented forms in their languages, and the
-  // reason sits in a different argument position in each. An annotation call with
-  // any string literal in it is the honest predicate; pinning the position would
-  // pass one language and fail the other. This branch is scoped to the languages
-  // that have annotations.
-  if ((kind === 'py' || kind === 'java') && /@[\w.]+\s*\(/.test(current) && /["']/.test(current)) return true;
-
   // JavaScript and Go put the reason inside the call. Playwright documents
   // `test.skip(condition, 'reason')` and `test.fixme(condition, 'reason')`: the
   // reason is the second argument. Go's `t.Skip("reason")` and `t.Skipf("...")`
@@ -759,6 +751,24 @@ function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '')
   return comment !== -1 && tokenIndex !== -1 && comment > tokenIndex;
 }
 
+function annotationHasReason(annotation, context) {
+  const { source, keptSource, lineOffset, kind } = context;
+  const end = lineOffset + annotation.index + annotation[0].length;
+  const open = /^\s*\(/.exec(source.slice(end));
+  if (!open) return false;
+  const args = callArguments(source, end + open[0].length, keptSource) ?? [];
+  return args.some((range, index) => {
+    const argument = keptSource.slice(...range).trim();
+    const keyword = kind === 'py' ? /^reason\s*=(?!=)\s*/ : /^value\s*=(?!=)\s*/;
+    const assignment = keyword.exec(argument);
+    const positional = /\bskip(?:If|Unless)$/.test(annotation[0]) ? 1 : 0;
+    if (!assignment && (annotation[0].startsWith('@pytest.') || index !== positional)) return false;
+    const value = argument.slice(assignment?.[0].length ?? 0);
+    const literal = /^("""|'''|"|')((?:(?!\1)[^\\]|\\[\s\S])*)\1$/.exec(value);
+    return Boolean(literal?.[2].trim());
+  });
+}
+
 // ---------------------------------------------------------------------------
 // The rules
 //
@@ -767,35 +777,92 @@ function hasAdjacentComment(rawLines, lineIndex, kind, stripped = '', code = '')
 // the reason it is not a block.
 // ---------------------------------------------------------------------------
 
-/**
- * Whether the bare identifier `delay` is MSW's `delay` in this file: imported as
- * `import { delay } from 'msw'` (also a subpath, also beside a default import) or
- * destructured as `const { delay } = require('msw')`. Read from the kept view
- * because the module name is a string literal. An aliased `delay as X` leaves the
- * bare name free, and a `delay` from any other module is a real wait and still
- * fires. Member calls such as `msw.delay(300)` never match the bare-call pattern.
- */
-const MSW_MODULE = String.raw`['"]msw(?:\/[\w/-]+)?['"]`;
-const MSW_NAMED_IMPORT = new RegExp(String.raw`\bimport\s+(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*${MSW_MODULE}`, 'g');
-const MSW_DESTRUCTURE = new RegExp(
-  String.raw`\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?(?:require\s*\(|import\s*\()\s*${MSW_MODULE}\s*\)`,
-  'g',
-);
+const JS_IDENTIFIER = String.raw`[A-Za-z_$][\w$]*`;
+const JS_REFERENCE = String.raw`${JS_IDENTIFIER}(?:\s*\.\s*${JS_IDENTIFIER})*`;
+const TEST_RECEIVER =
+  /^(?:test|it|describe|context|suite|specify)(?:\.(?:describe|parallel|serial|concurrent|each|when|runIf|skipIf|sequential))*$/;
+const TEST_MODULES = new Set(['@playwright/test', '@jest/globals', 'vitest', 'mocha', 'test', 'bun:test']);
 
-function bindsMswDelay(code) {
-  const binds = (list, separator) =>
-    list.split(',').some((entry) => {
-      const [name, local = name] = entry
-        .replace(/=.*$/s, '')
-        .trim()
-        .split(separator)
-        .map((part) => part.trim());
-      return name === 'delay' && local === 'delay';
-    });
-  return (
-    [...code.matchAll(MSW_NAMED_IMPORT)].some((match) => binds(match[1].replaceAll(/\btype\s+(?=[\w$])/g, ''), /\s+as\s+/)) ||
-    [...code.matchAll(MSW_DESTRUCTURE)].some((match) => binds(match[1], /\s*:\s*/))
+function resolveBinding(bindings, reference) {
+  const [local, ...members] = reference.split(/\s*\.\s*/);
+  const binding = bindings.get(local);
+  if (!binding) return null;
+  return { module: binding.module, name: [binding.name, ...members].filter(Boolean).join('.') };
+}
+
+function matchesCode(stripped, kept, pattern) {
+  // Literal text can look like an import. Its opening keyword is blank in the stripped view.
+  return [...kept.matchAll(pattern)].filter(({ index }) => stripped[index] === kept[index]);
+}
+
+function collectJsBindings(stripped, kept, bindings) {
+  const record = (module, name, local) => bindings.set(local, { module: module.replace(/^node:/, ''), name });
+  const recordList = (module, list, separator) => {
+    for (const entry of list.split(',')) {
+      const [name, local = name] = entry.replace(/=.*$/s, '').trim().split(separator);
+      if (/^[\w$]+$/.test(name) && /^[\w$]+$/.test(local)) record(module, name, local);
+    }
+  };
+  for (const [, clause, , module] of matchesCode(stripped, kept, /\bimport\s+(?!type\s)([\w$\s,*{}]+?)\s+from\s*(['"])([\w@:/.-]+)\2/g)) {
+    const defaultName = /^\s*([\w$]+)\s*(?:,|$)/.exec(clause)?.[1];
+    const namespace = /\*\s+as\s+([\w$]+)\s*$/.exec(clause)?.[1];
+    const list = /\{([^}]*)\}/.exec(clause)?.[1];
+    if (defaultName) record(module, '', defaultName);
+    if (namespace) record(module, '', namespace);
+    if (list) recordList(module, list, /\s+as\s+/);
+  }
+  for (const [, target, , module] of matchesCode(
+    stripped,
+    kept,
+    /\b(?:const|let|var)\s+(\{[^{}]*\}|[\w$]+)\s*=\s*(?:await\s+)?(?:require|import)\s*\(\s*(['"])([\w@:/.-]+)\2\s*\)/g,
+  )) {
+    if (target.startsWith('{')) recordList(module, target.slice(1, -1), /\s*:\s*/);
+    else record(module, '', target);
+  }
+
+  const aliases = new RegExp(
+    String.raw`\bconst\s+(${JS_IDENTIFIER})\s*=\s*(${JS_REFERENCE})\s*(?:\(\s*(${JS_REFERENCE})\s*\)|(?=[;\r\n]|$))`,
+    'g',
   );
+  for (const [, local, reference, argument] of stripped.matchAll(aliases)) {
+    const binding = resolveBinding(bindings, reference);
+    if (argument) {
+      const timer = resolveBinding(bindings, argument);
+      if (
+        binding?.module === 'util' &&
+        binding.name === 'promisify' &&
+        (timer ? timer.module === 'timers' && timer.name === 'setTimeout' : argument === 'setTimeout')
+      ) {
+        record('timers/promises', 'setTimeout', local);
+      }
+    } else if (binding) {
+      record(binding.module, binding.name, local);
+    } else if (TEST_RECEIVER.test(reference)) {
+      record('test', reference, local);
+    } else {
+      record('', '', local);
+    }
+  }
+}
+
+function collectPythonBindings(stripped, bindings) {
+  const recordList = (module, list) => {
+    for (const entry of list.split(',')) {
+      const [name, local = name] = entry.trim().split(/\s+as\s+/);
+      if (/^\w+$/.test(name) && /^\w+$/.test(local)) bindings.set(local, { module: module || name, name: module ? name : '' });
+    }
+  };
+  for (const [, module, group, line] of stripped.matchAll(/(?:^|[;\n])[ \t]*from[ \t]+(\w+)[ \t]+import\s*(?:\(([^)]*)\)|([^;\r\n]+))/g)) {
+    recordList(module, group ?? line);
+  }
+  for (const [, list] of stripped.matchAll(/(?:^|[;\n])[ \t]*import[ \t]+([^;\r\n]+)/g)) recordList('', list);
+}
+
+function fileBindings(kind, stripped, kept) {
+  const bindings = new Map();
+  if (kind === 'js') collectJsBindings(stripped, kept, bindings);
+  if (kind === 'py') collectPythonBindings(stripped, bindings);
+  return bindings;
 }
 
 /**
@@ -903,6 +970,96 @@ function sleepCalls(source) {
   return spans;
 }
 
+function bracketFocusSpans(stripped, { code, bindings }) {
+  const spans = [];
+  const pattern = new RegExp(String.raw`(?<![\w$.])(${JS_REFERENCE})\s*\[([\s+]*)\]\s*[(.]`, 'dg');
+  for (const match of stripped.matchAll(pattern)) {
+    const binding = resolveBinding(bindings, match[1]);
+    const receiver = match[1].replaceAll(/\s/g, '');
+    if (
+      binding ? !TEST_MODULES.has(binding.module) || (binding.name && !TEST_RECEIVER.test(binding.name)) : !TEST_RECEIVER.test(receiver)
+    ) {
+      continue;
+    }
+    const parts = code
+      .slice(...match.indices[2])
+      .trim()
+      .split(/\s*\+\s*/);
+    const literals = parts.map((part) => /^(['"`])([a-z]*)\1$/.exec(part)?.[2]);
+    if (literals.every((value) => value !== undefined) && literals.join('') === 'only') {
+      spans.push([match.index, match.index + match[0].length]);
+    }
+  }
+  return spans;
+}
+
+const JS_TIMER_APIS = new Set(['setTimeout', 'scheduler.wait']);
+
+function isJsTimer(binding) {
+  return binding?.module === 'timers/promises' && JS_TIMER_APIS.has(binding.name);
+}
+
+function isMswDelay(binding) {
+  return binding?.name === 'delay' && (binding.module === 'msw' || binding.module.startsWith('msw/'));
+}
+
+/** Literal zero is an intentional yield in this rule. Node still schedules a timer turn. */
+function isZeroDelay(value) {
+  return /^(?:0+(?:\.0*)?|\.0+)(?:e[+-]?\d+)?$/i.test(value);
+}
+
+function promiseTimerSpans(source, code) {
+  // The timer must call the Promise resolver. A timer that rejects is a deadline guard.
+  const timer = (resolver) => String.raw`setTimeout\s*\(\s*(?:${resolver}|\(\s*\)\s*=>\s*${resolver}\s*\(\s*\))\s*,`;
+  const promise = String.raw`\bnew\s+Promise\s*(?:<[^<>()]*>)?\s*\(\s*`;
+  const params = String.raw`([\w$]+)\s*(?:,\s*[\w$]+\s*)?`;
+  const patterns = [
+    new RegExp(String.raw`${promise}(?:\(\s*)?${params}\)?\s*=>\s*(?:{\s*)?${timer(String.raw`\1`)}`, 'g'),
+    new RegExp(String.raw`${promise}function\s*\(\s*${params}\)\s*{\s*${timer(String.raw`\1`)}`, 'g'),
+  ];
+  return patterns.flatMap((pattern) =>
+    [...source.matchAll(pattern)].flatMap((match) => {
+      const range = callArguments(source, match.index + match[0].length, code)?.[0];
+      if (!range) return [];
+      const delay = code.slice(...range).trim();
+      return delay && !isZeroDelay(delay) ? [[match.index, range[1]]] : [];
+    }),
+  );
+}
+
+function timerKind(source, index, reference, binding, kind) {
+  if (kind === 'py') {
+    const module = binding?.name === 'sleep' ? binding.module : null;
+    if (module === 'time' || (!binding && reference === 'time.sleep')) return 'blocking';
+    if (module === 'asyncio' || (!binding && reference === 'asyncio.sleep')) return 'yield';
+  } else {
+    if (isJsTimer(binding)) return 'yield';
+    if (reference === 'delay' && !isMswDelay(binding)) return 'numeric';
+    if (!binding && reference === 'setTimeout' && /\bawait\s+$/.test(source.slice(Math.max(0, index - 100), index))) return 'numeric';
+  }
+  return null;
+}
+
+function importedTimerSpans(source, { code, bindings, kind }) {
+  const spans = [];
+  const calls = new RegExp(String.raw`(?<![\w$.])(${JS_REFERENCE})\s*\(`, 'g');
+  for (const match of source.matchAll(calls)) {
+    const reference = match[1].replaceAll(/\s/g, '');
+    const binding = resolveBinding(bindings, reference);
+    const timer = timerKind(source, match.index, reference, binding, kind);
+    if (timer === null) continue;
+
+    const from = match.index + match[0].length;
+    const range = callArguments(source, from, code)?.[0];
+    if (!range) continue;
+    const delay = code.slice(...range).trim();
+    if (timer === 'numeric' && !/^\d/.test(delay)) continue;
+    if (timer !== 'blocking' && isZeroDelay(delay.replace(/^delay\s*=\s*/, ''))) continue;
+    spans.push([match.index, range[1]]);
+  }
+  return spans;
+}
+
 const RULES = [
   {
     id: 'C1',
@@ -921,13 +1078,14 @@ const RULES = [
     match(line, context) {
       const patterns = {
         js: /(?:^|[^\w.])(?:x(?:it|describe|test)\s*\(|\w+(?:\.\w+)*\.(?:skip|fixme)\s*[(.]|\w+\.todo\s*\()/,
-        py: /@(?:pytest\.mark\.skip|unittest\.skip)/,
+        py: /@(?:pytest\.mark\.skip(?:if)?|unittest\.skip(?:If|Unless)?)\b/,
         // No identifier is required before the dot: `s.T().Skip()` is a skip too.
         go: /\.Skip(?:f|Now)?\s*\(/,
-        java: /@(?:Ignore|Disabled)\b/,
+        java: /@(?:[\w.]+\.)?(?:Ignore|Disabled)\b/,
       };
-      const pattern = patterns[context.kind];
-      if (!pattern || !pattern.test(line)) return false;
+      const match = patterns[context.kind]?.exec(line);
+      if (!match) return false;
+      if ((context.kind === 'py' || context.kind === 'java') && annotationHasReason(match, context)) return false;
       return !hasAdjacentComment(context.rawLines, context.lineIndex, context.kind, line, context.code);
     },
   },
@@ -942,8 +1100,12 @@ const RULES = [
     scope: 'source',
     kinds: ['js'],
     fix: 'Remove `.only` / `fdescribe` / `fit`. A committed focus silently disables every sibling test in the file.',
-    matchSource(stripped) {
-      return [...matchSpans(stripped, /(?<![\w.])(?:fdescribe|fit|ftest)\s*\(/g), ...matchSpans(stripped, /\.only\s*[(.]/g)];
+    matchSource(stripped, context) {
+      return [
+        ...matchSpans(stripped, /(?<![\w.])(?:fdescribe|fit|ftest)\s*\(/g),
+        ...matchSpans(stripped, /\.only\s*[(.]/g),
+        ...bracketFocusSpans(stripped, context),
+      ];
     },
   },
   {
@@ -1040,35 +1202,10 @@ const RULES = [
     kinds: ['js', 'py', 'java', 'go', 'maestro'],
     fix: 'Wait on a web-first assertion, an explicit readiness signal, `cy.wait("@alias")`, or `extendedWaitUntil` in a Maestro flow.',
     matchSource(source, context) {
-      // The timer a hard wait hands to a Promise executor, ending at the delay's
-      // first digit. It must CALL the resolver: `setTimeout(r, 1000)` and
-      // `setTimeout(() => r(), 1000)` wait, while `setTimeout(() => reject(...), 5000)`
-      // is a timeout guard on something else and stays silent.
-      const timer = (resolver) => `setTimeout\\s*\\(\\s*(?:${resolver}|\\(\\s*\\)\\s*=>\\s*${resolver}\\s*\\(\\s*\\))\\s*,\\s*\\d`;
-      // The optional `<void>` is the TypeScript type argument on `new Promise<void>(`.
-      const promise = String.raw`\bnew\s+Promise\s*(?:<[^<>()]*>)?\s*\(\s*`;
-      const params = String.raw`([\w$]+)\s*(?:,\s*[\w$]+\s*)?`;
-      const firstParam = String.raw`\1`;
+      const sleep = resolveBinding(context.bindings, 'sleep');
       const patterns = {
-        js: [
-          /\bwaitForTimeout\s*\(/g,
-          /\bcy\.wait\s*\(\s*\d/g,
-          // MSW's `delay()` simulates server latency inside a handler, so it is
-          // left out when the bare `delay` is the one imported from msw. A member
-          // call such as `nockScope.delay(200)` belongs to a library and is left
-          // out too.
-          ...(bindsMswDelay(context.code) ? [] : [/(?<![\w.$])delay\s*\(\s*\d/g]),
-          /\bawait\s+setTimeout\s*\(\s*\d/g,
-          new RegExp(String.raw`${promise}(?:\(\s*)?${params}\)?\s*=>\s*(?:{\s*)?${timer(firstParam)}`, 'g'),
-          new RegExp(String.raw`${promise}function\s*\(\s*${params}\)\s*{\s*${timer(firstParam)}`, 'g'),
-        ],
-        py: [
-          /\btime\.sleep\s*\(/g,
-          // `def sleep(self):` defines a helper.
-          /(?<![\w.])(?<!\bdef\s+)sleep\s*\(/g,
-          // `asyncio.sleep(0)` is a cooperative yield, not a wait.
-          /\basyncio\.sleep\s*\((?!\s*0(?:\.0*)?\s*\))/g,
-        ],
+        js: [/\bwaitForTimeout\s*\(/g, /\bcy\.wait\s*\(\s*\d/g],
+        py: timerKind(source, 0, 'sleep', sleep, 'py') ? [] : [/(?<![\w.])(?<!\bdef\s+)sleep\s*\(/g],
         // Kotlin's `delay()` stays out on purpose: under `runTest` it advances
         // virtual time and waits on nothing.
         java: [
@@ -1085,7 +1222,9 @@ const RULES = [
         ...patterns[context.kind].flatMap((pattern) =>
           [...source.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length]),
         ),
-        ...(context.kind === 'js' ? sleepCalls(source) : []),
+        ...(context.kind === 'js' || context.kind === 'py' ? importedTimerSpans(source, context) : []),
+        ...(context.kind === 'js' ? promiseTimerSpans(source, context.code) : []),
+        ...(context.kind === 'js' && !isJsTimer(sleep) && !isMswDelay(sleep) ? sleepCalls(source) : []),
       ].sort((a, b) => a[0] - b[0]);
     },
   },
@@ -1220,6 +1359,7 @@ function scanContent(relativePath, source, config, options) {
   const lineStarts = lineStartOffsets(stripped);
   let views = null;
   let keptLines = null;
+  let bindings = null;
   const findings = [];
 
   for (const rule of activeRules(settings)) {
@@ -1255,7 +1395,8 @@ function scanContent(relativePath, source, config, options) {
       // newlines, so offsets into the stripped text are offsets into the source.
       // One finding per line, as the line rules report, carrying every match on it.
       const byLine = new Map();
-      for (const [start, end] of rule.matchSource(stripped, { kind, config: settings, ...views, relativePath })) {
+      bindings ??= fileBindings(kind, stripped, views.code);
+      for (const [start, end] of rule.matchSource(stripped, { kind, config: settings, ...views, relativePath, bindings })) {
         const index = lineAt(lineStarts, start);
         byLine.set(index, [...(byLine.get(index) || []), identity(start, end)]);
       }
@@ -1272,7 +1413,17 @@ function scanContent(relativePath, source, config, options) {
     }
 
     for (const [index, line] of strippedLines.entries()) {
-      const context = { kind, config: settings, rawLines, lineIndex: index, relativePath, code: keptLines[index] };
+      const context = {
+        kind,
+        config: settings,
+        rawLines,
+        lineIndex: index,
+        relativePath,
+        code: keptLines[index],
+        source: stripped,
+        keptSource: views.code,
+        lineOffset: lineStarts[index],
+      };
       if (rule.match(line, context)) {
         findings.push({
           rule,
