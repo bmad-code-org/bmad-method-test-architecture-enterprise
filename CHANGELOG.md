@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tea-test-review` discovers changed `.mts` and `.cts` tests, Kotlin and XCTest test files, and Flutter `_test.dart` files in PRs (#511).
 - `tea-test-review --gate-on introduced` uses Git's paired rename paths to keep findings on untouched lines pre-existing when a test file moves (#512).
 - `tea-test-review --help` describes CLI flags as overriding the resolved TEA configuration value (#505).
+- The BMad v7 handoff reports red-mode halts as blocked builds. Headless resume uses the supplied ticket or stops when several ATDD checklists could match (#504).
 
 ## [4.4.2] - 2026-11-23
 

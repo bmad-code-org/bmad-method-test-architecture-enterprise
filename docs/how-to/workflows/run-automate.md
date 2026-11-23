@@ -687,22 +687,23 @@ For one story, set `route = "full"` and run `bmad-build`:
 4. Resume `bmad-build` to implement the story and pass the tests.
 
 For automatic red mode, set `route = "full"` under `[workflow]` in `_bmad/custom/bmad-build.toml` or `_bmad/custom/bmad-build-auto.toml`.
-In the same table, copy `implementation_handoff` from the installed skill's `customize.toml` or edit your existing override. Move any `before_implement` instructions into the handoff and remove that key.
-
-Prepend this to the handoff string:
+Copy `implementation_handoff` from the installed skill's `customize.toml` into the same table, or edit your override. Move any `before_implement` instructions into the handoff and remove the old key. Prepend this:
 
 ```text
-If {plan_file} names a `ticket`, do the following before dispatch:
+If {plan_file} names a ticket, do this before dispatch:
 
-1. Run bmad-tea-automate in red mode for the ticket. Reuse existing test
-   scaffolds on resume and regenerate any a review loopback removed.
-2. List the test files in the plan's Code Map and add their run command to
-   Verification.
-3. For each scaffold, add or update a task to activate the skipped test,
-   confirm it fails for the missing behavior, then make it pass.
+1. Pass the ticket to bmad-tea-automate in red mode on create and resume.
+   Reuse scaffolds and regenerate any removed in review. If red mode halts
+   in bmad-build-auto, halt with status blocked and use its message as
+   the blocking condition.
+2. Add test files to Code Map and their command to Verification.
+3. Add a task to unskip each test, confirm it fails for the missing
+   behavior, then make it pass.
 
 Leave the frozen intent unchanged.
 ```
+
+Activate each red scaffold before Verification. The Matrix Test Audit counts a skipped covering test as missing.
 
 <a id="red-prerequisites"></a>
 
