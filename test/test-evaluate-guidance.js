@@ -3698,9 +3698,68 @@ function checkIsolationViolationGuidance(guide, failures) {
   }
 }
 
+/** The labels of the evaluation brief, in order: what a reader who has not seen the evaluation reads first. */
+const BRIEF_LABELS = ['What was tested', 'Verdict', 'What it means', 'Caught', 'Not caught', 'Limits', 'Next step', 'Links'];
+
+/**
+ * The gap report opens with the evaluation brief: `gaps.md` sends the report to the template and names what the brief covers, and the
+ * template's first section is `## Evaluation brief`, with one line per label in order.
+ */
+function checkEvaluationBrief(guide, template, failures) {
+  const opening = headingBody(guide, '## Open the report with an evaluation brief');
+  for (const marker of [
+    '`assets/gap-report.template.md`',
+    '`## Evaluation brief`',
+    'what was tested, the verdict and what it means, what was caught and what was not, the limits, the next step, and links',
+    'compute none',
+    '`gap-view.json`',
+  ])
+    requireText(opening, marker, 'gaps.md evaluation brief', failures);
+  if (guide.match(/^## .+$/m)?.[0] !== '## Open the report with an evaluation brief')
+    failures.push('gaps.md does not open with the evaluation brief section');
+  if (template.match(/^## .+$/m)?.[0] !== '## Evaluation brief')
+    failures.push('gap-report.template.md does not open with ## Evaluation brief');
+  const brief = headingBody(template, '## Evaluation brief');
+  const labels = [...brief.matchAll(/^- \*\*([^*]+):\*\* \S/gm)].map((match) => match[1]);
+  if (JSON.stringify(labels) !== JSON.stringify(BRIEF_LABELS))
+    failures.push(`gap-report.template.md's brief lists ${JSON.stringify(labels)}; expected ${JSON.stringify(BRIEF_LABELS)}`);
+}
+
+/** `ci.md` ends with the pre-PR checklist: every item, each through a command the stages already run, and no new command. */
+function checkPrChecklist(guide, failures) {
+  const checklist = headingBody(guide, '## Before you open the PR');
+  if (checklist === '') {
+    failures.push('ci.md has no ## Before you open the PR checklist');
+    return;
+  }
+  for (const marker of [
+    'adds none',
+    'The inputs are committed',
+    'A development run was made over that commit',
+    '`dirty: false`',
+    'That run was scored',
+    'every observation an oracle requires was recorded',
+    'The baseline was accepted',
+    'tea-evaluate compare --evaluation <evaluation-folder> --accept',
+    'frozen and independent',
+    '`held-out-drift`',
+    'tea-evaluate ci --evaluation <evaluation-folder> --tier pr` exits 0',
+    "The repository's own pull request gates",
+    'The evaluation brief exists',
+  ])
+    requireText(checklist, marker, 'ci.md pre-PR checklist', failures);
+  const items = checklist.match(/^\d+\. /gm) ?? [];
+  if (items.length !== 8) failures.push(`ci.md's pre-PR checklist has ${items.length} items; expected 8`);
+  const commands = new Set(['check', 'run', 'score', 'compare', 'ci']);
+  for (const [, command] of checklist.matchAll(/tea-evaluate ([a-z-]+)/g))
+    if (!commands.has(command)) failures.push(`ci.md's pre-PR checklist names tea-evaluate ${command}, which no stage runs`);
+}
+
 function checkGapsGuidance(guide, engine, failures) {
   checkRetiredNetwork(guide, failures, 'gaps.md');
+  checkEvaluationBrief(guide, fs.readFileSync(ASSET('gap-report.template.md'), 'utf8'), failures);
   for (const heading of [
+    '## Open the report with an evaluation brief',
     '## Read the strength vector',
     '## Read a loose oracle',
     '## Separate process from outcome',
@@ -4024,6 +4083,7 @@ function filledTemplate(template) {
 /** The ci stage guide (Story 2.4): inspection headings, placement rules, the plan template and the tagged plan examples. */
 function checkCiGuidance(guide, failures, assets = ciAssets(), egressProblems = []) {
   const plan = require('../cli/lib/evaluate/ci-plan');
+  checkPrChecklist(guide, failures);
   const INSPECTIONS = [
     [
       '## Inspect existing CI',
@@ -5040,6 +5100,27 @@ async function main() {
         'run',
         checkRunGuidance,
         (text) => text.replace('./node_modules/.bin/eval-quality compile', 'eval-quality compile'),
+      ],
+      [
+        'gaps evaluation brief removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^## Open the report with an evaluation brief\n\n[^\n]*\n\n/m, ''),
+        'gaps.md does not open with the evaluation brief section',
+      ],
+      [
+        'ci pre-PR checklist item removal',
+        'ci',
+        ciCheck,
+        (text) => text.replace(/^8\. The evaluation brief exists[^\n]*\n/m, ''),
+        'pre-PR checklist has 7 items',
+      ],
+      [
+        'ci pre-PR checklist new command',
+        'ci',
+        ciCheck,
+        (text) => text.replace('1. The inputs are committed', '1. Run `tea-evaluate ready`. The inputs are committed'),
+        'names tea-evaluate ready',
       ],
       [
         'gaps outcome removal',

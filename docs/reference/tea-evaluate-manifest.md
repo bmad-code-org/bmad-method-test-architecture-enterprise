@@ -85,11 +85,32 @@ The runner sits in the evaluations folder's install (`evals/node_modules`), insi
 }
 ```
 
+## Mandatory actions
+
+A behavior that requires the target to act, such as calling a tool, writing a record or sending a reply, can fail by doing nothing.
+List such behaviors in `evaluation.json` to have `check` require proof that a missing action is caught:
+
+```json
+{
+  "mandatoryActionBehaviors": ["B-001"]
+}
+```
+
+For each listed behavior, `check` requires a zero-action defect probe: `probeClass` `zero-action`, `expectedClean: false` and a defect on that behavior, whose signature exposes the missing action.
+A clean control on the behavior does not count, since it expects a clean run.
+A listed ID the contract does not declare is a finding too.
+The field is optional and additive: a file without it checks exactly as before.
+
 ## Held-out probes and partition plans
 
 For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutProbes": ["P-002"]`.
 Each ID must name a committed probe, cannot name a clean control, and must leave a development probe for every affected behavior.
 Omit the field when every probe belongs to development.
+
+With a held-out set, `check` requires a defect, gameability or zero-action defect probe for every `material` or `critical` behavior in scope.
+A clean control or canary does not count.
+For a partial set, record each excluded behavior and its reason under `heldOutCoverageExclusions`. For example, `"heldOutCoverageExclusions": { "B-002": "Covered in development while the independent held-out case is prepared." }`.
+Keep those limits in the gap report.
 
 To keep a request meant only for held-out probes out of the development partition, declare a `partitionPlan` beside `heldOutProbes`:
 

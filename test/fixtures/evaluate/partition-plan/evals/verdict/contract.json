@@ -8,7 +8,7 @@
     {
       "id": "B-001",
       "description": "Under the committed strict policy the verdict command accepts the shared request it is given and exits 0.",
-      "severity": "critical",
+      "severity": "low",
       "observableSuccessCriterion": "The shared run says verdict: accepted on stdout and exits 0.",
       "requirementLinks": [
         {

@@ -21,7 +21,7 @@ function suite(name) {
       env: { ...BASE_ENV, ...env },
     });
     if (run.error) throw run.error;
-    return { status: run.status, output: `${run.stdout}${run.stderr}` };
+    return { status: run.status, stdout: run.stdout, stderr: run.stderr, output: `${run.stdout}${run.stderr}` };
   }
   /**
    * A committed temp project from the verdict fixture, one trial per arm. With

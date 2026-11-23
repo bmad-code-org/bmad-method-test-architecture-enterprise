@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A `tea-test-review` run under `chmod` isolation that is stopped by SIGINT, SIGTERM or SIGHUP (Ctrl-C, a cancelled CI job) restores the project's write permissions before it exits, and is not retried. A run killed by SIGKILL leaves a lock marker in an owner-only per-user directory, and the next run on that project restores the permissions from it before anything else. A second `chmod` run on a project that is still locked exits 2 instead of locking it again (#514).
 
+## [4.4.0] - 2026-11-23
+
+### Added
+
+- Evaluate pre-PR readiness checks. `tea-evaluate check` now names every material or critical behavior with neither a qualifying held-out probe nor an explicit coverage exclusion. A new optional `mandatoryActionBehaviors` field in `evaluation.json` makes `check` require a zero-action defect probe for each listed behavior; files without the field check as before.
+- Held-out and both-partition runs record a `heldOutDigest` in `run.json`. `check` prints a non-blocking warning when the newest scored held-out run no longer matches the committed held-out material.
+- The gap report template opens with a plain-language evaluation brief, and the CI guide ends with a "before you open the PR" checklist.
+
+### Changed
+
+- Require eval-quality 10.1.1 for escaped CLI diagnostics.
+- The `oracle-count` rule also holds a zero-action defect probe's behavior to exactly one oracle, as it already did for defect and gameability probes.
+
+### Fixed
+
+- Quote paths in BMad resolver commands so TeA works in checkouts with spaces.
+
 ## [4.3.1] - 2026-11-20
 
 ### Fixed

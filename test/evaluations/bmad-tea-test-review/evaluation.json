@@ -63,6 +63,18 @@
   "heldOutProbes": [
     "P-011"
   ],
+  "heldOutCoverageExclusions": {
+    "B-001": "The held-out corpus covers defects introduced by a PR. Clean changes are covered in development.",
+    "B-003": "Introduced-function classification is covered in development.",
+    "B-004": "Setup-only regressions are covered in development.",
+    "B-005": "Separate findings under one criterion are covered in development.",
+    "B-006": "Assertions chosen by branching control flow are covered in development.",
+    "B-007": "Type checks and value assertions are covered in development.",
+    "B-009": "Full-file versus PR review scope is covered in development.",
+    "B-010": "Repositories without a type checker are covered in development.",
+    "B-011": "Type checkers missing from CI are covered in development.",
+    "B-012": "Type-checker scope is covered in development."
+  },
   "trials": 3,
   "tiers": [
     "pr"

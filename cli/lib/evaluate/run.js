@@ -97,7 +97,7 @@ const {
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
-const { corpusDigestOf } = require('./corpus-index');
+const { corpusDigestOf, heldOutDigestOf } = require('./corpus-index');
 const { calibrationObservation, calibrationPartial, calibrationStepPair, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
@@ -115,7 +115,7 @@ const { holdDeployment, recordRefusal } = require('./historical');
 const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
-const { bothViewDesignation, committedProbes, selectPartition, unknownPartition } = require('./partition');
+const { bothViewDesignation, committedProbes, loadContractView, selectPartition, unknownPartition } = require('./partition');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
@@ -317,10 +317,22 @@ function runRunCommand(
         if (!(error instanceof EvaluatorLayerError)) throw error;
         return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `the evaluation layer cannot be used: ${error.message}` });
       }
+      const index = readJson(path.join(folder, INDEX_PATH));
       snapshot = {
         policyBytes: fs.readFileSync(path.join(folder, ...POLICY_PATH.split('/'))),
         conditions: fs.existsSync(conditionsFile) ? readJson(conditionsFile) : null,
-        index: readJson(path.join(folder, INDEX_PATH)),
+        index,
+        // The held-out material this run measures, so `check` can tell when a scored held-out result no longer describes the
+        // committed held-out partition. A development run measures none and records none; neither does a run with no held-out probe.
+        heldOutDigest:
+          partition === 'development' || heldOut.size === 0
+            ? null
+            : await heldOutDigestOf({
+                index,
+                probes: probes.map(({ probe }) => probe),
+                heldOutProbes: heldOut,
+                contract: loadContractView({ folder, evaluation: context.evaluation, partition: 'held-out' }).contract,
+              }),
         probeIds: probes
           .filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId))
           .map(({ probe }) => probe.probeId),
@@ -2165,6 +2177,7 @@ async function completeRun(
     evaluatorConfigurationDigest: configurationDigest,
     partition: snapshot.partition,
     heldOutProbes: snapshot.heldOutProbes,
+    ...(snapshot.heldOutDigest === null ? {} : { heldOutDigest: snapshot.heldOutDigest }),
     operationPhases: snapshot.operationPhases,
     runner: registry.entries.map((entry) => runnerOf(entry, registry)),
     evaluator: evaluatorRecord,
