@@ -2915,15 +2915,30 @@ async function runTests() {
         },
         { children: [{ record: null, exitCode: 1 }], expected: 'quality' },
         { children: [{ record: { failureClass: 'none' }, exitCode: 0 }], expected: 'none' },
+        {
+          children: [
+            { record: { failureClass: 'none' }, exitCode: 0 },
+            { record: { failureClass: 'environment-transport' }, exitCode: 2 },
+          ],
+          expected: 'environment-transport',
+        },
+        {
+          children: [
+            { record: { failureClass: 'none' }, exitCode: 0 },
+            { record: { failureClass: 'environment-transport' }, exitCode: 2 },
+            { record: { failureClass: 'environment-configuration' }, exitCode: 2 },
+          ],
+          expected: 'environment-configuration',
+        },
       ];
       assert(
         childOutcomes.every(({ children, expected }) => runFailureClass(children) === expected),
         'eval:all settles each child from its own record and exit code, and a contradiction takes the worse of the two',
         JSON.stringify(childOutcomes.map(({ children }) => runFailureClass(children))),
       );
-      // The end-to-end half: a preflight run where one suite reports an environment
-      // failure and the others pass. The process exit and the exit code inside the
-      // summary it wrote are read back and compared.
+      // The end-to-end half: the bad runner produces a transport failure.
+      // A child may fail even earlier if the host cannot start its isolation
+      // backend. In that case configuration takes precedence over transport.
       const summaryPath = path.join(tmpRoot, 'eval-all-run-summary.json');
       const reconciledRun = spawnSync(
         process.execPath,
@@ -2940,13 +2955,25 @@ async function runTests() {
         { cwd: repoRoot, encoding: 'utf8' },
       );
       const writtenSummary = fs.existsSync(summaryPath) ? JSON.parse(fs.readFileSync(summaryPath, 'utf8')) : null;
+      const reportedChildren = writtenSummary?.suites ?? [];
+      const reportedClasses = reportedChildren.map((child) => child.failureClass);
+      const expectedFailureClass = reportedClasses.includes('environment-configuration')
+        ? 'environment-configuration'
+        : 'environment-transport';
       assert(
         writtenSummary !== null &&
+          reportedClasses.includes('environment-transport') &&
+          reportedChildren.every(
+            ({ failureClass, exitCode }) =>
+              ['none', 'environment-transport', 'environment-configuration'].includes(failureClass) &&
+              exitCodeForFailureClass(failureClass) === exitCode,
+          ) &&
+          reconciledRun.status === 2 &&
           writtenSummary.exitCode === reconciledRun.status &&
           exitCodeForFailureClass(writtenSummary.failureClass) === reconciledRun.status &&
-          writtenSummary.failureClass === 'environment-transport',
-        'eval:all exits with the code its own run summary carries, and keeps the class the failing child recorded',
-        `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })}`,
+          writtenSummary.failureClass === expectedFailureClass,
+        'eval:all exits with the code its own run summary carries and preserves the highest-priority child failure',
+        `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })} childClasses=${JSON.stringify(reportedClasses)}`,
       );
       assert(resolveModel('not-a-real-vendor') === null, 'resolveModel returns null for an unknown adapter');
       try {

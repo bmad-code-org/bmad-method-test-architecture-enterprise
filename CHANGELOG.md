@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `eval:all` summary test now handles hosts where a missing or unavailable isolation backend fails preflight before a runner can be probed, while still checking that the CLI exit and highest-priority child failure agree (#506).
+
 ## [4.4.0] - 2026-11-23
 
 ### Added
