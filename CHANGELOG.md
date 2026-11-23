@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.2] - 2026-11-23
+
 ### Fixed
 
 - `tea-test-review` verifies file identities before restoring permissions from a `chmod` lock. Replaced paths cannot redirect the restore outside the checkout. Journals from older versions are retained for manual recovery.
