@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-11-23
+
 ### Added
 
 - Evaluate pre-PR readiness checks. `tea-evaluate check` now names every material or critical behavior with neither a qualifying held-out probe nor an explicit coverage exclusion. A new optional `mandatoryActionBehaviors` field in `evaluation.json` makes `check` require a zero-action defect probe for each listed behavior; files without the field check as before.
