@@ -281,6 +281,7 @@ const {
   sectionOf,
 } = require('./lib/docs-pages');
 const { scratchDirectories } = require('./lib/scratch-directories');
+const { gitToolchain } = require('./lib/git-toolchain');
 const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 
 /** The scoring instant a test's held inputs hand `--scored-at` and the in-process re-score. */
@@ -474,6 +475,8 @@ function refusesMounts(result, named = []) {
   );
 }
 
+let cachedGitToolchain;
+
 /**
  * A committed temp project from the fixture; `edit` changes it before the
  * index is digested and the commit made. With `below`, the project sits in
@@ -485,36 +488,6 @@ function refusesMounts(result, named = []) {
  * With `outside`, the evaluation folder sits in a directory of its own, beside
  * no repository, and `launch.root` points at the project (Story 1.112).
  */
-let cachedGitToolchain = null;
-let gitToolchainBin = null;
-
-/**
- * The directories of this host's `git` outside the system's own (Story 1.60): the confinement audits every process of a target,
- * a `git` the fixture's target runs included, and a toolchain outside `/usr` is read from where it is installed, as an adopter
- * declares it in `systemPaths` (a Homebrew prefix on macOS or the selected Command Line Tools or Xcode installation).
- * Resolve Darwin's shim before confinement so its framework and cache dependencies remain outside the target's grants.
- * Nothing on a host whose git lives under `/usr`, as CI's does.
- */
-function gitToolchainPaths() {
-  if (cachedGitToolchain !== null) return cachedGitToolchain;
-  const found = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
-  const paths = new Set();
-  if (found !== '') {
-    let real = fs.realpathSync(found);
-    if (process.platform === 'darwin' && real.startsWith('/usr/bin/')) {
-      const selected = spawnSync('xcrun', ['--find', 'git'], { encoding: 'utf8', env: BASE_ENV });
-      if (selected.status !== 0 || !fs.existsSync(selected.stdout.trim())) throw new Error('cannot resolve selected Darwin git');
-      real = fs.realpathSync(selected.stdout.trim());
-      gitToolchainBin = path.dirname(real);
-    }
-    const cellar = real.indexOf('/Cellar/');
-    if (cellar !== -1) paths.add(real.slice(0, cellar));
-    else if (!real.startsWith('/usr/') && !real.startsWith('/bin/')) paths.add(path.dirname(path.dirname(real)));
-  }
-  cachedGitToolchain = [...paths].filter((entry) => fs.existsSync(entry));
-  return cachedGitToolchain;
-}
-
 function makeProject(
   label,
   { edit = () => {}, below = null, unconfined = false, history = () => {}, toolchain = false, outside = false } = {},
@@ -538,9 +511,10 @@ function makeProject(
   }
   if (unconfined) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.confinement = false));
   // A case whose target runs `git` declares where this host installed it, when that is outside the system's directories.
-  if (toolchain && gitToolchainPaths().length > 0) {
+  const targetGit = toolchain ? (cachedGitToolchain ??= gitToolchain(BASE_ENV)) : null;
+  if (targetGit?.paths.length > 0) {
     editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
-      for (const entry of evaluation.registry) entry.systemPaths = [...(entry.systemPaths ?? []), ...gitToolchainPaths()];
+      for (const entry of evaluation.registry) entry.systemPaths = [...(entry.systemPaths ?? []), ...targetGit.paths];
     });
   }
   edit({ project, folder });
@@ -560,7 +534,7 @@ function makeProject(
       TMPDIR: directory,
       TMP: directory,
       TEMP: directory,
-      ...(toolchain && gitToolchainBin !== null ? { PATH: `${gitToolchainBin}${path.delimiter}${BASE_ENV.PATH}` } : {}),
+      ...targetGit?.env,
     },
   };
 }
@@ -9778,14 +9752,15 @@ function runConfined(workspace, folder, script, { git: gitAccess = gitAccessOf(w
   const status = confinement.mode === 'bubblewrap' ? tempDir('withheld-history-status') : null;
   const sandbox = targetSandbox({ confinement, workspace: workspace.top, git: gitAccess, status });
   const ownGit = gitAccessOf(workspace);
+  const targetGit = (cachedGitToolchain ??= gitToolchain(BASE_ENV));
   const readable = [
-    ...gitToolchainPaths(),
+    ...targetGit.paths,
     ...(ownGit === null ? [] : [ownGit.directory, ownGit.metadata, ownGit.view, ...ownGit.alternates].filter(Boolean)),
   ];
   const wrapped = sandbox.wrap('/bin/sh', ['-c', script], [], readable);
   const result = spawnSync(wrapped.target, wrapped.args, {
     cwd: workspace.root,
-    env: { ...GIT_ENV, ...(gitToolchainBin === null ? {} : { PATH: `${gitToolchainBin}${path.delimiter}${BASE_ENV.PATH}` }) },
+    env: { ...GIT_ENV, ...targetGit.env },
     encoding: 'utf8',
     timeout: SPAWN_TIMEOUT_MS,
     killSignal: 'SIGKILL',
@@ -10951,10 +10926,7 @@ async function checkWithheldHistoryReach() {
     // The stub `git` on PATH is a tool the target is meant to run, so its entry lists the directory that holds it.
     const stubs = fs.realpathSync(tempDir('reach-large-git'));
     const large = reachProject('reach-large', { systemPaths: [stubs] });
-    const real =
-      gitToolchainBin === null
-        ? spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim()
-        : path.join(gitToolchainBin, 'git');
+    const { executable: real } = (cachedGitToolchain ??= gitToolchain(BASE_ENV));
     // The store's object walk answers as git does and then prints more ids; every other git call is git's.
     fs.writeFileSync(
       path.join(stubs, 'git'),
