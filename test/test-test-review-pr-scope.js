@@ -1918,6 +1918,76 @@ function main() {
         prompt.slice(0, 300),
       );
 
+      const mobileAndModuleTests = [
+        ['tests/checkout.test.mts', 'src/checkout.mts'],
+        ['src/checkout.spec.cts', 'src/checkout.cts'],
+        ['app/src/androidTest/java/com/x/LoginTest.kt', 'app/src/main/java/com/x/Login.kt'],
+        ['app/src/androidTest/kotlin/com/x/LoginJourney.kt', 'app/src/main/kotlin/com/x/LoginJourney.kt'],
+        ['iosApp/AppTests/LoginTests.swift', 'iosApp/App/Login.swift'],
+        ['integration_test/app_test.dart', 'lib/app.dart'],
+      ];
+      for (const [index, [testFile, sourceFile]] of mobileAndModuleTests.entries()) {
+        const discoveryRepo = pullRequestRepo(tmpRoot, `discovery-${index}`, { [sourceFile]: '' }, { [testFile]: '', [sourceFile]: '\n' });
+        const discoveryJson = path.join(tmpRoot, `discovery-${index}.json`);
+        const discovery = run(`discovery-${index}`, ['--base', 'main', '--agent', 'none', '--json', discoveryJson], {}, discoveryRepo);
+        const verdict = fs.existsSync(discoveryJson) ? JSON.parse(fs.readFileSync(discoveryJson, 'utf8')) : null;
+        assert(
+          discovery.status === 0 &&
+            verdict?.promptOnly === true &&
+            verdict.files?.length === 1 &&
+            verdict.files[0] === testFile &&
+            verdict.contextFiles?.includes(sourceFile),
+          `the CLI reviews ${testFile} and keeps ${sourceFile} as context`,
+          `status=${discovery.status} verdict=${JSON.stringify(verdict)} stderr=${discovery.stderr}`,
+        );
+      }
+
+      const oldTestFile = 'tests/legacy [discount].spec.ts';
+      const newTestFile = 'tests/discount.spec.ts';
+      for (const [kind, baseContent, expectedExit, expectedRanges] of [
+        ['move', DISCOUNT_PR, 0, []],
+        ['move-and-edit', DISCOUNT_BASE, 1, ['3']],
+        ['move-and-reuse-old-path', DISCOUNT_PR, 0, []],
+      ]) {
+        const moveRepo = pullRequestRepo(tmpRoot, kind, { [oldTestFile]: baseContent }, { [newTestFile]: DISCOUNT_PR });
+        git(['config', 'diff.renames', 'false'], moveRepo);
+        git(['rm', '--', oldTestFile], moveRepo);
+        if (kind === 'move-and-reuse-old-path') {
+          fs.mkdirSync(path.join(moveRepo, oldTestFile));
+          fs.writeFileSync(path.join(moveRepo, oldTestFile, 'unrelated.snap'), 'Unrelated snapshot\n'.repeat(12));
+          git(['add', '--', oldTestFile], moveRepo);
+        }
+        git(['commit', '-qm', 'complete move'], moveRepo);
+        const movePrompt = path.join(tmpRoot, `${kind}-prompt.txt`);
+        const moved = run(kind, ['--base', 'main'], { STUB_FIXTURE: 'pr-scope-symptom.md', STUB_PROMPT_OUT: movePrompt }, moveRepo);
+        const ranges = fs.existsSync(movePrompt) ? (changedLinesIn(fs.readFileSync(movePrompt, 'utf8'))?.[newTestFile] ?? []) : null;
+        const findings = moved.verdict?.findings;
+        assert(
+          moved.status === expectedExit &&
+            JSON.stringify(ranges) === JSON.stringify(expectedRanges) &&
+            (expectedExit === 0
+              ? findings?.length === 0
+              : findings?.length === 1 && findings[0].row === 'C3' && findings[0].line === 3 && findings[0].provenance === 'modified'),
+          `${kind} gates only on findings attributable to edits in the renamed test`,
+          `status=${moved.status} ranges=${JSON.stringify(ranges)} findings=${JSON.stringify(findings)} stderr=${moved.stderr}`,
+        );
+      }
+
+      const renamedNonTest = pullRequestRepo(tmpRoot, 'test-removed', { [oldTestFile]: DISCOUNT_PR }, { 'src/discount.ts': DISCOUNT_PR });
+      git(['config', 'diff.renames', 'false'], renamedNonTest);
+      git(['rm', '--', oldTestFile], renamedNonTest);
+      git(['commit', '-qm', 'remove test path'], renamedNonTest);
+      const deletedJson = path.join(tmpRoot, 'deleted-test.json');
+      const deleted = run('test-removed', ['--base', 'main', '--json', deletedJson], {}, renamedNonTest);
+      const deletedVerdict = fs.existsSync(deletedJson) ? JSON.parse(fs.readFileSync(deletedJson, 'utf8')) : null;
+      assert(
+        deleted.status === 1 &&
+          deletedVerdict?.skipped === true &&
+          JSON.stringify(deletedVerdict.deletedFiles) === JSON.stringify([oldTestFile]),
+        'a rename to a non-test path with rename detection disabled preserves the deletions-only failure',
+        `status=${deleted.status} verdict=${JSON.stringify(deletedVerdict)} stderr=${deleted.stderr}`,
+      );
+
       const full = run('full', ['--base', 'main', '--gate-on', 'all'], { STUB_FIXTURE: 'pr-scope-symptom.md' });
       assert(
         full.status === 1 &&

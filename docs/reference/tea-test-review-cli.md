@@ -205,6 +205,9 @@ counts, ledger and score lines, the list items and table rows that name it, and 
 sections, then parses the result again with the same strict parser. A line under the report's title states the pull
 request decision, the reviewed commit and how many findings were left out, and stderr prints the same count.
 
+When Git detects a rename, the CLI compares the original file to the renamed file. A pure move has no changed lines.
+A move with edits contributes only its edited hunks.
+
 Use `--gate-on all` for a baseline audit. An explicit `--files` review skips git,
 so it defaults to `all`; combining `--files` with `--gate-on introduced` is
 rejected instead of guessing provenance.

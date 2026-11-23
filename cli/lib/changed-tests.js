@@ -25,7 +25,7 @@ const TEST_DIR_SEGMENTS = new Set(['test', 'tests', '__tests__', 'e2e', 'spec', 
 
 // A directory-segment match only counts when the file is actual source code,
 // so fixtures like tests/data.json or e2e/docker-compose.yaml stay out.
-const CODE_EXTENSION_PATTERN = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|php|cs|java|kt|swift|rs|dart|exs|ex|vue|svelte)$/;
+const CODE_EXTENSION_PATTERN = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|py|go|rb|php|cs|java|kt|swift|rs|dart|exs|ex|vue|svelte)$/;
 
 // Maestro flows are declarative YAML, not code, but the criteria registry carries
 // mobile rows for them, so they are a scorable format and belong in the review set.
@@ -44,6 +44,9 @@ const TEST_FILENAME_PATTERNS = [
   /Test\.php$/, // phpunit: LoginTest.php
   /Tests?\.cs$/, // dotnet xUnit/NUnit: CheckoutTest.cs, CheckoutTests.cs
   /Tests?\.java$/, // junit: CheckoutTest.java, CheckoutTests.java
+  /Tests?\.kt$/, // Kotlin: CheckoutTest.kt, CheckoutTests.kt
+  /Tests?\.swift$/, // XCTest: CheckoutTest.swift, CheckoutTests.swift
+  /_test\.dart$/, // Flutter: checkout_test.dart
   /\.pacttest\.[^.]+$/, // pact contract tests: orders.pacttest.ts
   /\.test\.[^.]+$/, // js/ts: checkout.test.ts
   /\.spec\.[^.]+$/, // js/ts: checkout.spec.ts
@@ -126,6 +129,10 @@ function isNativeTestFile(filePath) {
   }
 
   if (directories.some((segment) => TEST_DIR_SEGMENTS.has(segment.toLowerCase()))) {
+    return true;
+  }
+
+  if (/\.(?:java|kt)$/.test(filename) && directories.includes('androidTest')) {
     return true;
   }
 
