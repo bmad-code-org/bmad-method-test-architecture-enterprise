@@ -3495,6 +3495,24 @@ try {
     }
   });
 
+  check('Trace uses the CI revision only outside a checkout, not when Git cannot read checkout metadata', () => {
+    const archive = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-archive-'));
+    const previous = process.env.GITHUB_SHA;
+    const sha = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    try {
+      const nested = path.join(archive, 'nested');
+      fs.mkdirSync(nested);
+      process.env.GITHUB_SHA = sha;
+      assert.equal(currentSourceSha(nested), sha);
+      fs.writeFileSync(path.join(archive, '.git'), 'gitdir: /nonexistent/tea-trace-git-dir\n');
+      assert.equal(currentSourceSha(nested), '');
+    } finally {
+      if (previous === undefined) delete process.env.GITHUB_SHA;
+      else process.env.GITHUB_SHA = previous;
+      fs.rmSync(archive, { recursive: true, force: true });
+    }
+  });
+
   // Git refuses a repository another user owns unless protected config lists it in safe.directory, which is what
   // container CI does. Making such a repository needs chown, so this runs as root only.
   if (typeof process.getuid === 'function' && process.getuid() === 0) {
@@ -3516,6 +3534,8 @@ try {
         const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
         spawnSync('chown', ['-R', 'nobody', repo]);
         assert.equal(gitHead(repo), '', 'an untrusted checkout of another owner has no readable HEAD');
+        process.env.GITHUB_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+        assert.equal(currentSourceSha(repo), '', 'an untrusted checkout must not use the CI revision');
         fs.writeFileSync(globalConfig, `[safe]\n\tdirectory = ${repo}\n`);
         assert.equal(gitHead(repo), head);
         assert.equal(currentSourceSha(repo), head);

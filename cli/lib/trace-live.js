@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const os = require('node:os');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const normalizedSha = (value) => {
@@ -62,7 +63,20 @@ function gitHead(projectRoot) {
 function currentSourceSha(projectRoot) {
   const head = gitHead(projectRoot);
   if (head) return head;
-  return git(projectRoot, 'rev-parse', '--is-inside-work-tree').status === 0 ? '' : normalizedSha(process.env.GITHUB_SHA);
+  const location = git(projectRoot, 'rev-parse', '--is-inside-work-tree');
+  // An unreadable or untrusted checkout is not a source archive. Refuse the
+  // CI fallback if Git failed or if checkout metadata is still present.
+  if (location.error || location.status !== 128) return '';
+  for (let directory = path.resolve(projectRoot); ; directory = path.dirname(directory)) {
+    try {
+      fs.lstatSync(path.join(directory, '.git'));
+      return '';
+    } catch (error) {
+      if (error.code !== 'ENOENT') return '';
+    }
+    if (directory === path.dirname(directory)) break;
+  }
+  return normalizedSha(process.env.GITHUB_SHA);
 }
 
 /**
