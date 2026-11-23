@@ -63,17 +63,21 @@ Then select one:
 
 ### 2. Load the Selected Checklist
 
-**Run identity check.** Read the identity fields before inspecting progress. For a legacy checklist, recover its story key from `storyKey` or, if absent, its `atdd-checklist-{story_key}.md` filename. Halt if the story key cannot be recovered. When a story was named, compare the checklist's story key with the resolved `story_key`, and compare any existing `runKey` with `run_key`. If either differs, report the two identities and halt before reading or reporting progress. A missing legacy `runKey` proceeds to migration once the story key matches.
+**Run identity check.** Read `storyKey` and `runKey` before inspecting progress. A legacy checklist is in the legacy root or lacks `runKey`. If a legacy checklist lacks `storyKey`, recover it from its `atdd-checklist-{story_key}.md` filename. Halt if the story key is missing or any existing `runKey` differs from `story-{storyKey}` using the recovered key. If a story was named, also compare the checklist's story key with the resolved `story_key`. On a mismatch, report the two identities and halt before reading or reporting progress.
 
-**Legacy checklist migration.** A checklist selected from `{legacyProgressGlob}`, or any checklist without `runKey`, predates run identity. ATDD checklists always recorded their story, so the identity is recoverable:
+Set `story_key` to the verified key, `run_scope` to `story`, and `run_key` to `story-{story_key}`.
 
-1. Use the story key recovered and checked above.
-2. Set `run_scope` to `story` and `run_key` to `story-{story_key}`.
-3. If the checklist came from the legacy root and `{outputFile}` already exists for that story, verify the folder checklist has the same `storyKey` and `runKey` before choosing either file. In an interactive run, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checklist deletes the legacy file and continues from `{outputFile}`; keeping the legacy checklist continues with item 4. A headless run keeps the folder checklist, leaves the legacy file untouched, and says so.
-4. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `storyKey`, `runScope`, and `runKey` set in its frontmatter and `atddChecklistPath` set to `{outputFile}`.
-5. If the checklist came from the legacy root, delete the legacy file only after that write succeeds. Continue from the migrated file.
+**Choose the checklist to keep.** If the selected checklist is in the legacy root, its migration destination is `{outputFile}` in the `atdd/` folder. If both files exist, apply the identity check to the folder checklist and require the same story key. A missing `runKey` in the folder checklist permits migration when its story key matches.
 
-After any migration, require the final checklist's `runKey` to equal `story-{storyKey}` and both keys to match the named story when supplied. Halt on a missing or mismatched identity before reading progress. If no story was named, adopt the final checklist's identity.
+- In a headless run, keep the folder checklist and say that the legacy root file stays in place.
+- In an interactive run, show both timestamps and ask which checklist to keep. Halt until the user chooses. If they keep the folder checklist, remove the legacy root file only after the folder checklist is ready to resume.
+
+**Migrate the chosen checklist.** Apply only the case that matches the chosen file:
+
+- **Legacy root checklist:** Write its content to `{outputFile}` after creating the `atdd/` folder if needed. Set `storyKey`, `runScope`, `runKey`, and `atddChecklistPath` in the destination. Remove the legacy root file after the write succeeds, then continue from the destination.
+- **Folder or explicit non-root checklist:** Continue from the chosen path. If identity metadata needs migration, set `storyKey`, `runScope`, `runKey`, and `atddChecklistPath` in that file. The legacy root copy never replaces the chosen file.
+
+Before reading progress, verify that the checklist you will resume records the verified `story_key` and `run_key`.
 
 Bind `outputFile` and `atddChecklistPath` to the selected checklist's exact path after any migration. Preserve this path for all subsequent progress saves, even when it is outside `{test_artifacts}`. Refresh the stored `atddChecklistPath` to this exact path on the next progress save so the implementation handoff names the resumed checklist.
 
