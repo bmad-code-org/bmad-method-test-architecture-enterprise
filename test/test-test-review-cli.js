@@ -111,6 +111,7 @@ const {
   buildBwrapPrefix,
   selectBackend,
   isolationAvailable,
+  noBackendReason,
   lockMarkerPath,
   recoverInterruptedLock,
   withIsolation,
@@ -2567,7 +2568,10 @@ async function runTests() {
       );
 
       assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'none' }, 'darwin') === null, 'backend override "none" disables isolation');
-      assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'darwin') === 'chmod', 'backend override "chmod" forces the fallback');
+      assert(
+        selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'darwin', 501) === 'chmod',
+        'backend override "chmod" forces the fallback',
+      );
       // A recognized backend name that is wrong for this platform (bwrap is
       // linux-only) must fail closed, not silently degrade to "no isolation":
       // that would run the agent unsandboxed while logging nothing distinct
@@ -2592,9 +2596,36 @@ async function runTests() {
           `${error.code}: ${error.message}`,
         );
       }
-      assert(selectBackend({ PATH: '' }, 'darwin') === 'chmod', 'darwin without sandbox-exec on PATH falls back to chmod');
-      assert(selectBackend({ PATH: '' }, 'linux') === 'chmod', 'linux without bwrap on PATH falls back to chmod');
-      assert(selectBackend({}, 'win32') === null, 'win32 has no isolation backend');
+      assert(selectBackend({ PATH: '' }, 'darwin', 501) === 'chmod', 'darwin without sandbox-exec on PATH falls back to chmod');
+      assert(selectBackend({ PATH: '' }, 'linux', 1000) === 'chmod', 'linux without bwrap on PATH falls back to chmod');
+      assert(selectBackend({}, 'win32', null) === null, 'win32 has no isolation backend');
+      // Root ignores permission bits, so the chmod fallback would isolate nothing (#515): root gets no backend, and the
+      // documented path applies (a warning in CI, exit 2 with --isolate), with a reason that names the fix.
+      assert(selectBackend({ PATH: '' }, 'linux', 0) === null, 'linux as root without bwrap has no backend: chmod cannot restrict root');
+      assert(
+        selectBackend({ PATH: '' }, 'darwin', 0) === null,
+        'darwin as root without sandbox-exec has no backend: chmod cannot restrict root',
+      );
+      try {
+        selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'linux', 0);
+        assert(false, 'backend override "chmod" as root throws rather than running the agent unrestricted');
+      } catch (error) {
+        assert(
+          error.code === 'ISOLATION_ERROR' && error.message.includes('root') && error.message.includes('bwrap'),
+          'backend override "chmod" as root throws ISOLATION_ERROR saying root ignores the lock and naming bwrap',
+          `${error.code}: ${error.message}`,
+        );
+      }
+      assert(
+        noBackendReason('linux', 0).includes('root') && noBackendReason('linux', 0).includes('bubblewrap'),
+        'the no-backend reason as root says chmod cannot isolate root and names bubblewrap',
+        noBackendReason('linux', 0),
+      );
+      assert(
+        noBackendReason('win32', null) === 'no isolation backend (sandbox-exec, bwrap, chmod) is available on this platform',
+        'the no-backend reason off root is unchanged',
+        noBackendReason('win32', null),
+      );
       assert(typeof isolationAvailable() === 'boolean', 'isolationAvailable() returns a boolean');
 
       const minimalEnv = buildMinimalEnv(['EXTRA_ONE'], { PATH: '/usr/bin', HOME: '/home/x', EXTRA_ONE: '1', SECRET_TOKEN: 'nope' });
@@ -2981,9 +3012,9 @@ async function runTests() {
         'eval:all settles each child from its own record and exit code, and a contradiction takes the worse of the two',
         JSON.stringify(childOutcomes.map(({ children }) => runFailureClass(children))),
       );
-      // The end-to-end half: a preflight run where one suite reports an environment
-      // failure and the others pass. The process exit and the exit code inside the
-      // summary it wrote are read back and compared.
+      // The end-to-end half: the bad runner produces a transport failure.
+      // A child may fail even earlier if the host cannot start its isolation
+      // backend. In that case configuration takes precedence over transport.
       const summaryPath = path.join(tmpRoot, 'eval-all-run-summary.json');
       const reconciledRun = spawnSync(
         process.execPath,
@@ -3000,13 +3031,20 @@ async function runTests() {
         { cwd: repoRoot, encoding: 'utf8' },
       );
       const writtenSummary = fs.existsSync(summaryPath) ? JSON.parse(fs.readFileSync(summaryPath, 'utf8')) : null;
+      const reportedClasses = writtenSummary?.suites.map((child) => child.failureClass) ?? [];
+      const expectedFailureClass = reportedClasses.includes('environment-configuration')
+        ? 'environment-configuration'
+        : 'environment-transport';
       assert(
         writtenSummary !== null &&
+          reportedClasses.includes('environment-transport') &&
+          reportedClasses.every((failureClass) => ['environment-transport', 'environment-configuration'].includes(failureClass)) &&
+          reconciledRun.status === 2 &&
           writtenSummary.exitCode === reconciledRun.status &&
           exitCodeForFailureClass(writtenSummary.failureClass) === reconciledRun.status &&
-          writtenSummary.failureClass === 'environment-transport',
-        'eval:all exits with the code its own run summary carries, and keeps the class the failing child recorded',
-        `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })}`,
+          writtenSummary.failureClass === expectedFailureClass,
+        'eval:all exits with the code its own run summary carries and preserves the highest-priority child failure',
+        `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })} childClasses=${JSON.stringify(reportedClasses)}`,
       );
       assert(resolveModel('not-a-real-vendor') === null, 'resolveModel returns null for an unknown adapter');
       try {
@@ -10438,10 +10476,11 @@ async function runTests() {
         );
       }
       assert(
-        selectBackend({ PATH: '' }, 'win32') === null &&
-          selectBackend({ PATH: '' }, 'linux') === 'chmod' &&
-          selectBackend({ PATH: '' }, 'darwin') === 'chmod',
-        'Windows has no isolation backend, while macOS and Linux always fall back to chmod',
+        // An explicit non-root uid: the platform rule is what the reference states; root's refusal is asserted in Suite 6.
+        selectBackend({ PATH: '' }, 'win32', 1000) === null &&
+          selectBackend({ PATH: '' }, 'linux', 1000) === 'chmod' &&
+          selectBackend({ PATH: '' }, 'darwin', 1000) === 'chmod',
+        'Windows has no isolation backend, while macOS and Linux fall back to chmod for a non-root user',
       );
       assert(
         /Windows:\*\* no backend exists/.test(reference) && /falls back to `chmod`/.test(reference),

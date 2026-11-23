@@ -82,7 +82,7 @@ const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
 const { neutralizeWorkflowCommands } = require('./lib/safe-log');
 const { AGENT_ADAPTERS, resolveModel, resolvedModelFromAnswer, agentAnswerText } = require('./lib/agent-adapters');
-const { withIsolation, selectBackend, recoverInterruptedLock } = require('./lib/isolate');
+const { withIsolation, selectBackend, noBackendReason, recoverInterruptedLock } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { RUBRIC_VERSION, TEA_CLI_VERSION, buildReviewProvenance, skillRubricVersion } = require('./lib/review-provenance');
 const { validInterval } = require('./lib/heartbeat');
@@ -1413,9 +1413,9 @@ async function runReview(session) {
     if (backend !== null) {
       isolationActive = true;
     } else if (isolateExplicit) {
-      fail(EXIT.ENV_ERROR, '--isolate was requested but no isolation backend (sandbox-exec, bwrap, chmod) is available on this platform.');
+      fail(EXIT.ENV_ERROR, `--isolate was requested but ${noBackendReason()}.`);
     } else {
-      console.error('tea-test-review: CI requested isolation but no backend is available on this platform; continuing without it.');
+      console.error(`tea-test-review: CI requested isolation but ${noBackendReason()}; continuing without it.`);
     }
   }
 
