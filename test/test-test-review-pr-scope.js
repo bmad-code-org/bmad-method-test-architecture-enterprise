@@ -1981,7 +1981,9 @@ function main() {
       const deleted = run('test-removed', ['--base', 'main', '--json', deletedJson], {}, renamedNonTest);
       const deletedVerdict = fs.existsSync(deletedJson) ? JSON.parse(fs.readFileSync(deletedJson, 'utf8')) : null;
       assert(
-        deleted.status === 1 && deletedVerdict?.skipped === true && JSON.stringify(deletedVerdict.deletedFiles) === JSON.stringify([oldTestFile]),
+        deleted.status === 1 &&
+          deletedVerdict?.skipped === true &&
+          JSON.stringify(deletedVerdict.deletedFiles) === JSON.stringify([oldTestFile]),
         'a rename to a non-test path with rename detection disabled preserves the deletions-only failure',
         `status=${deleted.status} verdict=${JSON.stringify(deletedVerdict)} stderr=${deleted.stderr}`,
       );
