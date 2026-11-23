@@ -38,7 +38,7 @@ Resume an interrupted workflow by selecting the checklist that belongs to the st
 
 ### 1. Select the Run to Resume
 
-Resolve the named story from the invocation. In a headless run with no story named in the invocation, use the `ticket` reference supplied by the calling build. Treat that reference as the named story for selection and identity checks.
+Resolve the named story from the invocation. In a headless run with no story named in the invocation, use the `ticket` reference supplied by the calling build. Treat that reference as the named story. If a story was named, resolve `story_key` and `run_key` as `step-01-preflight-and-context.md` does before selecting any checkpoint.
 
 If `resume_checkpoint_path` is set, select that exact readable file before building a candidate list. Do not list, substitute, or ask to choose another checkpoint. Proceed directly to section 2 and apply its identity and legacy migration checks. A supplied checkpoint path is not a named target scope; only a separately supplied story, epic, feature, target or system request triggers the scope identity comparison.
 
@@ -53,7 +53,7 @@ Then select one:
 
 - **No candidates:** display "⚠️ **No previous progress found.** There is no ATDD checklist to resume from. Please use **[C] Create** to start a fresh workflow run." **Halt.**
 
-- **A story was named:** resolve `story_key` and `run_key` exactly as `step-01-preflight-and-context.md` does, then select the candidate for that story. If none exists, display "⚠️ **No progress found for `{run_key}`.** Checklists exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed stories." **Halt.** Never fall back to another story's checklist.
+- **A story was named:** select the candidate with the resolved `story_key`. If none exists, display "⚠️ **No progress found for `{run_key}`.** Checklists exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed stories." **Halt.** Never fall back to another story's checklist.
 
 - **Exactly one candidate and no story named:** select it and state which story it belongs to before continuing.
 
@@ -63,27 +63,25 @@ Then select one:
 
 ### 2. Load the Selected Checklist
 
-Read the selected checklist and parse YAML frontmatter for:
-
-- `runScope` — always `story` for ATDD
-- `runKey` — this run's identity, `story-{story_key}`
-- `workflowStatus` — overall workflow state (`in-progress` or `completed`)
-- `stepsCompleted` — array of completed step names
-- `lastStep` — last completed step name
-- `lastSaved` — timestamp of last save
-- `storyId`, `storyKey`, `storyFile`, `ticketRef` — the story this checklist covers (`ticketRef` is absent on checklists written before v7 keys)
-
-**Run identity check.** Check only identity fields first, before reading progress or rendering the dashboard. A mismatch response names the conflicting identities only and omits all saved status/step details. When a story was named, `runKey` must equal the `run_key` resolved for it, and `storyKey` must equal the resolved `story_key`. If either differs, display "⚠️ **Checklist belongs to a different story** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When no story was named, adopt the checklist's own `storyKey`, `runScope`, and `runKey` as this run's identity.
+**Run identity check.** Read the identity fields before inspecting progress. For a legacy checklist, recover its story key from `storyKey` or, if absent, its `atdd-checklist-{story_key}.md` filename. Halt if the story key cannot be recovered. When a story was named, compare the checklist's story key with the resolved `story_key`, and compare any existing `runKey` with `run_key`. If either differs, report the two identities and halt before reading or reporting progress. A missing legacy `runKey` proceeds to migration once the story key matches.
 
 **Legacy checklist migration.** A checklist selected from `{legacyProgressGlob}`, or any checklist without `runKey`, predates run identity. ATDD checklists always recorded their story, so the identity is recoverable:
 
-1. Set `story_key` to the checklist's `storyKey`, or to the `{story_key}` part of its file name when `storyKey` is absent. If a story was named and it differs, apply the run identity check above and halt.
+1. Use the story key recovered and checked above.
 2. Set `run_scope` to `story` and `run_key` to `story-{story_key}`.
-3. If the checklist came from the legacy root and `{outputFile}` already exists for that story, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checklist deletes the legacy file and continues from `{outputFile}`; keeping the legacy checklist continues with item 4. A headless run keeps the folder checklist, leaves the legacy file untouched, and says so.
-4. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `runScope` and `runKey` added to its frontmatter and `atddChecklistPath` set to `{outputFile}`.
+3. If the checklist came from the legacy root and `{outputFile}` already exists for that story, verify the folder checklist has the same `storyKey` and `runKey` before choosing either file. In an interactive run, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checklist deletes the legacy file and continues from `{outputFile}`; keeping the legacy checklist continues with item 4. A headless run keeps the folder checklist, leaves the legacy file untouched, and says so.
+4. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `storyKey`, `runScope`, and `runKey` set in its frontmatter and `atddChecklistPath` set to `{outputFile}`.
 5. If the checklist came from the legacy root, delete the legacy file only after that write succeeds. Continue from the migrated file.
 
+After any migration, require the final checklist's `runKey` to equal `story-{storyKey}` and both keys to match the named story when supplied. Halt on a missing or mismatched identity before reading progress. If no story was named, adopt the final checklist's identity.
+
 Bind `outputFile` and `atddChecklistPath` to the selected checklist's exact path after any migration. Preserve this path for all subsequent progress saves, even when it is outside `{test_artifacts}`. Refresh the stored `atddChecklistPath` to this exact path on the next progress save so the implementation handoff names the resumed checklist.
+
+Read the remaining frontmatter after the identity check:
+
+- `runScope` is always `story` for ATDD.
+- `workflowStatus`, `stepsCompleted`, `lastStep`, and `lastSaved` describe the saved progress.
+- `storyId`, `storyFile`, and `ticketRef` identify the story source. Older checklists may omit `ticketRef`.
 
 If `workflowStatus` is missing (legacy checklist), infer it from `lastStep`: `'step-05-validate-and-complete'` means `completed`; any other known step means `in-progress`.
 
