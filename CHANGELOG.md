@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CI's `actionlint` install sends the workflow token with its GitHub downloads, so shared runners no longer exhaust the unauthenticated rate limit. The 4.1.0 publish run failed when github.com answered HTTP 429 to all seven tarball attempts. A refused download now names the host that refused it.
+
 ## [4.4.1] - 2026-11-23
 
 ### Fixed

@@ -104,7 +104,7 @@ function startStub(plan) {
     else if (/\/download\/v[\d.]+\/actionlint_[\d.]+_checksums\.txt$/.test(url)) kind = 'checksums';
     else if (/\/download\/v[\d.]+\/actionlint_[\d.]+_\w+_\w+\.tar\.gz$/.test(url)) kind = 'tarball';
     count = requests.filter((entry) => entry.kind === kind).length + 1;
-    requests.push({ kind, url });
+    requests.push({ kind, url, authorization: request.headers.authorization ?? null });
     const answer = plan(kind, count, url) ?? { status: 404, body: 'not found' };
     if (answer.cut) {
       // Announce the whole body, send half and drop the connection: curl reports exit 18.
@@ -233,6 +233,48 @@ async function caseTransientStatusThenTarball() {
       );
     },
   );
+}
+
+async function caseTokenAuthenticatesGitHubRequestsOnly() {
+  const token = 'test-token-value';
+  const scratch = sandbox();
+  await withStub(scratch, {}, async (stub, model) => {
+    const result = await runInstaller(stub, scratch, {
+      INSTALL_ACTIONLINT_SCRIPT_SHA256: model.standInDigest,
+      INSTALL_ACTIONLINT_GITHUB_TOKEN: token,
+    });
+    check(result.status === 0, `a token-authenticated install failed: ${describe(result)}`);
+    for (const kind of ['script', 'latest', 'tarball', 'checksums']) {
+      const sent = stub.requests.filter((entry) => entry.kind === kind);
+      check(
+        sent.length > 0 && sent.every((entry) => entry.authorization === `Bearer ${token}`),
+        `the ${kind} request did not carry the token: ${JSON.stringify(sent)}`,
+      );
+    }
+    check(
+      stub.requests.filter((entry) => entry.kind === 'ping').every((entry) => entry.authorization === null),
+      "the pinned script's own curl call received the token",
+    );
+    check(!result.output.includes(token), 'the token reached the installer output');
+  });
+  const anonymous = sandbox();
+  await withStub(anonymous, {}, async (stub, model) => {
+    const result = await runInstaller(stub, anonymous, { INSTALL_ACTIONLINT_SCRIPT_SHA256: model.standInDigest });
+    check(result.status === 0, `an install without a token failed: ${describe(result)}`);
+    check(
+      stub.requests.every((entry) => entry.authorization === null),
+      'a request carried an Authorization header with no token set',
+    );
+  });
+  const limited = sandbox();
+  await withStub(limited, { tarball: () => ({ status: 429, body: 'rate limited' }) }, async (stub, model) => {
+    const result = await runInstaller(stub, limited, { INSTALL_ACTIONLINT_SCRIPT_SHA256: model.standInDigest });
+    const final = result.output.trim().split('\n').at(-1);
+    check(
+      final.includes(`last HTTP status 429 (from ${new URL(stub.base).host})`),
+      `a refused download does not name the host that refused it: ${JSON.stringify(final)}`,
+    );
+  });
 }
 
 async function caseHtmlBodyNeverReachesTar() {
@@ -524,6 +566,7 @@ async function caseDeadlineEndsTheRetries() {
 
 const CASES = [
   ['a 503 twice and then a tarball installs after three attempts', caseTransientStatusThenTarball],
+  ['a token authenticates only the GitHub requests and a refusal names its host', caseTokenAuthenticatesGitHubRequestsOnly],
   ['an HTML body never reaches tar and the failure names its cause', caseHtmlBodyNeverReachesTar],
   ['a truncated tarball is retried', caseTruncatedTarballIsRetried],
   ['a checksum mismatch is retried and then fails', caseChecksumMismatch],

@@ -20,6 +20,10 @@
 # Every download retries up to ATTEMPTS times with a wait that doubles (2, 4, 8, 16, 32, 64 seconds), which rides out a GitHub outage of about two minutes.
 # The waits of one run share a budget of WAIT_BUDGET seconds (126, the sum of the schedule), which keeps a pull request's step short.
 # A run that has spent DEADLINE seconds stops retrying, so a hung network ends in a message that names the cause before the step's 5 minute timeout.
+# Shared runners download unauthenticated from GitHub at the same IP addresses, so github.com answers 429 under load.
+# With INSTALL_ACTIONLINT_GITHUB_TOKEN set (the workflows pass github.token), every request to the script and release
+# bases carries it, which moves the downloads onto the token's own rate limit. The header travels in a file, never on a
+# command line, and curl drops it on a redirect to another host, so the release asset host never receives it.
 # The worst case stays inside that timeout: the last wait starts before the deadline (170 seconds) and lasts at most 64,
 # and the attempt after it makes at most two requests of 20 seconds (the tarball and the checksum file), about 274 seconds in all.
 
@@ -96,22 +100,38 @@ with_retry() {
   done
 }
 
+# github_auth URL: set AUTH to the curl arguments that authenticate a request to the GitHub bases, or to none.
+github_auth() {
+  AUTH=()
+  if [[ -n ${INSTALL_ACTIONLINT_GITHUB_TOKEN:-} && ($1 == "$RAW_BASE"/* || $1 == "$RELEASES_BASE"/*) ]]; then
+    local header=$INSTALL_ACTIONLINT_WORK/auth-header
+    if [[ ! -s $header ]]; then
+      (umask 077 && printf 'Authorization: Bearer %s\n' "$INSTALL_ACTIONLINT_GITHUB_TOKEN" >"$header")
+    fi
+    AUTH=(-H "@${header}")
+  fi
+}
+
 # fetch_file URL FILE: one GET that follows redirects.
 # It returns 0 on a 2xx answer.
-# A curl error counts as status 000 with its message as the detail.
+# A curl error counts as status 000 with its message as the detail; a refused answer names the host that gave it.
 fetch_file() {
-  local status code=0
+  local answer code=0
   rm -f "$2"
-  status=$("$INSTALL_ACTIONLINT_REAL_CURL" -sSL "${CURL_LIMITS[@]}" -o "$2" -w '%{http_code}' "$1" 2>"$INSTALL_ACTIONLINT_WORK/curl.err") || code=$?
+  github_auth "$1"
+  answer=$("$INSTALL_ACTIONLINT_REAL_CURL" -sSL "${CURL_LIMITS[@]}" ${AUTH[@]+"${AUTH[@]}"} -o "$2" -w '%{http_code} %{url_effective}' "$1" 2>"$INSTALL_ACTIONLINT_WORK/curl.err") || code=$?
   if ((code != 0)); then
     FAIL_STATUS=000
     FAIL_DETAIL="curl exit ${code}: $(tr '\n' ' ' <"$INSTALL_ACTIONLINT_WORK/curl.err" | sed 's/ *$//')"
     return 1
   fi
-  FAIL_STATUS=$status
-  case $status in
+  FAIL_STATUS=${answer%% *}
+  case $FAIL_STATUS in
     2??) return 0 ;;
   esac
+  local host=${answer#* }
+  host=${host#*://}
+  FAIL_DETAIL="from ${host%%/*}"
   return 1
 }
 
@@ -153,7 +173,8 @@ try_script() {
 # Step 2: the latest release tag, from the redirect of /releases/latest.
 try_latest() {
   local answer code=0 location
-  answer=$("$INSTALL_ACTIONLINT_REAL_CURL" -sS "${CURL_LIMITS[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$LATEST_URL" 2>"$INSTALL_ACTIONLINT_WORK/curl.err") || code=$?
+  github_auth "$LATEST_URL"
+  answer=$("$INSTALL_ACTIONLINT_REAL_CURL" -sS "${CURL_LIMITS[@]}" ${AUTH[@]+"${AUTH[@]}"} -o /dev/null -w '%{http_code} %{redirect_url}' "$LATEST_URL" 2>"$INSTALL_ACTIONLINT_WORK/curl.err") || code=$?
   if ((code != 0)); then
     FAIL_DETAIL="curl exit ${code}: $(tr '\n' ' ' <"$INSTALL_ACTIONLINT_WORK/curl.err" | sed 's/ *$//')"
     FAIL_NOTE="no release tag was resolved"

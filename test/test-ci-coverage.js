@@ -30,6 +30,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const yaml = require('js-yaml');
 
 const {
   ACTIONLINT_INSTALLER,
@@ -429,6 +430,17 @@ const INLINE_STEP = `        run: |
           sudo mv ./actionlint /usr/local/bin/
 `;
 
+/** Change the install step's timeout without depending on its YAML key order. */
+function withInstallerTimeout(text, minutes) {
+  const workflow = yaml.load(text);
+  const installer = Object.values(workflow.jobs)
+    .flatMap(({ steps = [] }) => steps)
+    .find(({ name }) => name === 'Install actionlint');
+  if (minutes === null) delete installer['timeout-minutes'];
+  else installer['timeout-minutes'] = minutes;
+  return yaml.dump(workflow);
+}
+
 function checkEachWorkflowKeepsTheInstaller() {
   for (const file of ACTIONLINT_WORKFLOWS) {
     const text = fs.readFileSync(path.join(WORKFLOW_ROOT, file), 'utf8');
@@ -440,14 +452,8 @@ function checkEachWorkflowKeepsTheInstaller() {
     const mutations = {
       'the inline curl and bash steps': text.replace(step[0], INLINE_STEP),
       'a step that runs something else': text.replace(step[0], '        run: echo installed\n'),
-      'a step with no timeout': text.replace(
-        '        timeout-minutes: 5\n        run: |\n          bash tools/install-actionlint.sh',
-        '        run: |\n          bash tools/install-actionlint.sh',
-      ),
-      'a step with a 30 minute timeout': text.replace(
-        '        timeout-minutes: 5\n        run: |\n          bash tools/install-actionlint.sh',
-        '        timeout-minutes: 30\n        run: |\n          bash tools/install-actionlint.sh',
-      ),
+      'a step with no timeout': withInstallerTimeout(text, null),
+      'a step with a 30 minute timeout': withInstallerTimeout(text, 30),
       'a step that swallows the installer failure': text.replace(
         'bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin"',
         'bash tools/install-actionlint.sh "$RUNNER_TEMP/actionlint-bin" || true',
