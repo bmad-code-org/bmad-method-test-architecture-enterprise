@@ -230,7 +230,7 @@ function snapshotModes(projectRoot) {
  * Undo the lock. With a snapshot, every recorded entry goes back to its exact
  * mode; entries created during the run were never locked and are left alone.
  */
-function restoreModes(projectRoot, modes) {
+function restoreModes(projectRoot, modes, { strict = false } = {}) {
   if (modes === null) {
     runChmod(['-R', 'u+w', projectRoot]);
     return;
@@ -238,8 +238,10 @@ function restoreModes(projectRoot, modes) {
   for (const [entry, mode] of modes) {
     try {
       fs.chmodSync(entry, mode);
-    } catch {
-      // entry was removed during the run; nothing to restore
+    } catch (error) {
+      // A removed entry needs no restore. On recovery, preserve its marker
+      // if another failure made the restore incomplete.
+      if (strict && error.code !== 'ENOENT') throw error;
     }
   }
 }
@@ -438,7 +440,7 @@ function recoverInterruptedLock(projectRoot) {
       return false;
     }
     try {
-      restoreModes(root, snapshot);
+      restoreModes(root, snapshot, { strict: true });
     } catch (error) {
       console.error(
         `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +

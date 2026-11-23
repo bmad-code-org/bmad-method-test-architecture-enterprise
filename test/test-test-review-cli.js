@@ -276,9 +276,13 @@ function stopCliDuringAgent(args, env, signal, { waitForBeatMs = 10_000, endWith
     let stderr = '';
     let stopped = false;
     let settled = false;
+    let waitTimer;
+    let endTimer;
     const finish = (result) => {
       if (settled) return;
       settled = true;
+      clearTimeout(waitTimer);
+      clearTimeout(endTimer);
       resolve({ ...result, stopped, stderr });
     };
     const killGroup = (name) => {
@@ -294,14 +298,14 @@ function stopCliDuringAgent(args, env, signal, { waitForBeatMs = 10_000, endWith
       if (!stopped && stderr.includes('agent still running')) {
         stopped = true;
         killGroup(signal);
-        setTimeout(() => {
+        endTimer = setTimeout(() => {
           killGroup('SIGKILL');
           finish({ status: null, signal: null, timedOut: true });
         }, endWithinMs);
       }
     });
     child.on('close', (status, endSignal) => finish({ status, signal: endSignal, timedOut: false }));
-    setTimeout(() => {
+    waitTimer = setTimeout(() => {
       if (stopped) return;
       killGroup('SIGKILL');
       finish({ status: null, signal: null, timedOut: true });
@@ -3110,6 +3114,28 @@ async function runTests() {
           );
           assert(recovered.notice.includes(`pid ${deadPid}`), 'recovering an interrupted lock says which run left it', recovered.notice);
           assert(recoverInterruptedLock(lockedRoot) === false, 'with no marker there is nothing to recover');
+
+          fs.chmodSync(lockedFile, 0o444);
+          writeMarker(deadPid);
+          const chmodForRetry = fs.chmodSync;
+          try {
+            fs.chmodSync = (entry, mode) => {
+              if (entry === lockedFile) throw Object.assign(new Error('simulated chmod failure'), { code: 'EIO' });
+              return chmodForRetry(entry, mode);
+            };
+            const failed = quietly(() => recoverInterruptedLock(lockedRoot));
+            assert(
+              failed.result === false && failed.notice.includes('simulated chmod failure') && fs.existsSync(lockMarkerPath(lockedRoot)),
+              'failed recovery keeps the original marker for retry',
+              failed.notice,
+            );
+          } finally {
+            fs.chmodSync = chmodForRetry;
+          }
+          assert(
+            quietly(() => recoverInterruptedLock(lockedRoot)).result && modeOf(lockedFile) === 0o644,
+            'a later recovery can restore from the retained marker',
+          );
 
           // A dead marker stays visible until recovery restores every mode.
           // Start the competing run synchronously during the first chmod,
