@@ -436,6 +436,8 @@ const RESTORED_COPIES = [
   ['mechanism probe', String.raw`const tail = String(result.stderr ?? '').trim().split('\n').slice(-2).join(' | ');`],
 ];
 
+const RUNNING_AS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+
 /** Loads the three modules afresh over a shared module whose primitives count their calls, drives each, and returns the counts. */
 function reachedPrimitives() {
   const names = ['executableOnPath', 'isInside', 'isProfileSafePath', 'assertProfileSafePath', 'probeTrivialProcess'];
@@ -468,6 +470,10 @@ function reachedPrimitives() {
       process.env.TEA_TEST_REVIEW_ISOLATION = 'chmod';
       try {
         freshIsolate.withIsolation(project, [path.join(project, 'out', 'report.md')], () => {});
+      } catch (error) {
+        // Root ignores permission bits, so a forced chmod backend is refused there before it locks anything (#515).
+        if (!(RUNNING_AS_ROOT && error.code === 'ISOLATION_ERROR')) throw error;
+        counts.rootChmodRefused = true;
       } finally {
         if (savedBackend === undefined) delete process.env.TEA_TEST_REVIEW_ISOLATION;
         else process.env.TEA_TEST_REVIEW_ISOLATION = savedBackend;
@@ -503,8 +509,14 @@ function reachedPrimitives() {
 function checkReached() {
   section('every module calls the shared primitives');
   const counts = reachedPrimitives();
+  if (RUNNING_AS_ROOT) {
+    assert(counts.rootChmodRefused === true, 'as root, the forced chmod backend is refused with ISOLATION_ERROR before it locks anything');
+  }
   const expected = {
-    [MODULES[0].name]: ['executableOnPath', 'assertProfileSafePath', 'isInside'],
+    // isInside is reached only by the chmod lock, which root never takes; a non-root run still holds it.
+    [MODULES[0].name]: RUNNING_AS_ROOT
+      ? ['executableOnPath', 'assertProfileSafePath']
+      : ['executableOnPath', 'assertProfileSafePath', 'isInside'],
     [MODULES[1].name]: ['executableOnPath', 'assertProfileSafePath', 'probeTrivialProcess'],
     [MODULES[2].name]: ['executableOnPath', 'assertProfileSafePath', 'isProfileSafePath', 'isInside', 'probeTrivialProcess'],
   };

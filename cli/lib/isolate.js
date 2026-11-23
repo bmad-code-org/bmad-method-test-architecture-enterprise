@@ -13,7 +13,8 @@
  *      writes on the writable paths and their parents, and ALWAYS restores in a
  *      finally from a permission-bit snapshot taken before the lock, so the tree
  *      comes back with its exact original modes. A restore failure prints a loud
- *      warning but never masks the run result.
+ *      warning but never masks the run result. Root ignores permission bits, so
+ *      the fallback is never chosen for uid 0: there it would isolate nothing.
  *
  * TEA_TEST_REVIEW_ISOLATION (sandbox-exec|bwrap|chmod|none) overrides backend
  * selection; it exists so tests can force the chmod fallback on any platform.
@@ -34,14 +35,24 @@ function isolationError(message) {
   return error;
 }
 
+/** The effective uid, or null where the platform has none (win32). */
+function currentUid() {
+  return typeof process.getuid === 'function' ? process.getuid() : null;
+}
+
+/** Why chmod cannot isolate a run as root, for the messages that would otherwise name it as an option. */
+const CHMOD_ROOT_REASON =
+  'chmod cannot isolate a run as root, because root ignores permission bits; install bubblewrap (bwrap) or run as a non-root user';
+
 /**
  * Pick the isolation backend for this platform.
  *
  * @param {object} [env] - Environment to read the override/PATH from.
  * @param {string} [platform] - Platform override for tests.
+ * @param {number|null} [uid] - Effective uid override for tests; root (0) never gets the chmod fallback.
  * @returns {'sandbox-exec'|'bwrap'|'chmod'|null}
  */
-function selectBackend(env = process.env, platform = process.platform) {
+function selectBackend(env = process.env, platform = process.platform, uid = currentUid()) {
   const override = env[BACKEND_OVERRIDE_ENV];
   if (override) {
     if (override === 'none') {
@@ -54,6 +65,10 @@ function selectBackend(env = process.env, platform = process.platform) {
       return 'bwrap';
     }
     if (override === 'chmod' && platform !== 'win32') {
+      if (uid === 0) {
+        // Forcing a backend that cannot hold must fail, like a wrong platform, not run the agent unrestricted.
+        throw isolationError(`${BACKEND_OVERRIDE_ENV}=chmod: ${CHMOD_ROOT_REASON}.`);
+      }
       return 'chmod';
     }
     // A typo (e.g. "chmodd") or a backend name that is real but wrong for this
@@ -71,10 +86,24 @@ function selectBackend(env = process.env, platform = process.platform) {
   if (platform === 'linux' && executableOnPath('bwrap', env) !== null) {
     return 'bwrap';
   }
-  if (platform !== 'win32') {
+  if (platform !== 'win32' && uid !== 0) {
     return 'chmod';
   }
   return null;
+}
+
+/**
+ * Why no backend is available, for the warning or the exit 2 that follows: the root case names its own fix.
+ *
+ * @param {string} [platform] - Platform override for tests.
+ * @param {number|null} [uid] - Effective uid override for tests.
+ * @returns {string}
+ */
+function noBackendReason(platform = process.platform, uid = currentUid()) {
+  if (platform !== 'win32' && uid === 0) {
+    return `no isolation backend is available: ${CHMOD_ROOT_REASON}`;
+  }
+  return 'no isolation backend (sandbox-exec, bwrap, chmod) is available on this platform';
 }
 
 /**
@@ -330,6 +359,7 @@ function withIsolation(projectRoot, writablePaths, fn) {
 module.exports = {
   withIsolation,
   isolationAvailable,
+  noBackendReason,
   selectBackend,
   buildSandboxProfile,
   buildBwrapPrefix,

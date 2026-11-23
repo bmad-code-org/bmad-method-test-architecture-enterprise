@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `tea-trace` reads HEAD of a checkout owned by another user, such as a container CI job, when the user's global or system Git config trusts it with `safe.directory`, as `actions/checkout` does. Trace's Git calls still ignore the rest of that config, but now pass its `safe.directory` entries on, so live evidence no longer turns stale or unverifiable there and the agent's recorded revision is no longer rejected. If Git refuses an existing checkout, Trace does not substitute the CI revision for its unreadable HEAD.
+- The `eval:all` summary test now handles hosts where a missing or unavailable isolation backend fails preflight before a runner can be probed, while still checking that the CLI exit and highest-priority child failure agree (#506).
+- `tea-test-review` no longer reports a run as isolated when it runs as root without `bwrap`. The `chmod` fallback cannot restrict root, so as root it is never chosen: CI's default isolation warns that chmod cannot isolate root and continues without it, `--isolate` exits 2, and `TEA_TEST_REVIEW_ISOLATION=chmod` exits 2 instead of running the agent with full write access. The warning names the fix: install bubblewrap or run as a non-root user.
 
 ## [4.4.0] - 2026-11-23
 
