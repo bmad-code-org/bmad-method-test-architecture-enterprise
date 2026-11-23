@@ -122,7 +122,7 @@ This section is the definition of the five coverage statuses. Every other file i
   - [ ] Inferred UI journeys missing E2E/component coverage
   - [ ] Inferred UI journeys missing loading/empty/error/permission state coverage
 - [ ] Gaps prioritized by risk level using test-priorities framework. This list is the definition of the four risk buckets; `steps-c/step-04-analyze-gaps.md` section 1 builds them from it:
-  - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER). Gate Rule 1 requires P0 coverage at 100% and counts only FULL criteria, so a P0 criterion at PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY fails the gate by itself and belongs here
+  - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER). Gate Rule 1 counts only FULL criteria. Include P0 criteria at PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY here
   - [ ] **HIGH** - P1 criteria with NONE coverage (PR blocker)
   - [ ] **MEDIUM** - P2 criteria with NONE coverage (nightly gap)
   - [ ] **LOW** - P3 criteria with NONE coverage (acceptable)
@@ -357,7 +357,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 **P0 Criteria Evaluation:**
 
-- [ ] P0 oracle-item coverage evaluated (must be 100%)
+- [ ] P0 oracle-item coverage evaluated (against the resolved P0 threshold)
 - [ ] Available execution, security, NFR, and stability findings recorded as supporting evidence
 - [ ] P0 decision recorded: PASS or FAIL
 
@@ -503,7 +503,7 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 ### Decision Integrity
 
 - [ ] Decision is deterministic (follows rules, not arbitrary)
-- [ ] P0 coverage below 100% results in FAIL
+- [ ] P0 coverage below its required threshold results in FAIL
 - [ ] Fresh live failures cap a passing decision at CONCERNS as Step 5 defines
 - [ ] Filed waivers are validated and reported separately from the derived decision
 - [ ] Residual risks are documented (if CONCERNS or WAIVED)
@@ -649,7 +649,7 @@ This list is the definition of waiver validity. `steps-c/step-05-gate-decision.m
 
 - [ ] All prerequisites met
 - [ ] All oracle items mapped or gaps documented
-- [ ] P0 coverage is 100% OR documented as BLOCKER
+- [ ] P0 coverage meets the required threshold or is documented as a blocker
 - [ ] Gap analysis is complete and prioritized
 - [ ] Test quality issues identified and flagged
 - [ ] Deliverables generated and saved

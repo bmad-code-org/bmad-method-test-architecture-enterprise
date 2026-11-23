@@ -73,6 +73,8 @@ if (coverageMatrix.phase !== 'PHASE_1_COMPLETE') {
 
 ### 2. Apply Gate Decision Logic
 
+Use the resolved `gate_policy` as `gatePolicy` throughout this step. Record it in both gate-eligible JSON artifacts.
+
 **Decision Tree:**
 
 ```javascript
@@ -114,10 +116,10 @@ const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
 // Displayed percentages round down (Math.floor), so a displayed value reaches a whole-number threshold exactly when the counts do. Apply thresholds to integer counts.
 const meetsCoverage = (covered, total, threshold) => total === 0 || covered * 100 >= threshold * total;
-const p0Met = meetsCoverage(priorityBreakdown.P0.covered, priorityBreakdown.P0.total, 100);
-const p1MinimumMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, 80);
-const p1TargetMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, 90);
-const overallMet = meetsCoverage(stats.fully_covered, stats.total_requirements, 80);
+const p0Met = meetsCoverage(priorityBreakdown.P0.covered, priorityBreakdown.P0.total, gatePolicy.p0_required);
+const p1MinimumMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, gatePolicy.p1_minimum);
+const p1TargetMet = meetsCoverage(priorityBreakdown.P1.covered, priorityBreakdown.P1.total, gatePolicy.p1_target);
+const overallMet = meetsCoverage(stats.fully_covered, stats.total_requirements, gatePolicy.overall_minimum);
 const criticalGaps = (coverageMatrix.gap_analysis?.critical_gaps || []).length;
 const isUnresolved = (value) => typeof value === 'string' && value.startsWith('{') && value.endsWith('}');
 const normalizeResolvedToken = (value) => {
@@ -322,38 +324,38 @@ let rationale;
 if (!gateEligible) {
   rationale = `Gate decision skipped because allow_gate=${allowGate} and collection_status=${collectionStatus}.`;
 } else {
-  // Rule 1: P0 coverage must be 100%
+  // Rule 1: P0 must meet its required coverage.
   if (!p0Met) {
     gateDecision = 'FAIL';
     // Critical gaps are every P0 criterion under FULL, which includes PARTIAL, UNIT-ONLY, and
     // INTEGRATION-ONLY, so the count is stated as "below FULL coverage". See checklist.md's Gap Analysis.
-    rationale = `P0 coverage is ${p0Coverage}% (required: 100%). ${criticalGaps} critical requirement(s) below FULL coverage.`;
+    rationale = `P0 coverage is ${p0Coverage}% (required: ${gatePolicy.p0_required}%). ${criticalGaps} critical requirement(s) below FULL coverage.`;
   }
-  // Rule 2: Overall coverage must be >= 80%
+  // Rule 2: Overall coverage must meet its minimum.
   else if (!overallMet) {
     gateDecision = 'FAIL';
-    rationale = `Overall coverage is ${overallCoverage}% (minimum: 80%). Significant gaps exist.`;
+    rationale = `Overall coverage is ${overallCoverage}% (minimum: ${gatePolicy.overall_minimum}%). Significant gaps exist.`;
   }
-  // Rule 3: P1 coverage < 80% → FAIL
+  // Rule 3: P1 below its minimum fails.
   else if (!p1MinimumMet) {
     gateDecision = 'FAIL';
     rationale = hasP1Requirements
-      ? `P1 coverage is ${effectiveP1Coverage}% (minimum: 80%). High-priority gaps must be addressed.`
+      ? `P1 coverage is ${effectiveP1Coverage}% (minimum: ${gatePolicy.p1_minimum}%). High-priority gaps must be addressed.`
       : `P1 requirements are not present; continuing with remaining gate criteria.`;
   }
-  // Rule 4: P1 coverage >= 90% and overall >= 80% with P0 at 100% → PASS
+  // Rule 4: P1 at target passes when the earlier checks pass.
   else if (p1TargetMet) {
     gateDecision = 'PASS';
     rationale = hasP1Requirements
-      ? `P0 coverage is 100%, P1 coverage is ${effectiveP1Coverage}% (target: 90%), and overall coverage is ${overallCoverage}% (minimum: 80%).`
-      : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%). No P1 requirements detected.`;
+      ? `P0 coverage is ${p0Coverage}%, P1 coverage is ${effectiveP1Coverage}% (target: ${gatePolicy.p1_target}%), and overall coverage is ${overallCoverage}% (minimum: ${gatePolicy.overall_minimum}%).`
+      : `P0 coverage is ${p0Coverage}% and overall coverage is ${overallCoverage}% (minimum: ${gatePolicy.overall_minimum}%). No P1 requirements detected.`;
   }
-  // Rule 5: P1 coverage 80-89% with P0 at 100% and overall >= 80% → CONCERNS
+  // Rule 5: P1 between minimum and target has concerns.
   else if (p1MinimumMet) {
     gateDecision = 'CONCERNS';
     rationale = hasP1Requirements
-      ? `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but P1 coverage is ${effectiveP1Coverage}% (target: 90%).`
-      : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but additional non-P1 gaps need mitigation.`;
+      ? `P0 coverage is ${p0Coverage}% and overall coverage is ${overallCoverage}% (minimum: ${gatePolicy.overall_minimum}%), but P1 coverage is ${effectiveP1Coverage}% (target: ${gatePolicy.p1_target}%).`
+      : `P0 coverage is ${p0Coverage}% and overall coverage is ${overallCoverage}% (minimum: ${gatePolicy.overall_minimum}%), but additional non-P1 gaps need mitigation.`;
   }
 
   // Rule 6: Manual waiver — deliberately not computed here. Rules 1-5 above are the only rules
@@ -491,16 +493,16 @@ const gateReport = {
 
   gate_criteria: gateEligible
     ? {
-        p0_coverage_required: '100%',
+        p0_coverage_required: `${gatePolicy.p0_required}%`,
         p0_coverage_actual: `${p0Coverage}%`,
         p0_status: p0Met ? 'MET' : 'NOT_MET',
 
-        p1_coverage_target: '90%',
-        p1_coverage_minimum: '80%',
+        p1_coverage_target: `${gatePolicy.p1_target}%`,
+        p1_coverage_minimum: `${gatePolicy.p1_minimum}%`,
         p1_coverage_actual: `${effectiveP1Coverage}%`,
         p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
 
-        overall_coverage_minimum: '80%',
+        overall_coverage_minimum: `${gatePolicy.overall_minimum}%`,
         overall_coverage_actual: `${overallCoverage}%`,
         overall_status: overallMet ? 'MET' : 'NOT_MET',
       }
@@ -818,15 +820,16 @@ if (waivers) {
 
 if (gateEligible) {
   e2eTraceSummary.gate_status = gateDecision;
+  e2eTraceSummary.gate_policy = gatePolicy;
   e2eTraceSummary.gate_criteria = {
-    p0_coverage_required: '100%',
+    p0_coverage_required: `${gatePolicy.p0_required}%`,
     p0_coverage_actual: `${p0Coverage}%`,
     p0_status: p0Met ? 'MET' : 'NOT_MET',
-    p1_coverage_target: '90%',
-    p1_coverage_minimum: '80%',
+    p1_coverage_target: `${gatePolicy.p1_target}%`,
+    p1_coverage_minimum: `${gatePolicy.p1_minimum}%`,
     p1_coverage_actual: `${effectiveP1Coverage}%`,
     p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
-    overall_coverage_minimum: '80%',
+    overall_coverage_minimum: `${gatePolicy.overall_minimum}%`,
     overall_coverage_actual: `${overallCoverage}%`,
     overall_status: overallMet ? 'MET' : 'NOT_MET',
   };
@@ -851,6 +854,7 @@ if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision
     collection_status: e2eTraceSummary.collection_status,
     gate_basis: e2eTraceSummary.gate_basis,
     gate_status: gateDecision,
+    gate_policy: gatePolicy,
     rationale: rationale,
     p0_status: e2eTraceSummary.gate_criteria.p0_status,
     p1_status: e2eTraceSummary.gate_criteria.p1_status,
@@ -944,9 +948,9 @@ This is the only write of report content in this step. Section 6 changes the fro
 🚨 GATE DECISION: {gateDecision}
 
 📊 Coverage Analysis:
-- P0 Coverage: {p0Coverage}% (Required: 100%) → {p0_status}
-- P1 Coverage: {effectiveP1Coverage}% (PASS target: 90%, minimum: 80%) → {p1_status}
-- Overall Coverage: {overallCoverage}% (Minimum: 80%) → {overall_status}
+- P0 Coverage: {p0Coverage}% (Required: {gate_policy.p0_required}%) → {p0_status}
+- P1 Coverage: {effectiveP1Coverage}% (PASS target: {gate_policy.p1_target}%, minimum: {gate_policy.p1_minimum}%) → {p1_status}
+- Overall Coverage: {overallCoverage}% (Minimum: {gate_policy.overall_minimum}%) → {overall_status}
 
 ✅ Decision Rationale:
 {rationale}
@@ -1042,7 +1046,7 @@ Then append the gate decision summary (from section 5 above) to the end of the r
 - Any output written to a path without this run's `run_key`, or another scope's output read or modified
 - Report missing or incomplete
 
-**Master Rule:** Gate decision MUST be deterministic based on clear criteria (P0 100%, P1 90/80, overall >=80) whenever `allow_gate` is true and `collection_status` is `COLLECTED`. A run with any requirement covered only by recorded live verification MUST NOT return PASS. A filed waiver MUST be validated and reported, and MUST leave the derived decision unchanged. `{e2e_trace_summary_output}` MUST be written before the workflow terminates.
+**Master Rule:** Gate decision MUST be deterministic based on clear criteria (the resolved coverage thresholds) whenever `allow_gate` is true and `collection_status` is `COLLECTED`. A run with any requirement covered only by recorded live verification MUST NOT return PASS. A filed waiver MUST be validated and reported, and MUST leave the derived decision unchanged. `{e2e_trace_summary_output}` MUST be written before the workflow terminates.
 
 ## On Complete
 

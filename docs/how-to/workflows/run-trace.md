@@ -382,7 +382,7 @@ The profile-export gap is P2 and scheduled for v1.3.
 
 ### Gate Decision Rules
 
-For a gate-eligible collection, TEA applies these coverage thresholds:
+Set `p0_required`, `p1_target`, `p1_minimum`, or `overall_minimum` under `[workflow.gate]` in `_bmad/custom/bmad-tea-trace.toml`. The gate JSON records values and sources.
 
 | P0 Coverage | P1 Coverage | Overall Coverage | Decision        |
 | ----------- | ----------- | ---------------- | --------------- |
@@ -400,8 +400,6 @@ Proceeding on CONCERNS needs the approval your release policy names. Document:
 - Risk is acceptable
 - Team approves proceeding
 - Monitoring in place
-
-**FAIL** ❌: P0 coverage below 100%, P1 coverage below 80%, or overall coverage below 80%.
 
 Release approval also considers test execution, NFR audits, and test quality under the team's policy.
 

@@ -162,7 +162,7 @@ Every coverage status and missing behavior in this block repeats Step 3's `Requi
 
 #### Critical Gaps (BLOCKER) ❌
 
-Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 requires P0 coverage at 100% and counts only FULL, so each entry here fails the gate on its own.
+Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 counts only FULL coverage. Each gap counts against the required P0 threshold.
 
 {CRITICAL_GAP_COUNT} gaps found. **Do not release until resolved.**
 
@@ -421,13 +421,13 @@ Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 require
 
 #### P0 Criteria (Must ALL Pass)
 
-| Criterion             | Threshold | Actual                    | Status   |
-| --------------------- | --------- | ------------------------- | -------- | -------- |
-| P0 Coverage           | 100%      | {p0_coverage}%            | {✅ PASS | ❌ FAIL} |
-| P0 Test Pass Rate     | 100%      | {p0_pass_rate}%           | {✅ PASS | ❌ FAIL} |
-| Security Issues       | 0         | {security_issue_count}    | {✅ PASS | ❌ FAIL} |
-| Critical NFR Failures | 0         | {critical_nfr_fail_count} | {✅ PASS | ❌ FAIL} |
-| Flaky Tests           | 0         | {flaky_test_count}        | {✅ PASS | ❌ FAIL} |
+| Criterion             | Threshold                  | Actual                    | Status   |
+| --------------------- | -------------------------- | ------------------------- | -------- | -------- |
+| P0 Coverage           | {gate_policy.p0_required}% | {p0_coverage}%            | {✅ PASS | ❌ FAIL} |
+| P0 Test Pass Rate     | 100%                       | {p0_pass_rate}%           | {✅ PASS | ❌ FAIL} |
+| Security Issues       | 0                          | {security_issue_count}    | {✅ PASS | ❌ FAIL} |
+| Critical NFR Failures | 0                          | {critical_nfr_fail_count} | {✅ PASS | ❌ FAIL} |
+| Flaky Tests           | 0                          | {flaky_test_count}        | {✅ PASS | ❌ FAIL} |
 
 **P0 Evaluation**: {✅ ALL PASS | ❌ ONE OR MORE FAILED}
 
@@ -737,7 +737,7 @@ traceability_and_gate:
       critical_nfrs_fail: {critical_nfr_fail_count}
       flaky_tests: {flaky_test_count}
     thresholds:
-      min_p0_coverage: 100
+      min_p0_coverage: {gate_policy.p0_required}
       min_p0_pass_rate: 100
       min_p1_coverage: {min_p1_coverage}
       min_p1_pass_rate: {min_p1_pass_rate}

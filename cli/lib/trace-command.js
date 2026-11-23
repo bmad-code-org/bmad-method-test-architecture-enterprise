@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
 const yaml = require('js-yaml');
 const MarkdownIt = require('markdown-it');
 const TOML = require('smol-toml');
@@ -20,6 +21,28 @@ const COLLECTION_MODES = [
 ];
 const GATE_STATUSES = new Set(['PASS', 'CONCERNS', 'FAIL']);
 const LEVELS = ['e2e', 'api', 'component', 'unit', 'live', 'other'];
+const DEFAULT_THRESHOLDS = Object.freeze({ p0_required: 100, p1_target: 90, p1_minimum: 80, overall_minimum: 80 });
+
+function resolveTraceGatePolicy(overrides, workflowSources = new Map()) {
+  const label = (key) => workflowSources.get(key ? `workflow.gate.${key}` : 'workflow.gate') ?? 'skill defaults';
+  if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))) {
+    throw new Error(`[workflow.gate] in ${label()} must be a table.`);
+  }
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...overrides };
+  for (const [key, value] of Object.entries(thresholds)) {
+    if (!Object.hasOwn(DEFAULT_THRESHOLDS, key)) throw new Error(`Unknown workflow.gate.${key} in ${label(key)}.`);
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      throw new Error(`workflow.gate.${key} in ${label(key)} must be an integer from 0 through 100.`);
+    }
+  }
+  if (thresholds.p1_minimum > thresholds.p1_target) {
+    throw new Error(`workflow.gate.p1_minimum in ${label('p1_minimum')} must be at most p1_target in ${label('p1_target')}.`);
+  }
+  if (thresholds.p0_required < thresholds.p1_target) {
+    throw new Error(`workflow.gate.p0_required in ${label('p0_required')} must be at least p1_target in ${label('p1_target')}.`);
+  }
+  return { ...thresholds, sources: Object.fromEntries(Object.keys(thresholds).map((key) => [key, label(key)])) };
+}
 
 function criterionText(value) {
   const content = value.replace(/\s*\(P[0-3]\)\s*$/, '');
@@ -1249,6 +1272,7 @@ function validateTraceOutputs({
   target,
   collectionMode,
   allowGate,
+  gatePolicy = resolveTraceGatePolicy(),
   oracleLedger = [],
   requireOracleLedger = false,
   allowLegacyExplicitOracle = false,
@@ -1443,19 +1467,19 @@ function validateTraceOutputs({
     const overall = summary.coverage.inventory.pct;
     // Displayed percentages round down, so they reach a whole-number threshold exactly when the counts do; decisions compare the source counts.
     const meets = (bucket, threshold) => bucket.total === 0 || bucket.covered * 100 >= threshold * bucket.total;
-    const p0Met = meets(summary.coverage.priority_breakdown.P0, 100);
-    const p1TargetMet = meets(summary.coverage.priority_breakdown.P1, 90);
-    const p1MinimumMet = meets(summary.coverage.priority_breakdown.P1, 80);
-    const overallMet = meets(summary.coverage.inventory, 80);
+    const p0Met = meets(summary.coverage.priority_breakdown.P0, gatePolicy.p0_required);
+    const p1TargetMet = meets(summary.coverage.priority_breakdown.P1, gatePolicy.p1_target);
+    const p1MinimumMet = meets(summary.coverage.priority_breakdown.P1, gatePolicy.p1_minimum);
+    const overallMet = meets(summary.coverage.inventory, gatePolicy.overall_minimum);
     const expectedCriteria = {
-      p0_coverage_required: '100%',
+      p0_coverage_required: `${gatePolicy.p0_required}%`,
       p0_coverage_actual: `${p0}%`,
       p0_status: p0Met ? 'MET' : 'NOT_MET',
-      p1_coverage_target: '90%',
-      p1_coverage_minimum: '80%',
+      p1_coverage_target: `${gatePolicy.p1_target}%`,
+      p1_coverage_minimum: `${gatePolicy.p1_minimum}%`,
       p1_coverage_actual: `${p1}%`,
       p1_status: p1TargetMet ? 'MET' : p1MinimumMet ? 'PARTIAL' : 'NOT_MET',
-      overall_coverage_minimum: '80%',
+      overall_coverage_minimum: `${gatePolicy.overall_minimum}%`,
       overall_coverage_actual: `${overall}%`,
       overall_status: overallMet ? 'MET' : 'NOT_MET',
     };
@@ -1497,7 +1521,19 @@ function validateTraceOutputs({
       throw new Error('Trace gate artifact has incomplete or inconsistent decision evidence.');
     for (const field of ['p0_status', 'p1_status', 'overall_status'])
       if (gate[field] !== criteria[field]) throw new Error(`Trace gate artifact disagrees with ${field}.`);
-  } else if ('gate_status' in summary || 'gate_criteria' in summary || fs.existsSync(paths.gate) || summary.gate_basis !== 'none') {
+    for (const artifact of [summary, gate]) {
+      if ('gate_policy' in artifact && !isDeepStrictEqual(artifact.gate_policy, gatePolicy)) {
+        throw new Error('Trace gate policy contradicts the resolved workflow.gate settings.');
+      }
+      artifact.gate_policy = gatePolicy;
+    }
+  } else if (
+    'gate_status' in summary ||
+    'gate_criteria' in summary ||
+    'gate_policy' in summary ||
+    fs.existsSync(paths.gate) ||
+    summary.gate_basis !== 'none'
+  ) {
     throw new Error('Trace collected no eligible gate, but emitted a gate signal.');
   }
   return { matrix, summary, gate };
@@ -1614,6 +1650,7 @@ function publishTraceOutputs(value, destinations, io = fs) {
 }
 
 module.exports = {
+  resolveTraceGatePolicy,
   coveragePct,
   PCT_RULE,
   sourceOracleLedger,
