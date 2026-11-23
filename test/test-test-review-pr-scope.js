@@ -1950,6 +1950,7 @@ function main() {
         ['move-and-reuse-old-path', DISCOUNT_PR, 0, []],
       ]) {
         const moveRepo = pullRequestRepo(tmpRoot, kind, { [oldTestFile]: baseContent }, { [newTestFile]: DISCOUNT_PR });
+        git(['config', 'diff.renames', 'false'], moveRepo);
         git(['rm', '--', oldTestFile], moveRepo);
         if (kind === 'move-and-reuse-old-path') {
           fs.mkdirSync(path.join(moveRepo, oldTestFile));
@@ -1971,6 +1972,19 @@ function main() {
           `status=${moved.status} ranges=${JSON.stringify(ranges)} findings=${JSON.stringify(findings)} stderr=${moved.stderr}`,
         );
       }
+
+      const renamedNonTest = pullRequestRepo(tmpRoot, 'test-removed', { [oldTestFile]: DISCOUNT_PR }, { 'src/discount.ts': DISCOUNT_PR });
+      git(['config', 'diff.renames', 'false'], renamedNonTest);
+      git(['rm', '--', oldTestFile], renamedNonTest);
+      git(['commit', '-qm', 'remove test path'], renamedNonTest);
+      const deletedJson = path.join(tmpRoot, 'deleted-test.json');
+      const deleted = run('test-removed', ['--base', 'main', '--json', deletedJson], {}, renamedNonTest);
+      const deletedVerdict = fs.existsSync(deletedJson) ? JSON.parse(fs.readFileSync(deletedJson, 'utf8')) : null;
+      assert(
+        deleted.status === 1 && deletedVerdict?.skipped === true && JSON.stringify(deletedVerdict.deletedFiles) === JSON.stringify([oldTestFile]),
+        'a rename to a non-test path with rename detection disabled preserves the deletions-only failure',
+        `status=${deleted.status} verdict=${JSON.stringify(deletedVerdict)} stderr=${deleted.stderr}`,
+      );
 
       const full = run('full', ['--base', 'main', '--gate-on', 'all'], { STUB_FIXTURE: 'pr-scope-symptom.md' });
       assert(

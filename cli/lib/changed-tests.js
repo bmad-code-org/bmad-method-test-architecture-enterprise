@@ -388,7 +388,7 @@ function runGitDiff({ base, projectRoot, diffFilter }) {
 
   const result = spawnSync(
     'git',
-    ['-c', 'core.quotePath=false', 'diff', '--name-only', '--find-renames', `--diff-filter=${diffFilter}`, '-z', `${base}...HEAD`, '--'],
+    ['-c', 'core.quotePath=false', 'diff', '--name-only', `--diff-filter=${diffFilter}`, '-z', `${base}...HEAD`, '--'],
     { cwd: projectRoot, encoding: 'utf8' },
   );
 
