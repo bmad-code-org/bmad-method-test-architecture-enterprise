@@ -1108,6 +1108,18 @@ try {
         () => change('evaluation.json', (value) => value.heldOutProbes.push('P-004')),
         /P-004 leaves behavior B-002 without a development probe/,
       ],
+      // Every material or critical behavior has a non-clean held-out probe; the fixture's shared behavior B-001 is low, so it stays in
+      // development alone until its severity rises.
+      ...['critical', 'material'].map((severity) => [
+        `a ${severity} behavior no held-out probe exercises`,
+        () => change('contract.json', (contract) => (contract.behaviors[0].severity = severity)),
+        new RegExp(String.raw`evaluation\.json: \[held-out\] behavior B-001 is ${severity} and no probe in heldOutProbes exercises it`),
+      ]),
+      [
+        'a critical behavior whose only held-out probe moved to development',
+        () => change('evaluation.json', (value) => (value.heldOutProbes = ['P-002'])),
+        /evaluation\.json: \[held-out\] behavior B-002 is critical and no probe in heldOutProbes exercises it/,
+      ],
       [
         'a held-out step that is not a contract step',
         () => change(PLAN_FILE, (value) => (value.interactionPlan[0]['canary-extra'] = 'canary-field-value')),
@@ -2351,6 +2363,8 @@ try {
     assert.equal(developmentRan.status, 0, developmentRan.output);
     assertLaunches('development', launchesSince(flow, mark), { trials: true });
     const developmentRun = test.latest(flow.folder);
+    // A development run measures no held-out material, so its run.json records no heldOutDigest (read before the directory is deleted).
+    const developmentRecordedDigest = Object.hasOwn(read(path.join(developmentRun, 'run.json')), 'heldOutDigest');
     assert.equal(
       fs.readFileSync(path.join(developmentRun, 'contract.json')).equals(fs.readFileSync(path.join(flow.folder, 'contract.json'))),
       true,
@@ -2500,6 +2514,37 @@ try {
     });
     const bothScored = cli(flow, 'score', ['--run', path.basename(bothRun)]);
     assert.equal(bothScored.status, 0, bothScored.output);
+    // run.json records the held-out material a held-out run and a run of both partitions measured, and a development run records none.
+    const runRecordOf = (run) => read(path.join(run, 'run.json'));
+    assert.equal(developmentRecordedDigest, false, 'a development run recorded a heldOutDigest');
+    const measured = runRecordOf(heldOutRun).heldOutDigest;
+    assert.match(measured, /^sha256:[0-9a-f]{64}$/, 'a held-out run recorded no heldOutDigest');
+    assert.equal(runRecordOf(bothRun).heldOutDigest, measured, 'a run of both partitions recorded other held-out material');
+    // `check` compares the newest scored one with the committed held-out material: silent while they match, a warning and exit 0 once a
+    // held-out probe moves, and silent again once it is back.
+    const warningsOf = (result) => result.stderr.split('\n').filter((line) => line.startsWith('warning: '));
+    const current = cli(flow, 'check');
+    assert.equal(current.status, 0, current.output);
+    assert.deepEqual(warningsOf(current), [], 'check warned over held-out material the newest scored run measured');
+    const heldOutProbeFile = path.join(flow.folder, 'probes', 'P-003.probe.json');
+    const heldOutProbeBytes = fs.readFileSync(heldOutProbeFile);
+    try {
+      write(heldOutProbeFile, { ...read(heldOutProbeFile), rationale: 'The held-out seed was reworded.' });
+      assert.equal(cli(flow, 'digest').status, 0);
+      const drifted = cli(flow, 'check');
+      assert.equal(drifted.status, 0, drifted.output);
+      assert.equal(warningsOf(drifted).length, 1, drifted.output);
+      assert.match(
+        warningsOf(drifted)[0],
+        new RegExp(
+          String.raw`^warning: runs/${path.basename(bothRun)}/run\.json: \[held-out-drift\] the newest scored held-out run ${path.basename(bothRun)} measured held-out material that has changed since \(heldOutDigest ${measured}, now sha256:[0-9a-f]{64}\)`,
+        ),
+      );
+    } finally {
+      fs.writeFileSync(heldOutProbeFile, heldOutProbeBytes);
+      assert.equal(cli(flow, 'digest').status, 0);
+    }
+    assert.deepEqual(warningsOf(cli(flow, 'check')), [], 'check still warned once the held-out probe was restored');
     // eval-quality designates an oracle only for a behavior that names exactly one, and the both view gives B-002 its development oracle
     // and its held-out one. Each probe of B-002 is handed the oracle of its own partition, so the both view scores it as that partition's
     // own run does (Story 1.110): P-004 against O-002, P-003 against O-101, and both are caught. The probes of B-001, which has one

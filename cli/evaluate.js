@@ -123,7 +123,7 @@
 const { Command } = require('commander');
 
 const { readFolderFile, resolveEvaluationFolder } = require('./lib/evaluate/folder');
-const { checkEvaluation } = require('./lib/evaluate/check');
+const { checkEvaluation, checkWarnings } = require('./lib/evaluate/check');
 const { CorpusIndexError, writeCorpusIndex } = require('./lib/evaluate/corpus-index');
 const { EngineUnavailableError, loadEngine } = require('./lib/evaluate/engine');
 const { EngineStageError } = require('./lib/evaluate/engine-cli');
@@ -159,11 +159,15 @@ function folderFrom(options) {
 async function runCheck(options) {
   const folder = folderFrom(options);
   const findings = await checkEvaluation(folder);
+  for (const finding of findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
+  // A warning never changes the exit: it names evidence to refresh, not an authoring defect, and it is read only after every finding
+  // is printed, so it can never hide one.
+  for (const warning of await checkWarnings(folder, findings))
+    process.stderr.write(`warning: ${findingLine(warning.file, warning.rule, warning.message)}`);
   if (findings.length === 0) {
     process.stdout.write(`${NAME} check: ${folder} has no authoring defects\n`);
     return EXIT_CODES.ok;
   }
-  for (const finding of findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
   process.stdout.write(`${NAME} check: ${findings.length} authoring defect(s) in ${folder}\n`);
   return EXIT_CODES.authoring;
 }

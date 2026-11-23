@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "bmad-method-test-architecture-enterprise",
-  "version": "4.3.1",
+  "version": "4.4.0",
   "description": "Master Test Architect for quality strategy, test automation, and release gates",
   "keywords": [
     "bmad",
@@ -386,7 +386,7 @@
     "zod-to-json-schema": "3.25.1"
   },
   "peerDependencies": {
-    "eval-quality": ">=10.1.0"
+    "eval-quality": ">=10.1.1"
   },
   "peerDependenciesMeta": {
     "eval-quality": {

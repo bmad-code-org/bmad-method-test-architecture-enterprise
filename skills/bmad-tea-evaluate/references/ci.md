@@ -254,3 +254,16 @@ Invoke `bmad-tea-framework` with explicit CI setup scope and Edit operation on t
 Framework's CI phase renders each `gates` entry as a wait of the named job on the evaluation job of the tier, and its summary reports the edit to the job, a name that matches no job and a conflicting gate, so relay that report to the adopter.
 When the plan gates a job, invoke it on the workflow file that holds that job.
 When that skill is not installed, give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record. Stage 12 is complete when the plan passes `check` and the hand-off is made; a declined baseline or a missing `bmad-tea-framework` stays a named open item in the `## CI` section and does not reopen the stage. Finish with the closing summary: the placement table, the deviations and their reasons, the secrets the live tiers need (the names from `environmentKeys`), the gates adopted, the baseline still to accept, every tier that exited non-zero with the stage that owns its repair, and each publish or deploy job that waits for the evaluation job through `gates`, with every such job the plan leaves ungated and the reason.
+
+## Before you open the PR
+
+Open the pull request that adds or changes the evaluation only when every item below holds. Each item uses a command the stages above already run, so the checklist adds none. Record each item with its evidence in the `## CI` section, and name an item that does not hold as an open item.
+
+1. The inputs are committed: `contract.json`, `evaluation.json`, `requirements.md`, `corpus/`, `probes/`, `mutations/`, `policy/`, `adapter/`, `evaluator/`, `corpus-index.json` and `ci/evaluation-ci-plan.json`, with `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>` exiting 0 over them.
+2. A development run was made over that commit: `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development` after the last commit, whose `run.json` records `dirty: false` (`--partition` only when `evaluation.json` declares a `partitionPlan`).
+3. That run was scored with `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>`, and its evidence was reviewed: every observation an oracle requires was recorded, so no probe reads `unreached`, `abstained` or `oracle-error`.
+4. The baseline was accepted from that scored run with `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare --evaluation <evaluation-folder> --accept`, and `baseline/` is committed in the same change.
+5. The held-out partition stayed frozen and independent: the gap loop read held-out results only through `gap-view.json` and edited no file under `corpus/held-out/`, and `check` prints no `held-out-drift` warning, so the newest scored held-out run still describes the committed held-out material.
+6. `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate ci --evaluation <evaluation-folder> --tier pr` exits 0.
+7. The repository's own pull request gates, the checks the merge flow inspection recorded as required, pass on the branch.
+8. The evaluation brief exists: `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` opens with a filled `## Evaluation brief`.

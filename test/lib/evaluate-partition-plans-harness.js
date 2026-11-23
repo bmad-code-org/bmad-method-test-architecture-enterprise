@@ -313,6 +313,12 @@ function createHarness(suiteName) {
     behavior.oracles = ['O-004', 'O-005'];
     contract.behaviors.push(behavior);
     write(contractFile, contract);
+    const manifestFile = path.join(folder, 'evaluation.json');
+    const manifest = read(manifestFile);
+    manifest.heldOutCoverageExclusions = {
+      'B-003': 'This fixture exercises the multiple-oracle behavior through a development clean control.',
+    };
+    write(manifestFile, manifest);
     const plan = read(path.join(folder, PLAN_FILE));
     plan.oracles.push(copyOf(plan.oracles, 'O-101', 'O-102'));
     plan.behaviorOracles['B-003'] = ['O-102'];
