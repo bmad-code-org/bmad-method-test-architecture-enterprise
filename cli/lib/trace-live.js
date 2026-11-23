@@ -1,6 +1,8 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const normalizedSha = (value) => {
@@ -15,10 +17,39 @@ const shaMatches = (left, right) => {
 };
 const asString = (value) => (typeof value === 'string' ? value.trim() : '');
 
+const REPOSITORY_ENV = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'];
+
+/**
+ * The `safe.directory` entries of the user's system and global Git config, in the order Git reads them. Git honors
+ * this key only from protected config, so a checkout owned by another user (a container job, where
+ * `actions/checkout` adds the entry globally) is refused once that config is hidden. Read in the user's normal
+ * environment, outside any repository, so the repository's own config cannot add one, and through the files those
+ * scopes include, as Git reads them.
+ */
+function safeDirectories() {
+  const env = { ...process.env };
+  for (const key of REPOSITORY_ENV) delete env[key];
+  const values = [];
+  for (const scope of ['--system', '--global']) {
+    // --includes: a scoped read skips include.path files unless asked, and plain Git reads them. -z: a value may hold
+    // a newline, so values are NUL-terminated; an empty value (which resets the list) is kept.
+    const result = spawnSync('git', ['config', scope, '--includes', '-z', '--get-all', 'safe.directory'], {
+      encoding: 'utf8',
+      env,
+      cwd: os.tmpdir(),
+    });
+    if (result.status === 0 && result.stdout) values.push(...result.stdout.split('\0').slice(0, -1));
+  }
+  return values;
+}
+
 function git(projectRoot, ...args) {
+  // The user's config stays out (aliases, hooks and the like), except `safe.directory`, passed on the command line,
+  // which Git also honors, so Trace reads HEAD wherever plain `git` can.
+  const trusted = safeDirectories().flatMap((value) => ['-c', `safe.directory=${value}`]);
   const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) delete env[key];
-  return spawnSync('git', ['-C', projectRoot, ...args], { encoding: 'utf8', env });
+  for (const key of REPOSITORY_ENV) delete env[key];
+  return spawnSync('git', [...trusted, '-C', projectRoot, ...args], { encoding: 'utf8', env });
 }
 
 /** The project's own full Git object ID for HEAD, or '' when Git does not resolve one. */
@@ -32,7 +63,26 @@ function gitHead(projectRoot) {
 function currentSourceSha(projectRoot) {
   const head = gitHead(projectRoot);
   if (head) return head;
-  return git(projectRoot, 'rev-parse', '--is-inside-work-tree').status === 0 ? '' : normalizedSha(process.env.GITHUB_SHA);
+  const location = git(projectRoot, 'rev-parse', '--is-inside-work-tree');
+  // An unreadable or untrusted checkout is not a source archive. Refuse the
+  // CI fallback if Git failed or if checkout metadata is still present.
+  if (location.error || location.status !== 128) return '';
+  let directory;
+  try {
+    directory = fs.realpathSync(projectRoot);
+  } catch {
+    return '';
+  }
+  for (; ; directory = path.dirname(directory)) {
+    try {
+      fs.lstatSync(path.join(directory, '.git'));
+      return '';
+    } catch (error) {
+      if (error.code !== 'ENOENT') return '';
+    }
+    if (directory === path.dirname(directory)) break;
+  }
+  return normalizedSha(process.env.GITHUB_SHA);
 }
 
 /**
@@ -154,6 +204,7 @@ module.exports = {
   normalizedSha,
   gitHead,
   currentSourceSha,
+  safeDirectories,
   captureLiveResults,
   assertLiveSourceRevision,
   liveAliasMap,
