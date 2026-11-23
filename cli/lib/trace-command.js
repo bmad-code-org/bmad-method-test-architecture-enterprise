@@ -25,7 +25,7 @@ const DEFAULT_THRESHOLDS = Object.freeze({ p0_required: 100, p1_target: 90, p1_m
 
 function resolveTraceGatePolicy(overrides, workflowSources = new Map()) {
   const label = (key) => workflowSources.get(key ? `workflow.gate.${key}` : 'workflow.gate') ?? 'skill defaults';
-  if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))) {
+  if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides) || overrides instanceof Date)) {
     throw new Error(`[workflow.gate] in ${label()} must be a table.`);
   }
   const thresholds = { ...DEFAULT_THRESHOLDS, ...overrides };

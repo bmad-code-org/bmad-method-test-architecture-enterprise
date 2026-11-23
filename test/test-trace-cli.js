@@ -871,6 +871,11 @@ try {
       const inverted = run('pass');
       assert.equal(inverted.status, 2, inverted.stdout);
       assert.match(inverted.payload.reason, /p1_minimum.*p1_target.*bmad-tea-trace.user.toml/);
+
+      fs.writeFileSync(path.join(root, user), '[workflow]\ngate = 2026-11-01\n');
+      const date = run('pass');
+      assert.equal(date.status, 2, date.stdout);
+      assert.match(date.payload.reason, /workflow.gate.*bmad-tea-trace.user.toml.*must be a table/);
     } finally {
       fs.writeFileSync(target, originalTarget);
       fs.writeFileSync(path.join(root, team), originalTeam);

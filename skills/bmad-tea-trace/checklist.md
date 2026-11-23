@@ -122,7 +122,7 @@ This section is the definition of the five coverage statuses. Every other file i
   - [ ] Inferred UI journeys missing E2E/component coverage
   - [ ] Inferred UI journeys missing loading/empty/error/permission state coverage
 - [ ] Gaps prioritized by risk level using test-priorities framework. This list is the definition of the four risk buckets; `steps-c/step-04-analyze-gaps.md` section 1 builds them from it:
-  - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER). Gate Rule 1 counts only FULL criteria. Include P0 criteria at PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY here
+  - [ ] **CRITICAL** - Every P0 criterion below FULL coverage. P0 coverage blocks release when it misses the resolved threshold
   - [ ] **HIGH** - P1 criteria with NONE coverage (PR blocker)
   - [ ] **MEDIUM** - P2 criteria with NONE coverage (nightly gap)
   - [ ] **LOW** - P3 criteria with NONE coverage (acceptable)
@@ -363,8 +363,8 @@ The automated gate applies Step 5's coverage thresholds, oracle-confidence overl
 
 **P1 Criteria Evaluation:**
 
-- [ ] P1 oracle-item coverage evaluated (PASS >=90%, CONCERNS 80-89%, FAIL <80%)
-- [ ] Overall oracle coverage evaluated (threshold: >=80%)
+- [ ] P1 oracle-item coverage evaluated against the resolved target and minimum
+- [ ] Overall oracle coverage evaluated against the resolved minimum
 - [ ] Code coverage considered if available (informational unless explicitly required by policy)
 - [ ] P1 decision recorded: PASS, CONCERNS, or FAIL
 
@@ -677,9 +677,9 @@ This list is the definition of waiver validity. `steps-c/step-05-gate-decision.m
 
 **Phase 1 - Traceability Status:**
 
-- [ ] ✅ PASS - All quality gates met, no critical gaps
-- [ ] ⚠️ WARN - P1 gaps exist, address before PR merge
-- [ ] ❌ FAIL - P0 gaps exist, BLOCKER for release
+- [ ] ✅ PASS when the resolved thresholds and evidence checks are met
+- [ ] ⚠️ WARN when the gate has concerns
+- [ ] ❌ FAIL when the gate misses a required threshold
 
 **Phase 2 - Gate Decision Status (if enabled):**
 

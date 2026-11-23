@@ -382,7 +382,7 @@ The profile-export gap is P2 and scheduled for v1.3.
 
 ### Gate Decision Rules
 
-Set `p0_required`, `p1_target`, `p1_minimum`, or `overall_minimum` under `[workflow.gate]` in `_bmad/custom/bmad-tea-trace.toml`. The gate JSON records values and sources.
+These are the defaults. Set `p0_required`, `p1_target`, `p1_minimum`, or `overall_minimum` in `_bmad/custom/bmad-tea-trace.toml` under `[workflow.gate]`. Gate JSON records the effective values and sources.
 
 | P0 Coverage | P1 Coverage | Overall Coverage | Decision        |
 | ----------- | ----------- | ---------------- | --------------- |

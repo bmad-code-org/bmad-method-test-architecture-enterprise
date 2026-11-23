@@ -160,11 +160,11 @@ Every coverage status and missing behavior in this block repeats Step 3's `Requi
 
 ### Gap Analysis
 
-#### Critical Gaps (BLOCKER) ❌
+#### Critical Gaps (P0)
 
 Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 counts only FULL coverage. Each gap counts against the required P0 threshold.
 
-{CRITICAL_GAP_COUNT} gaps found. **Do not release until resolved.**
+{CRITICAL_GAP_COUNT} gaps found. Report P0 coverage as a release blocker if it falls below `p0_required`.
 
 1. **{CRITERION_ID}: {CRITERION_DESCRIPTION}** (P0)
    - Current Coverage: {COVERAGE_STATUS}
@@ -174,9 +174,9 @@ Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 counts 
 
 ---
 
-#### High Priority Gaps (PR BLOCKER) ⚠️
+#### High Priority Gaps (P1)
 
-{HIGH_GAP_COUNT} gaps found. **Address before PR merge.**
+{HIGH_GAP_COUNT} gaps found. Report how they affect the P1 target and minimum.
 
 1. **{CRITERION_ID}: {CRITERION_DESCRIPTION}** (P1)
    - Current Coverage: {COVERAGE_STATUS}
