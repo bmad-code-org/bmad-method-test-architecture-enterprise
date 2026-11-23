@@ -74,11 +74,13 @@ If any are missing: **HALT** and notify the user.
 
 - Resolve and read the story by `{tea-contracts}/story-identity.md` sections 1 to 3: a v7 ticket through `tickets.py find`, or a v6 story file at `{story_file}`. Ask the user for the story when none was given.
 - Extract the criteria that contract selects, and the constraints, into a criterion registry in source order. Keep the `R` ids each v7 criterion names in its row's text.
-- Check every selected criterion for an observable outcome a failing test can assert. In an interactive run, name each criterion that has none and ask the user to refine it with Sofia the Product Owner (`bmad-agent-po`) or rewrite it; **halt** until answered. A headless run halts with "Story `{story_id}` has criteria red mode cannot turn into failing tests: {unusable criteria}; refine them first."
 - Preserve every supplied criterion id that matches `AC-<positive integer>` exactly
 - Reject duplicate supplied ids
 - Assign ids to unnamed criteria deterministically. Reserve all supplied ids first, then visit unnamed criteria in source order and assign the lowest unused `AC-<positive integer>` id
-- Persist each registry row as `{ id, idSource: supplied | generated, text }` and persist the exact ordered id set as `{criterion_ids}`. The same story content must always produce the same registry
+- Persist the full registry as `fullCriterionRegistry`. Every row carries `{ id, idSource: supplied | generated, text }` in source order, even if it cannot be tested.
+- Resolve `workflow.unusable_criteria` to `halt` (default) or `skip-and-report`. Reject other values. After assigning stable IDs, check each criterion for an observable outcome a failing test can assert. Record unusable rows as `{ id, text, reason }` in source order.
+- Under `halt`, ask an interactive user to refine each unusable criterion with the Product Owner and halt. In a headless run, halt with "Story `{story_id}` has criteria red mode cannot turn into failing tests: {unusable criteria}; refine them first."
+- Under `skip-and-report`, proceed with the testable criteria and report all unusable rows. If every criterion is unusable, halt with their IDs and reasons. Set `criterionRegistry` and `criterion_ids` to the testable subset in source order, preserving the full registry's IDs.
 - Identify affected components and integrations
 - Derive and store `story_id`, `story_key`, `ticket_ref` and `story_file` by `{tea-contracts}/story-identity.md` section 4. For a v6 story file, `story_id` comes from story metadata, the H1 heading, or the filename (typically `{epic_num}.{story_num}`); with neither a file nor an id, `story_key` is a slug of the story title: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters
 - Use that `story_key` for the `{outputFile}` basename so all checklist and handoff paths stay consistent
@@ -243,7 +245,7 @@ Then write this step's output below the frontmatter.
 - Set `atddChecklistPath` to `{outputFile}`
 - Initialize `generatedTestFiles` to `[]`
 - Set `inputDocuments` to the list of artifact paths loaded in this step (e.g., knowledge fragments, test design documents, configuration files)
-- Set `acceptanceCriteria` to the persisted criterion registry, including generated ids and `idSource`
+- Set `acceptanceCriteria` to `fullCriterionRegistry`. Persist `unusable_criteria` and the `unusableCriteria` array, including an empty array when every criterion is testable.
 
 Load next step: `{nextStepFile}`
 

@@ -22,8 +22,8 @@ Install the skills from GitHub:
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-Setup needs [uv](https://docs.astral.sh/uv/) and the `bmad` and `bmod-core-tools` skills from BMad Method core.
-If those skills are missing, install them:
+Setup needs [uv](https://docs.astral.sh/uv/) and the `bmad` and `bmod-core-tools` skills from BMad v7 core.
+The v7 preview reports `6.13.0-next` in `bmad status`. This command installs core from BMad Method's GitHub main:
 
 ```bash
 npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools

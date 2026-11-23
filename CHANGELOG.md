@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Red mode can generate scaffolds for testable criteria and report criteria that need clarification. `unusable_criteria = "skip-and-report"` opts in, and the CLI returns the skipped count (#509).
+
+### Changed
+
+- The installation guide identifies BMad v7 core and the version its preview reports (#503).
+
 ## [4.4.3] - 2026-11-23
 
 ### Fixed

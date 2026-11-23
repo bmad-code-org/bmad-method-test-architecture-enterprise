@@ -1,5 +1,7 @@
 # ATDD Workflow Validation Checklist
 
+For a `skip-and-report` checklist, scaffold requirements apply to the testable subset. Verify that each skipped ID is still in the full acceptance-criteria registry and has a reason in the checklist. Its omission is a coverage gap.
+
 Use this checklist to assess red-mode deliverables and verification evidence. Create runs `{skill-root}/resources/run-and-heal.md` after generation and aggregation; that resource is authoritative for execution, repair scope and stopping conditions. Validate assesses available evidence without repair or requiring a passing suite. Edit checks the requested changes and never runs the healing loop. A completed generation workflow records unresolved, blocked or disabled red verification honestly.
 
 ## Prerequisites

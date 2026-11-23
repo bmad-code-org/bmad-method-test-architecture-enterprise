@@ -7,6 +7,8 @@ validationChecklist: '{skill-root}/red/checklist.md'
 
 # Step 1: Validate Outputs
 
+For a `skip-and-report` checklist, scaffold requirements apply to the testable subset. Verify that each skipped ID is still in the full acceptance-criteria registry and has a reason in the checklist. Its omission is a coverage gap.
+
 ## STEP GOAL:
 
 Validate outputs using the workflow checklist and record findings.

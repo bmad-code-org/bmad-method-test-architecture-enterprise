@@ -659,25 +659,19 @@ Generate tests for scenarios NOT covered by those files
 
 ## Red Mode
 
-Use the Automate skill's `red` mode to generate acceptance test scaffolds before implementation. Ask `/bmad-tea-automate`, `$bmad-tea-automate`, or `TA` for red mode.
-TEA emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
+Generate acceptance test scaffolds before implementation with `/bmad-tea-automate` in red mode. TEA writes `test.skip()` tests for the builder to activate.
 
 <a id="red-when-to-use-this"></a>
 
 ### When to Use This
 
-- You are about to implement a feature
-- You want to follow TDD workflow (red → green → refactor)
-- You want tests to guide your implementation
-- You're practicing acceptance test-driven development
-
-For tests of implemented features, use [Automate](/docs/how-to/workflows/run-automate.md).
+Use red when the story has acceptance criteria and implementation is about to begin.
 
 <a id="red-with-bmad-build"></a>
 
 ### With BMad Build
 
-When a BMad v7 ticket has only a `Verify:` line, red mode reads the acceptance criteria from the build plan.
+BMad v7 includes the `6.13.0-next` preview. For a ticket with only a `Verify:` line, red mode uses criteria from the build plan.
 
 For one story, set `route = "full"` and run `bmad-build`:
 
@@ -703,7 +697,9 @@ If {plan_file} names a ticket, do this before dispatch:
 Leave the frozen intent unchanged.
 ```
 
-Activate each red scaffold before Verification. The Matrix Test Audit counts a skipped covering test as missing.
+Activate each red scaffold before Verification. The Matrix Test Audit counts skipped tests as missing.
+
+Red mode defaults to `halt` on untestable criteria. Set `unusable_criteria = "skip-and-report"` under `[workflow.red]` in `_bmad/custom/bmad-tea-automate.toml` to generate tests for the rest. The checklist records each skipped criterion and why it was skipped. If none can be tested, red mode halts.
 
 <a id="red-prerequisites"></a>
 

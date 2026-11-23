@@ -68,7 +68,7 @@ const parseBooleanFlag = (value, defaultValue = true) => {
 };
 
 const subagentContext = {
-  story_acceptance_criteria: /* from Step 1 */,
+  story_acceptance_criteria: /* Step 1's testable criterionRegistry */,
   test_strategy: /* from Step 3 */,
   knowledge_fragments_loaded: /* list of fragments */,
   config: {

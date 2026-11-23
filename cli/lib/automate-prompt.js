@@ -5,7 +5,7 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 const TOML = require('smol-toml');
 const { readTeaConfigFile, readWorkflowCustomization, configSource, MODULE_DEFAULTS, SNAPSHOT_DEFAULTS } = require('./resolve-tea-config');
-const { RESULT_KEYS } = require('./automate-result');
+const { RESULT_KEYS, unusableCriteriaPolicy } = require('./automate-result');
 
 const HEALING_DEFAULTS = { auto_validate: true, auto_heal_failures: true, max_healing_iterations: 3, use_mcp_healing: true };
 
@@ -40,12 +40,13 @@ function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRo
       settings[key] = Number(raw);
     } else settings[key] = boolean(raw, key);
   }
+  if (mode === 'red') settings.unusable_criteria = unusableCriteriaPolicy(workflowCustomization.unusable_criteria);
   if (operation === 'resume') {
     const text = fs.readFileSync(checkpointPath, 'utf8');
     const frontmatter = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
     if (frontmatter) {
       const saved = yaml.load(frontmatter[1]);
-      for (const key of Object.keys(settings)) {
+      for (const key of Object.keys(HEALING_DEFAULTS)) {
         if (saved?.[key] === undefined) continue;
         if (key === 'max_healing_iterations') {
           if (!Number.isSafeInteger(saved[key]) || saved[key] < 0 || saved[key] > 3)
@@ -53,10 +54,12 @@ function resolveGenerationConfig(projectRoot, checkpointPath, operation, skillRo
           settings[key] = saved[key];
         } else settings[key] = boolean(saved[key], `checkpoint ${key}`);
       }
+      if (mode === 'red') settings.unusable_criteria = unusableCriteriaPolicy(saved?.unusable_criteria, 'checkpoint unusable_criteria');
     }
   }
   return {
-    workflowCustomization,
+    workflowCustomization:
+      mode === 'red' ? { ...workflowCustomization, unusable_criteria: settings.unusable_criteria } : workflowCustomization,
     configSnapshot: {
       core: { user_name: 'User', communication_language: 'English', document_output_language: 'English', ...file.core },
       modules: { tea: { ...tea, ...settings } },
@@ -122,6 +125,9 @@ function generationRequest({
     mode === 'red'
       ? 'Finish the red Create or Resume workflow through step-05-validate-and-complete before publishing the manifest. The saved checklist frontmatter must have workflowStatus: completed; stepsCompleted must retain step-01-preflight-and-context, step-02-generation-mode, step-03-test-strategy, step-04c-aggregate (or step-04-generate-tests), and step-05-validate-and-complete; lastStep must be step-05-validate-and-complete. Record only steps actually completed during this run.'
       : 'Finish the expand Create or Resume workflow through step-04-validate-and-summarize before publishing the manifest. The saved summary frontmatter must have workflowStatus: completed; stepsCompleted must retain step-01-preflight-and-context, step-02-identify-targets, step-03c-aggregate (or step-03-generate-tests), and step-04-validate-and-summarize; lastStep must be step-04-validate-and-summarize. Record only steps actually completed during this run.',
+    mode === 'red'
+      ? 'Save unusable_criteria in the red Create or Resume checkpoint. When skip-and-report is selected, also retain the full acceptanceCriteria registry and unusableCriteria array, even when that array is empty. Write a checklist Unusable criteria section for any skipped criteria. The CLI verifies and counts them from the checklist.'
+      : '',
     'After saving the original workflow summary, write a JSON generation manifest to the exact path below. This is CLI metadata in addition to the existing skill outputs.',
     JSON.stringify(manifestPath),
     `CLI request identity: ${JSON.stringify(requestId)}. Set manifest requestId to this exact value.`,

@@ -38,7 +38,7 @@ Translate acceptance criteria into a prioritized, level-appropriate test plan.
 
 ## 1. Map Acceptance Criteria
 
-- Convert each acceptance criterion in the persisted registry into test scenarios
+- Convert each criterion in the testable `criterionRegistry` into test scenarios. Preserve the unusable rows for the checklist.
 - Record the exact declared acceptance criterion id on every scenario. Preserve supplied ids and use the preflight-generated id for an unnamed criterion
 - Plan exactly one primary red-phase scaffold for every declared criterion. Record secondary branches for green-phase automation without emitting extra red-phase leaves
 - Identify the one smallest criterion-defining assertion that must fail first. Assert the exact newly promised status, scalar, or property before broad object, schema, or secondary assertions
