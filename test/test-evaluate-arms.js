@@ -187,6 +187,7 @@ const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { WorkspaceRefusal, createWorkspace, removeWorkspace } = require('../cli/lib/evaluate/workspace');
 const { printGroupsWhenAsked, runs, selectGroup, groupsOf } = require('./lib/case-groups');
 const { scratchDirectories } = require('./lib/scratch-directories');
+const { gitToolchain } = require('./lib/git-toolchain');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -200,6 +201,7 @@ const JUDGE_SNAPSHOT = 'stub-judge-2026-09';
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GIT_')));
 const GIT_IDENTITY = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
 const GIT_ENV = { ...BASE_ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+let cachedGitToolchain;
 
 let lazyFetchSkippable = null;
 
@@ -340,7 +342,7 @@ function commitAll(repository, folder, message) {
  * write, so a marked project opts out of file-system confinement (Story
  * 1.31); one made with `marker: false` runs confined.
  */
-function makeProject(label, { edit = () => {}, marker: marked = true } = {}) {
+function makeProject(label, { edit = () => {}, marker: marked = true, toolchain = false } = {}) {
   const directory = scratch.make(label);
   const repository = path.join(directory, 'repository');
   fs.cpSync(FIXTURE, repository, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -349,16 +351,22 @@ function makeProject(label, { edit = () => {}, marker: marked = true } = {}) {
   const marker = path.join(directory, 'launches.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
+  const targetGit = toolchain ? (cachedGitToolchain ??= gitToolchain(BASE_ENV)) : null;
   const project = {
     repository,
     folder,
     marker,
     directory,
-    env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(marked ? { VERDICT_MARKER: marker } : {}) },
+    env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(marked ? { VERDICT_MARKER: marker } : {}), ...targetGit?.env },
   };
   if (marked) {
     const manifest = path.join(folder, 'evaluation.json');
     fs.writeFileSync(manifest, `${JSON.stringify({ ...JSON.parse(fs.readFileSync(manifest, 'utf8')), confinement: false }, null, 2)}\n`);
+  }
+  if (targetGit?.paths.length > 0) {
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+      for (const entry of evaluation.registry) entry.systemPaths = [...(entry.systemPaths ?? []), ...targetGit.paths];
+    });
   }
   edit(project);
   git(repository, ['init', '--quiet', '--initial-branch', 'main']);
@@ -596,10 +604,18 @@ async function checkGameability() {
  */
 function makeHistoricalProject(
   label,
-  { before = 'mode: lenient\n', fixFile = 'rules/policy.txt', keepMutation = false, fixCommitOf = ({ fix }) => fix, marker = true } = {},
+  {
+    before = 'mode: lenient\n',
+    fixFile = 'rules/policy.txt',
+    keepMutation = false,
+    fixCommitOf = ({ fix }) => fix,
+    marker = true,
+    toolchain = false,
+  } = {},
 ) {
   const project = makeProject(label, {
     marker,
+    toolchain,
     edit: ({ repository, folder }) => {
       fs.writeFileSync(path.join(repository, 'rules', 'policy.txt'), before);
       if (!keepMutation) {
@@ -4102,7 +4118,7 @@ async function checkConfinedArms() {
   // runs in a project outside git, so its two call sites have no git directory to withhold and stay held by the
   // source scan in test:evaluate-confinement.
   for (const context of ['historical', 'qualify-P-004-fail-before', 'qualify-P-004-pass-after']) {
-    const probing = makeHistoricalProject(`historical-git-${context}`, { marker: false });
+    const probing = makeHistoricalProject(`historical-git-${context}`, { marker: false, toolchain: true });
     const when = context === 'historical' ? `historical-${probing.parent}` : context;
     const probed = evaluate(['run', '--evaluation', probing.folder], { ...probing.env, VERDICT_WHEN: when, VERDICT_DO: 'probe-git' });
     check(probed.status === 0, `a confined historical run whose ${when} workspace probed git exited ${probed.status}\n${probed.output}`);
