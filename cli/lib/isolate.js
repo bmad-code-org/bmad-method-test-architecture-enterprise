@@ -411,55 +411,47 @@ function recoverInterruptedLock(projectRoot) {
   const marker = lockMarkerPath(root);
   const record = readMarker(marker, root);
   if (record === null || processAlive(record.pid)) return false;
-  // Claim the marker by renaming it to a private name: of runs that all saw it dead, one wins the rename, so no run
-  // can delete a marker another run has just published in its place.
-  const claim = privateName(marker, 'claim');
+  // Serialize stale recovery separately while leaving the original marker at
+  // its canonical name. Acquirers must keep seeing it until restoration is done.
+  const claim = `${marker}.recover`;
   try {
-    fs.renameSync(marker, claim);
-  } catch {
-    return false; // another run claimed it first
-  }
-  const claimed = readMarkerFile(claim, root);
-  // Put a claimed marker back untouched; if a new marker was published meanwhile, that one stands.
-  const putBack = () => {
-    try {
-      fs.linkSync(claim, marker);
-    } catch {
-      // a newer marker holds the name
-    }
-    fs.rmSync(claim, { force: true });
-  };
-  if (claimed === null || processAlive(claimed.pid)) {
-    putBack(); // the rename took a marker that is not a dead run's: leave it as it was
-    return false;
-  }
-  if (claimed.locked !== true) {
-    // The run ended before it locked anything: the marker is all there is to undo.
-    fs.rmSync(claim, { force: true });
-    return false;
-  }
-  const snapshot = markerSnapshot(claimed, root);
-  if (snapshot === false) {
-    putBack();
-    console.error(
-      `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or an invalid mode. ` +
-        'If the project is still read-only, restore it manually with: chmod -R u+w <path>',
-    );
-    return false;
-  }
-  try {
-    restoreModes(root, snapshot);
+    fs.mkdirSync(claim, { mode: 0o700 });
   } catch (error) {
-    putBack(); // keep the snapshot for the next attempt
-    console.error(
-      `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +
-        'Restore manually with: chmod -R u+w <path>',
-    );
-    return false;
+    if (error.code === 'EEXIST') return false;
+    throw isolationError(`cannot claim chmod lock recovery for ${root}: ${error.message}`);
   }
-  fs.rmSync(claim, { force: true });
-  console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${claimed.pid}) left on ${root}.`);
-  return true;
+  try {
+    // The lock may have been recovered or acquired by another process since
+    // the first read. Never restore based on a record read before the claim.
+    const claimed = readMarker(marker, root);
+    if (claimed === null || processAlive(claimed.pid)) return false;
+    if (claimed.locked !== true) {
+      fs.rmSync(marker, { force: true });
+      return false;
+    }
+    const snapshot = markerSnapshot(claimed, root);
+    if (snapshot === false) {
+      console.error(
+        `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or an invalid mode. ` +
+          'If the project is still read-only, restore it manually with: chmod -R u+w <path>',
+      );
+      return false;
+    }
+    try {
+      restoreModes(root, snapshot);
+    } catch (error) {
+      console.error(
+        `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +
+          'Restore manually with: chmod -R u+w <path>',
+      );
+      return false;
+    }
+    fs.rmSync(marker, { force: true });
+    console.error(`tea-test-review: restored the write permissions an interrupted run (pid ${claimed.pid}) left on ${root}.`);
+    return true;
+  } finally {
+    fs.rmdirSync(claim);
+  }
 }
 
 /**
@@ -489,6 +481,13 @@ function acquireLockMarker(root) {
           );
         }
         if (attempt > 0) {
+          const claim = `${marker}.recover`;
+          if (fs.existsSync(claim)) {
+            throw isolationError(
+              `chmod lock recovery for ${root} is already claimed at ${claim}; wait for it to finish. ` +
+                'If the recovering process was killed, make sure no recovery is running, then remove only the empty .recover directory and retry.',
+            );
+          }
           throw isolationError(`a chmod lock marker ${marker} could not be recovered; check ${root} and remove the marker.`);
         }
         recoverInterruptedLock(root);

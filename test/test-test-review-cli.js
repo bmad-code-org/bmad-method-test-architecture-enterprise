@@ -3111,6 +3111,43 @@ async function runTests() {
           assert(recovered.notice.includes(`pid ${deadPid}`), 'recovering an interrupted lock says which run left it', recovered.notice);
           assert(recoverInterruptedLock(lockedRoot) === false, 'with no marker there is nothing to recover');
 
+          // A dead marker stays visible until recovery restores every mode.
+          // Start the competing run synchronously during the first chmod,
+          // avoiding an unreliable timing race in the test itself.
+          if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
+            fs.chmodSync(lockedFile, 0o444);
+            writeMarker(deadPid);
+            const chmod = fs.chmodSync;
+            let competitor;
+            try {
+              fs.chmodSync = (entry, mode) => {
+                if (competitor === undefined) {
+                  competitor = spawnSync(
+                    process.execPath,
+                    [
+                      '-e',
+                      'try { require(process.argv[1]).withIsolation(process.argv[2], [], () => process.exit(5)); } ' +
+                        'catch (error) { console.error(error.message); process.exitCode = error.code === "ISOLATION_ERROR" ? 2 : 1; }',
+                      path.resolve(__dirname, '../cli/lib/isolate.js'),
+                      lockedRoot,
+                    ],
+                    { encoding: 'utf8', env: { ...process.env, TEA_TEST_REVIEW_ISOLATION: 'chmod' } },
+                  );
+                }
+                return chmod(entry, mode);
+              };
+              const result = quietly(() => recoverInterruptedLock(lockedRoot));
+              assert(result.result === true, 'stale-marker recovery succeeds when another run tries to acquire', result.notice);
+            } finally {
+              fs.chmodSync = chmod;
+            }
+            assert(
+              competitor?.status === 2 && competitor.stderr.includes('recovery') && modeOf(lockedFile) === 0o644,
+              'a concurrent run cannot acquire before stale-marker permission restore finishes',
+              JSON.stringify({ status: competitor?.status, stderr: competitor?.stderr, mode: modeOf(lockedFile).toString(8) }),
+            );
+          }
+
           // A forged marker must not reach outside the project: the whole snapshot is refused, nothing is applied.
           fs.chmodSync(lockedFile, 0o444);
           writeMarker(deadPid, [
