@@ -817,7 +817,7 @@ function jsBindingScopes(source) {
   for (let index = 0; index < source.length; index++) {
     const character = source[index];
     if (character === '(') parens.push(index);
-    if (character === ')' && parens.length) closedParens.set(index, parens.pop());
+    if (character === ')' && parens.length > 0) closedParens.set(index, parens.pop());
     if (character === '{') {
       const previous = previousCode(index - 1);
       const arrow = source[previous] === '>' && source[previous - 1] === '=';
@@ -869,7 +869,6 @@ function jsBindingScopes(source) {
       for (let scope = scopeAt(position); scope; scope = scope.parent) {
         if (scope.names.has(name)) return scope.names.get(name);
       }
-      return undefined;
     },
   };
 }
