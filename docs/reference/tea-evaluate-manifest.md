@@ -107,6 +107,11 @@ For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutPro
 Each ID must name a committed probe, cannot name a clean control, and must leave a development probe for every affected behavior.
 Omit the field when every probe belongs to development.
 
+With a held-out set, `check` requires a defect, gameability or zero-action defect probe for every `material` or `critical` behavior in scope.
+A clean control or canary does not count.
+For a partial set, record each excluded behavior and its reason under `heldOutCoverageExclusions`. For example, `"heldOutCoverageExclusions": { "B-002": "Covered in development while the independent held-out case is prepared." }`.
+Keep those limits in the gap report.
+
 To keep a request meant only for held-out probes out of the development partition, declare a `partitionPlan` beside `heldOutProbes`:
 
 ```json
@@ -119,7 +124,6 @@ To keep a request meant only for held-out probes out of the development partitio
 ```
 
 Without it, every partition runs the whole `contract.json` plan, and `run --partition` filters only the scored probes.
-With it, `check` also requires a held-out probe for every `material` or `critical` behavior: a defect, gameability or zero-action defect probe in `heldOutProbes` that names the behavior or seeds a defect on it. A clean control or a canary does not count, and a `low` behavior may stay in development alone.
 With it, each step is shared (in `contract.json`, run by every partition), development-only (in `contract.json` and named by `developmentOnlySteps`) or held-out (only in the held-out plan, `held-out-plan.schema.json`: `schemaVersion` 1, `interactionPlan`, `oracles`, optional `rubrics`, `waivers` and `mappings`, and `behaviorOracles`, the oracle IDs each behavior gains in the held-out view).
 The file sits directly under `corpus/held-out/`, so `corpus-index.json` digests it.
 A plan step carries no `partition` field.

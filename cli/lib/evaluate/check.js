@@ -26,8 +26,7 @@
  * - `web-interface`: the contract declares an interface of kind `web`.
  * - `written-file-signature`: a defect signature addresses a file the target wrote.
  * - `oracle-count`: a behavior a defect, gameability or zero-action defect probe discharges does not declare exactly one oracle.
- * - `held-out` coverage: under a `partitionPlan`, a `material` or `critical` behavior that no held-out defect, gameability or
- *   zero-action defect probe discharges (a clean control and a canary never do).
+ * - `held-out` coverage: a held-out set leaves a `material` or `critical` behavior without a qualifying probe or a documented exclusion.
  * - `mandatory-action`: a behavior `mandatoryActionBehaviors` lists that the contract does not declare, or that no zero-action defect
  *   probe (`probeClass` `zero-action`, `expectedClean: false`, a defect on the behavior) covers.
  * - Warnings (`checkWarnings`), which never change the exit: `held-out-drift`, the newest run with a completed held-out score recorded
@@ -1862,14 +1861,21 @@ function behaviorsOf(contract) {
 }
 
 /**
- * Under a `partitionPlan`, every `material` or `critical` behavior has a held-out probe that discharges it (`dischargesBehaviors`), so
- * the held-out partition scores every behavior that can fail the evaluation. The rule is the plan's: a folder that holds probes out
- * through `heldOutProbes` alone keeps its earlier meaning, because TeA's own evaluations hold probes out that way and requalifying them
- * takes live runs, and a development-only folder is held to nothing here.
+ * A held-out set needs a probe for each material or critical behavior in scope. A documented exclusion records the limit of a
+ * partial corpus without changing its accepted baseline.
  */
 function checkHeldOutCoverage(report, evaluation, contract, probes) {
-  if (!isPlainObject(evaluation.partitionPlan)) return;
   const selected = Array.isArray(evaluation.heldOutProbes) ? evaluation.heldOutProbes : [];
+  if (selected.length === 0 && !isPlainObject(evaluation.partitionPlan)) return;
+  const behaviors = behaviorsOf(contract);
+  const required = new Set(behaviors.filter((behavior) => HELD_OUT_SEVERITIES.has(behavior.severity)).map((behavior) => behavior.id));
+  const exclusions = isPlainObject(evaluation.heldOutCoverageExclusions) ? evaluation.heldOutCoverageExclusions : {};
+  if (contract !== undefined) {
+    for (const id of Object.keys(exclusions)) {
+      if (!required.has(id))
+        report.add(MANIFEST_NAME, 'held-out', `heldOutCoverageExclusions names ${id}, which is not a material or critical behavior`);
+    }
+  }
   const covered = new Set();
   for (const id of selected) {
     const probe = probes.get(id);
@@ -1877,8 +1883,9 @@ function checkHeldOutCoverage(report, evaluation, contract, probes) {
     for (const behaviorId of [probe.behaviorId, ...defectsOf(probe).map((defect) => defect.behaviorId)])
       if (typeof behaviorId === 'string') covered.add(behaviorId);
   }
-  for (const behavior of behaviorsOf(contract)) {
-    if (!HELD_OUT_SEVERITIES.has(behavior.severity) || covered.has(behavior.id)) continue;
+  for (const behavior of behaviors) {
+    if (!required.has(behavior.id) || covered.has(behavior.id)) continue;
+    if (Object.hasOwn(exclusions, behavior.id) && typeof exclusions[behavior.id] === 'string' && exclusions[behavior.id].trim()) continue;
     report.add(
       MANIFEST_NAME,
       'held-out',

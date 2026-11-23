@@ -175,6 +175,12 @@
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^P-[0-9]{3,}$" }
     },
+    "heldOutCoverageExclusions": {
+      "description": "For an evaluation with a partial held-out set, map each material or critical behavior outside the held-out scope to its reason.",
+      "type": "object",
+      "propertyNames": { "pattern": "^B-[0-9]{3,}$" },
+      "additionalProperties": { "type": "string", "pattern": "\\S" }
+    },
     "mandatoryActionBehaviors": {
       "description": "Behaviors whose required action must be proven to happen, each a contract behavior ID. Optional and additive: absent, check holds nothing more. Declared, tea-evaluate check requires, for every listed behavior, a zero-action defect probe: probeClass zero-action, expectedClean false and a defect on that behavior, so a target that skips the action is caught.",
       "type": "array",

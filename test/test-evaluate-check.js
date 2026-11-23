@@ -5239,10 +5239,8 @@ function copyPartitionPlan() {
 }
 
 /**
- * Held-out coverage is a `partitionPlan` rule. A folder that holds a probe out through `heldOutProbes` alone, as TeA's own evaluations
- * do, and a development-only folder check as before, a held-out gap included. Under a plan only a probe that discharges its behavior
- * counts: a defect, gameability or zero-action defect probe, and never a clean control or a canary. The same predicate decides which
- * probes the oracle count holds, so a zero-action defect probe's behavior declares exactly one oracle too.
+ * Held-out coverage applies with either partition layout. The same eligibility predicate drives coverage and the oracle count.
+ * Development-only evaluations can omit held-out coverage. A partial held-out set records its scope through behavior exclusions.
  */
 function checkHeldOutCoverage() {
   const coverageLine = (behaviorId, severity) =>
@@ -5253,12 +5251,25 @@ function checkHeldOutCoverage() {
     `a development-only folder: check exited ${developmentOnly.status}; expected 0\n${developmentOnly.output}`,
   );
 
-  // Without a plan: P-002 holds B-001 out and leaves the critical B-002 with no held-out probe, which this rule does not hold.
+  // P-002 holds out B-001. The contract's critical B-002 still needs coverage when the partitions share the same plan.
   const unplanned = copyValid();
   editJson(unplanned, 'evaluation.json', (evaluation) => (evaluation.heldOutProbes = ['P-002']));
   const gap = runCli(['check', '--evaluation', unplanned]);
-  check(gap.status === 0, `a held-out gap with no partitionPlan: check exited ${gap.status}; expected 0\n${gap.output}`);
-  check(!gap.output.includes('[held-out]'), `the held-out coverage rule ran without a partitionPlan\n${gap.output}`);
+  check(gap.status === 10, `a held-out gap with no partitionPlan: check exited ${gap.status}; expected 10\n${gap.output}`);
+  check(gap.stdout.includes(coverageLine('B-002', 'critical')), `no coverage finding names B-002\n${gap.output}`);
+
+  editJson(unplanned, 'evaluation.json', (evaluation) => {
+    evaluation.heldOutCoverageExclusions = { 'B-002': 'The retained held-out set covers only the other behavior.' };
+  });
+  const scoped = runCli(['check', '--evaluation', unplanned]);
+  check(scoped.status === 0, `a documented partial held-out set: check exited ${scoped.status}; expected 0\n${scoped.output}`);
+  editJson(unplanned, 'evaluation.json', (evaluation) => {
+    evaluation.heldOutCoverageExclusions = { 'B-002': '   ', 'B-999': 'Unknown behavior' };
+  });
+  const invalidScope = runCli(['check', '--evaluation', unplanned]);
+  check(invalidScope.status === 10, `invalid held-out coverage exclusions: check exited ${invalidScope.status}; expected 10`);
+  check(invalidScope.stdout.includes(coverageLine('B-002', 'critical')), 'a blank exclusion suppressed the coverage finding');
+  check(invalidScope.stdout.includes('heldOutCoverageExclusions names B-999'), 'an unknown exclusion escaped check');
 
   // With a plan: the fixture holds P-003 out for B-002 and keeps its low B-001 in development; raising B-001 opens the gap.
   const planned = copyPartitionPlan();
