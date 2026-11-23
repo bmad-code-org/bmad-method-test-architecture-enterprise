@@ -67,7 +67,13 @@ function currentSourceSha(projectRoot) {
   // An unreadable or untrusted checkout is not a source archive. Refuse the
   // CI fallback if Git failed or if checkout metadata is still present.
   if (location.error || location.status !== 128) return '';
-  for (let directory = path.resolve(projectRoot); ; directory = path.dirname(directory)) {
+  let directory;
+  try {
+    directory = fs.realpathSync(projectRoot);
+  } catch {
+    return '';
+  }
+  for (; ; directory = path.dirname(directory)) {
     try {
       fs.lstatSync(path.join(directory, '.git'));
       return '';

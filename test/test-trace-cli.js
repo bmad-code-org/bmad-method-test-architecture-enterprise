@@ -3506,6 +3506,16 @@ try {
       assert.equal(currentSourceSha(nested), sha);
       fs.writeFileSync(path.join(archive, '.git'), 'gitdir: /nonexistent/tea-trace-git-dir\n');
       assert.equal(currentSourceSha(nested), '');
+      if (process.platform !== 'win32') {
+        const links = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-links-'));
+        try {
+          const linked = path.join(links, 'linked');
+          fs.symlinkSync(nested, linked);
+          assert.equal(currentSourceSha(linked), '');
+        } finally {
+          fs.rmSync(links, { recursive: true, force: true });
+        }
+      }
     } finally {
       if (previous === undefined) delete process.env.GITHUB_SHA;
       else process.env.GITHUB_SHA = previous;
