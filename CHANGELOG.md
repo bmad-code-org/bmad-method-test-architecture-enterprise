@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tea-trace` reads HEAD of a checkout owned by another user, such as a container CI job, when the user's global or system Git config trusts it with `safe.directory`, as `actions/checkout` does. Trace's Git calls still ignore the rest of that config, but now pass its `safe.directory` entries on, so live evidence no longer turns stale or unverifiable there and the agent's recorded revision is no longer rejected.
 
+## [4.4.0] - 2026-11-23
+
+### Added
+
+- Evaluate pre-PR readiness checks. `tea-evaluate check` now names every material or critical behavior with neither a qualifying held-out probe nor an explicit coverage exclusion. A new optional `mandatoryActionBehaviors` field in `evaluation.json` makes `check` require a zero-action defect probe for each listed behavior; files without the field check as before.
+- Held-out and both-partition runs record a `heldOutDigest` in `run.json`. `check` prints a non-blocking warning when the newest scored held-out run no longer matches the committed held-out material.
+- The gap report template opens with a plain-language evaluation brief, and the CI guide ends with a "before you open the PR" checklist.
+
+### Changed
+
+- Require eval-quality 10.1.1 for escaped CLI diagnostics.
+- The `oracle-count` rule also holds a zero-action defect probe's behavior to exactly one oracle, as it already did for defect and gameability probes.
+
+### Fixed
+
+- Quote paths in BMad resolver commands so TeA works in checkouts with spaces.
+
 ## [4.3.1] - 2026-11-20
 
 ### Fixed

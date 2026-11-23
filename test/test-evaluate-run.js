@@ -3814,8 +3814,7 @@ async function checkHeldDiagnostics() {
     );
     restore();
 
-    // A newline inside a diagnostic (a mount path the confinement audit reported): the CLI writes it as it is, and an
-    // untampered run it scores Invalid is not refused. The control without the newline scores the same way.
+    // An observed mount can carry control characters. The CLI and the re-score escape the same values and agree on Invalid.
     const sealMount = (mount) => {
       const digest = reseal(
         secondSet.isolationManifest,
@@ -3829,9 +3828,9 @@ async function checkHeldDiagnostics() {
         });
       }
     };
-    for (const [label, mount] of [
-      ['without a newline', '/tmp/evilname'],
-      ['with a newline', '/tmp/evil\nname'],
+    for (const [label, mount, displayed] of [
+      ['without controls', '/tmp/evilname', '/tmp/evilname'],
+      ['with a newline and a C1 control', '/tmp/evil\nname\u009B', String.raw`/tmp/evil\nname\u009b`],
     ]) {
       restore();
       sealMount(mount);
@@ -3843,16 +3842,14 @@ async function checkHeldDiagnostics() {
         `a score over an observed mount ${label} exited ${scored.status} with the call at ${call?.exitCode}; expected 3 for both\n${scored.output}`,
       );
       check(
-        /mount outside allowlist/.test(call?.stderr ?? ''),
+        diagnosticsOf(call?.stderr ?? '').some((line) => line.endsWith(`mount outside allowlist: ${displayed}`)),
         `the call over a mount ${label} did not name the mount: ${JSON.stringify(call?.stderr)}`,
       );
-      if (mount.includes('\n')) {
-        const given = await holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT }).reproduce(secondSet);
-        check(
-          given.lines.some((line) => line.includes('\n')),
-          `the re-score of a mount with a newline gave ${JSON.stringify(given.lines)}; expected a line that carries it`,
-        );
-      }
+      const given = await holdScoreInputs({ runDirectory, index, record: record(), engine, scoredAt: SCORED_AT }).reproduce(secondSet);
+      check(
+        JSON.stringify(given.lines) === JSON.stringify(diagnosticsOf(call?.stderr ?? '')),
+        `the re-score of the mount gave ${JSON.stringify(given.lines)}; expected the same escaped lines as stderr`,
+      );
     }
   } finally {
     restore();

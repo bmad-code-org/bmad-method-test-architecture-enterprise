@@ -146,6 +146,56 @@ async function corpusDigestOf(index) {
   return engine.digestArtifact(index, INDEX_NAME);
 }
 
+/** The name `heldOutDigestOf` digests its value under. */
+const HELD_OUT_CONTENT = 'held-out-content';
+
+/**
+ * The index entries that hold held-out material: every file under `corpus/held-out/`, and for each probe `heldOutProbes` lists, its
+ * probe file, its degenerate response under `corpus/gameability/` and the mutation file its qualification names.
+ *
+ * @param {Array<{ path: string, sha256: string }>} index
+ * @param {Array<object>} probes the committed probes, parsed
+ * @param {Iterable<string>} heldOutProbes
+ * @returns {Array<{ path: string, sha256: string }>}
+ */
+function heldOutEntries(index, probes, heldOutProbes) {
+  const held = new Set(heldOutProbes);
+  const owned = new Set();
+  for (const probe of probes) {
+    if (probe === null || typeof probe !== 'object' || !held.has(probe.probeId)) continue;
+    owned.add(`probes/${probe.probeId}.probe.json`);
+    owned.add(`corpus/gameability/${probe.probeId}.json`);
+    const mutation = probe.qualification?.mutation;
+    if (typeof mutation === 'string') owned.add(`mutations/${mutation}.mutation.json`);
+  }
+  return index
+    .filter((entry) => entry !== null && typeof entry === 'object' && typeof entry.path === 'string')
+    .filter((entry) => entry.path.startsWith('corpus/held-out/') || owned.has(entry.path))
+    .map((entry) => ({ path: entry.path, sha256: entry.sha256 }))
+    .sort(byPath);
+}
+
+/**
+ * eval-quality's `digestArtifact` over the held-out material a run measured: the sorted `heldOutProbes`, the index entries
+ * `heldOutEntries` keeps, and the contract a held-out run executes (the held-out view under a `partitionPlan`: the shared steps, the
+ * held-out plan's steps and the oracles that view keeps). It reads digests from the index and opens no held-out file itself. It moves
+ * when a held-out probe, its seed, its degenerate response, a file under `corpus/held-out/`, the held-out list, a shared step or an
+ * oracle the held-out view keeps moves, and stays put when only development material does (a development probe, or a
+ * development-only step and the oracles that read it).
+ *
+ * @param {object} options
+ * @param {Array<{ path: string, sha256: string }>} options.index the corpus index
+ * @param {Array<object>} options.probes the committed probes, parsed
+ * @param {Iterable<string>} options.heldOutProbes
+ * @param {object} options.contract the contract a held-out run executes (`loadContractView` with `partition: 'held-out'`)
+ * @returns {Promise<string>}
+ */
+async function heldOutDigestOf({ index, probes, heldOutProbes, contract }) {
+  const engine = await loadEngine();
+  const ids = [...new Set(heldOutProbes)].sort();
+  return engine.digestArtifact({ heldOutProbes: ids, files: heldOutEntries(index, probes, ids), contract }, HELD_OUT_CONTENT);
+}
+
 /** Whether a path is absent or a regular file (never a directory or a symbolic link). */
 function isRegularOrAbsent(file) {
   try {
@@ -228,6 +278,8 @@ module.exports = {
   buildCorpusIndex,
   corpusDigestOf,
   corpusIndexProblem,
+  heldOutDigestOf,
+  heldOutEntries,
   unreadPaths,
   writeCorpusIndex,
 };

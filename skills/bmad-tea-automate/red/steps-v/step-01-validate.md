@@ -93,7 +93,7 @@ Replace the `IN_PROGRESS` body in this run's reserved `{outputFile}` with the fi
 Execute the non-empty `workflow.on_complete` retained from selected-mode activation as the final terminal instruction, then exit normally; never run the other mode's hook.
 If it was not retained, resolve it from the selected key:
 
-Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key {workflow-key}.on_complete`
+Run: `uv run "{project-root}/_bmad/scripts/resolve_customization.py" --skill "{skill-root}" --project-root "{project-root}" --key {workflow-key}.on_complete`
 
 If the resolver succeeds and returns a non-empty value for `{workflow-key}.on_complete`, execute that value as the final terminal instruction before exiting.
 
