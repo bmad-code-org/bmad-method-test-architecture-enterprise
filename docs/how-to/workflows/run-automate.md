@@ -694,8 +694,11 @@ Prepend this to the handoff string:
 ```text
 If {plan_file} names a `ticket`, do the following before dispatch:
 
-1. Run bmad-tea-automate in red mode for the ticket. Reuse existing test
-   scaffolds on resume and regenerate any a review loopback removed.
+1. Run bmad-tea-automate in red mode for the ticket. Pass the ticket reference
+   on both create and resume. Reuse existing test scaffolds on resume and
+   regenerate any a review loopback removed. If red mode halts during
+   bmad-build-auto, halt the build with status blocked and use the red-mode
+   halt message as the blocking condition. Stop before dispatch.
 2. List the test files in the plan's Code Map and add their run command to
    Verification.
 3. For each scaffold, add or update a task to activate the skipped test,
@@ -703,6 +706,8 @@ If {plan_file} names a `ticket`, do the following before dispatch:
 
 Leave the frozen intent unchanged.
 ```
+
+Activate each red scaffold before Verification. The Matrix Test Audit counts a skipped covering test as missing.
 
 <a id="red-prerequisites"></a>
 
