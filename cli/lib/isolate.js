@@ -33,6 +33,11 @@ const { spawnSync } = require('node:child_process');
 const { assertProfileSafePath, executableOnPath, isInside } = require('./isolation-primitives');
 
 const BACKEND_OVERRIDE_ENV = 'TEA_TEST_REVIEW_ISOLATION';
+const CHMOD_SNAPSHOT_VERSION = 1;
+const PERMISSION_BITS = 0o7777n;
+// Node does not export these platform-specific flags.
+const DARWIN_NOFOLLOW_ANY = 0x20_00_00_00;
+const LINUX_PATH_ONLY = 0o1000_0000;
 
 function isolationError(message) {
   const error = new Error(message);
@@ -206,8 +211,8 @@ function lockedParents(writablePath, projectRoot) {
 
 /**
  * Walk a tree depth-first without following symlinks (matching `chmod -R`), and
- * visit every entry. Unreadable entries are skipped rather than aborting: a
- * partial snapshot still restores more than a blanket `chmod -R u+w`.
+ * visit every entry that still exists. A tree we cannot read cannot be locked
+ * with a complete permission snapshot.
  */
 function walkTree(root, visit) {
   const stack = [root];
@@ -215,8 +220,9 @@ function walkTree(root, visit) {
     const current = stack.pop();
     let stats;
     try {
-      stats = fs.lstatSync(current);
-    } catch {
+      stats = fs.lstatSync(current, { bigint: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw isolationError(`cannot snapshot permissions for ${current}: ${error.message}`);
       continue;
     }
     if (stats.isSymbolicLink()) {
@@ -227,7 +233,8 @@ function walkTree(root, visit) {
       let names;
       try {
         names = fs.readdirSync(current);
-      } catch {
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw isolationError(`cannot snapshot permissions under ${current}: ${error.message}`);
         continue;
       }
       for (const name of names) {
@@ -237,43 +244,82 @@ function walkTree(root, visit) {
   }
 }
 
-/**
- * Record every entry's permission bits so the lock can be undone exactly.
- * `chmod -R u+w` is not an inverse of `chmod -R a-w`: it drops group/other write
- * bits permanently and makes deliberately read-only files writable, so a local
- * run would silently rewrite the permissions of the tree it was protecting.
- *
- * @returns {Map<string, number>|null} Path to mode, or null when the snapshot
- *   could not be taken (the caller then falls back to the blanket restore).
- */
+/** Record the permission bits and identity of each entry before locking it. */
 function snapshotModes(projectRoot) {
+  const modes = new Map();
+  walkTree(projectRoot, (entry, stats) => {
+    const saved = {
+      mode: Number(stats.mode & PERMISSION_BITS),
+      dev: stats.dev.toString(),
+      ino: stats.ino.toString(),
+      birth: stats.birthtimeNs.toString(),
+    };
+    // Check procfs before locking on Linux. On macOS, make sure every writable entry can still be opened after the lock.
+    if ((process.platform === 'linux' && entry === projectRoot) || (process.platform === 'darwin' && (saved.mode & 0o222) !== 0)) {
+      try {
+        fs.closeSync(openChmodEntry(entry, saved));
+      } catch (error) {
+        throw isolationError(`cannot safely recover permissions for ${entry}: ${error.message}`);
+      }
+    }
+    modes.set(entry, saved);
+  });
+  if (modes.size === 0) throw isolationError(`cannot take a permission snapshot of ${projectRoot}`);
+  return modes;
+}
+
+function matchesSnapshot(stats, saved) {
+  return (
+    !stats.isSymbolicLink() &&
+    stats.dev.toString() === saved.dev &&
+    stats.ino.toString() === saved.ino &&
+    stats.birthtimeNs.toString() === saved.birth
+  );
+}
+
+function changedEntry(entry) {
+  return new Error(`${entry} no longer names the recorded file or directory`);
+}
+
+/** Pin the object before changing its permissions. On Linux O_PATH also covers unreadable files and special entries. */
+function openChmodEntry(entry, saved) {
+  const flags =
+    process.platform === 'linux'
+      ? LINUX_PATH_ONLY | fs.constants.O_NOFOLLOW
+      : fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | (process.platform === 'darwin' ? DARWIN_NOFOLLOW_ANY : fs.constants.O_NOFOLLOW);
+  const descriptor = fs.openSync(entry, flags);
   try {
-    const modes = new Map();
-    walkTree(path.resolve(projectRoot), (entry, stats) => modes.set(entry, stats.mode & 0o7777));
-    return modes.size > 0 ? modes : null;
-  } catch {
-    return null;
+    if (!matchesSnapshot(fs.fstatSync(descriptor, { bigint: true }), saved)) throw changedEntry(entry);
+    // Linux's leaf-only no-follow flag allows intermediate symlinks. Verify the kernel's path for the pinned object.
+    if (process.platform === 'linux' && fs.readlinkSync(`/proc/self/fd/${descriptor}`) !== entry) throw changedEntry(entry);
+    return descriptor;
+  } catch (error) {
+    fs.closeSync(descriptor);
+    throw error;
   }
 }
 
-/**
- * Undo the lock. With a snapshot, every recorded entry goes back to its exact
- * mode; entries created during the run were never locked and are left alone.
- */
-function restoreModes(projectRoot, modes, { strict = false } = {}) {
-  if (modes === null) {
-    runChmod(['-R', 'u+w', projectRoot]);
-    return;
-  }
-  for (const [entry, mode] of modes) {
+/** Restore only the recorded objects. A missing entry needs no restoration. */
+function restoreModes(modes) {
+  let firstError;
+  for (const [entry, saved] of modes) {
     try {
-      fs.chmodSync(entry, mode);
+      const current = fs.lstatSync(entry, { bigint: true });
+      if (!matchesSnapshot(current, saved)) throw changedEntry(entry);
+      if (Number(current.mode & PERMISSION_BITS) === saved.mode) continue;
+      const descriptor = openChmodEntry(entry, saved);
+      try {
+        if (process.platform === 'linux') fs.chmodSync(`/proc/self/fd/${descriptor}`, saved.mode);
+        else fs.fchmodSync(descriptor, saved.mode);
+      } finally {
+        fs.closeSync(descriptor);
+      }
     } catch (error) {
-      // A removed entry needs no restore. On recovery, preserve its marker
-      // if another failure made the restore incomplete.
-      if (strict && error.code !== 'ENOENT') throw error;
+      // A missing procfs descriptor or a failed chmod is an incomplete restore, not a removed project entry.
+      if (error.code !== 'ENOENT' || error.path !== entry) firstError ??= error;
     }
   }
+  if (firstError) throw firstError;
 }
 
 // Signals that end a run from outside (Ctrl-C, a cancelled CI job, a closed terminal). Node's default for each is
@@ -404,27 +450,24 @@ function writeRecordFile(file, root, record) {
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
   const descriptor = fs.openSync(file, flags, 0o600);
   try {
-    fs.writeSync(descriptor, JSON.stringify({ projectRoot: root, pid: process.pid, ...record }), 0, 'utf8');
+    fs.writeFileSync(descriptor, JSON.stringify({ projectRoot: root, pid: process.pid, ...record }), 'utf8');
     fs.fsyncSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
   }
 }
 
-/**
- * The snapshot a marker holds, as restoreModes takes it, when every entry is a path inside the project with a plain
- * permission value; otherwise false, and nothing is applied.
- */
+/** Decode a snapshot only when every entry has an identity and names a path inside the project. */
 function markerSnapshot(record, root) {
-  if (record.modes === null) return null;
-  if (!Array.isArray(record.modes)) return false;
+  if (!Array.isArray(record.modes) || record.modes.length === 0) return false;
   const modes = new Map();
   for (const item of record.modes) {
     if (!Array.isArray(item) || item.length !== 2) return false;
-    const [entry, mode] = item;
-    if (typeof entry !== 'string' || !path.isAbsolute(entry) || !isInside(root, entry)) return false;
-    if (!Number.isInteger(mode) || mode < 0 || mode > 0o7777) return false;
-    modes.set(entry, mode);
+    const [entry, saved] = item;
+    if (typeof entry !== 'string' || !path.isAbsolute(entry) || path.resolve(entry) !== entry || !isInside(root, entry)) return false;
+    if (saved === null || typeof saved !== 'object' || !Number.isInteger(saved.mode) || saved.mode < 0 || saved.mode > 0o7777) return false;
+    if (![saved.dev, saved.ino, saved.birth].every((id) => typeof id === 'string' && /^-?\d+$/.test(id))) return false;
+    modes.set(entry, saved);
   }
   return modes;
 }
@@ -459,20 +502,27 @@ function recoverInterruptedLock(projectRoot) {
       fs.rmSync(marker, { force: true });
       return false;
     }
+    if (claimed.snapshotVersion !== CHMOD_SNAPSHOT_VERSION) {
+      console.error(
+        `tea-test-review WARNING: cannot automatically restore ${root} from the older chmod lock marker ${marker}: it lacks file identities. ` +
+          'Review the recorded paths and restore their permissions manually before removing the marker.',
+      );
+      return false;
+    }
     const snapshot = markerSnapshot(claimed, root);
     if (snapshot === false) {
       console.error(
-        `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or an invalid mode. ` +
-          'If the project is still read-only, restore it manually with: chmod -R u+w <path>',
+        `tea-test-review WARNING: ignoring the chmod lock marker ${marker}: it names a path outside ${root} or has an invalid permission snapshot. ` +
+          'Review the recorded paths and restore their permissions manually before removing the marker.',
       );
       return false;
     }
     try {
-      restoreModes(root, snapshot, { strict: true });
+      restoreModes(snapshot);
     } catch (error) {
       console.error(
         `tea-test-review WARNING: a previous run left ${root} read-only and restoring it failed: ${error.message}. ` +
-          'Restore manually with: chmod -R u+w <path>',
+          'Review the recorded paths and restore their permissions manually before removing the marker.',
       );
       return false;
     }
@@ -567,7 +617,7 @@ function prepareChmodLock(projectRoot, writablePaths, marker, onSnapshot = () =>
   const modes = snapshotModes(projectRoot);
   // The snapshot is in the marker before the lock, so no moment exists where the tree is locked and nothing records
   // how to undo it.
-  marker.write({ locked: true, modes: modes === null ? null : [...modes] });
+  marker.write({ locked: true, snapshotVersion: CHMOD_SNAPSHOT_VERSION, modes: [...modes] });
   onSnapshot(modes);
   runChmod(['-R', 'a-w', projectRoot]);
   for (const entry of insidePaths) {
@@ -639,12 +689,12 @@ function withIsolation(projectRoot, writablePaths, fn) {
       return;
     }
     try {
-      restoreModes(root, modes);
+      restoreModes(modes);
       marker.remove();
     } catch (error) {
       console.error(
         `tea-test-review WARNING: failed to restore write permissions under ${root}: ${error.message}. ` +
-          'Restore manually with: chmod -R u+w <path>',
+          'Review the recorded paths and restore their permissions manually before removing the marker.',
       );
     }
   };
