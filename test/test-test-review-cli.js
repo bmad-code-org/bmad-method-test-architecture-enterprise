@@ -202,6 +202,12 @@ function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 }
 
+/** A saved chmod entry for tests that synthesize a journal. */
+function recordedChmodMode(entry, mode) {
+  const { dev, ino, birthtimeNs } = fs.lstatSync(entry, { bigint: true });
+  return [entry, { mode, dev: dev.toString(), ino: ino.toString(), birth: birthtimeNs.toString() }];
+}
+
 /** runCli for a test that serves HTTP from this process: spawnSync would block the server it is talking to. */
 function runCliAsync(args, env = {}) {
   return new Promise((resolve) => {
@@ -3105,16 +3111,14 @@ async function runTests() {
         const markerDir = path.dirname(lockMarkerPath(lockedRoot));
         fs.mkdirSync(markerDir, { recursive: true, mode: 0o700 });
         fs.chmodSync(markerDir, 0o700);
-        const writeMarker = (
-          pid,
-          modes = [
-            [lockedRoot, 0o755],
-            [lockedFile, 0o644],
-          ],
-        ) =>
-          fs.writeFileSync(lockMarkerPath(lockedRoot), JSON.stringify({ projectRoot: lockedRoot, pid, locked: true, modes }), {
-            mode: 0o600,
-          });
+        const writeMarker = (pid, modes = [recordedChmodMode(lockedRoot, 0o755), recordedChmodMode(lockedFile, 0o644)]) =>
+          fs.writeFileSync(
+            lockMarkerPath(lockedRoot),
+            JSON.stringify({ projectRoot: lockedRoot, pid, locked: true, snapshotVersion: 1, modes }),
+            {
+              mode: 0o600,
+            },
+          );
         const modeOf = (entry) => fs.statSync(entry).mode & 0o777;
         const quietly = (fn) => {
           const originalError = console.error;
@@ -3155,10 +3159,11 @@ async function runTests() {
 
           fs.chmodSync(lockedFile, 0o444);
           writeMarker(deadPid);
-          const chmodForRetry = fs.chmodSync;
+          const chmodMethod = process.platform === 'linux' ? 'chmodSync' : 'fchmodSync';
+          const chmodForRetry = fs[chmodMethod];
           try {
-            fs.chmodSync = (entry, mode) => {
-              if (entry === lockedFile) throw Object.assign(new Error('simulated chmod failure'), { code: 'EIO' });
+            fs[chmodMethod] = (entry, mode) => {
+              if (mode === 0o644) throw Object.assign(new Error('simulated chmod failure'), { code: 'EIO' });
               return chmodForRetry(entry, mode);
             };
             const failed = quietly(() => recoverInterruptedLock(lockedRoot));
@@ -3168,7 +3173,7 @@ async function runTests() {
               failed.notice,
             );
           } finally {
-            fs.chmodSync = chmodForRetry;
+            fs[chmodMethod] = chmodForRetry;
           }
           assert(
             quietly(() => recoverInterruptedLock(lockedRoot)).result && modeOf(lockedFile) === 0o644,
@@ -3181,10 +3186,10 @@ async function runTests() {
           if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
             fs.chmodSync(lockedFile, 0o444);
             writeMarker(deadPid);
-            const chmod = fs.chmodSync;
+            const chmod = fs[chmodMethod];
             let competitor;
             try {
-              fs.chmodSync = (entry, mode) => {
+              fs[chmodMethod] = (entry, mode) => {
                 if (competitor === undefined) {
                   competitor = spawnSync(
                     process.execPath,
@@ -3203,7 +3208,7 @@ async function runTests() {
               const result = quietly(() => recoverInterruptedLock(lockedRoot));
               assert(result.result === true, 'stale-marker recovery succeeds when another run tries to acquire', result.notice);
             } finally {
-              fs.chmodSync = chmod;
+              fs[chmodMethod] = chmod;
             }
             assert(
               competitor?.status === 2 && competitor.stderr.includes('recovery') && modeOf(lockedFile) === 0o644,
@@ -3214,16 +3219,29 @@ async function runTests() {
 
           // A forged marker must not reach outside the project: the whole snapshot is refused, nothing is applied.
           fs.chmodSync(lockedFile, 0o444);
-          writeMarker(deadPid, [
-            [lockedFile, 0o644],
-            [outsideFile, 0o777],
-          ]);
+          writeMarker(deadPid, [recordedChmodMode(lockedFile, 0o644), recordedChmodMode(outsideFile, 0o777)]);
           const forged = quietly(() => recoverInterruptedLock(lockedRoot));
           assert(
             forged.result === false && modeOf(outsideFile) === 0o600 && modeOf(lockedFile) === 0o444 && forged.notice.includes('outside'),
             'a marker that names a path outside the project is refused and none of its modes is applied',
             `result=${forged.result} outside=${modeOf(outsideFile).toString(8)} inside=${modeOf(lockedFile).toString(8)} notice=${forged.notice}`,
           );
+
+          // Neither older snapshot form identifies the objects it used to name.
+          for (const modes of [null, [[lockedFile, 0o644]]]) {
+            const marker = lockMarkerPath(lockedRoot);
+            const older = JSON.stringify({ projectRoot: lockedRoot, pid: deadPid, locked: true, modes });
+            fs.writeFileSync(marker, older, { mode: 0o600 });
+            const refused = quietly(() => recoverInterruptedLock(lockedRoot));
+            assert(
+              !refused.result &&
+                modeOf(lockedFile) === 0o444 &&
+                fs.readFileSync(marker, 'utf8') === older &&
+                refused.notice.includes('lacks file identities'),
+              'an older lock journal is retained for manual recovery without changing permissions',
+              refused.notice,
+            );
+          }
 
           // A marker directory others can write may hold a planted marker: it is not read at all.
           writeMarker(deadPid);
@@ -3254,7 +3272,16 @@ async function runTests() {
           // A marker reached through a symbolic link is never read.
           fs.rmSync(lockMarkerPath(lockedRoot), { force: true });
           const decoy = path.join(lockedParent, 'decoy.json');
-          fs.writeFileSync(decoy, JSON.stringify({ projectRoot: lockedRoot, pid: deadPid, locked: true, modes: [[lockedFile, 0o644]] }));
+          fs.writeFileSync(
+            decoy,
+            JSON.stringify({
+              projectRoot: lockedRoot,
+              pid: deadPid,
+              locked: true,
+              snapshotVersion: 1,
+              modes: [recordedChmodMode(lockedFile, 0o644)],
+            }),
+          );
           fs.symlinkSync(decoy, lockMarkerPath(lockedRoot));
           assert(
             recoverInterruptedLock(lockedRoot) === false && modeOf(lockedFile) === 0o444,
@@ -6359,7 +6386,8 @@ async function runTests() {
             projectRoot: fs.realpathSync(killedRoot),
             pid: deadHolder,
             locked: true,
-            modes: [[fs.realpathSync(killedOut), 0o755]],
+            snapshotVersion: 1,
+            modes: [recordedChmodMode(fs.realpathSync(killedOut), 0o755)],
           }),
           { mode: 0o600 },
         );
@@ -6384,6 +6412,77 @@ async function runTests() {
           `status=${rerun.status} stderr=${rerun.stderr}`,
         );
         fs.chmodSync(killedOut, 0o755);
+
+        // Use a real chmod lock and leave before finally runs. The next CLI invocation must never chmod a
+        // different object through a path that changed between taking the snapshot and recovering the lock.
+        for (const replacement of ['leaf link', 'ancestor link', 'regular file']) {
+          const recoveryRoot = fs.realpathSync(fs.mkdtempSync(path.join(tmpRoot, 'replaced-entry-')));
+          const ancestor = path.join(recoveryRoot, 'tracked');
+          const entry = path.join(ancestor, 'recorded.txt');
+          const outside = fs.mkdtempSync(path.join(tmpRoot, 'outside-recovery-'));
+          const outsideFile = path.join(outside, 'recorded.txt');
+          const original = path.join(outside, 'original');
+          const testFile = path.join(recoveryRoot, 'checkout.spec.ts');
+          fs.mkdirSync(ancestor);
+          fs.writeFileSync(entry, 'tracked');
+          fs.chmodSync(entry, 0o644);
+          fs.writeFileSync(outsideFile, 'outside');
+          fs.chmodSync(outsideFile, 0o600);
+          fs.copyFileSync(path.join(stopRoot, 'tests', 'checkout.spec.ts'), testFile);
+          try {
+            const tookLock = spawnSync(
+              process.execPath,
+              [
+                '-e',
+                'require(process.argv[1]).withIsolation(process.argv[2], [], () => process.exit(0));',
+                path.join(repoRoot, 'cli', 'lib', 'isolate.js'),
+                recoveryRoot,
+              ],
+              { encoding: 'utf8', env: { ...process.env, TEA_TEST_REVIEW_ISOLATION: 'chmod' } },
+            );
+            assert(
+              tookLock.status === 0 && fs.existsSync(lockMarkerPath(recoveryRoot)),
+              'the interrupted run wrote a real journal',
+              tookLock.stderr,
+            );
+            fs.chmodSync(recoveryRoot, 0o700);
+            fs.chmodSync(ancestor, 0o755);
+            if (replacement === 'ancestor link') {
+              fs.renameSync(ancestor, original);
+              fs.symlinkSync(outside, ancestor);
+            } else {
+              fs.renameSync(entry, original);
+              if (replacement === 'leaf link') fs.symlinkSync(outsideFile, entry);
+              else {
+                fs.writeFileSync(entry, 'replacement');
+                fs.chmodSync(entry, 0o600);
+              }
+            }
+            const rerun = runCli([
+              '--files',
+              'checkout.spec.ts',
+              '--project-root',
+              recoveryRoot,
+              '--output',
+              'review.md',
+              '--agent-cmd',
+              stubAgent,
+              '--no-isolate',
+            ]);
+            const protectedFile = replacement === 'regular file' ? entry : outsideFile;
+            assert(
+              (fs.statSync(protectedFile).mode & 0o777) === 0o600 &&
+                fs.existsSync(lockMarkerPath(recoveryRoot)) &&
+                rerun.stderr.includes('restoring it failed'),
+              `chmod recovery refuses a replaced ${replacement} and retains the journal`,
+              `mode=${(fs.statSync(protectedFile).mode & 0o777).toString(8)} stderr=${rerun.stderr}`,
+            );
+          } finally {
+            fs.rmSync(lockMarkerPath(recoveryRoot), { force: true });
+            fs.chmodSync(recoveryRoot, 0o700);
+            if (!fs.lstatSync(ancestor).isSymbolicLink()) fs.chmodSync(ancestor, 0o755);
+          }
+        }
       } else {
         skip('a run stopped by SIGTERM is not retried and leaves the tree unlocked', isRoot ? 'running as root' : 'platform unsupported');
       }
