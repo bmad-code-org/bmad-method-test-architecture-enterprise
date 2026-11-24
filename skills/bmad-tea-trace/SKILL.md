@@ -37,6 +37,8 @@ Run: `uv run "{project-root}/_bmad/scripts/resolve_customization.py" --skill "{s
 
 Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
 
+Resolve `workflow.gate` once. Its four keys are `p0_required`, `p1_target`, `p1_minimum`, and `overall_minimum`. Each must be an integer percentage from 0 through 100, with `p1_minimum <= p1_target <= p0_required`. Stop on unknown keys or invalid values and name the layer that supplied each value in error. Keep the four values and a `sources` map keyed by threshold in `gate_policy`. Use project-relative paths for overrides and `skill defaults` for packaged defaults. If the headless CLI supplies a frozen `gate_policy`, use that snapshot.
+
 ### Step 2: Execute Prepend Steps
 
 Execute each entry in `{workflow.activation_steps_prepend}` in order before proceeding.

@@ -359,11 +359,19 @@ function assertNoRetiredSurface(source, skillName, workflow) {
   }
 }
 
+function recordWorkflowSources(settings, label, sources, prefix = 'workflow') {
+  for (const [key, value] of Object.entries(settings)) {
+    const field = `${prefix}.${key}`;
+    sources.set(field, label);
+    if (isPlainObject(value)) recordWorkflowSources(value, label, sources, field);
+  }
+}
+
 /**
  * Resolve trusted skill defaults and project workflow overrides from the same configuration source.
  * `table` selects a `[workflow.<table>]` surface of the skill (red, ci); without it the surface tables are left out.
  */
-function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-tea-test-review', { table } = {}) {
+function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = 'bmad-tea-test-review', { table, sources } = {}) {
   if (!skillRoot) return {};
   const defaultsPath = path.join(skillRoot, 'customize.toml');
   source.recordInput?.(defaultsPath);
@@ -373,6 +381,7 @@ function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = '
   } catch (error) {
     if (error.code !== 'ENOENT') throw configError(`Failed to load ${defaultsPath}: ${error.message}`);
   }
+  if (sources && isPlainObject(merged.workflow)) recordWorkflowSources(merged.workflow, 'skill defaults', sources);
   if (!/^[a-z0-9][a-z0-9-]*$/.test(skillName)) throw configError('Workflow skill name must be a lowercase kebab-case name');
   const oldName =
     skillName === 'bmad-tea-teach-me-testing'
@@ -391,6 +400,8 @@ function readWorkflowCustomization(source, skillRoot, projectRoot, skillName = '
     if (conflict) {
       throw configError(`Conflicting workflow customization ${conflict} in ${source.label(legacyPath)} and ${source.label(currentPath)}`);
     }
+    if (sources && isPlainObject(legacy.workflow)) recordWorkflowSources(legacy.workflow, legacyPath.split(path.sep).join('/'), sources);
+    if (sources && isPlainObject(current.workflow)) recordWorkflowSources(current.workflow, currentPath.split(path.sep).join('/'), sources);
     merged = mergeTables(merged, unionEqualCustomizationValues(legacy, current));
   }
   if (merged.workflow !== undefined && !isPlainObject(merged.workflow)) {
@@ -656,6 +667,7 @@ const KEY_TO_INSTALLED_FIELD = {
  * @param {string} options.projectRoot - Consuming project root.
  * @param {string} [options.baseRef] - Configuration source ref, pinned before any file read.
  * @param {string} [options.skillRoot] - Trusted skill defaults for workflow customization.
+ * @param {Map<string, string>} [options.workflowSources] - Receives supplying layers keyed by the full workflow setting path.
  * @param {string} [options.workflowTable] - `[workflow.<table>]` surface to return (red, ci) in place of the skill's own workflow table.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
@@ -666,11 +678,24 @@ const KEY_TO_INSTALLED_FIELD = {
  *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
-function resolveTeaConfig({ projectRoot, flags = {}, baseRef, skillRoot, skillName, workflowTable, inputPaths, inputPatterns }) {
+function resolveTeaConfig({
+  projectRoot,
+  flags = {},
+  baseRef,
+  skillRoot,
+  skillName,
+  workflowTable,
+  workflowSources,
+  inputPaths,
+  inputPatterns,
+}) {
   const source = configSource(projectRoot, baseRef, inputPaths, inputPatterns);
   inputPaths?.add(path.join(projectRoot, 'package.json'));
   const file = readTeaConfigFile(projectRoot, baseRef, source);
-  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName, { table: workflowTable });
+  const workflowCustomization = readWorkflowCustomization(source, skillRoot, projectRoot, skillName, {
+    table: workflowTable,
+    sources: workflowSources,
+  });
 
   const values = {};
   const sources = {};
