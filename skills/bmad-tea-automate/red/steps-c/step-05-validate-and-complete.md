@@ -55,8 +55,8 @@ Use `{skill-root}/red/checklist.md` to validate:
 - Tests are generated as red-phase scaffolds and marked with `test.skip()`
 - Every skipped leaf has an adjacent comment explaining that its red scaffold awaits implementation; activation removes `.skip` and the temporary reason before confirming RED
 - Preflight preserved supplied criterion ids and assigned stable, collision-free ids to unnamed criteria
-- Every executable leaf title carries exactly one id from the persisted criterion registry
-- Every declared acceptance criterion has exactly one red-phase leaf scaffold
+- Every executable leaf title carries exactly one testable criterion ID from the persisted registry
+- Each testable criterion has exactly one red-phase leaf scaffold. With `halt`, this covers every declared criterion. With `skip-and-report`, each unusable criterion keeps its ID, text, and reason in the checklist and checkpoint.
 - Secondary branches and journeys are checklist work for green-phase automation
 - The criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
 - API setup responses from unimplemented endpoints remain opaque before the criterion assertion
