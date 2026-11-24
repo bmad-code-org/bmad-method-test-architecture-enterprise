@@ -55,8 +55,8 @@ Use `{skill-root}/red/checklist.md` to validate:
 - Tests are generated as red-phase scaffolds and marked with `test.skip()`
 - Every skipped leaf has an adjacent comment explaining that its red scaffold awaits implementation; activation removes `.skip` and the temporary reason before confirming RED
 - Preflight preserved supplied criterion ids and assigned stable, collision-free ids to unnamed criteria
-- Every executable leaf title carries exactly one id from the persisted criterion registry
-- Every declared acceptance criterion has exactly one red-phase leaf scaffold
+- Every executable leaf title carries exactly one testable criterion ID from the persisted registry
+- Each testable criterion has exactly one red-phase leaf scaffold. With `halt`, this covers every declared criterion. With `skip-and-report`, each unusable criterion keeps its ID, text, and reason in the checklist and checkpoint.
 - Secondary branches and journeys are checklist work for green-phase automation
 - The criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
 - API setup responses from unimplemented endpoints remain opaque before the criterion assertion
@@ -89,7 +89,7 @@ Report:
 - Test files created
 - Checklist output path
 - Story key, and the handoff: for a v7 ticket, its `ticketRef` and the `plan` path `find` returned, saying whether that plan exists yet, so the builder lists these red tests in it; for a v6 story, the story file
-- Key risks or assumptions
+- Key risks or assumptions, including the skipped criterion count and IDs when `skip-and-report` is active
 - Next recommended workflow: `bmad-build` when the method module is installed (`dev-story` before BMAD 6.12), otherwise the team's own implementation process; `automate` comes after implementation
 - Red mode changed no ticket, plan or story status
 
@@ -98,7 +98,7 @@ Report:
 ## 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
-Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used` in either save branch below. Save their current values; the first-save identity template never resets settings or spent rounds.
+Preserve or include the loop's resolved YAML frontmatter keys `test_mode`, `test_operation`, `auto_validate`, `auto_heal_failures`, `max_healing_iterations`, `use_mcp_healing`, and `healing_rounds_used` in either save branch below. Save their current values. Preserve the full `acceptanceCriteria`, the resolved `unusable_criteria` policy, and the `unusableCriteria` list and reasons in the final checklist.
 
 - **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
 

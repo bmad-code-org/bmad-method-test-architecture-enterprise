@@ -1,5 +1,7 @@
 # ATDD Workflow Validation Checklist
 
+For a `skip-and-report` checklist, scaffold requirements apply to the testable subset. Verify that each skipped ID is still in the full acceptance-criteria registry and has a reason in the checklist. Its omission is a coverage gap.
+
 Use this checklist to assess red-mode deliverables and verification evidence. Create runs `{skill-root}/resources/run-and-heal.md` after generation and aggregation; that resource is authoritative for execution, repair scope and stopping conditions. Validate assesses available evidence without repair or requiring a passing suite. Edit checks the requested changes and never runs the healing loop. A completed generation workflow records unresolved, blocked or disabled red verification honestly.
 
 ## Prerequisites
@@ -97,8 +99,8 @@ Before starting this workflow, verify:
 
 - [ ] All tests use Given-When-Then structure with clear comments
 - [ ] All tests have descriptive names explaining what they test
-- [ ] Every executable leaf title carries exactly one declared `AC-<n>` id from the criterion registry
-- [ ] Every declared acceptance criterion has exactly one red-phase leaf scaffold
+- [ ] Every executable leaf title carries exactly one testable `AC-<n>` ID from the criterion registry
+- [ ] Each testable criterion has exactly one red-phase leaf scaffold
 - [ ] Secondary branches and journeys are recorded for green-phase automation
 - [ ] Criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
 - [ ] API setup responses from unimplemented endpoints remain opaque before the criterion assertion

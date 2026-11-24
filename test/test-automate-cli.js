@@ -230,6 +230,56 @@ try {
     }
   const red = invoke([...agent, '--mode', 'red', '--story', 'story.md']);
   check(red.status === 0 && JSON.parse(red.stdout).executionStatus === 'verified red', 'verified red exits 0 with intended failure counts');
+  assert.equal(JSON.parse(red.stdout).skippedCriteriaCount, 0);
+  const redArgs = [...agent, '--mode', 'red', '--story', 'story.md'];
+  const policyOverride = path.join(scratch, '_bmad/custom/bmad-tea-automate.user.toml');
+  const previousOverride = fs.existsSync(policyOverride) ? fs.readFileSync(policyOverride, 'utf8') : null;
+  const originalStory = fs.readFileSync(path.join(scratch, 'story.md'), 'utf8');
+  const checkpointFile = path.join(scratch, JSON.parse(red.stdout).summaryPath);
+  const redCheckpointBeforePartialRun = fs.readFileSync(checkpointFile);
+  try {
+    fs.writeFileSync(path.join(scratch, 'story.md'), '# Story\n\nAC-1: Promised behavior.\nAC-2: Offer a pleasant experience.\n');
+    check(invoke(redArgs, 'partial-criteria').status === 3, 'default red policy refuses a checklist that silently skipped a criterion');
+    fs.writeFileSync(policyOverride, '[workflow.red]\nunusable_criteria = "skip-and-report"\n');
+    const partial = invoke(redArgs, 'partial-criteria');
+    const result = JSON.parse(partial.stdout);
+    check(
+      partial.status === 0 && result.skippedCriteriaCount === 1 && result.executionStatus === 'verified red',
+      'red can verify its testable criteria and report one skip',
+    );
+    check(invoke(redArgs, 'partial-missing-section').status === 3, 'red rejects skipped criteria missing from the checklist body');
+    const idOnly = invoke(redArgs, 'partial-id-only');
+    check(
+      idOnly.status === 3 && idOnly.stderr.includes('must list each skipped ID, text, and reason'),
+      'red rejects checklist entries without criterion text and reason',
+    );
+    check(invoke(redArgs, 'partial-all').status === 3, 'red rejects a checklist that skips every criterion');
+    fs.writeFileSync(checkpointFile, redCheckpointBeforePartialRun);
+    const omitted = invoke(redArgs);
+    check(
+      omitted.status === 3 && omitted.stderr.includes('must record unusableCriteria'),
+      'red requires an explicit skipped list when the opt-in policy applies',
+    );
+    check(invoke(redArgs, 'partial-criteria').status === 0, 'red writes a partial checkpoint before resume');
+    fs.writeFileSync(policyOverride, '[workflow.red]\nunusable_criteria = "halt"\n');
+    const resumed = invoke([...agent, '--mode', 'red', '--operation', 'resume', '--checkpoint', result.summaryPath], 'partial-criteria');
+    check(
+      resumed.status === 0 && JSON.parse(resumed.stdout).skippedCriteriaCount === 1,
+      'red resume retains its recorded skip policy and criteria',
+    );
+    fs.writeFileSync(policyOverride, '[workflow.red]\nunusable_criteria = "ignore"\n');
+    check(invoke(['--agent', 'none', '--mode', 'red', '--story', 'story.md']).status === 2, 'red rejects an unknown skip policy');
+    check(
+      invoke(['--agent', 'none', '--mode', 'expand', 'coverage']).status === 0,
+      'expand neither uses nor validates the red skip policy',
+    );
+  } finally {
+    if (previousOverride === null) fs.unlinkSync(policyOverride);
+    else fs.writeFileSync(policyOverride, previousOverride);
+    fs.writeFileSync(path.join(scratch, 'story.md'), originalStory);
+    fs.writeFileSync(checkpointFile, redCheckpointBeforePartialRun);
+  }
+
   check(
     invoke([...agent, '--mode', 'red', '--story', 'story.md'], 'activated-red').status === 0,
     'native red locations retain identity when the disposable activation removes skip',

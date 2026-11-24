@@ -9,6 +9,13 @@ const { projectPath } = require('./workflow-cli');
 const { generatedInventory, reconcileInventory } = require('./automate-inventory');
 const { UNIT_CHECK_KIND, normalizeUnitReport, unitReportRunner } = require('./unit-runners');
 
+const UNUSABLE_CRITERIA_POLICIES = new Set(['halt', 'skip-and-report']);
+
+function unusableCriteriaPolicy(value = 'halt', label = 'workflow.red.unusable_criteria') {
+  if (!UNUSABLE_CRITERIA_POLICIES.has(value)) throw new Error(`${label} must be halt or skip-and-report`);
+  return value;
+}
+
 const STATUSES = ['passed', 'verified red', 'failed', 'could not measure', 'disabled'];
 const RESULT_KEYS = [
   'requestId',
@@ -157,6 +164,64 @@ function frontmatter(file) {
   return { text, state, hash: createHash('sha256').update(text).digest('hex') };
 }
 
+function skippedRedCriteria(checkpoint, text, settings, operation, inventory) {
+  const continuing = operation === 'create' || operation === 'resume';
+  const savedPolicy = unusableCriteriaPolicy(checkpoint.unusable_criteria, 'checkpoint unusable_criteria');
+  const expected = settings.unusable_criteria ?? 'halt';
+  if (continuing && savedPolicy !== expected) throw new Error('Red checkpoint changed the resolved unusable_criteria policy');
+  const skipped = checkpoint.unusableCriteria;
+  if (skipped === undefined && savedPolicy === 'halt') return 0;
+  if (!Array.isArray(skipped)) throw new Error('Red checklist must record unusableCriteria as an array');
+  if (skipped.length === 0) return 0;
+  if (savedPolicy !== 'skip-and-report') throw new Error('Red checklist cannot skip criteria unless skip-and-report is enabled');
+  if (!Array.isArray(checkpoint.acceptanceCriteria)) throw new Error('Red checklist must retain all acceptance criteria');
+
+  const registry = new Map();
+  for (const row of checkpoint.acceptanceCriteria) {
+    if (
+      typeof row?.id !== 'string' ||
+      !/^AC-[1-9]\d*$/.test(row.id) ||
+      typeof row.text !== 'string' ||
+      !row.text.trim() ||
+      registry.has(row.id)
+    ) {
+      throw new Error('Red checklist has an invalid acceptance-criteria registry');
+    }
+    registry.set(row.id, row.text);
+  }
+  const excluded = new Set();
+  for (const row of skipped) {
+    if (
+      !row ||
+      !registry.has(row.id) ||
+      row.text !== registry.get(row.id) ||
+      typeof row.reason !== 'string' ||
+      !row.reason.trim() ||
+      excluded.has(row.id)
+    ) {
+      throw new Error('Red checklist has an unusable criterion with a missing reason, mismatched text, or duplicate ID');
+    }
+    excluded.add(row.id);
+  }
+  if (excluded.size >= registry.size) throw new Error('Red checklist has no testable acceptance criteria');
+
+  const section = text.split(/^## Unusable criteria[ \t]*\r?$/m)[1]?.split(/^#{1,2}[ \t]/m)[0] ?? '';
+  const oneLine = (value) => value.trim().replaceAll(/\s+/g, ' ');
+  const listed = [...section.matchAll(/^-[ \t]+(AC-[1-9]\d*:.*)$/gm)].map((match) => oneLine(match[1]));
+  const expectedEntries = skipped.map(({ id, text, reason }) => `${id}: ${oneLine(text)} | Reason: ${oneLine(reason)}`);
+  if (!isDeepStrictEqual(listed, expectedEntries))
+    throw new Error('Red checklist Unusable criteria section must list each skipped ID, text, and reason in order');
+  if (continuing && inventory) {
+    const active = new Set([...registry.keys()].filter((id) => !excluded.has(id)));
+    for (const test of inventory.tests) {
+      const [id, ...extra] = test.titlePath.at(-1).match(/\bAC-\d+\b/g) ?? [];
+      if (extra.length > 0 || !active.delete(id)) throw new Error('Red scaffold titles must map one-to-one to testable criteria');
+    }
+    if (active.size > 0) throw new Error('Red scaffold inventory omits a testable criterion');
+  }
+  return excluded.size;
+}
+
 function parseResult({
   manifestPath,
   projectRoot,
@@ -247,13 +312,14 @@ function parseResult({
   }
   const allRecognized = recognizedReports > 0 && recognizedReports === result.executionReports.length;
   if (successful && !allRecognized) throw new Error('successful execution requires supported native reports for every final scope');
+  let inventory;
   if (successful) {
     // The report family selects the registration grammar; reconciliation then
     // requires that family to match a runner the project declared before the run.
     const unitRunner = nativeReports
       .map((report) => (report.kind === UNIT_CHECK_KIND ? report.runner : unitReportRunner(report)))
       .find(Boolean);
-    const inventory = generatedInventory(projectRoot, result.generatedFiles, { runner: unitRunner ?? 'playwright' });
+    inventory = generatedInventory(projectRoot, result.generatedFiles, { runner: unitRunner ?? 'playwright' });
     if (evidenceDir)
       fs.writeFileSync(path.join(evidenceDir, 'generated-test-inventory.json'), `${JSON.stringify(inventory, null, 2)}\n`, { flag: 'wx' });
     const verified = reconcileInventory(inventory, nativeReports, { mode, runners });
@@ -293,6 +359,7 @@ function parseResult({
     if (operation === 'validate' && summary.hash !== checkpointBefore.hash) throw new Error('Validate modified the selected checkpoint');
     if (operation === 'edit' && summary.hash === checkpointBefore.hash) throw new Error('Edit did not update the selected checkpoint');
     const identityKeys = ['runScope', 'runKey', 'testEntry', 'testMode', 'test_mode', 'test_operation', 'cli_story', 'cli_targets'];
+    if (mode === 'red') identityKeys.push('unusable_criteria', 'unusableCriteria');
     const progressKeys = [
       'workflowStatus',
       'stepsCompleted',
@@ -363,6 +430,7 @@ function parseResult({
     if (settings.auto_validate && result.executionStatus === 'disabled')
       throw new Error('validation was enabled but execution reports disabled');
   }
+  if (mode === 'red') result.skippedCriteriaCount = skippedRedCriteria(checkpoint, summary.text, settings, operation, inventory);
   const final = result.counts.final;
   if (['passed', 'verified red'].includes(result.executionStatus)) {
     if (final.executed === 0 || final.skipped !== 0 || result.executionReports.length === 0)
@@ -380,4 +448,4 @@ function parseResult({
   return result;
 }
 
-module.exports = { STATUSES, RESULT_KEYS, artifactPath, parseResult, reportCounts, frontmatter };
+module.exports = { STATUSES, RESULT_KEYS, artifactPath, parseResult, reportCounts, frontmatter, unusableCriteriaPolicy };

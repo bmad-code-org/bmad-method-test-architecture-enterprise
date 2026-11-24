@@ -65,6 +65,7 @@ These terms come from the wider BMad Method and apply when TEA runs inside its p
 | **Agent**                 | AI persona with a role, such as analyst, architect, developer, or test architect.                                          |
 | **BMad**                  | Breakthrough Method of Agile AI-Driven Development. An AI-assisted development framework with agents and guided workflows. |
 | **BMad Method**           | AI-assisted development method covering planning, architecture, implementation, and testing.                               |
+| **BMad v7**               | The BMad core skills CLI layout that TEA 4.x requires. Its first preview reports `6.13.0-next` in `bmad status`.           |
 | **BMM**                   | BMad Method Module. The development agents and workflows supplied by BMad Method.                                          |
 | **Scale-Adaptive System** | Workflow selection that adjusts planning depth to the project.                                                             |
 | **Workflow**              | A guided process that uses an AI agent to produce an artifact or complete a task.                                          |

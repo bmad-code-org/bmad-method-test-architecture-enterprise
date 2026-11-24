@@ -87,6 +87,8 @@ Read the remaining frontmatter after the identity check:
 - `workflowStatus`, `stepsCompleted`, `lastStep`, and `lastSaved` describe the saved progress.
 - `storyId`, `storyFile`, and `ticketRef` identify the story source. Older checklists may omit `ticketRef`.
 
+Restore `unusable_criteria` and `unusableCriteria` from the checkpoint. Older checklists default to `halt` and an empty list. Rebuild `criterionRegistry` and `criterion_ids` from the saved `acceptanceCriteria`, excluding the saved unusable IDs. Preserve the full registry, IDs, and reasons on subsequent saves.
+
 If `workflowStatus` is missing (legacy checklist), infer it from `lastStep`: `'step-05-validate-and-complete'` means `completed`; any other known step means `in-progress`.
 
 ---

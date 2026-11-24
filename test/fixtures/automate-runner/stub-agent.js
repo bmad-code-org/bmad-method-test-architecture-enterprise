@@ -22,6 +22,14 @@ const terminal = mode === 'red' ? 'step-05-validate-and-complete' : 'step-04-val
 const steps = mode === 'red' ? ['step-01-preflight-and-context','step-02-generation-mode','step-03-test-strategy','step-04c-aggregate',terminal] : ['step-01-preflight-and-context','step-02-identify-targets','step-03c-aggregate',terminal];
 const scenario = process.env.TEA_AUTOMATE_STUB_CASE ?? 'success';
 if (scenario === 'missing') process.exit(0);
+const partial = scenario.startsWith('partial-');
+const excluded = {id:'AC-2', text:'Offer a pleasant experience.', reason:'No observable outcome is specified.'};
+const partialState = partial ? {
+  acceptanceCriteria: [{id:'AC-1',idSource:'supplied',text:'Promised behavior.'},{id:excluded.id,idSource:'supplied',text:excluded.text}],
+  unusableCriteria: scenario === 'partial-all' ? [{id:'AC-1', text:'Promised behavior.',reason:'No outcome.'},excluded] : [excluded],
+} : {};
+const excludedDetails = scenario === 'partial-id-only' ? '' : ` ${excluded.text} | Reason: ${excluded.reason}`;
+const partialBody = partial && scenario !== 'partial-missing-section' ? `\n## Unusable criteria\n\n- AC-2:${excludedDetails}\n` : '';
 const unrelated = scenario.endsWith('unrelated');
 const summaryPath = selected && !unrelated ? JSON.parse(selected) : '_bmad-output/test-artifacts/automate/summary.md';
 const original = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf8') : '';
@@ -33,7 +41,7 @@ fs.mkdirSync('_bmad-output/test-artifacts/automate', { recursive: true });
 if (scenario !== 'stale-artifacts') {
   if (scenario !== 'stale-generated') fs.writeFileSync('tests/api/generated.spec.ts', `${mode === 'red' ? 'test.skip' : 'test'}('AC-1 behavior', () => {});\n`);
   if (operation === 'create' || operation === 'resume') {
-    fs.writeFileSync(summaryPath, `---\n${yaml.dump({ ...saved, stepsCompleted: steps, lastStep:terminal, workflowStatus: 'completed', test_mode: mode, test_operation: 'create', ...settings, healing_rounds_used: (operation === 'create' ? 0 : saved.healing_rounds_used ?? 0), cli_request_id: requestId, cli_story: operation === 'resume' && Object.hasOwn(saved,'cli_story') ? saved.cli_story : story ? JSON.parse(story) : null, cli_targets: operation === 'resume' && Object.hasOwn(saved,'cli_targets') ? saved.cli_targets : targets ? JSON.parse(targets) : [], inputDocuments: story ? [JSON.parse(story)] : saved.inputDocuments ?? [] })}---\n\n# Synthetic CLI fixture\n`);
+    fs.writeFileSync(summaryPath, `---\n${yaml.dump({ ...saved, stepsCompleted: steps, lastStep:terminal, workflowStatus: 'completed', test_mode: mode, test_operation: 'create', ...settings, ...partialState, healing_rounds_used: (operation === 'create' ? 0 : saved.healing_rounds_used ?? 0), cli_request_id: requestId, cli_story: operation === 'resume' && Object.hasOwn(saved,'cli_story') ? saved.cli_story : story ? JSON.parse(story) : null, cli_targets: operation === 'resume' && Object.hasOwn(saved,'cli_targets') ? saved.cli_targets : targets ? JSON.parse(targets) : [], inputDocuments: story ? [JSON.parse(story)] : saved.inputDocuments ?? [] })}---\n\n# Synthetic CLI fixture\n${partialBody}`);
   } else if (operation === 'edit') {
     if (!unrelated && scenario !== 'edit-unchanged') fs.writeFileSync(summaryPath, `${original}\nRequested synthetic edit applied.\n`);
     else if (unrelated) fs.writeFileSync(summaryPath, `---\n${yaml.dump({workflowStatus:'completed',test_mode:mode,test_operation:'create'})}---\n# Unrelated\n`);

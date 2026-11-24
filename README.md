@@ -22,8 +22,12 @@ Install the skills from GitHub:
 npx skills add bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-Setup needs [uv](https://docs.astral.sh/uv/) and the `bmad` and `bmod-core-tools` skills from BMad Method core.
-If those skills are missing, install them:
+### Compatibility
+
+TEA 4.x requires BMad v7 core, starting with the preview that reports `6.13.0-next` in `bmad status`.
+Module setup, ticket-based red mode, and the build handoff use the v7 skills CLI layout. If `bmad status` reports `6.12.x`, migrate to v7 before using these workflows.
+
+Setup needs [uv](https://docs.astral.sh/uv/) and the `bmad` and `bmod-core-tools` skills. Install core from BMad Method's GitHub main:
 
 ```bash
 npx skills add bmad-code-org/BMAD-METHOD --skill bmad bmod-core-tools

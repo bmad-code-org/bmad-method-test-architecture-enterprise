@@ -7,6 +7,8 @@ validationChecklist: '{skill-root}/red/checklist.md'
 
 # Step 1: Validate Outputs
 
+For a `skip-and-report` checklist, scaffold requirements apply to the testable subset. Verify that each skipped ID is still in the full acceptance-criteria registry and has a reason in the checklist. Its omission is a coverage gap.
+
 ## STEP GOAL:
 
 Validate outputs using the workflow checklist and record findings.
@@ -69,7 +71,7 @@ Execution and healing checklist items inspect existing evidence only: record PAS
 Do not run-and-heal, repair tests, require a passing full suite, or change Create checkpoints.
 A validation report completes even when its verdict is FAIL.
 
-For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. Require exactly one red-phase leaf per declared criterion. For every scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
+For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. Require exactly one red-phase leaf per testable criterion. For every scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
 
 ### 4. Write Report
 
