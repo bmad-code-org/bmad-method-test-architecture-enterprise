@@ -235,6 +235,8 @@ try {
   const policyOverride = path.join(scratch, '_bmad/custom/bmad-tea-automate.user.toml');
   const previousOverride = fs.existsSync(policyOverride) ? fs.readFileSync(policyOverride, 'utf8') : null;
   const originalStory = fs.readFileSync(path.join(scratch, 'story.md'), 'utf8');
+  const checkpointFile = path.join(scratch, JSON.parse(red.stdout).summaryPath);
+  const originalCheckpoint = fs.readFileSync(checkpointFile);
   try {
     fs.writeFileSync(path.join(scratch, 'story.md'), '# Story\n\nAC-1: Promised behavior.\nAC-2: Offer a pleasant experience.\n');
     check(invoke(redArgs, 'partial-criteria').status === 3, 'default red policy refuses a checklist that silently skipped a criterion');
@@ -247,7 +249,12 @@ try {
     );
     check(invoke(redArgs, 'partial-missing-section').status === 3, 'red rejects skipped criteria missing from the checklist body');
     check(invoke(redArgs, 'partial-all').status === 3, 'red rejects a checklist that skips every criterion');
-    check(invoke(redArgs).status === 3, 'red requires an explicit skipped list when the opt-in policy applies');
+    fs.writeFileSync(checkpointFile, originalCheckpoint);
+    const omitted = invoke(redArgs);
+    check(
+      omitted.status === 3 && omitted.stderr.includes('must record unusableCriteria'),
+      'red requires an explicit skipped list when the opt-in policy applies',
+    );
     check(invoke(redArgs, 'partial-criteria').status === 0, 'red writes a partial checkpoint before resume');
     fs.writeFileSync(policyOverride, '[workflow.red]\nunusable_criteria = "halt"\n');
     const resumed = invoke([...agent, '--mode', 'red', '--operation', 'resume', '--checkpoint', result.summaryPath], 'partial-criteria');
@@ -265,6 +272,7 @@ try {
     if (previousOverride === null) fs.unlinkSync(policyOverride);
     else fs.writeFileSync(policyOverride, previousOverride);
     fs.writeFileSync(path.join(scratch, 'story.md'), originalStory);
+    fs.writeFileSync(checkpointFile, originalCheckpoint);
   }
 
   check(
