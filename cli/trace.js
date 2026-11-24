@@ -27,6 +27,7 @@ const {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  resolveTraceGatePolicy,
   classifyTraceRejection,
   withFullSourceSha,
   publishTraceOutputs,
@@ -68,7 +69,9 @@ function execute(options, registerOutputGuard = () => {}) {
   if (levels.length === 0 || levels.some((level) => !['e2e', 'api', 'component', 'unit', 'live'].includes(level)))
     throw new Error('--coverage-levels must list e2e, api, component, unit, or live.');
   const skillRoot = resolveWorkflowSkill({ projectRoot, skillName: 'bmad-tea-trace', skillRoot: options.skillRoot });
-  const resolvedConfig = resolveTeaConfig({ projectRoot, skillRoot, skillName: 'bmad-tea-trace' });
+  const workflowSources = new Map();
+  const resolvedConfig = resolveTeaConfig({ projectRoot, skillRoot, skillName: 'bmad-tea-trace', workflowSources });
+  const gatePolicy = resolveTraceGatePolicy(resolvedConfig.workflowCustomization.gate, workflowSources);
   const rawArtifacts = resolvedConfig.configSnapshot.modules.tea.test_artifacts;
   if (typeof rawArtifacts !== 'string' || !rawArtifacts.trim())
     throw new Error('test_artifacts in the TEA config must be a nonempty string.');
@@ -217,6 +220,7 @@ function execute(options, registerOutputGuard = () => {}) {
           `Resolve {collection_mode} to ${JSON.stringify(options.collectionMode)}, {coverage_levels} to ${JSON.stringify([...new Set(levels)].join(','))}, {allow_gate} to ${allowGate}, and {decision_mode} to "deterministic".`,
           'Resolve {coverage_basis} and {summary_confidence} to auto, then persist the concrete values selected by Step 1.',
           PCT_RULE,
+          `Resolve {gate_policy} to ${JSON.stringify(gatePolicy)}. Use this frozen policy for Step 5.`,
           `Write the matrix to ${JSON.stringify(paths.matrix)} and the schema 0.3.x summary to ${JSON.stringify(paths.summary)}.`,
           `Resolve {outputFile} and {default_output_file} to ${JSON.stringify(paths.matrix)}, {e2e_trace_summary_output} to ${JSON.stringify(paths.summary)}, and {gate_decision_output} to ${JSON.stringify(paths.gate)}.`,
           'Write the gate JSON when this run is eligible. Omit gate fields and the gate file when this run evaluates no gate.',
@@ -235,6 +239,7 @@ function execute(options, registerOutputGuard = () => {}) {
           target,
           collectionMode: options.collectionMode,
           allowGate,
+          gatePolicy,
           oracleLedger,
           requireOracleLedger: true,
           liveCapture,

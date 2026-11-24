@@ -17,6 +17,7 @@ const {
   resolveTraceTarget,
   tracePaths,
   validateTraceOutputs,
+  resolveTraceGatePolicy,
   classifyTraceRejection,
   withFullSourceSha,
   publishTraceOutputs,
@@ -28,6 +29,7 @@ const cli = path.join(__dirname, '..', 'cli', 'trace.js');
 const agent = path.join(__dirname, 'fixtures', 'trace-cli-agent.js');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-cli-'));
 let checks = 0;
+const defaultGatePolicy = resolveTraceGatePolicy();
 
 function run(mode, extra = [], project = root) {
   const result = spawnSync(
@@ -830,6 +832,56 @@ try {
       fs.writeFileSync(file, original);
     }
   });
+  check('the CLI uses layered gate thresholds and records where each value came from', () => {
+    const target = path.join(root, 'docs', 'epic-4-export.md');
+    const team = '_bmad/custom/bmad-tea-trace.toml';
+    const user = '_bmad/custom/bmad-tea-trace.user.toml';
+    const originalTarget = fs.readFileSync(target, 'utf8');
+    const originalTeam = fs.readFileSync(path.join(root, team), 'utf8');
+    try {
+      const rows = Array.from({ length: 29 }, (_, i) => `AC-${i + 2} (P1): Behavior ${i + 2}.`);
+      fs.writeFileSync(target, `# Epic 4: Export\n\nAC-1 (P0): Behavior 1.\n${rows.join('\n')}\n`);
+      fs.appendFileSync(path.join(root, team), '\n[workflow.gate]\np1_target = 88\noverall_minimum = 85\n');
+      fs.writeFileSync(path.join(root, user), '[workflow.gate]\np1_target = 89\n');
+
+      const result = run('threshold-custom-policy-correct');
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.payload.gate_status, 'PASS');
+      const policy = {
+        p0_required: 100,
+        p1_target: 89,
+        p1_minimum: 80,
+        overall_minimum: 85,
+        sources: { p0_required: 'skill defaults', p1_target: user, p1_minimum: 'skill defaults', overall_minimum: team },
+      };
+      for (const name of ['summary', 'gate']) {
+        const payload = JSON.parse(fs.readFileSync(result.payload.artifacts[name], 'utf8'));
+        assert.deepEqual(payload.gate_policy, policy);
+      }
+      const wrongThresholds = run('threshold-p1-target-correct');
+      assert.equal(wrongThresholds.status, 3, wrongThresholds.stdout);
+      assert.match(wrongThresholds.payload.reason, /contradicts the coverage inventory or Step 5 thresholds/);
+
+      fs.writeFileSync(path.join(root, user), '[workflow.gate]\np1_target = 101\n');
+      const invalid = run('pass');
+      assert.equal(invalid.status, 2, invalid.stdout);
+      assert.match(invalid.payload.reason, /workflow.gate.p1_target.*bmad-tea-trace.user.toml.*integer from 0 through 100/);
+
+      fs.writeFileSync(path.join(root, user), '[workflow.gate]\np1_target = 70\n');
+      const inverted = run('pass');
+      assert.equal(inverted.status, 2, inverted.stdout);
+      assert.match(inverted.payload.reason, /p1_minimum.*p1_target.*bmad-tea-trace.user.toml/);
+
+      fs.writeFileSync(path.join(root, user), '[workflow]\ngate = 2026-11-01\n');
+      const date = run('pass');
+      assert.equal(date.status, 2, date.stdout);
+      assert.match(date.payload.reason, /workflow.gate.*bmad-tea-trace.user.toml.*must be a table/);
+    } finally {
+      fs.writeFileSync(target, originalTarget);
+      fs.writeFileSync(path.join(root, team), originalTeam);
+      fs.unlinkSync(path.join(root, user));
+    }
+  });
   check('skill decision tree applies exact ratios and fresh-failure overlay', () => {
     const step = fs.readFileSync(path.resolve(__dirname, '../skills/bmad-tea-trace/steps-c/step-05-gate-decision.md'), 'utf8');
     const script = step.split('**Decision Tree:**')[1].split('```javascript\n')[1].split('\n```')[0];
@@ -866,7 +918,7 @@ try {
           overall_coverage_percentage: Math.floor((fully_covered * 100) / requirements.length),
         },
       };
-      const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, { coverageMatrix });
+      const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, { coverageMatrix, gatePolicy: defaultGatePolicy });
       assert.equal(actual, expected, JSON.stringify(buckets));
     }
   });
@@ -897,6 +949,7 @@ try {
       );
       const fully_covered = requirements.filter((row) => row.coverage === 'FULL').length;
       return require('node:vm').runInNewContext(`${script}\n({ gateDecision, rationale })`, {
+        gatePolicy: defaultGatePolicy,
         coverageMatrix: {
           requirements,
           live_evidence: {},
@@ -931,6 +984,7 @@ try {
     const script = step.split('**Decision Tree:**')[1].split('```javascript\n')[1].split('\n```')[0];
     const execute = (live_evidence) =>
       require('node:vm').runInNewContext(`${script}\ngateDecision`, {
+        gatePolicy: defaultGatePolicy,
         coverageMatrix: {
           requirements: [{ priority: 'P0', coverage: 'FULL', tests: [{ id: 'test-1', level: 'api' }] }],
           coverage_statistics: {
@@ -1055,6 +1109,7 @@ try {
       ['fresh', 1, 100, 'CONCERNS', 0],
     ]) {
       const actual = require('node:vm').runInNewContext(`${script}\ngateDecision`, {
+        gatePolicy: defaultGatePolicy,
         gateEligible: true,
         allowGate: true,
         collectionStatus: 'COLLECTED',

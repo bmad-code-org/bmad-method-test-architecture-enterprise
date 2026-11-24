@@ -100,6 +100,7 @@ const summary = {
 };
 // Boundary fixtures exercise the real CLI with independently declared gate outcomes.
 const thresholdCases = {
+  'custom-policy': { P0: [1, 1], P1: [26, 29], verdict: 'PASS', policy: { p1Target: '89%', overallMinimum: '85%' } },
   'p1-target': { P0: [1, 1], P1: [26, 29], verdict: 'CONCERNS', p1Status: 'PARTIAL' },
   'p1-minimum': { P0: [1, 1], P1: [35, 44], verdict: 'FAIL', p1Status: 'NOT_MET' },
   'overall-minimum': { P0: [1, 1], P2: [34, 43], verdict: 'FAIL', overallStatus: 'NOT_MET' },
@@ -125,8 +126,8 @@ if (threshold) {
   summary.gate_status = gateStatus;
   summary.gate_criteria = {
     p0_coverage_required: '100%', p0_coverage_actual: `${P0.pct}%`, p0_status: rounded ? (P0.pct === 100 ? 'MET' : 'NOT_MET') : threshold.p0Status ?? 'MET',
-    p1_coverage_target: '90%', p1_coverage_minimum: '80%', p1_coverage_actual: `${P1.pct}%`, p1_status: rounded ? (P1.pct >= 90 ? 'MET' : P1.pct >= 80 ? 'PARTIAL' : 'NOT_MET') : threshold.p1Status ?? 'MET',
-    overall_coverage_minimum: '80%', overall_coverage_actual: `${overall}%`, overall_status: rounded ? (overall >= 80 ? 'MET' : 'NOT_MET') : threshold.overallStatus ?? 'MET',
+    p1_coverage_target: threshold.policy?.p1Target ?? '90%', p1_coverage_minimum: '80%', p1_coverage_actual: `${P1.pct}%`, p1_status: rounded ? (P1.pct >= 90 ? 'MET' : P1.pct >= 80 ? 'PARTIAL' : 'NOT_MET') : threshold.p1Status ?? 'MET',
+    overall_coverage_minimum: threshold.policy?.overallMinimum ?? '80%', overall_coverage_actual: `${overall}%`, overall_status: rounded ? (overall >= 80 ? 'MET' : 'NOT_MET') : threshold.overallStatus ?? 'MET',
   };
 }
 const coverageFor = row => threshold ? (coveredIds.has(row.id) ? 'FULL' : 'NONE') : pct ? 'FULL' : 'NONE';
