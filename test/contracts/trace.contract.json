@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
-  "sourceSpecDigest": "sha256:f953a5b976d792cb823e420f8f7006e69d8ddb55eda20cfa657ea9f4186ce5dc",
+  "sourceSpecDigest": "sha256:0b172f0d0b987eafd26cee0bd8654efaf0fa9c23771b0e3cfcd8ac94c8a6d33d",
   "behaviors": [
     {
       "id": "B-001",
@@ -2591,6 +2591,7 @@
                 "links",
                 "waivers",
                 "gate_status",
+                "gate_policy",
                 "gate_criteria"
               ],
               "types": {
@@ -2618,6 +2619,7 @@
                 "links": null,
                 "waivers": "object",
                 "gate_status": "string",
+                "gate_policy": null,
                 "gate_criteria": "object"
               }
             }
@@ -2895,6 +2897,7 @@
                 "links",
                 "waivers",
                 "gate_status",
+                "gate_policy",
                 "gate_criteria"
               ],
               "types": {
@@ -2922,6 +2925,7 @@
                 "links": null,
                 "waivers": "object",
                 "gate_status": "string",
+                "gate_policy": null,
                 "gate_criteria": "object"
               }
             }
@@ -3213,6 +3217,7 @@
               "links",
               "waivers",
               "gate_status",
+              "gate_policy",
               "gate_criteria"
             ],
             "types": {
@@ -3240,6 +3245,7 @@
               "links": null,
               "waivers": "object",
               "gate_status": "string",
+              "gate_policy": null,
               "gate_criteria": "object"
             },
             "successIndicator": "/gate_status",
