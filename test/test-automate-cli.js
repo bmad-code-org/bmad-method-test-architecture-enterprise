@@ -248,6 +248,11 @@ try {
       'red can verify its testable criteria and report one skip',
     );
     check(invoke(redArgs, 'partial-missing-section').status === 3, 'red rejects skipped criteria missing from the checklist body');
+    const idOnly = invoke(redArgs, 'partial-id-only');
+    check(
+      idOnly.status === 3 && idOnly.stderr.includes('must list each skipped ID, text, and reason'),
+      'red rejects checklist entries without criterion text and reason',
+    );
     check(invoke(redArgs, 'partial-all').status === 3, 'red rejects a checklist that skips every criterion');
     fs.writeFileSync(checkpointFile, redCheckpointBeforePartialRun);
     const omitted = invoke(redArgs);

@@ -272,7 +272,7 @@ UI components to implement:
 {list UI flows from E2E tests}
 ```
 
-When `unusableCriteria` is nonempty, include a `## Unusable criteria` section in `checklistContent`. Use one bullet per row in source order, in the form `- AC-n: criterion text`, with the reason on the same bullet. Keep these criteria in the original story and the full checkpoint registry. The checklist records a gap and provides no coverage evidence for it.
+When `unusableCriteria` is nonempty, include a `## Unusable criteria` section in `checklistContent`. Use one bullet per row in source order, in the form `- AC-n: criterion text | Reason: explanation`. Copy the text and reason from the checkpoint, collapsing whitespace so the bullet fits on one line. Keep these criteria in the original story and the full checkpoint registry. The checklist records a gap and provides no coverage evidence for it.
 
 **Save checklist:**
 

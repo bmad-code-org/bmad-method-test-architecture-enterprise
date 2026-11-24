@@ -671,7 +671,7 @@ Use red when the story has acceptance criteria and implementation is about to be
 
 ### With BMad Build
 
-BMad v7 includes the `6.13.0-next` preview. For a ticket with only a `Verify:` line, red mode uses criteria from the build plan.
+[BMad v7](/docs/glossary/index.md#core-concepts) includes the `6.13.0-next` preview. For a ticket with only a `Verify:` line, red mode uses criteria from the build plan.
 
 For one story, set `route = "full"` and run `bmad-build`:
 

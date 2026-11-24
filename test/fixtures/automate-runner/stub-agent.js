@@ -28,7 +28,8 @@ const partialState = partial ? {
   acceptanceCriteria: [{id:'AC-1',idSource:'supplied',text:'Promised behavior.'},{id:excluded.id,idSource:'supplied',text:excluded.text}],
   unusableCriteria: scenario === 'partial-all' ? [{id:'AC-1', text:'Promised behavior.',reason:'No outcome.'},excluded] : [excluded],
 } : {};
-const partialBody = partial && scenario !== 'partial-missing-section' ? `\n## Unusable criteria\n\n- AC-2: ${excluded.text} ${excluded.reason}\n` : '';
+const excludedDetails = scenario === 'partial-id-only' ? '' : ` ${excluded.text} | Reason: ${excluded.reason}`;
+const partialBody = partial && scenario !== 'partial-missing-section' ? `\n## Unusable criteria\n\n- AC-2:${excludedDetails}\n` : '';
 const unrelated = scenario.endsWith('unrelated');
 const summaryPath = selected && !unrelated ? JSON.parse(selected) : '_bmad-output/test-artifacts/automate/summary.md';
 const original = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf8') : '';

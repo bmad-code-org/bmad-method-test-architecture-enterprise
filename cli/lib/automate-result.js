@@ -206,9 +206,11 @@ function skippedRedCriteria(checkpoint, text, settings, operation, inventory) {
   if (excluded.size >= registry.size) throw new Error('Red checklist has no testable acceptance criteria');
 
   const section = text.split(/^## Unusable criteria[ \t]*\r?$/m)[1]?.split(/^#{1,2}[ \t]/m)[0] ?? '';
-  const listed = [...section.matchAll(/^-[ \t]+(AC-[1-9]\d*):/gm)].map((match) => match[1]);
-  if (!isDeepStrictEqual(listed, [...excluded]))
-    throw new Error('Red checklist Unusable criteria section must list each skipped ID in order');
+  const oneLine = (value) => value.trim().replace(/\s+/g, ' ');
+  const listed = [...section.matchAll(/^-[ \t]+(AC-[1-9]\d*:.*)$/gm)].map((match) => oneLine(match[1]));
+  const expectedEntries = skipped.map(({ id, text, reason }) => `${id}: ${oneLine(text)} | Reason: ${oneLine(reason)}`);
+  if (!isDeepStrictEqual(listed, expectedEntries))
+    throw new Error('Red checklist Unusable criteria section must list each skipped ID, text, and reason in order');
   if (continuing && inventory) {
     const active = new Set([...registry.keys()].filter((id) => !excluded.has(id)));
     for (const test of inventory.tests) {
