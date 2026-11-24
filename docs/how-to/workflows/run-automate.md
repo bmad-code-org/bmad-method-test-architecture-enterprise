@@ -659,7 +659,7 @@ Generate tests for scenarios NOT covered by those files
 
 ## Red Mode
 
-Generate acceptance test scaffolds before implementation with `/bmad-tea-automate` in red mode. TEA writes `test.skip()` tests for the builder to activate.
+Generate acceptance test scaffolds before implementation with `/bmad-tea-automate` in red mode. TEA emits these scaffolds with `test.skip()` for the builder to activate.
 
 <a id="red-when-to-use-this"></a>
 
