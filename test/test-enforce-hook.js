@@ -151,6 +151,15 @@ function run() {
     ['tests/a.spec.ts', 'expect(actual)\n  .toBe(actual);\n', 'C3', 'self-comparison split across lines'],
     ['tests/a.spec.ts', 'test.only\n("x", async () => {});\n', 'C2', '.only split from its call'],
     ['tests/a.spec.ts', 'test\n  .only("x", async () => {});\n', 'C2', '.only on a continuation line'],
+    ['tests/a.spec.ts', 'test["only"]("x", () => {});', 'C2', 'focused test through a bracket member'],
+    ['tests/a.spec.ts', "test.describe['on' + 'ly']('suite', () => {});", 'C2', 'focus through a static computed member'],
+    ['tests/a.spec.ts', 'const t = test;\nt[`only`]("x", () => {});', 'C2', 'focused test through a local alias'],
+    [
+      'tests/a.spec.ts',
+      'import { test as check } from "@playwright/test";\ncheck["only"]("x", () => {});',
+      'C2',
+      'focused test through an imported alias',
+    ],
     ['src/LoginTest.java', 'assertEquals(\n    actual,\n    actual);\n', 'C3', 'JUnit self-comparison split across lines'],
     ['pkg/login_test.go', 'assert.Equal(t, m["a"], m["a"])\n', 'C3', 'Go self-comparison'],
     ['pkg/login_test.go', 'assert.EqualValues(t,\n    m["a"],\n    m["a"])\n', 'C3', 'Go self-comparison split across lines'],
@@ -172,6 +181,29 @@ function run() {
     ['tests/a.spec.ts', 'await new Promise(function (r) { setTimeout(r, 1000); });\n', 'H1', 'function-expression Promise executor'],
     ['tests/a.spec.ts', 'await new Promise((resolve) => setTimeout(() => resolve(), 1000));\n', 'H1', 'timer that wraps the resolver'],
     ['tests/a.spec.ts', 'await new Promise((resolve, reject) => setTimeout(resolve, 50));\n', 'H1', 'two-parameter Promise executor'],
+    ['tests/a.spec.ts', 'const wait = (ms) => new Promise((r) => setTimeout(r, ms));', 'H1', 'wait helper with a variable delay'],
+    ['tests/a.spec.ts', 'await new Promise((r) => setTimeout(() => r(), TIMEOUTS.short));', 'H1', 'timer with a member delay'],
+    [
+      'tests/a.spec.ts',
+      "import { scheduler } from 'node:timers/promises';\nawait scheduler.wait(makeDelay());",
+      'H1',
+      'scheduler wait with an expression delay',
+    ],
+    ['tests/a.spec.ts', 'import timers from "node:timers/promises";\nawait timers.setTimeout(ms);', 'H1', 'default timer import'],
+    [
+      'tests/a.spec.ts',
+      'const { setTimeout: wait } = require("timers/promises");\nawait wait(ms);',
+      'H1',
+      'destructured timer alias from require',
+    ],
+    [
+      'tests/a.spec.ts',
+      'import * as util from "node:util";\nconst wait = util.promisify(setTimeout);\nawait wait(ms);',
+      'H1',
+      'promisified callback timer',
+    ],
+    ['tests/test_a.py', 'from time import sleep as nap\nnap(seconds)\n', 'H1', 'aliased Python sleep'],
+    ['tests/test_a.py', 'import asyncio as aio\nawait aio.sleep(seconds)\n', 'H1', 'aliased Python asyncio namespace'],
     ['tests/a.spec.ts', 'await sleep(1000);\n', 'H1', 'a bare sleep() call'],
     ['tests/a.spec.ts', 'if (slow) { await sleep(1000); }\n', 'H1', 'a sleep() call inside a block'],
     ['tests/a.spec.ts', 'sleep(500);\nawait sleep(ms)\n', 'H1', 'bare sleep() statements and a variable argument'],
@@ -307,6 +339,15 @@ function run() {
     ],
     ['tests/a.spec.ts', 'describe.skip("a, b", () => {});\n', 'C1', 'a comma inside the title is not a reason separator'],
     ['tests/test_a.py', '@unittest.skip\ndef test_x():\n    assert f() == 1\n', 'C1', 'a bare @unittest.skip'],
+    ['tests/test_a.py', '@pytest.mark.skipif("sys.platform == win32")\ndef test_x():\n    pass', 'C1', 'skipif condition is not a reason'],
+    ['tests/test_a.py', '@pytest.mark.skipif(True, reason="")\ndef test_x():\n    pass', 'C1', 'empty pytest reason'],
+    ['src/FooTest.java', '@Test @Disabled @DisplayName("checkout") void checkout() {}', 'C1', 'another annotation supplies the string'],
+    [
+      'src/FooTest.java',
+      '@Disabled("known issue") void a() {} @Disabled void b() {}',
+      'C1',
+      'skip annotations on the same line need separate reasons',
+    ],
     ['pkg/a_test.go', 'func TestX(t *testing.T) {\n\tt.Skip()\n}\n', 'C1', 'Go t.Skip() with no reason'],
     ['pkg/a_test.go', 'func TestX(t *testing.T) {\n\tt.SkipNow()\n}\n', 'C1', 'Go t.SkipNow()'],
     ['pkg/a_test.go', 'func (s *Suite) TestX() {\n\ts.T().Skip()\n}\n', 'C1', 'Go s.T().Skip() through a suite'],
@@ -325,6 +366,72 @@ function run() {
     const found = ids(scan(file, source));
     assert(found.includes(expected), `${expected} fires: ${label}`, `got [${found.join(', ')}] for ${file}`);
   }
+
+  for (const [source, rule, expectedLines] of [
+    [
+      'import { test } from "@playwright/test";\ntest["only"]("focus", () => {});\n{\n  const test = widget;\n  test["only"]("value");\n}\ntest["only"]("again", () => {});',
+      'C2',
+      [2, 7],
+    ],
+    ['import { test } from "../support/merged-fixtures";\ntest["only"]("focus", () => {});', 'C2', [2]],
+    ['import { test as verify } from "./merged-fixtures";\nverify["only"]("focus", () => {});', 'C2', [2]],
+    [
+      'import { setTimeout as wait } from "node:timers/promises";\nawait wait(ms);\nfunction exercise(wait) {\n  wait(ms);\n}\nawait wait(ms);',
+      'H1',
+      [2, 6],
+    ],
+    ['import { setTimeout as later } from "node:timers";\nawait new Promise(r => later(r, ms));', 'H1', [2]],
+    ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, ms));', 'H1', [2]],
+    ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, 0));', 'H1', []],
+    ['const later = widget;\nawait new Promise(r => later(r, ms));', 'H1', []],
+    [
+      'import { setTimeout as wait } from "node:timers/promises";\nfunction probe(wait: (ms: number) => void): void { wait(50); }\nawait wait(50);',
+      'H1',
+      [3],
+    ],
+    [
+      'import { setTimeout as timer } from "node:timers/promises";\nfunction run() { const pause = wait; pause(ms); }\nconst wait = timer;\nrun();',
+      'H1',
+      [2],
+    ],
+    ['const a = b; const b = a; a(ms);', 'H1', []],
+    ['import { promisify } from "node:util"; const wait = promisify(wait); wait(ms);', 'H1', []],
+    ['await new Promise(resolve => {\n  const ms = 300;\n  setTimeout(resolve, ms);\n});', 'H1', [3]],
+    ['await new Promise((resolve, reject) => { const ms = 300; setTimeout(reject, ms); });', 'H1', []],
+    ['await new Promise(resolve => { function timer(resolve) { setTimeout(resolve, 300); } });', 'H1', []],
+    [
+      'import { setTimeout } from "node:timers/promises";\nawait setTimeout(0x0);\nawait setTimeout(0b0_0);\nawait setTimeout(0x1);',
+      'H1',
+      [4],
+    ],
+    ['await delay(ms);\nawait delay(.5);\nawait delay(0);', 'H1', [1, 2]],
+    ['const { test } = widget;\ntest["only"]("value");', 'C2', []],
+    ['const { fixture: { test } } = widget;\ntest["only"]["each"](rows)("value");', 'C2', []],
+    ['const { test } = require("@playwright/test");\ntest["only"]["each"](rows)("focus");', 'C2', [2]],
+    ['for (const test of widgets) { test["only"]("value"); }\ntest["only"]("focus", () => {});', 'C2', [2]],
+    ['for (const test of widgets) test["only"]("value");\ntest["only"]("focus", () => {});', 'C2', [2]],
+  ]) {
+    const actualLines = scan('tests/a.spec.ts', source)
+      .filter((finding) => finding.rule.id === rule)
+      .map((finding) => finding.line);
+    assert(JSON.stringify(actualLines) === JSON.stringify(expectedLines), `${rule} resolves the binding at each call`, source);
+  }
+
+  const pythonScopes = [
+    'from time import sleep',
+    'async def helper():',
+    '    from asyncio import (',
+    '        sleep,',
+    '    )',
+    '    await sleep(0)',
+    '    await sleep(1)',
+    'def test_example():',
+    '    sleep(0)',
+  ].join('\n');
+  const pythonHardWaitLines = scan('tests/test_a.py', pythonScopes)
+    .filter((finding) => finding.rule.id === 'H1')
+    .map((finding) => finding.line);
+  assert(JSON.stringify(pythonHardWaitLines) === '[7,9]', 'H1 resolves Python imports in the scope of each call', pythonScopes);
 
   assert(
     ids(scan('vitest.config.pact.ts', 'export default { test: { pool: "forks" } };\n')).includes('H6'),
@@ -455,6 +562,17 @@ function run() {
     ],
     ['src/cart.test.tsx', 'import msw, { delay } from "msw";\nawait delay(150);\n', 'delay imported beside a default msw import'],
     ['src/cart.test.tsx', 'import { delay as mswDelay } from "msw";\nawait mswDelay(300);\n', 'an aliased msw delay'],
+    ['tests/a.spec.ts', 'import { delay as sleep } from "msw";\nawait sleep(100);', 'MSW delay aliased to sleep'],
+    ['tests/a.spec.ts', 'const test = widget;\ntest["only"]("value");', 'unrelated bracket member on a locally bound object'],
+    ['tests/a.spec.ts', 'const example = `test["only"]("example", () => {})`;', 'focus example inside a template literal'],
+    [
+      'tests/a.spec.ts',
+      'const doc = `import { setTimeout as wait } from "node:timers/promises";`;\nawait wait(ms);',
+      'import in a literal',
+    ],
+    ['tests/a.spec.ts', 'await new Promise((r) => setTimeout(r, 0));', 'Promise timer used to yield'],
+    ['tests/a.spec.ts', 'await delay(0.0);', 'bare delay used to yield'],
+    ['tests/test_a.py', 'from asyncio import sleep\nawait sleep(0, result=1)\n', 'imported asyncio sleep used to yield'],
     ['src/cart.test.tsx', 'import * as msw from "msw";\nawait msw.delay(300);\n', 'a namespace msw delay'],
     ['src/cart.test.tsx', 'const { delay } = require("msw");\nawait delay(300);\n', 'an msw delay destructured from require'],
     ['src/cart.test.tsx', 'const { delay: mswDelay } = require("msw/node");\nawait mswDelay(300);\n', 'a renamed msw delay from require'],
@@ -581,6 +699,12 @@ function run() {
       '@unittest.skipIf(sys.platform == "win32", "posix only")\ndef test_x():\n    pass\n',
       '@unittest.skipIf carrying its own reason',
     ],
+    [
+      'tests/test_a.py',
+      '@pytest.mark.skipif(\n    has_issue(),\n    reason="fixed upstream",\n)\ndef test_x():\n    pass',
+      'multiline pytest reason',
+    ],
+    ['src/FooTest.java', '@org.junit.jupiter.api.Disabled(value = "upstream issue")\nvoid checkout() {}', 'named JUnit reason'],
     [
       'pkg/a_test.go',
       'func TestX(t *testing.T) {\n\tif testing.Short() {\n\t\tt.Skip("integration; run without -short")\n\t}\n}\n',
@@ -859,6 +983,20 @@ function run() {
     const hookFile = path.resolve(__dirname, '../skills/bmad-tea-framework/resources/hooks/tea-enforce.cjs');
     for (const [file, content, expected, label] of [
       ['e2e/a.spec.ts', 'await new Promise(r => setTimeout(r, 1000));', 2, 'Promise timer blocks'],
+      ['e2e/a.spec.mts', "import { setTimeout as wait } from 'node:timers/promises';\nawait wait(ms);", 2, 'aliased timer blocks in .mts'],
+      [
+        'e2e/a.spec.cts',
+        "const { setTimeout: wait } = require('node:timers/promises');\nawait wait(0.0);",
+        0,
+        'literal zero timer passes in .cts',
+      ],
+      [
+        'e2e/a.spec.cts',
+        "const { setTimeout: wait } = require('node:timers/promises');\nawait wait(1);",
+        2,
+        'nonzero timer triggers H1 in .cts',
+      ],
+      ['e2e/a.spec.ts', 'test["only"]("x", () => {});', 2, 'bracket focus blocks'],
       ['e2e/a.spec.ts', 'await new Promise((resolve, reject) => {\n setTimeout(resolve, 1000);\n});', 2, 'multiline Promise timer blocks'],
       ['e2e/a.spec.ts', "import { setTimeout } from 'node:timers/promises';\nawait setTimeout(1000);", 2, 'awaited timer blocks'],
       ['e2e/a.spec.ts', 'await setTimeout(\n 1000\n);', 2, 'multiline awaited timer blocks'],
@@ -907,6 +1045,9 @@ function run() {
         timeout: 10_000,
       });
       assert(result.status === expected, label, `exit=${result.status} stderr=${result.stderr}`);
+      if (file.endsWith('.cts') && expected === 2) {
+        assert(result.stderr.includes('[H1 '), 'the .cts timer is blocked by H1', result.stderr);
+      }
     }
   } finally {
     fs.rmSync(payloadProject, { recursive: true, force: true });

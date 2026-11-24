@@ -1,6 +1,6 @@
 {
   "testGlobs": [
-    "tests/**/*.spec.{ts,js}"
+    "tests/**/*.spec.{ts,js,mts,cts}"
   ],
   "pactConfigGlobs": [],
   "excludeGlobs": [],
@@ -8,5 +8,5 @@
   "maxFileLines": 1000,
   "stopScanWindowSeconds": 900,
   "maxScannedFiles": 5000,
-  "hookSha256": "c284f1ead755fddbb77ce4acd12c4716abb151aa4b6f7b50efe68d7e52ad5f3b"
+  "hookSha256": "e09c6e4295545bfda98918391bd6d0301c361ea2fd0704a221063b228ee765e8"
 }

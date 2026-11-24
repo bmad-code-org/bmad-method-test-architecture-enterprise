@@ -117,7 +117,7 @@ Fill `testGlobs` from the frameworks selected in step 2 and the directories scaf
 
 | Detected surface | Add to `testGlobs`                                                                                                                                             |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Playwright       | `{test_dir}/**/*.spec.{ts,js}`                                                                                                                                 |
+| Playwright       | `{test_dir}/**/*.spec.{ts,js,mts,cts}`                                                                                                                         |
 | Cypress          | `cypress/e2e/**/*.cy.{ts,js}`                                                                                                                                  |
 | Vitest / Jest    | `**/*.test.{ts,tsx,js,jsx}`, `**/*.spec.{ts,tsx,js,jsx}` scoped to `{test_dir}` and the source tree that holds co-located unit tests                           |
 | Pact (consumer)  | `**/*.pacttest.{ts,js}`                                                                                                                                        |
