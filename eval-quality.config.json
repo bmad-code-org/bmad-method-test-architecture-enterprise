@@ -2281,7 +2281,7 @@
           "reason": "Trace probe strength records retain three uncovered whole-body falsifiers; reviewed against the stored expected-strength artifact.",
           "asOf": {
             "subject": "test/probes/expected-strength.json",
-            "hash": "22c0d7811312590b2aca9fca1a796ac76b3839cd08e814448801692baea81471"
+            "hash": "3ae962a02a3a527033d4f5f4fbf0f928102c4eff6b42e7b0cf2b0108a8a6d80d"
           }
         },
         {
