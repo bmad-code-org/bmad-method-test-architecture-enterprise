@@ -990,6 +990,12 @@ function run() {
         0,
         'literal zero timer passes in .cts',
       ],
+      [
+        'e2e/a.spec.cts',
+        "const { setTimeout: wait } = require('node:timers/promises');\nawait wait(1);",
+        2,
+        'nonzero timer triggers H1 in .cts',
+      ],
       ['e2e/a.spec.ts', 'test["only"]("x", () => {});', 2, 'bracket focus blocks'],
       ['e2e/a.spec.ts', 'await new Promise((resolve, reject) => {\n setTimeout(resolve, 1000);\n});', 2, 'multiline Promise timer blocks'],
       ['e2e/a.spec.ts', "import { setTimeout } from 'node:timers/promises';\nawait setTimeout(1000);", 2, 'awaited timer blocks'],
@@ -1039,6 +1045,9 @@ function run() {
         timeout: 10_000,
       });
       assert(result.status === expected, label, `exit=${result.status} stderr=${result.stderr}`);
+      if (file.endsWith('.cts') && expected === 2) {
+        assert(result.stderr.includes('[H1]'), 'the .cts timer is blocked by H1', result.stderr);
+      }
     }
   } finally {
     fs.rmSync(payloadProject, { recursive: true, force: true });
