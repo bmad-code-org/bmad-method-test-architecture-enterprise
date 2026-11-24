@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-11-24
+
 ### Added
 
 - Red mode can generate scaffolds for testable criteria and report criteria that need clarification. `unusable_criteria = "skip-and-report"` opts in, and the CLI returns the skipped count (#509).
