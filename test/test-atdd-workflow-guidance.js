@@ -153,7 +153,7 @@ function main() {
     ['strategy', 'Record the exact declared acceptance criterion id on every scenario'],
     ['strategy', 'Identify the one smallest criterion-defining assertion that must fail first'],
     ['strategy', 'Assert the exact newly promised status, scalar, or property'],
-    ['strategy', 'Plan exactly one primary red-phase scaffold for every declared criterion'],
+    ['strategy', 'Plan exactly one primary red-phase scaffold for every testable criterion'],
     ['strategy', 'choose the transition-bearing branch as the primary red-phase scenario'],
     ['api', 'Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id'],
     ['api', '"criterion_registry"'],
