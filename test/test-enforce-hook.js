@@ -1046,7 +1046,7 @@ function run() {
       });
       assert(result.status === expected, label, `exit=${result.status} stderr=${result.stderr}`);
       if (file.endsWith('.cts') && expected === 2) {
-        assert(result.stderr.includes('[H1]'), 'the .cts timer is blocked by H1', result.stderr);
+        assert(result.stderr.includes('[H1 '), 'the .cts timer is blocked by H1', result.stderr);
       }
     }
   } finally {
