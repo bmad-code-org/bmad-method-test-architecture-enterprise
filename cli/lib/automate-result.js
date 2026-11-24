@@ -206,7 +206,7 @@ function skippedRedCriteria(checkpoint, text, settings, operation, inventory) {
   if (excluded.size >= registry.size) throw new Error('Red checklist has no testable acceptance criteria');
 
   const section = text.split(/^## Unusable criteria[ \t]*\r?$/m)[1]?.split(/^#{1,2}[ \t]/m)[0] ?? '';
-  const oneLine = (value) => value.trim().replace(/\s+/g, ' ');
+  const oneLine = (value) => value.trim().replaceAll(/\s+/g, ' ');
   const listed = [...section.matchAll(/^-[ \t]+(AC-[1-9]\d*:.*)$/gm)].map((match) => oneLine(match[1]));
   const expectedEntries = skipped.map(({ id, text, reason }) => `${id}: ${oneLine(text)} | Reason: ${oneLine(reason)}`);
   if (!isDeepStrictEqual(listed, expectedEntries))
