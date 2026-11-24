@@ -36,3 +36,10 @@ persistent_facts = []
 # Override wins. Leave empty for no custom post-completion behavior.
 
 on_complete = ""
+
+# Coverage thresholds for a deterministic Trace gate, as whole percentages.
+[workflow.gate]
+p0_required = 100
+p1_target = 90
+p1_minimum = 80
+overall_minimum = 80

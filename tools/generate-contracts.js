@@ -1593,9 +1593,8 @@ function allOf(operands) {
  *
  * Step-05 section 3b builds the summary as one `const e2eTraceSummary = {...}`
  * whose top-level keys sit at a two-space indent, then adds `waivers` when a
- * register exists and `gate_status` and `gate_criteria` when the gate was
- * eligible, by assignment. The always-present keys are the literal's; the
- * conditional ones are the assignment targets. A key the workflow gains lands
+ * register exists and the gate fields when the gate was eligible. The literal holds the
+ * always-present keys and the assignments add conditional keys. A key the workflow gains lands
  * here without an edit and `--check` fails until the contract is regenerated,
  * which is the rule the verdict descriptor already follows for tea-test-review.
  */
@@ -1686,6 +1685,7 @@ const TRACE_SUMMARY_TYPES = {
   waivers: 'object',
   gate_status: 'string',
   gate_criteria: 'object',
+  gate_policy: 'object',
 };
 
 /** The key sets and types of the summary, in the vocabulary of the descriptor's fields and of the `shape` operator. */
@@ -1707,6 +1707,7 @@ function traceSummaryDescriptor(keys, cardinalityBound) {
       '/rejected_evidence': 'collection',
       '/coverage': 'payload',
       '/gate_criteria': 'payload',
+      '/gate_policy': 'payload',
       '/live_evidence': 'payload',
       '/waivers': 'payload',
     },
@@ -1737,7 +1738,7 @@ function traceWholeSummaryTargets(set) {
  * response key at one step, and the summary declares twenty-two. The other oracles read the gate, the coverage
  * arithmetic, the oracle block and the collections. This one states that the summary is the object step-05
  * declares: every key its literal always carries is present, no key beyond the ones it declares appears (the
- * conditional `waivers`, `gate_status` and `gate_criteria` are permitted), and each key whose type the contract
+ * conditional waiver and gate fields are permitted), and each key whose type the contract
  * states has it. Each required key also resolves as a pointer of its own, which is what puts every key in the check
  * beside the `shape` that reads the root.
  *
@@ -2293,8 +2294,9 @@ function traceOracleSpecs(groundTruth) {
 
   // After every oracle above, so the ids above keep their numbers. One oracle per set reads the whole summary,
   // which is what the `whole-body` coverage rule asks for and no oracle above supplies.
+  const { always, conditional } = summaryKeysFromStep05();
+  const keyCount = always.length;
   for (const set of groundTruth.fixtureSets) {
-    const keyCount = summaryKeysFromStep05().always.length;
     push(
       set.id,
       'whole-summary',
@@ -2302,7 +2304,7 @@ function traceOracleSpecs(groundTruth) {
         polarity: 'expects-hold',
         commentary:
           `${set.id}: the summary is the object step-05 declares. All ${keyCount} keys its literal always carries are present, each typed key of its declared type, ` +
-          'and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.',
+          `and the only keys beyond them are the conditional fields: ${conditional.join(', ')}.`,
         direction: {
           polarity: 'expects-hold',
           relation: 'all',
@@ -2451,7 +2453,7 @@ function buildTraceContract() {
   const specs = traceOracleSpecs(groundTruth);
   const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
   const summaryKeys = summaryKeysFromStep05();
-  for (const key of ['gate_status', 'gate_criteria', 'waivers']) {
+  for (const key of ['gate_status', 'gate_criteria', 'gate_policy', 'waivers']) {
     assert(summaryKeys.conditional.includes(key), `step-05 no longer assigns "${key}" conditionally, and the oracles here address it`);
   }
   for (const key of [

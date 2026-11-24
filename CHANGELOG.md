@@ -10,10 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Red mode can generate scaffolds for testable criteria and report criteria that need clarification. `unusable_criteria = "skip-and-report"` opts in, and the CLI returns the skipped count (#509).
-
-### Changed
-
-- The installation guide identifies BMad v7 core and the version its preview reports (#503).
+- The installation guide adds a BMad v7 compatibility section and identifies the version its preview reports (#503).
+- Trace uses coverage thresholds from `[workflow.gate]` and records each effective threshold and its source in both gate artifacts (#508).
 
 ## [4.4.3] - 2026-11-23
 

@@ -99,8 +99,8 @@ Before starting this workflow, verify:
 
 - [ ] All tests use Given-When-Then structure with clear comments
 - [ ] All tests have descriptive names explaining what they test
-- [ ] Every executable leaf title carries exactly one declared `AC-<n>` id from the criterion registry
-- [ ] Every declared acceptance criterion has exactly one red-phase leaf scaffold
+- [ ] Every executable leaf title carries exactly one testable `AC-<n>` ID from the criterion registry
+- [ ] Each testable criterion has exactly one red-phase leaf scaffold
 - [ ] Secondary branches and journeys are recorded for green-phase automation
 - [ ] Criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
 - [ ] API setup responses from unimplemented endpoints remain opaque before the criterion assertion

@@ -778,7 +778,7 @@ Existing `AC-<n>` ids remain unchanged.
 For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id.
 Every executable test title carries exactly one id from that registry.
 
-TEA emits exactly one red-phase leaf scaffold per declared criterion.
+TEA emits exactly one red-phase leaf scaffold per testable criterion.
 Secondary branches and journeys remain implementation-checklist work until green-phase automation.
 Each scaffold puts one direct criterion assertion first.
 That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks.
