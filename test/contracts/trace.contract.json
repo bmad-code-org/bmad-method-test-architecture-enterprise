@@ -501,7 +501,7 @@
     },
     {
       "id": "B-027",
-      "description": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "description": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional fields: waivers, gate_status, gate_policy, gate_criteria.",
       "severity": "material",
       "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
       "requirementLinks": [
@@ -520,7 +520,7 @@
     },
     {
       "id": "B-028",
-      "description": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "description": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional fields: waivers, gate_status, gate_policy, gate_criteria.",
       "severity": "material",
       "observableSuccessCriterion": "Both summaries carry every key step-05 always writes, each typed key of its declared type, and no key step-05 does not declare.",
       "requirementLinks": [
@@ -2500,7 +2500,7 @@
     {
       "id": "O-027",
       "polarity": "expects-hold",
-      "commentary": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "commentary": "seeded-tenant-data-export: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional fields: waivers, gate_status, gate_policy, gate_criteria.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -2619,7 +2619,7 @@
                 "links": null,
                 "waivers": "object",
                 "gate_status": "string",
-                "gate_policy": null,
+                "gate_policy": "object",
                 "gate_criteria": "object"
               }
             }
@@ -2806,7 +2806,7 @@
     {
       "id": "O-028",
       "polarity": "expects-hold",
-      "commentary": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional waivers, gate_status and gate_criteria.",
+      "commentary": "clean-api-token-lifecycle: the summary is the object step-05 declares. All 22 keys its literal always carries are present, each typed key of its declared type, and the only keys beyond them are the conditional fields: waivers, gate_status, gate_policy, gate_criteria.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -2925,7 +2925,7 @@
                 "links": null,
                 "waivers": "object",
                 "gate_status": "string",
-                "gate_policy": null,
+                "gate_policy": "object",
                 "gate_criteria": "object"
               }
             }
@@ -3245,7 +3245,7 @@
               "links": null,
               "waivers": "object",
               "gate_status": "string",
-              "gate_policy": null,
+              "gate_policy": "object",
               "gate_criteria": "object"
             },
             "successIndicator": "/gate_status",
@@ -3255,6 +3255,7 @@
               "/rejected_evidence": "collection",
               "/coverage": "payload",
               "/gate_criteria": "payload",
+              "/gate_policy": "payload",
               "/live_evidence": "payload",
               "/waivers": "payload"
             },
