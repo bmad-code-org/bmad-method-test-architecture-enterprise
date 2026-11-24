@@ -342,6 +342,12 @@ function run() {
     ['tests/test_a.py', '@pytest.mark.skipif("sys.platform == win32")\ndef test_x():\n    pass', 'C1', 'skipif condition is not a reason'],
     ['tests/test_a.py', '@pytest.mark.skipif(True, reason="")\ndef test_x():\n    pass', 'C1', 'empty pytest reason'],
     ['src/FooTest.java', '@Test @Disabled @DisplayName("checkout") void checkout() {}', 'C1', 'another annotation supplies the string'],
+    [
+      'src/FooTest.java',
+      '@Disabled("known issue") void a() {} @Disabled void b() {}',
+      'C1',
+      'skip annotations on the same line need separate reasons',
+    ],
     ['pkg/a_test.go', 'func TestX(t *testing.T) {\n\tt.Skip()\n}\n', 'C1', 'Go t.Skip() with no reason'],
     ['pkg/a_test.go', 'func TestX(t *testing.T) {\n\tt.SkipNow()\n}\n', 'C1', 'Go t.SkipNow()'],
     ['pkg/a_test.go', 'func (s *Suite) TestX() {\n\ts.T().Skip()\n}\n', 'C1', 'Go s.T().Skip() through a suite'],
@@ -378,12 +384,54 @@ function run() {
     ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, ms));', 'H1', [2]],
     ['import * as timers from "node:timers";\nawait new Promise(r => timers.setTimeout(r, 0));', 'H1', []],
     ['const later = widget;\nawait new Promise(r => later(r, ms));', 'H1', []],
+    [
+      'import { setTimeout as wait } from "node:timers/promises";\nfunction probe(wait: (ms: number) => void): void { wait(50); }\nawait wait(50);',
+      'H1',
+      [3],
+    ],
+    [
+      'import { setTimeout as timer } from "node:timers/promises";\nfunction run() { const pause = wait; pause(ms); }\nconst wait = timer;\nrun();',
+      'H1',
+      [2],
+    ],
+    ['const a = b; const b = a; a(ms);', 'H1', []],
+    ['import { promisify } from "node:util"; const wait = promisify(wait); wait(ms);', 'H1', []],
+    ['await new Promise(resolve => {\n  const ms = 300;\n  setTimeout(resolve, ms);\n});', 'H1', [3]],
+    ['await new Promise((resolve, reject) => { const ms = 300; setTimeout(reject, ms); });', 'H1', []],
+    ['await new Promise(resolve => { function timer(resolve) { setTimeout(resolve, 300); } });', 'H1', []],
+    [
+      'import { setTimeout } from "node:timers/promises";\nawait setTimeout(0x0);\nawait setTimeout(0b0_0);\nawait setTimeout(0x1);',
+      'H1',
+      [4],
+    ],
+    ['await delay(ms);\nawait delay(.5);\nawait delay(0);', 'H1', [1, 2]],
+    ['const { test } = widget;\ntest["only"]("value");', 'C2', []],
+    ['const { fixture: { test } } = widget;\ntest["only"]["each"](rows)("value");', 'C2', []],
+    ['const { test } = require("@playwright/test");\ntest["only"]["each"](rows)("focus");', 'C2', [2]],
+    ['for (const test of widgets) { test["only"]("value"); }\ntest["only"]("focus", () => {});', 'C2', [2]],
+    ['for (const test of widgets) test["only"]("value");\ntest["only"]("focus", () => {});', 'C2', [2]],
   ]) {
     const actualLines = scan('tests/a.spec.ts', source)
       .filter((finding) => finding.rule.id === rule)
       .map((finding) => finding.line);
     assert(JSON.stringify(actualLines) === JSON.stringify(expectedLines), `${rule} resolves the binding at each call`, source);
   }
+
+  const pythonScopes = [
+    'from time import sleep',
+    'async def helper():',
+    '    from asyncio import (',
+    '        sleep,',
+    '    )',
+    '    await sleep(0)',
+    '    await sleep(1)',
+    'def test_example():',
+    '    sleep(0)',
+  ].join('\n');
+  const pythonHardWaitLines = scan('tests/test_a.py', pythonScopes)
+    .filter((finding) => finding.rule.id === 'H1')
+    .map((finding) => finding.line);
+  assert(JSON.stringify(pythonHardWaitLines) === '[7,9]', 'H1 resolves Python imports in the scope of each call', pythonScopes);
 
   assert(
     ids(scan('vitest.config.pact.ts', 'export default { test: { pool: "forks" } };\n')).includes('H6'),

@@ -150,7 +150,7 @@ This project runs on Claude Code, which supports tool hooks, so the hook was ins
 
   ```json
   {
-    "testGlobs": ["tests/e2e/**/*.spec.{ts,js}"],
+    "testGlobs": ["tests/e2e/**/*.spec.{ts,js,mts,cts}"],
     "pactConfigGlobs": [],
     "excludeGlobs": [],
     "disabledRules": [],
