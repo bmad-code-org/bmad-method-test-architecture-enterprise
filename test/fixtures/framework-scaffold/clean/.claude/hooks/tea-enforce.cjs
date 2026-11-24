@@ -970,7 +970,7 @@ function collectJsBindings(stripped, kept, bindings) {
       if (/^[\w$]+$/.test(name) && /^[\w$]+$/.test(local)) record(module, name, local, index, kind);
     }
   };
-  for (const match of stripped.matchAll(/\b(const|let|var|function|class)\s+(?=[A-Za-z_$\[{])/g)) {
+  for (const match of stripped.matchAll(/\b(const|let|var|function|class)\s+(?=[A-Za-z_$[{])/g)) {
     const target = stripped.slice(match.index + match[0].length);
     for (const name of bindingNames(target)) bindings.set(name, UNKNOWN_BINDING, match.index, match[1]);
   }
