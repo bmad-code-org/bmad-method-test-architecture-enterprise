@@ -92,7 +92,7 @@
       }
     },
     "Target": {
-      "description": "Where a fix lands and what it changes: a SKILL.md or prompt for a skill or agent, tool descriptions or schemas for an MCP server, a handler for an API, a workflow step file, a promptfoo prompt.",
+      "description": "Where a fix lands and what it changes: a SKILL.md or prompt for a skill or agent, tool descriptions or schemas for an MCP server, a handler for an API, or a workflow step file.",
       "type": "object",
       "additionalProperties": false,
       "required": ["artifact", "change"],

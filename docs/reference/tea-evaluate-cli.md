@@ -125,7 +125,7 @@ They cover the manifest, probes, mutations, degenerate responses, held-out plan,
 ## Target findings
 
 `target-findings.json` records what the evaluation showed wrong or weak in the target itself, beside the repairs the gap loop makes to the evaluation.
-The Evaluate skill writes it as Stage 11 classifies each failure, and the adopter decides every entry once, at the end of that stage.
+The Evaluate skill writes it as gap review classifies each failure, and the adopter decides every entry once, when gap review ends.
 `cli/lib/evaluate/schemas/target-findings.schema.json` defines it, and [check](#check) holds it to the folder.
 
 ```json
@@ -273,10 +273,10 @@ warning: runs/<invocationId>/run.json: [held-out-drift] the newest scored held-o
 ```
 
 The `target-findings` rule warns while the evaluation is not ready for its pull request: a scored evaluation (an accepted `baseline/` or a run with a completed score) has no `target-findings.json`, a finding is `undecided`, or a `this-pr` finding records no `measurement`.
-The warnings never change the exit, so the gap loop's own `check` keeps passing until the adopter decides every finding at the end of Stage 11.
+The warnings never change the exit, so the gap loop's own `check` keeps passing until the adopter decides every finding when gap review ends.
 
 ```text
-warning: target-findings.json: [target-findings] finding T-002 is undecided; decide this-pr, new-pr or declined with a reason at the end of Stage 11
+warning: target-findings.json: [target-findings] finding T-002 is undecided; decide this-pr, new-pr or declined with a reason before the pull request
 ```
 
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.

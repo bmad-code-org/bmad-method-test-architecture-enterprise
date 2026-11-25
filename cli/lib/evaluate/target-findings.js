@@ -233,7 +233,7 @@ function targetFindingsWarnings(folder) {
     return scored
       ? [
           warn(
-            `the evaluation has scored evidence and no ${TARGET_FINDINGS_NAME}; record each target problem with its decision at the end of Stage 11, or an empty findings list when the evaluation found none`,
+            `the evaluation has scored evidence and no ${TARGET_FINDINGS_NAME}; record each problem found in the target with its decision, or an empty findings list when the evaluation found none`,
           ),
         ]
       : [];
@@ -244,7 +244,7 @@ function targetFindingsWarnings(folder) {
   for (const finding of value.findings) {
     if (!isPlainObject(finding) || typeof finding.id !== 'string' || !isPlainObject(finding.disposition)) continue;
     if (finding.disposition.decision === 'undecided')
-      warnings.push(warn(`finding ${finding.id} is undecided; decide this-pr, new-pr or declined with a reason at the end of Stage 11`));
+      warnings.push(warn(`finding ${finding.id} is undecided; decide this-pr, new-pr or declined with a reason before the pull request`));
     else if (finding.disposition.decision === 'this-pr' && finding.disposition.measurement === undefined)
       warnings.push(
         warn(

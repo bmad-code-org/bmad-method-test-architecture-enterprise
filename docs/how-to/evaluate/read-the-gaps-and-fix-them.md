@@ -138,27 +138,11 @@ Repeated held-out feedback can still influence later changes. A held-out pass is
 
 ## 6. Decide the Target's Improvements
 
-The steps above repair the evaluation. This step improves the thing you evaluated. While the loop runs, the skill records every target problem in `target-findings.json` in the evaluation folder:
+The steps above repair the evaluation. This step improves what you evaluated. While the loop runs, the skill records each target problem in `target-findings.json`: a clean control that fails on correct input, a behavior that fails only some trials, an isolation violation, a right answer reached through wrong steps, or a rule the target never states. Each finding cites its evidence and proposes a change to a named file.
 
-- a clean control that fails on correct input;
-- a behavior that passes some trials and fails others, usually an ambiguity in the target;
-- an isolation violation, where the target reads or writes beyond its task;
-- a process finding, where the answer is right and the steps are wrong or wasteful;
-- a rule the target never states, or states two ways, found while writing the requirements.
+After the held-out review, the skill shows every finding at once. Decide each: `this-pr` (applied with the others and measured by the one rerun the baseline needs), `new-pr` (a `target-handoff.md` for the next evaluation to measure) or `declined` (with your reason). The gap report then lists the net improvements with before and after numbers. An empty list records that the evaluation found nothing to improve.
 
-Each finding cites its evidence (run, score, probe and trial, or the requirements text), names the file a fix lands in (a `SKILL.md`, a prompt, a tool description, a handler) and proposes the change.
-
-When the development and held-out results are reviewed, the skill shows you every finding at once. Decide each one:
-
-| Decision   | What happens                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `this-pr`  | The change lands in this pull request. The skill applies every this-PR change together and measures them with one rerun.        |
-| `new-pr`   | The skill writes `target-handoff.md` with the target, the evidence and the proposed change, so the next evaluation measures it. |
-| `declined` | The target stays as it is. The skill records your reason.                                                                       |
-
-The rerun is the development and held-out run the baseline needs anyway, so there is no fix-and-rerun cycle per finding. The gap report then shows what the target got wrong, every improvement opportunity with its decision, and the net improvements with before and after numbers. An evaluation that found nothing records an empty list, so "no improvements" is an explicit answer.
-
-`tea-evaluate check` warns while a finding is undecided, while a this-PR change has no measured rerun, and while a scored evaluation has no `target-findings.json`. The warnings never block the loop. Clear them before you open the pull request.
+`check` warns, without blocking, until every finding is decided and measured. See [Target findings](/docs/reference/tea-evaluate-cli.md#target-findings).
 
 ## Manual Commands
 
