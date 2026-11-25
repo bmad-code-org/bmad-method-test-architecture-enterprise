@@ -130,6 +130,29 @@ function sameReceipt(left, right) {
   return JSON.stringify(ordered(left)) === JSON.stringify(ordered(right));
 }
 
+/** Whether a qualification record shows its clean arm failing: its oracles decided, and one was violated. */
+function showsFailure(record) {
+  return record?.verdict === 'violated';
+}
+
+/** A trial set's paths outside its allowlist, or null when the manifest's lists are not lists of paths. */
+function outsideAllowlist(manifest) {
+  const paths = (value) => Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+  if (!paths(manifest?.observedMounts) || !paths(manifest?.allowedMounts)) return null;
+  return mountsOutsideAllowlist(manifest.observedMounts, manifest.allowedMounts);
+}
+
+/** Whether `text` names `id` as a whole finding ID, so `T-001` is not found inside `T-0010`. */
+function namesFinding(text, id) {
+  return new RegExp(`(?<![A-Za-z0-9-])${id}(?![0-9])`).test(text);
+}
+
+/** The partitions a measurement entry covers: its own, or every partition the evaluation has for a run of both. */
+function covered(entry, heldOut) {
+  if (entry.partition !== 'both') return [entry.partition];
+  return heldOut.size > 0 ? ['development', 'held-out'] : ['development'];
+}
+
 /** The probe's partition: held-out when `evaluation.json` holds it out, development otherwise. */
 function partitionOf(heldOut, probe) {
   return heldOut.has(probe) ? 'held-out' : 'development';
@@ -265,7 +288,10 @@ function checkRunEvidence(report, folder, label, finding, heldOut) {
     const file = `${root}/qualification/${probe}/${evidence.qualification}.json`;
     const record = folderJson(folder, file);
     if (record === null) report(`${label} cites qualification record ${file}, which cannot be read`);
-    else if (record.verdict === 'held') report(`${label} cites qualification record ${file}, whose clean arm held, so it shows no failure`);
+    else if (!showsFailure(record))
+      report(
+        `${label} cites qualification record ${file}, whose verdict is ${JSON.stringify(record.verdict ?? null)}; it shows the clean arm failing only when its oracles decided and one was violated`,
+      );
   }
   const trialSet = `${root}/trial-sets/${probe}`;
   if (evidence.score === undefined && evidence.trials === undefined && evidence.paths === undefined) return null;
@@ -289,7 +315,12 @@ function checkRunEvidence(report, folder, label, finding, heldOut) {
     const manifest = folderJson(folder, `${trialSet}/isolation-manifest.json`);
     if (manifest === null) report(`${label} cites isolation paths of probe ${probe}; ${trialSet}/isolation-manifest.json cannot be read`);
     else {
-      const outside = new Set(mountsOutsideAllowlist(manifest.observedMounts ?? [], manifest.allowedMounts ?? []));
+      const listed = outsideAllowlist(manifest);
+      if (listed === null)
+        report(
+          `${label} cites isolation paths of probe ${probe}; ${trialSet}/isolation-manifest.json holds no list of observedMounts and allowedMounts to verify them against`,
+        );
+      const outside = new Set(listed ?? evidence.paths);
       for (const cited of evidence.paths)
         if (!outside.has(cited))
           report(
@@ -346,14 +377,15 @@ function checkMeasurement(report, folder, label, finding, { heldOut, batch }) {
       );
   }
   // Every this-pr change is applied together and measured by one rerun.
-  for (const entry of measurement.partitions) {
-    const shared = batch.get(entry.partition);
-    if (shared === undefined) batch.set(entry.partition, { ...entry.after, by: finding.id });
-    else if (shared.run !== entry.after.run || shared.score !== entry.after.score)
-      report(
-        `${label} measures ${entry.partition} after run ${entry.after.run}, and ${shared.by} after run ${shared.run}; every this-pr change is applied together and measured by one rerun`,
-      );
-  }
+  for (const entry of measurement.partitions)
+    for (const partition of covered(entry, heldOut)) {
+      const shared = batch.get(partition);
+      if (shared === undefined) batch.set(partition, { ...entry.after, by: finding.id });
+      else if (shared.run !== entry.after.run || shared.score !== entry.after.score)
+        report(
+          `${label} measures ${partition} after run ${entry.after.run}, and ${shared.by} after run ${shared.run}; every this-pr change is applied together and measured by one rerun`,
+        );
+    }
   const receipts = new Set(measurement.probes.map((receipt) => receipt.probe));
   if (evidence.probe !== undefined && !receipts.has(evidence.probe))
     report(`${label} measures no receipt for probe ${evidence.probe}, the probe its evidence cites`);
@@ -481,7 +513,7 @@ function reviewTargetFindings(folder, { evaluation, contract, validate, describe
     if (disposition.decision === 'new-pr') {
       const handoff = readFolderFile(folder, disposition.handoff);
       if (!handoff.ok) report(`${label} hands off to ${disposition.handoff}, which ${handoff.reason}`);
-      else if (!handoff.bytes.toString('utf8').includes(finding.id))
+      else if (!namesFinding(handoff.bytes.toString('utf8'), finding.id))
         report(`${label} hands off to ${disposition.handoff}, which does not name ${finding.id}`);
     }
     if (disposition.decision === 'undecided')
@@ -512,6 +544,9 @@ function scoredRun(folder, named) {
     if (!RUN_ID.test(run)) continue;
     const record = folderJson(folder, `runs/${run}/run.json`);
     if (record?.command !== 'run') continue;
+    // A run still in progress has neither finished nor stopped (the state `status` reads); a run that stopped at exit 11 keeps its
+    // outcome and its qualification evidence, so it stays.
+    if (named === undefined && record.completed !== true && !isPlainObject(record.outcome)) continue;
     const score = namesIn(folder, `runs/${run}/scores`, RUN_ID)
       .toReversed()
       .find((candidate) => folderJson(folder, `runs/${run}/scores/${candidate}/score.json`) !== null);
@@ -549,8 +584,7 @@ function draftTargetFindings(folder, { run, evaluation, contract }) {
     const clean = probe.expectedClean === true;
     for (const phase of clean ? ['baseline-pass', 'baseline-known-failing'] : []) {
       const record = folderJson(folder, `${root}/qualification/${id}/${phase}.json`);
-      if (record !== null && record.verdict !== 'held')
-        candidate(probe, 'clean-control-failure', { run: found.run, probe: id, qualification: phase });
+      if (showsFailure(record)) candidate(probe, 'clean-control-failure', { run: found.run, probe: id, qualification: phase });
     }
     if (found.score !== null && (clean || heldOut.has(id))) {
       const outcome = reducedOutcome(folder, root, found.score, id);
@@ -574,7 +608,7 @@ function draftTargetFindings(folder, { run, evaluation, contract }) {
     if (heldOut.has(id)) continue;
     const trialSet = `${root}/trial-sets/${id}`;
     const manifest = folderJson(folder, `${trialSet}/isolation-manifest.json`);
-    const outside = manifest === null ? [] : mountsOutsideAllowlist(manifest.observedMounts ?? [], manifest.allowedMounts ?? []);
+    const outside = outsideAllowlist(manifest) ?? [];
     if (outside.length > 0) candidate(probe, 'isolation-violation', { run: found.run, probe: id, paths: outside });
     if (!clean || found.score === null) continue;
     const phases = folderJson(folder, `${root}/operation-phases.json`);

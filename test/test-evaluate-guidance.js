@@ -3751,6 +3751,8 @@ function checkPrChecklist(guide, failures) {
     'an empty list when the evaluation found none',
     'tea-evaluate check --evaluation <evaluation-folder> --ready` exits 0',
     'every citation resolves to its run',
+    'go in a later commit that changes nothing the run evaluated',
+    'after the last commit that changed an evaluated input or the target',
     '`## Net improvements`',
   ])
     requireText(checklist, marker, 'ci.md pre-PR checklist', failures);
@@ -3819,6 +3821,7 @@ function checkTargetFindingsGuidance(guide, template, failures) {
     'tea-evaluate compare --evaluation <evaluation-folder> --run <invocationId>',
     '`measurement`',
     'the same for every `this-pr` finding',
+    'for every other partition, `before` is the scored run of that partition taken before the change',
     'The receipts are committed',
     'copied and never computed',
     'tea-evaluate check --evaluation <evaluation-folder> --ready',
@@ -4669,6 +4672,14 @@ function checkSkillStage12(skillContent, failures) {
     'Load `references/gaps.md`.',
   ])
     requireText(stage11, marker, 'SKILL.md Stage 11', failures);
+  for (const marker of ['continue from Stage 7 with `run --before-state`', 'Any other preflight failure stays a stop'])
+    requireText(headingBody(skillContent, '### Stage 6: Adapters'), marker, 'SKILL.md Stage 6', failures);
+  requireText(
+    fs.readFileSync(path.join(SKILL_ROOT, 'references', 'authoring-routing.md'), 'utf8'),
+    'to `<evaluation-folder>/target-findings.json`, with every record its findings cite',
+    'authoring-routing.md',
+    failures,
+  );
   requireText(headingBody(skillContent, '## Workflow'), 'Capture target findings from the start', 'SKILL.md workflow', failures);
   if (skillContent.indexOf('Capture target findings from the start') > skillContent.indexOf('### Stage 1: Inspection'))
     failures.push('SKILL.md asks for target findings only after Stage 1');

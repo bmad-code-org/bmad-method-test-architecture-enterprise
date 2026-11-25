@@ -266,6 +266,12 @@ for (const kind of Object.keys(FLAWS)) {
     const ready = cli(context, ['check', '--ready']);
     expectClean(ready);
     assert.deepEqual(warningsOf(ready), []);
+    // A newer run still in progress (no completion, no outcome) is passed over when no run is named.
+    const running = path.join(context.folder, 'runs', '20991231T000000000Z-ffffffff');
+    fs.mkdirSync(running);
+    writeJson(path.join(running, 'run.json'), { invocationId: path.basename(running), command: 'run' });
+    assert.equal(draft(context).run, after.run);
+    fs.rmSync(running, { recursive: true });
   });
 
   test(`${kind}: a measurement the runs do not bear out is refused`, () => {
@@ -334,6 +340,15 @@ for (const kind of Object.keys(FLAWS)) {
     };
     writeFindings(context, [structuredClone(finding), second]);
     expectFinding(cli(context, ['check']), 'target-findings', 'every this-pr change is applied together and measured by one rerun');
+    // A run of both partitions and a run of one partition are the same rerun only when they are the same run.
+    const partial = structuredClone(second);
+    partial.disposition.measurement.partitions = [{ partition: 'development', before, after: before }];
+    writeFindings(context, [structuredClone(finding), partial]);
+    expectFinding(
+      cli(context, ['check']),
+      'target-findings',
+      `measures development after run ${before.run}, and T-001 after run ${after.run}`,
+    );
     const regression = {
       ...structuredClone(finding),
       id: 'T-002',
@@ -449,12 +464,26 @@ for (const kind of Object.keys(FLAWS)) {
       '# Target handoff\n\n## T-001: the clean control fails its qualification\n',
     );
     expectClean(cli(stopped, ['check', '--ready']));
+    // A record whose verdict does not show the clean arm failing is no evidence, to the drafter or to check.
+    const recordFile = path.join(stopped.folder, 'runs', run, 'qualification', 'P-001', 'baseline-pass.json');
+    const genuine = fs.readFileSync(recordFile);
+    fs.writeFileSync(recordFile, '{}\n');
+    assert.deepEqual(draft(stopped, run).candidates, []);
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose verdict is null');
+    fs.writeFileSync(recordFile, genuine);
+    // The handoff names the finding by its whole ID.
+    fs.writeFileSync(path.join(stopped.folder, 'target-handoff.md'), '# Target handoff\n\n## T-0010: another finding\n');
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'which does not name T-001');
+    fs.writeFileSync(
+      path.join(stopped.folder, 'target-handoff.md'),
+      '# Target handoff\n\n## T-001: the clean control fails its qualification\n',
+    );
     fix(stopped);
     const fixed = cli(stopped, ['run']);
     assert.equal(fixed.status, 0, fixed.output);
     const held = /score --run (\S+)/.exec(fixed.stdout)[1];
     editFindings(stopped, (value) => (value.findings[0].evidence.run = held));
-    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose clean arm held, so it shows no failure');
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose verdict is "held"');
   });
 }
 
@@ -504,6 +533,11 @@ test('isolation and process citations are held to the allowlist and to the seale
     finding('T-002', 'process-finding', { score, trials: [1], finding: 'F-001' }),
   ]);
   expectClean(cli(context, ['check']));
+  writeJson(manifestFile, { ...manifest, observedMounts: {} });
+  write([finding('T-001', 'isolation-violation', { paths: ['/home/adopter/.npmrc'] })]);
+  expectFinding(cli(context, ['check']), 'target-findings', 'holds no list of observedMounts and allowedMounts to verify them against');
+  assert.equal(cli(context, ['target-findings', '--run', run]).status, 0, 'the drafter stopped on a malformed manifest');
+  writeJson(manifestFile, { ...manifest, observedMounts: ['/home/adopter/.npmrc', manifest.allowedMounts[0]] });
   write([finding('T-001', 'isolation-violation', { paths: [manifest.allowedMounts[0]] })]);
   expectFinding(cli(context, ['check']), 'target-findings', "does not record outside the trial set's allowlist");
   write([finding('T-001', 'process-finding', { score, trials: [1], finding: 'F-002' })]);
