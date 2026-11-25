@@ -2455,7 +2455,14 @@ async function checkBridgePrivateDirectories() {
     try {
       const project = makeProject(label, {
         unconfined,
-        edit: ({ folder }) => useSealedBriefAgent(folder, { capture, announce }),
+        edit: ({ folder }) => {
+          useSealedBriefAgent(folder, { capture, announce });
+          // The target reads the agent's announcements; Seatbelt enforces read grants (#410), so their directory is declared.
+          editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+            for (const entry of evaluation.registry)
+              entry.systemPaths = [...(entry.systemPaths ?? []), fs.realpathSync(path.dirname(announce))];
+          });
+        },
       });
       const ran = evaluate(['run', '--evaluation', project.folder], {
         ...project.env,
