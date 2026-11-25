@@ -205,7 +205,7 @@
               "const": "this-pr"
             },
             "measurement": {
-              "description": "The one rerun with every this-pr change applied, per partition, against the scored run the finding came from, and each measured probe's before and after outcome as a committed receipt, so the measurement stands when the gitignored run directories are gone.",
+              "description": "The one rerun with every this-pr change applied, per partition, against the scored run the finding came from, and each measured probe's before and after outcome as a committed receipt, which check --ready reads against the runs while runs/ holds them and which keep the numbers on record after.",
               "type": "object",
               "additionalProperties": false,
               "required": ["partitions", "probes"],

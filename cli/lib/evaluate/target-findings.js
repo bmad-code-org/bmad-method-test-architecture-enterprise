@@ -11,7 +11,7 @@
  *   qualification record's verdict, an isolation path against the trial set's allowlist, and a process finding rebuilt from the
  *   sealed record and operation phases the way `interpretation.json` is. A this-pr finding's measurement is held to the finding's
  *   own evidence (its before run), to the one rerun every this-pr finding shares (its after runs, one per partition) and to the
- *   per-probe receipt it commits, which keeps the before and after outcomes when the gitignored run directories are gone.
+ *   per-probe receipt it commits, which keeps the before and after outcomes on record once `check --ready` has read them from the runs.
  * - `reviewTargetFindings` readiness: what is not ready for the pull request. A scored evaluation with no file, an undecided
  *   finding, a this-pr finding with no measurement, and a citation or measurement run `check` cannot find. `check` prints these as
  *   warnings while the gap loop runs, and `check --ready`, the pre-PR invocation, reports them as findings and exits 10.

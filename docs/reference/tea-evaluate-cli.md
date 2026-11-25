@@ -206,7 +206,7 @@ An evaluation that found nothing to improve records `"findings": []`.
 A `this-pr` measurement has two parts:
 
 - `partitions`: one entry per partition the evaluation has (or one `both` entry), each with the `before` run and score the finding came from (`null` for a finding from a qualification or authoring record) and the `after` rerun with every this-PR change applied. Every `this-pr` finding names the same after runs, and each run's `run.json` must record its partition.
-- `probes`: a receipt per measured probe, the finding's own probe included, with its `before` and `after` outcome copied from each score's evidence artifact. `check` compares each receipt with the score it names, so the committed receipts stand when `runs/` is gone.
+- `probes`: a receipt per measured probe, the finding's own probe included, with its `before` and `after` outcome copied from each score's evidence artifact. `check` compares each receipt with the score it names. Run `check --ready` where `runs/` still holds every cited and measured run, since it refuses a run it cannot find; after that the committed receipts keep the numbers on record, and a plain `check` reports a missing run as an unverified warning.
 
 A finding whose evidence cites the after run is a problem the rerun showed, and `check` refuses it `this-pr`: one decision point carries every target change of a pull request.
 
