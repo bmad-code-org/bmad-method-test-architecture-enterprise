@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Evaluate now reports what is wrong with the target itself. Stage 11 classifies each failure as an evaluation problem or a target problem, records target problems in `target-findings.json` with their evidence and proposed change, and asks you once at the end to put each one in this PR, a new PR with a handoff, or decline it. This-PR changes are applied together and measured with the one rerun the baseline needs, and the gap report opens with what the target got wrong, the improvement opportunities and the net improvements.
-- `tea-evaluate check` validates `target-findings.json` against the evaluation's contract, probes and recorded evidence, and warns while a finding is undecided, a this-PR change is unmeasured, or a scored evaluation has no findings file.
+- `tea-evaluate target-findings` drafts the candidates one run's evidence holds: failing or intermittent clean controls, a clean control whose qualification failed, held-out failures by their gap-view row, isolation paths outside the allowlist and process findings.
+- `tea-evaluate check` verifies `target-findings.json` against the recorded evidence (trial votes, qualification records, allowlists, sealed process findings and committed before-and-after receipts), and `check --ready` exits 10 while a finding is undecided or unmeasured, a citation is unverified, or a scored evaluation has no findings file.
 
 ### Changed
 

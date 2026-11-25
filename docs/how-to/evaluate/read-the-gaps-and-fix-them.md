@@ -138,11 +138,11 @@ Repeated held-out feedback can still influence later changes. A held-out pass is
 
 ## 6. Decide the Target's Improvements
 
-The steps above repair the evaluation. This step improves what you evaluated. While the loop runs, the skill records each target problem in `target-findings.json`: a clean control that fails on correct input, a behavior that fails only some trials, an isolation violation, a right answer reached through wrong steps, or a rule the target never states. Each finding cites its evidence and proposes a change to a named file.
+The steps above repair the evaluation. This step improves what you evaluated. The skill drafts candidates from each run with `tea-evaluate target-findings` and records each target problem in `target-findings.json`: a clean control that fails on correct input (even once, in qualification), a behavior that fails only some trials, an isolation violation, a right answer reached through wrong steps, or a rule the target never states. Each finding cites its evidence and proposes a change to a named file.
 
-After the held-out review, the skill shows every finding at once. Decide each: `this-pr` (applied with the others and measured by the one rerun the baseline needs), `new-pr` (a `target-handoff.md` for the next evaluation to measure) or `declined` (with your reason). The gap report then lists the net improvements with before and after numbers. An empty list records that the evaluation found nothing to improve.
+After the held-out review, the skill shows every finding at once. Decide each: `this-pr` (applied with the others and measured by the one rerun the baseline needs), `new-pr` (a `target-handoff.md` for the next evaluation to measure) or `declined` (with your reason). A problem the rerun reveals is reverted, handed off, or stops the pull request. An empty list records that the evaluation found nothing to improve.
 
-`check` warns, without blocking, until every finding is decided and measured. See [Target findings](/docs/reference/tea-evaluate-cli.md#target-findings).
+`check` warns while a finding is undecided or unmeasured, and `check --ready` fails on it before the pull request. See [Target findings](/docs/reference/tea-evaluate-cli.md#target-findings).
 
 ## Manual Commands
 

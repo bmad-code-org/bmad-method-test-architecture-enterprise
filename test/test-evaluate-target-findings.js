@@ -1,21 +1,26 @@
 /**
- * Target findings across target kinds: `target-findings.json` produced from a scored run and held by `tea-evaluate check`.
+ * Target findings across target kinds, from a genuine recorded failure to a measured fix, through the real bin.
  *
- * Each case copies a real fixture evaluation with its target and spawns the real bin over it:
+ * For a skill (the refund-check skill through `tea-skill-runner`), an MCP tool server and an AI-feature HTTP service, each case
+ * copies the fixture evaluation with its target and plants the defect `test/fixtures/evaluate-target-findings/flaws.json` names.
+ * Then, at the CLI boundary:
  *
- * - a skill (`evaluate-tutorial`, the refund-check skill through `tea-skill-runner`), an MCP tool server (`evaluate-mcp`) and an
- *   AI-feature HTTP service (`evaluate-api`), each with an accepted baseline;
- * - the scored development run every finding cites is written from that baseline, with the isolation path (MCP) and the
- *   interpretation process finding (API) the findings cite, so every citation resolves against evidence on disk;
- * - before the file exists `check` warns that a scored evaluation has no target findings; an empty list records "no improvements"
- *   and warns of nothing; the committed findings (`test/fixtures/evaluate-target-findings/<kind>/`) check clean with no warning;
- * - an undecided finding and a this-pr finding with no measurement each warn and keep exit 0, since the gap loop's own `check`
- *   must keep passing until the decision point;
- * - every planted defect exits 10 naming `target-findings.json` and its rule: a cited trial, trial count, score, isolation path,
- *   interpretation finding, behavior, probe, clean control, excerpt, handoff or evaluation the folder does not bear out, findings
- *   out of order or repeated, a measurement of one run, a behavior failing every trial filed as intermittent, and shapes the
- *   schema refuses;
- * - a held-out probe (`evaluate-gap-loop/after`) is cited by its gap-view row alone: its trials are refused.
+ * - `run` and `score` record the defect: the clean control fails one trial of three (eval-quality's `false-positive`), score exits 2;
+ * - `tea-evaluate target-findings` drafts the candidate from that evidence (an intermittent behavior, its trial, trial count,
+ *   behavior and severity), and the case classifies it as a target problem and records it undecided;
+ * - `check` accepts it with a readiness warning and exit 0, so the gap loop keeps running, and `check --ready` (the pre-PR check)
+ *   exits 10 on the undecided finding, on a this-pr finding with no measurement and on a scored evaluation with no file;
+ * - the defect is removed (the this-pr fix), one rerun is run and scored, the measurement records both runs and each probe's
+ *   before and after outcome, and `check --ready` exits 0;
+ * - a measurement whose before run is not the finding's, whose receipt differs from the scores, whose after run is unknown, or
+ *   that a second this-pr finding measures with another rerun exits 10, and a problem the rerun shows cannot be decided this-pr.
+ *
+ * A defect that fires in the qualification workspace stops `run` at exit 11 with no score: the drafter offers the clean control's
+ * qualification record, and the finding citing it checks clean (the rare clean-control failure a later run may not repeat).
+ *
+ * The checker's evidence rules run over those genuine runs too: a cited trial whose vote passed, a trial or score the run does not
+ * hold, an isolation path inside the allowlist, a process finding the sealed records do not list (rebuilt as interpretation.json
+ * is, so a rescore or an accepted baseline still verifies it), a held-out probe cited beyond its gap-view row, and schema shapes.
  *
  * Usage: node test/test-evaluate-target-findings.js
  */
@@ -32,16 +37,10 @@ const { scratchDirectories } = require('./lib/scratch-directories');
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
 const FIXTURES = path.join(__dirname, 'fixtures');
-const FINDINGS = path.join(FIXTURES, 'evaluate-target-findings');
-const RUN = '20261125T100000000Z-0a1b2c3d';
-const SCORE = '20261125T100100000Z-0a1b2c3d';
+const FLAWS = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'evaluate-target-findings', 'flaws.json'), 'utf8'));
 const FILE = 'target-findings.json';
-
-const KINDS = [
-  { kind: 'skill', fixture: 'evaluate-tutorial', evaluation: 'evaluation' },
-  { kind: 'mcp', fixture: 'evaluate-mcp', evaluation: 'evals/grader' },
-  { kind: 'api', fixture: 'evaluate-api', evaluation: 'evals/grader' },
-];
+const TRIAL_WORKSPACE = 'trial-clean-2';
+const QUALIFICATION_WORKSPACE = 'qualify-clean';
 
 const scratch = scratchDirectories('tea-evaluate-target-findings');
 const failures = [];
@@ -64,10 +63,78 @@ function writeJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function check(folder) {
-  const result = spawnSync(process.execPath, [CLI, 'check', '--evaluation', folder], { cwd: ROOT, encoding: 'utf8' });
+function replaceOnce(file, find, replace) {
+  const text = fs.readFileSync(file, 'utf8');
+  assert.equal(text.split(find).length, 2, `${file} holds the text to replace exactly once`);
+  fs.writeFileSync(file, text.replace(find, replace));
+}
+
+/** A disposable project: the fixture with its target, no baseline or runs, and the installs the fixture's registry starts. */
+function project(kind) {
+  const flaw = FLAWS[kind];
+  const root = path.join(scratch.make(kind), flaw.fixture);
+  fs.cpSync(path.join(FIXTURES, flaw.fixture), root, {
+    recursive: true,
+    filter: (source) => !['runs', 'node_modules', 'baseline'].includes(path.basename(source)),
+  });
+  const folder = path.join(root, ...flaw.evaluation.split('/'));
+  if (kind === 'skill') {
+    const modules = path.join(root, 'node_modules');
+    const tea = path.join(modules, 'bmad-method-test-architecture-enterprise');
+    fs.mkdirSync(path.join(modules, '.bin'), { recursive: true });
+    fs.mkdirSync(tea);
+    fs.cpSync(path.join(ROOT, 'cli'), path.join(tea, 'cli'), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(tea, 'package.json'));
+    fs.cpSync(path.join(ROOT, 'node_modules', 'commander'), path.join(modules, 'commander'), { recursive: true });
+    fs.symlinkSync('../bmad-method-test-architecture-enterprise/cli/skill-runner.js', path.join(modules, '.bin', 'tea-skill-runner'));
+  } else {
+    fs.mkdirSync(path.join(folder, 'node_modules'));
+    fs.symlinkSync(path.join(ROOT, 'node_modules', 'eval-quality'), path.join(folder, 'node_modules', 'eval-quality'));
+    fs.symlinkSync(ROOT, path.join(folder, 'node_modules', 'bmad-method-test-architecture-enterprise'));
+  }
+  return { kind, flaw, root, folder, env: flaw.env };
+}
+
+/** Plants the kind's target defect, firing in one workspace; the stand-in model's reading of an ambiguity is planted beside it. */
+function plant(context, workspace) {
+  const { flaw, root } = context;
+  replaceOnce(path.join(root, flaw.target.file), flaw.target.find, flaw.target.replace.replaceAll('{{workspace}}', workspace));
+  if (flaw.model !== undefined)
+    replaceOnce(path.join(root, flaw.model.file), flaw.model.find, flaw.model.replace.replaceAll('{{workspace}}', workspace));
+}
+
+/** The this-PR fix: the target artifact back to its committed text. */
+function fix(context) {
+  const { flaw, root } = context;
+  fs.copyFileSync(path.join(FIXTURES, flaw.fixture, flaw.target.file), path.join(root, flaw.target.file));
+}
+
+function cli(context, args) {
+  const result = spawnSync(process.execPath, [CLI, ...args, '--evaluation', context.folder], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...process.env, ...context.env },
+  });
   if (result.error) throw result.error;
-  return result;
+  return { ...result, output: `${result.stdout}${result.stderr}` };
+}
+
+/** `run` then `score`, and the run and score invocation IDs they wrote. */
+function runAndScore(context, expectedScoreExit) {
+  const ran = cli(context, ['run']);
+  assert.equal(ran.status, 0, `run exited ${ran.status}:\n${ran.output}`);
+  const run = /score --run (\S+)/.exec(ran.stdout)?.[1];
+  assert.ok(run, `run named no invocation:\n${ran.output}`);
+  const scored = cli(context, ['score', '--run', run]);
+  assert.equal(scored.status, expectedScoreExit, `score exited ${scored.status}, expected ${expectedScoreExit}:\n${scored.output}`);
+  const scores = fs.readdirSync(path.join(context.folder, 'runs', run, 'scores')).filter((name) => /^\d/.test(name));
+  return { run, score: scores.toSorted().at(-1) };
+}
+
+function draft(context, run) {
+  const result = cli(context, ['target-findings', ...(run === undefined ? [] : ['--run', run])]);
+  assert.equal(result.status, 0, `target-findings exited ${result.status}:\n${result.output}`);
+  return JSON.parse(result.stdout);
 }
 
 function warningsOf(result) {
@@ -78,365 +145,480 @@ function findingsOf(result) {
   return result.stdout.split('\n').filter((line) => line.startsWith(`${FILE}: `));
 }
 
-/** A copy of one fixture evaluation with its target beside it, as `launch.root` reaches it. */
-function copyEvaluation({ fixture, evaluation }) {
-  const root = path.join(scratch.make(fixture), fixture);
-  fs.cpSync(path.join(FIXTURES, fixture), root, {
-    recursive: true,
-    filter: (source) => !source.split(path.sep).includes('runs') && !source.split(path.sep).includes('node_modules'),
-  });
-  return path.join(root, ...evaluation.split('/'));
-}
-
-/**
- * The scored development run the findings cite, written from the accepted baseline: the same trial sets and per-probe scores
- * under the run's own score invocation, with the evidence each kind's findings add.
- */
-function writeRun(folder, kind) {
-  const baseline = readJson(path.join(folder, 'baseline', 'baseline.json'));
-  const run = path.join(folder, 'runs', RUN);
-  fs.cpSync(path.join(folder, 'baseline'), run, { recursive: true });
-  fs.renameSync(path.join(run, 'scores', baseline.scoreInvocationId), path.join(run, 'scores', SCORE));
-  const runRecord = readJson(path.join(run, 'run.json'));
-  writeJson(path.join(run, 'run.json'), { ...runRecord, invocationId: RUN, seed: RUN });
-  if (kind === 'mcp') {
-    const manifest = path.join(run, 'trial-sets', 'P-001', 'isolation-manifest.json');
-    writeJson(manifest, { ...readJson(manifest), observedMounts: ['/home/adopter/.npmrc'] });
-  }
-  if (kind === 'api') {
-    writeJson(path.join(run, 'interpretation.json'), {
-      scoreInvocationId: SCORE,
-      probes: [
-        {
-          probeId: 'P-001',
-          trials: [1, 2, 3].map((trialIndex) => ({
-            trialIndex,
-            findings: trialIndex === 1 ? [{ findingId: 'F-001' }] : [],
-            process: trialIndex === 1 ? ['F-001'] : [],
-            outcome: [],
-          })),
-        },
-      ],
-    });
-  }
-}
-
-function placeFindings(folder, kind) {
-  for (const name of fs.readdirSync(path.join(FINDINGS, kind))) fs.copyFileSync(path.join(FINDINGS, kind, name), path.join(folder, name));
-}
-
-/** Rewrites the folder's findings through `edit` and checks it. */
-function checkEdited(folder, edit) {
-  const value = readJson(path.join(folder, FILE));
-  edit(value);
-  writeJson(path.join(folder, FILE), value);
-  return check(folder);
+function expectClean(result) {
+  assert.equal(result.status, 0, `expected exit 0, got ${result.status}:\n${result.output}`);
+  assert.deepEqual(findingsOf(result), []);
 }
 
 function expectFinding(result, rule, fragment) {
-  assert.equal(result.status, 10, `expected exit 10, got ${result.status}:\n${result.stdout}${result.stderr}`);
-  const lines = findingsOf(result);
+  assert.equal(result.status, 10, `expected exit 10, got ${result.status}:\n${result.output}`);
   assert.ok(
-    lines.some((line) => line.includes(`[${rule}]`) && line.includes(fragment)),
+    findingsOf(result).some((line) => line.includes(`[${rule}]`) && line.includes(fragment)),
     `no ${FILE} [${rule}] finding holds ${JSON.stringify(fragment)}:\n${result.stdout}`,
   );
 }
 
-function expectClean(result) {
-  assert.equal(result.status, 0, `expected exit 0, got ${result.status}:\n${result.stdout}${result.stderr}`);
-  assert.deepEqual(findingsOf(result), []);
+/** The receipt of one probe under one score, copied from its evidence artifact as the agent copies it. */
+function receipt(context, { run, score }, probe) {
+  const outcome = readJson(path.join(context.folder, 'runs', run, 'scores', score, probe, 'evidence-artifact.json'))
+    .reducedProbeOutcomes[0];
+  return {
+    caught: outcome.caught,
+    caughtCount: outcome.caughtCount,
+    validCount: outcome.validCount,
+    votes: outcome.trialVotes.toSorted((left, right) => left.trialIndex - right.trialIndex).map((vote) => vote.state),
+  };
 }
 
-/** Each case starts from the kind's committed findings over a fresh copy with the cited run written. */
-function prepared(entry) {
-  const folder = copyEvaluation(entry);
-  writeRun(folder, entry.kind);
-  placeFindings(folder, entry.kind);
-  return folder;
+function writeFindings(context, findings) {
+  const { evaluationId } = readJson(path.join(context.folder, 'evaluation.json'));
+  writeJson(path.join(context.folder, FILE), { schemaVersion: 1, evaluationId, findings });
 }
 
-for (const entry of KINDS) {
-  const { kind } = entry;
+function editFindings(context, edit) {
+  const file = path.join(context.folder, FILE);
+  const value = readJson(file);
+  edit(value);
+  writeJson(file, value);
+}
 
-  test(`${kind}: a scored evaluation with no target findings warns, and an empty list is the explicit no-improvement state`, () => {
-    const folder = copyEvaluation(entry);
-    const before = check(folder);
-    expectClean(before);
-    assert.equal(warningsOf(before).length, 1, before.stderr);
-    assert.match(warningsOf(before)[0], /has scored evidence and no target-findings\.json/);
-    writeJson(path.join(folder, FILE), {
-      schemaVersion: 1,
-      evaluationId: readJson(path.join(folder, 'evaluation.json')).evaluationId,
-      findings: [],
-    });
-    const empty = check(folder);
-    expectClean(empty);
-    assert.deepEqual(warningsOf(empty), []);
-  });
+const SUMMARIES = {
+  skill:
+    'The skill declined a refund exactly at the limit in one trial of three, because SKILL.md calls the at-limit case a judgment call.',
+  mcp: 'The grader tool server rejected a correct answer in one trial of three.',
+  api: 'The grader service rejected a correct answer in one trial of three.',
+};
+const CHANGES = {
+  skill: 'Remove the judgment-call line, so a refund equal to the limit is always approved.',
+  mcp: 'Remove the workspace-dependent rejection from grade_answer.',
+  api: 'Remove the workspace-dependent rejection from the grading handler.',
+};
 
-  test(`${kind}: the decided findings produced from the scored run check clean with no warning`, () => {
-    const result = check(prepared(entry));
-    expectClean(result);
-    assert.deepEqual(warningsOf(result), []);
-    assert.match(result.stdout, /has no authoring defects/);
-  });
+/** The classification Stage 11 makes over a candidate: a target problem, with what it got wrong and where the fix lands. */
+function classify(kind, id, candidate) {
+  return {
+    id,
+    summary: SUMMARIES[kind],
+    source: candidate.source,
+    evidence: candidate.evidence,
+    behaviorId: candidate.behaviorId,
+    severity: candidate.severity,
+    target: { artifact: FLAWS[kind].target.file, change: CHANGES[kind] },
+    disposition: { decision: 'undecided' },
+  };
+}
 
-  test(`${kind}: an undecided finding and an unmeasured this-pr finding warn and keep exit 0`, () => {
-    const folder = prepared(entry);
-    const undecided = checkEdited(folder, (value) => {
-      value.findings[0].disposition = { decision: 'undecided' };
-    });
-    expectClean(undecided);
+for (const kind of Object.keys(FLAWS)) {
+  let context;
+  let before;
+  let after;
+  let finding;
+
+  test(`${kind}: a genuine intermittent failure is drafted, classified and held undecided until the pre-PR check`, () => {
+    context = project(kind);
+    plant(context, TRIAL_WORKSPACE);
+    before = runAndScore(context, 2);
+    const ready = cli(context, ['check', '--ready']);
+    expectFinding(ready, 'target-findings', 'the evaluation has scored evidence and no target-findings.json');
+    const drafted = draft(context);
+    assert.equal(drafted.run, before.run);
+    assert.equal(drafted.score, before.score);
+    const intermittent = drafted.candidates.filter((candidate) => candidate.source === 'intermittent-behavior');
+    assert.equal(intermittent.length, 1, JSON.stringify(drafted.candidates));
+    assert.deepEqual(intermittent[0].evidence, { run: before.run, score: before.score, probe: 'P-001', trials: [2], trialCount: 3 });
+    assert.equal(intermittent[0].behaviorId, 'B-001');
+    assert.equal(intermittent[0].severity, 'critical');
+    finding = classify(kind, 'T-001', intermittent[0]);
+    writeFindings(context, [finding]);
+    const loop = cli(context, ['check']);
+    expectClean(loop);
     assert.ok(
-      warningsOf(undecided).some((line) => line.includes('finding T-001 is undecided')),
-      undecided.stderr,
+      warningsOf(loop).some((line) => line.includes('finding T-001 is undecided')),
+      loop.stderr,
     );
-    const unmeasured = checkEdited(folder, (value) => {
-      value.findings[0].disposition = { decision: 'this-pr' };
-    });
-    expectClean(unmeasured);
-    assert.ok(
-      warningsOf(unmeasured).some((line) => line.includes('finding T-001 is decided this-pr and records no measurement')),
-      unmeasured.stderr,
-    );
+    expectFinding(cli(context, ['check', '--ready']), 'target-findings', 'finding T-001 is undecided');
+    editFindings(context, (value) => (value.findings[0].disposition = { decision: 'this-pr' }));
+    expectFinding(cli(context, ['check', '--ready']), 'target-findings', 'finding T-001 is decided this-pr and records no measurement');
   });
 
-  test(`${kind}: a finding naming an undeclared behavior, an uncommitted probe or another evaluation is refused`, () => {
-    const folder = prepared(entry);
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.findings[0].behaviorId = 'B-099';
-      }),
-      'reference',
-      'names behavior B-099, which contract.json does not declare',
+  test(`${kind}: the this-pr fix is measured by one rerun and the pre-PR check passes`, () => {
+    fix(context);
+    after = runAndScore(context, 0);
+    assert.deepEqual(
+      draft(context, after.run).candidates.filter((candidate) => candidate.evidence.probe === 'P-001'),
+      [],
+      'the fixed target still yields a P-001 candidate',
     );
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.findings[0].behaviorId = 'B-001';
-        value.findings[0].evidence.probe = 'P-099';
-      }),
-      'reference',
-      'cites probe P-099, which probes/ does not hold',
-    );
-    placeFindings(folder, kind);
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.evaluationId = 'another-evaluation';
-      }),
-      'target-findings',
-      'evaluationId "another-evaluation" is not',
-    );
+    const partition = readJson(path.join(context.folder, 'runs', after.run, 'run.json')).partition;
+    finding.disposition = {
+      decision: 'this-pr',
+      measurement: {
+        partitions: [{ partition, before, after }],
+        probes: [{ probe: 'P-001', before: receipt(context, before, 'P-001'), after: receipt(context, after, 'P-001') }],
+      },
+    };
+    assert.deepEqual(finding.disposition.measurement.probes[0].after.votes, [
+      'passed-clean-control',
+      'passed-clean-control',
+      'passed-clean-control',
+    ]);
+    writeFindings(context, [finding]);
+    const ready = cli(context, ['check', '--ready']);
+    expectClean(ready);
+    assert.deepEqual(warningsOf(ready), []);
   });
 
-  test(`${kind}: repeated, unordered and one-run measurements are refused`, () => {
-    const folder = prepared(entry);
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.findings[1].id = 'T-001';
-      }),
-      'duplicate-id',
-      'finding ID "T-001" is declared more than once',
-    );
-    placeFindings(folder, kind);
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.findings.reverse();
-      }),
-      'target-findings',
-      'finding T-001 follows T-002; list findings in ID order',
-    );
-    placeFindings(folder, kind);
-    expectFinding(
-      checkEdited(folder, (value) => {
-        value.findings[0].disposition = {
-          decision: 'this-pr',
-          measurement: { before: { run: RUN, score: SCORE }, after: { run: RUN, score: SCORE } },
-        };
-      }),
-      'target-findings',
-      `measures run ${RUN} before and after`,
-    );
-  });
-
-  test(`${kind}: shapes the schema refuses`, () => {
-    const folder = prepared(entry);
-    for (const [label, edit] of [
-      ['a declined finding with no reason', (value) => (value.findings[0].disposition = { decision: 'declined' })],
-      ['a new-pr finding with no handoff', (value) => (value.findings[0].disposition = { decision: 'new-pr' })],
-      ['an unknown decision', (value) => (value.findings[0].disposition = { decision: 'later' })],
-      ['an unknown source', (value) => (value.findings[0].source = 'hunch')],
-      ['a null behavior outside authoring', (value) => (value.findings[0].behaviorId = null)],
+  test(`${kind}: a measurement the runs do not bear out is refused`, () => {
+    const measured = structuredClone(finding);
+    for (const [label, edit, rule, fragment] of [
       [
-        'an authoring finding with no excerpt',
-        (value) => (value.findings[0] = { ...value.findings[0], source: 'authoring', evidence: { record: 'requirements.md' } }),
+        'a before run other than the finding evidence',
+        (value) => (value.findings[0].disposition.measurement.partitions[0].before = after),
+        'target-findings',
+        `not the run ${before.run} score ${before.score} its evidence cites`,
       ],
-      ['an off-pattern ID', (value) => (value.findings[0].id = 'F-1')],
-      ['an absolute target artifact', (value) => (value.findings[0].target.artifact = '/etc/passwd')],
+      [
+        'a receipt that differs from the score',
+        (value) =>
+          (value.findings[0].disposition.measurement.probes[0].before.votes = [
+            'passed-clean-control',
+            'passed-clean-control',
+            'passed-clean-control',
+          ]),
+        'target-findings',
+        'records before outcome',
+      ],
+      [
+        'an after run no folder holds',
+        (value) =>
+          (value.findings[0].disposition.measurement.partitions[0].after = { run: '20261125T235959000Z-00000000', score: after.score }),
+        'target-findings',
+        'which is neither under runs/ nor the accepted baseline, so its outcomes are unverified',
+      ],
+      [
+        'a partition the after run did not run',
+        (value) => (value.findings[0].disposition.measurement.partitions[0].partition = 'development'),
+        'target-findings',
+        'a run of both',
+      ],
     ]) {
-      placeFindings(folder, kind);
-      const result = checkEdited(folder, edit);
-      assert.equal(result.status, 10, `${label}: expected exit 10, got ${result.status}`);
+      writeFindings(context, [structuredClone(measured)]);
+      editFindings(context, edit);
+      const result = cli(context, ['check', '--ready']);
+      assert.equal(result.status, 10, `${label}: expected exit 10, got ${result.status}:\n${result.output}`);
       assert.ok(
-        findingsOf(result).some((line) => line.includes('[schema]')),
-        `${label}: no schema finding:\n${result.stdout}`,
+        findingsOf(result).some((line) => line.includes(`[${rule}]`) && line.includes(fragment)),
+        `${label}:\n${result.stdout}`,
       );
     }
+    writeFindings(context, [structuredClone(measured)]);
+  });
+
+  test(`${kind}: one decision point: a second rerun and a problem the rerun shows are both refused this-pr`, () => {
+    const second = {
+      ...structuredClone(finding),
+      id: 'T-002',
+      disposition: {
+        decision: 'this-pr',
+        measurement: {
+          ...structuredClone(finding.disposition.measurement),
+          partitions: [{ ...finding.disposition.measurement.partitions[0], after: before }],
+        },
+      },
+    };
+    writeFindings(context, [structuredClone(finding), second]);
+    expectFinding(cli(context, ['check']), 'target-findings', 'every this-pr change is applied together and measured by one rerun');
+    const regression = {
+      ...structuredClone(finding),
+      id: 'T-002',
+      summary: 'The rerun shows a new failure.',
+      evidence: { run: after.run, score: after.score, probe: 'P-001', trials: [1] },
+      source: 'behavior-failure',
+      disposition: { decision: 'this-pr' },
+    };
+    writeFindings(context, [structuredClone(finding), regression]);
+    expectFinding(
+      cli(context, ['check']),
+      'target-findings',
+      'finding T-002 comes from the rerun that measured the this-pr changes, so it cannot be decided this-pr',
+    );
+    fs.writeFileSync(path.join(context.folder, 'target-handoff.md'), '# Target handoff\n\n## T-002: the rerun regression\n');
+    writeFindings(context, [
+      structuredClone(finding),
+      {
+        ...regression,
+        evidence: { ...regression.evidence, trials: [1] },
+        disposition: { decision: 'new-pr', handoff: 'target-handoff.md' },
+      },
+    ]);
+    expectFinding(cli(context, ['check']), 'target-findings', 'is a behavior failure, and score');
+    writeFindings(context, [structuredClone(finding)]);
+  });
+
+  test(`${kind}: cited evidence must show what the source says`, () => {
+    for (const [label, edit, rule, fragment] of [
+      [
+        'a cited trial whose vote passed',
+        (value) => (value.findings[0].evidence.trials = [1]),
+        'target-findings',
+        'its cited trials must fail and every other trial pass',
+      ],
+      [
+        'a trial count other than the votes',
+        (value) => (value.findings[0].evidence.trialCount = 4),
+        'target-findings',
+        'records trialCount 4',
+      ],
+      [
+        'a trial the run does not hold',
+        (value) => ((value.findings[0].evidence.trials = [4]), (value.findings[0].evidence.trialCount = 5)),
+        'target-findings',
+        'record-4.json does not exist',
+      ],
+      [
+        'a score the run does not hold',
+        (value) => (value.findings[0].evidence.score = '20261125T235959000Z-00000000'),
+        'target-findings',
+        'which holds no score of probe P-001',
+      ],
+      [
+        'a clean-control failure on a passing trial',
+        (value) => (
+          (value.findings[0].source = 'clean-control-failure'),
+          (value.findings[0].evidence.trials = [3]),
+          delete value.findings[0].evidence.trialCount
+        ),
+        'target-findings',
+        'a clean control that failed reads false-positive',
+      ],
+      [
+        'a clean-control failure on a seeded probe',
+        (value) => (
+          (value.findings[0].source = 'clean-control-failure'),
+          (value.findings[0].evidence.probe = 'P-002'),
+          delete value.findings[0].evidence.trialCount
+        ),
+        'target-findings',
+        'P-002, which is not a clean control',
+      ],
+      ['an undeclared behavior', (value) => (value.findings[0].behaviorId = 'B-099'), 'reference', 'names behavior B-099'],
+      ['an uncommitted probe', (value) => (value.findings[0].evidence.probe = 'P-099'), 'reference', 'cites probe P-099'],
+      [
+        'another evaluation',
+        (value) => (value.evaluationId = 'another-evaluation'),
+        'target-findings',
+        'evaluationId "another-evaluation" is not',
+      ],
+    ]) {
+      writeFindings(context, [{ ...structuredClone(finding), disposition: { decision: 'undecided' } }]);
+      editFindings(context, edit);
+      const result = cli(context, ['check']);
+      assert.equal(result.status, 10, `${label}: expected exit 10, got ${result.status}:\n${result.output}`);
+      assert.ok(
+        findingsOf(result).some((line) => line.includes(`[${rule}]`) && line.includes(fragment)),
+        `${label}:\n${result.stdout}`,
+      );
+    }
+    writeFindings(context, [structuredClone(finding)]);
+  });
+
+  test(`${kind}: a clean control that fails its qualification baseline is drafted from the record of a run that stopped`, () => {
+    const stopped = project(kind);
+    plant(stopped, QUALIFICATION_WORKSPACE);
+    const ran = cli(stopped, ['run']);
+    assert.equal(ran.status, 11, `run exited ${ran.status}, expected 11:\n${ran.output}`);
+    assert.match(ran.output, /the clean control's baseline does not pass/);
+    const run = fs.readdirSync(path.join(stopped.folder, 'runs')).find((name) => /^\d/.test(name));
+    const drafted = draft(stopped, run);
+    assert.equal(drafted.score, null);
+    assert.deepEqual(
+      drafted.candidates.map((candidate) => [candidate.source, candidate.evidence]),
+      [['clean-control-failure', { run, probe: 'P-001', qualification: 'baseline-pass' }]],
+    );
+    writeFindings(stopped, [
+      { ...classify(kind, 'T-001', drafted.candidates[0]), disposition: { decision: 'new-pr', handoff: 'target-handoff.md' } },
+    ]);
+    fs.writeFileSync(
+      path.join(stopped.folder, 'target-handoff.md'),
+      '# Target handoff\n\n## T-001: the clean control fails its qualification\n',
+    );
+    expectClean(cli(stopped, ['check', '--ready']));
+    fix(stopped);
+    const fixed = cli(stopped, ['run']);
+    assert.equal(fixed.status, 0, fixed.output);
+    const held = /score --run (\S+)/.exec(fixed.stdout)[1];
+    editFindings(stopped, (value) => (value.findings[0].evidence.run = held));
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose clean arm held, so it shows no failure');
   });
 }
 
-test('skill: an intermittent behavior is held to the trial set the run recorded', () => {
-  const folder = prepared(KINDS[0]);
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.trialCount = 4;
-      value.findings[0].evidence.trials = [4];
-    }),
-    'target-findings',
-    'cites trial 4 of probe P-001; runs/20261125T100000000Z-0a1b2c3d/trial-sets/P-001/record-4.json does not exist',
-  );
-  placeFindings(folder, 'skill');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.trialCount = 4;
-    }),
-    'target-findings',
-    'records trialCount 4; runs/20261125T100000000Z-0a1b2c3d/trial-sets/P-001 holds 3 trial record(s)',
-  );
-  placeFindings(folder, 'skill');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.trials = [1, 2, 3];
-    }),
-    'target-findings',
-    'cites every trial of 3 as failing',
-  );
-  placeFindings(folder, 'skill');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.trials = [5];
-    }),
-    'target-findings',
-    'cites trial 5 of 3',
-  );
-  placeFindings(folder, 'skill');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.score = '20261125T120000000Z-0a1b2c3d';
-    }),
-    'target-findings',
-    'cites score invocation 20261125T120000000Z-0a1b2c3d of run',
-  );
-});
+/** A run directory copied from a fixture's accepted baseline, for evidence the genuine runs do not hold. */
+function baselineRun(fixture, evaluation, run) {
+  const root = path.join(scratch.make(fixture), fixture);
+  fs.cpSync(path.join(FIXTURES, fixture), root, {
+    recursive: true,
+    filter: (source) => !['runs', 'node_modules'].includes(path.basename(source)),
+  });
+  const folder = path.join(root, ...evaluation.split('/'));
+  fs.cpSync(path.join(folder, 'baseline'), path.join(folder, 'runs', run), { recursive: true });
+  return { folder, env: {} };
+}
 
-test('skill: an authoring finding quotes its record and a new-pr finding is named in its handoff', () => {
-  const folder = prepared(KINDS[0]);
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[1].evidence.excerpt = 'The limit is exclusive.';
-    }),
-    'target-findings',
-    'quotes an excerpt requirements.md does not hold',
-  );
-  placeFindings(folder, 'skill');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[1].evidence.record = 'authoring-log.md';
-    }),
-    'target-findings',
-    'cites record authoring-log.md, which does not exist in the evaluation folder',
-  );
-  placeFindings(folder, 'skill');
-  fs.writeFileSync(path.join(folder, 'target-handoff.md'), '# Target handoff\n\nNothing yet.\n');
-  expectFinding(check(folder), 'target-findings', 'hands off to target-handoff.md, which does not name T-002');
-  fs.rmSync(path.join(folder, 'target-handoff.md'));
-  expectFinding(check(folder), 'target-findings', 'hands off to target-handoff.md, which does not exist in the evaluation folder');
-});
-
-test('skill: a cited run that is neither on disk nor the accepted run is recorded and not verified', () => {
-  const folder = prepared(KINDS[0]);
-  fs.rmSync(path.join(folder, 'runs'), { recursive: true });
-  const result = check(folder);
-  expectClean(result);
-  assert.deepEqual(warningsOf(result), []);
-});
-
-test('mcp: an isolation violation cites paths the run recorded and a clean-control failure cites a clean control', () => {
-  const folder = prepared(KINDS[1]);
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.paths = ['/home/adopter/.ssh/id_ed25519'];
-    }),
-    'target-findings',
-    'cites path "/home/adopter/.ssh/id_ed25519", which runs/20261125T100000000Z-0a1b2c3d/trial-sets/P-001/isolation-manifest.json does not list in observedMounts',
-  );
-  placeFindings(folder, 'mcp');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[1].evidence.probe = 'P-002';
-    }),
-    'target-findings',
-    'is a clean-control failure on P-002, which is not a clean control',
-  );
-});
-
-test('api: a process finding cites a finding the interpretation lists under process', () => {
-  const folder = prepared(KINDS[2]);
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.finding = 'F-002';
-    }),
-    'target-findings',
-    'cites finding "F-002", which runs/20261125T100000000Z-0a1b2c3d/interpretation.json does not list under process for probe P-001 in trial 1',
-  );
-  placeFindings(folder, 'api');
-  expectFinding(
-    checkEdited(folder, (value) => {
-      value.findings[0].evidence.trials = [2];
-    }),
-    'target-findings',
-    'does not list under process for probe P-001 in trial 2',
-  );
-});
-
-test('a scored run with no accepted baseline also asks for target findings, and an unscored folder does not', () => {
-  const folder = copyEvaluation({ fixture: 'evaluate', evaluation: 'valid' });
-  const unscored = check(folder);
-  expectClean(unscored);
-  assert.deepEqual(warningsOf(unscored), []);
-  const scoreDirectory = path.join(folder, 'runs', RUN, 'scores', SCORE);
-  fs.mkdirSync(scoreDirectory, { recursive: true });
-  writeJson(path.join(scoreDirectory, 'score.json'), { invocationId: SCORE, run: RUN });
-  const scored = check(folder);
-  expectClean(scored);
-  assert.equal(warningsOf(scored).length, 1, scored.stderr);
-});
-
-test('a held-out probe is cited by its gap-view row alone', () => {
-  const folder = copyEvaluation({ fixture: 'evaluate-gap-loop', evaluation: 'after/evaluation' });
-  const evaluation = readJson(path.join(folder, 'evaluation.json'));
-  const baseline = readJson(path.join(folder, 'baseline', 'baseline.json'));
-  const finding = (evidence) => ({
-    schemaVersion: 1,
-    evaluationId: evaluation.evaluationId,
+test('isolation and process citations are held to the allowlist and to the sealed records', () => {
+  const run = '20261125T100000000Z-0a1b2c3d';
+  const context = baselineRun('evaluate-api', 'evals/grader', run);
+  const { scoreInvocationId: score } = readJson(path.join(context.folder, 'baseline', 'baseline.json'));
+  const runRoot = path.join(context.folder, 'runs', run);
+  const manifestFile = path.join(runRoot, 'trial-sets', 'P-001', 'isolation-manifest.json');
+  const manifest = readJson(manifestFile);
+  writeJson(manifestFile, { ...manifest, observedMounts: ['/home/adopter/.npmrc', manifest.allowedMounts[0]] });
+  // A process finding: the record's finding cites its grading observation, and the run classifies that operation as process.
+  const recordFile = path.join(runRoot, 'trial-sets', 'P-001', 'record-1.json');
+  const record = readJson(recordFile);
+  writeJson(recordFile, {
+    ...record,
     findings: [
-      {
-        id: 'T-001',
-        summary: 'The mechanism missed a held-out defect its development twin catches.',
-        source: 'clean-control-failure',
-        evidence: { run: baseline.acceptedRun, score: baseline.scoreInvocationId, probe: 'P-010', ...evidence },
-        behaviorId: 'B-001',
-        severity: 'material',
-        target: { artifact: 'review.js', change: 'Report a missing assertion in every test of the file.' },
-        disposition: { decision: 'declined', reason: 'Reproduced and fixed on the development probe first.' },
-      },
+      { findingId: 'F-001', observationIds: [record.observations[0].observationId], oracleId: null, severity: 'material', kind: 'defect' },
     ],
   });
-  writeJson(path.join(folder, FILE), finding({ trials: [1] }));
-  expectFinding(
-    check(folder),
-    'target-findings',
-    'cites trials of held-out probe P-010; cite a held-out probe by its gap-view.json row alone',
+  writeJson(path.join(runRoot, 'operation-phases.json'), { grader: { 'grade-answer': 'process', 'report-release': 'outcome' } });
+  const finding = (id, source, evidence) => ({
+    id,
+    summary: 'The service graded correctly by a wasteful path.',
+    source,
+    evidence: { run, probe: 'P-001', ...evidence },
+    behaviorId: 'B-001',
+    severity: 'material',
+    target: { artifact: 'server/grader.js', change: 'Validate the answer before grading.' },
+    disposition: { decision: 'declined', reason: 'The adopter keeps the handler as it is.' },
+  });
+  const write = (findings) => writeFindings(context, findings);
+  write([
+    finding('T-001', 'isolation-violation', { paths: ['/home/adopter/.npmrc'] }),
+    finding('T-002', 'process-finding', { score, trials: [1], finding: 'F-001' }),
+  ]);
+  expectClean(cli(context, ['check']));
+  write([finding('T-001', 'isolation-violation', { paths: [manifest.allowedMounts[0]] })]);
+  expectFinding(cli(context, ['check']), 'target-findings', "does not record outside the trial set's allowlist");
+  write([finding('T-001', 'process-finding', { score, trials: [1], finding: 'F-002' })]);
+  expectFinding(cli(context, ['check']), 'target-findings', 'do not list in the process phase');
+  // The interpretation view plays no part: a rescore that replaced it, or a baseline that never kept it, still verifies the finding.
+  fs.rmSync(path.join(runRoot, 'interpretation.json'), { force: true });
+  write([finding('T-001', 'process-finding', { score, trials: [1], finding: 'F-001' })]);
+  expectClean(cli(context, ['check']));
+  // An unknown run is not verified: a warning in the loop, a finding before the pull request.
+  write([finding('T-001', 'isolation-violation', { run: '20261125T235959000Z-00000000', paths: ['/home/adopter/.npmrc'] })]);
+  const loop = cli(context, ['check']);
+  expectClean(loop);
+  assert.ok(
+    warningsOf(loop).some((line) => line.includes('so its evidence is unverified')),
+    loop.stderr,
   );
+  expectFinding(cli(context, ['check', '--ready']), 'target-findings', 'so its evidence is unverified');
+});
+
+test('a held-out probe is cited by its gap-view row, verified against the score, and reproduced on a development probe', () => {
+  const run = '20261125T100000000Z-0a1b2c3d';
+  const context = baselineRun('evaluate-gap-loop', 'after/evaluation', run);
+  const evaluation = readJson(path.join(context.folder, 'evaluation.json'));
+  const { scoreInvocationId: score } = readJson(path.join(context.folder, 'baseline', 'baseline.json'));
+  const missTrialTwo = (probe) => {
+    const file = path.join(context.folder, 'runs', run, 'scores', score, probe, 'evidence-artifact.json');
+    const artifact = readJson(file);
+    const outcome = artifact.reducedProbeOutcomes[0];
+    outcome.trialVotes = outcome.trialVotes.map((vote) => (vote.trialIndex === 2 ? { ...vote, state: 'missed' } : vote));
+    outcome.caughtCount = 2;
+    writeJson(file, artifact);
+  };
+  missTrialTwo('P-010');
+  missTrialTwo('P-005');
+  const row = { probeClass: 'defect', caught: true, caughtCount: 2, validCount: 3, votes: ['caught', 'missed', 'caught'] };
+  const finding = (evidence) => ({
+    id: 'T-001',
+    summary: 'The mechanism misses a held-out defect in one trial of three.',
+    source: 'intermittent-behavior',
+    evidence: { run, score, probe: 'P-010', ...evidence },
+    behaviorId: 'B-001',
+    severity: 'material',
+    target: { artifact: 'review.js', change: 'Report a missing assertion in every test of the file.' },
+    disposition: { decision: 'declined', reason: 'The adopter accepts the miss rate for now.' },
+  });
+  const write = (evidence) =>
+    writeJson(path.join(context.folder, FILE), { schemaVersion: 1, evaluationId: evaluation.evaluationId, findings: [finding(evidence)] });
+  write({ gapView: row, reproducedBy: { run, score, probe: 'P-005', trials: [2] } });
+  expectClean(cli(context, ['check']));
+  write({ gapView: { ...row, votes: ['caught', 'caught', 'caught'] } });
+  expectFinding(cli(context, ['check']), 'target-findings', 'copies a gap-view row of P-010 that differs');
+  write({ gapView: row, trials: [2], trialCount: 3 });
+  expectFinding(cli(context, ['check']), 'target-findings', 'cites trials of held-out probe P-010');
+  write({ gapView: row, reproducedBy: { run, score, probe: 'P-011', trials: [2] } });
+  expectFinding(cli(context, ['check']), 'target-findings', 'reproduces on held-out probe P-011');
+});
+
+test('shapes the schema refuses', () => {
+  const run = '20261125T100000000Z-0a1b2c3d';
+  const context = baselineRun('evaluate-mcp', 'evals/grader', run);
+  const base = {
+    id: 'T-001',
+    summary: 'A rule the target never states.',
+    source: 'authoring',
+    evidence: { record: 'requirements.md', excerpt: 'Confirmed by: fixture adopter' },
+    behaviorId: null,
+    severity: 'low',
+    target: { artifact: 'server/grader.js', change: 'State the rule.' },
+    disposition: { decision: 'declined', reason: 'Out of scope.' },
+  };
+  writeFindings(context, [base]);
+  expectClean(cli(context, ['check']));
+  for (const [label, edit] of [
+    ['a declined finding with no reason', (value) => (value.disposition = { decision: 'declined' })],
+    ['a new-pr finding with no handoff', (value) => (value.disposition = { decision: 'new-pr' })],
+    ['an unknown decision', (value) => (value.disposition = { decision: 'later' })],
+    ['an unknown source', (value) => (value.source = 'hunch')],
+    [
+      'a null behavior outside authoring',
+      (value) => ((value.source = 'clean-control-failure'), (value.evidence = { run, score: run, probe: 'P-001' })),
+    ],
+    ['an authoring finding with no excerpt', (value) => (value.evidence = { record: 'requirements.md' })],
+    [
+      'a clean-control failure with neither score nor qualification',
+      (value) => ((value.source = 'clean-control-failure'), (value.behaviorId = 'B-001'), (value.evidence = { run, probe: 'P-001' })),
+    ],
+    [
+      'a gap-view row with no score',
+      (value) => (
+        (value.source = 'behavior-failure'),
+        (value.behaviorId = 'B-001'),
+        (value.evidence = {
+          run,
+          probe: 'P-001',
+          gapView: { probeClass: 'defect', caught: false, caughtCount: 0, validCount: 3, votes: [] },
+        })
+      ),
+    ],
+    [
+      'a measurement with no receipts',
+      (value) =>
+        (value.disposition = {
+          decision: 'this-pr',
+          measurement: { partitions: [{ partition: 'both', before: null, after: { run, score: run } }], probes: [] },
+        }),
+    ],
+    ['an off-pattern ID', (value) => (value.id = 'F-1')],
+    ['an absolute target artifact', (value) => (value.target.artifact = '/etc/passwd')],
+  ]) {
+    const value = structuredClone(base);
+    edit(value);
+    writeFindings(context, [value]);
+    const result = cli(context, ['check']);
+    assert.equal(result.status, 10, `${label}: expected exit 10, got ${result.status}`);
+    assert.ok(
+      findingsOf(result).some((line) => line.includes('[schema]')),
+      `${label}: no schema finding:\n${result.stdout}`,
+    );
+  }
+  writeFindings(context, [{ ...base, evidence: { ...base.evidence, excerpt: 'The limit is exclusive.' } }]);
+  expectFinding(cli(context, ['check']), 'target-findings', 'quotes an excerpt requirements.md does not hold');
 });
 
 scratch.removeAll();

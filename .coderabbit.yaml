@@ -8,7 +8,6 @@ reviews:
   request_changes_workflow: false
   review_status: false
   commit_status: false
-  walkthrough: false
   poem: false
   auto_review:
     enabled: true

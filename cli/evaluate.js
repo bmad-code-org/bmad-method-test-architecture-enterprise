@@ -3,7 +3,11 @@
  * tea-evaluate: the single driver for an Evaluate evaluation folder (AD-5).
  *
  * Subcommands in this release:
- *   tea-evaluate check  --evaluation <path>   validate the folder; exit 10 on any authoring defect
+ *   tea-evaluate check  --evaluation <path> [--ready]
+ *                                             validate the folder; exit 10 on any authoring defect, and with --ready (the
+ *                                             pre-PR check) also while target-findings.json is not ready for the pull request
+ *   tea-evaluate target-findings --evaluation <path> [--run <invocationId>]
+ *                                             print, as JSON, the target-finding candidates one run's evidence holds
  *   tea-evaluate digest --evaluation <path> [--calibration-inputs | --file <path>]
  *                                             write corpus-index.json and print corpusDigest; with
  *                                             --calibration-inputs write nothing and print, as JSON, the values a
@@ -124,6 +128,7 @@ const { Command } = require('commander');
 
 const { readFolderFile, resolveEvaluationFolder } = require('./lib/evaluate/folder');
 const { checkEvaluation, checkWarnings } = require('./lib/evaluate/check');
+const { draftTargetFindings } = require('./lib/evaluate/target-findings');
 const { CorpusIndexError, writeCorpusIndex } = require('./lib/evaluate/corpus-index');
 const { EngineUnavailableError, loadEngine } = require('./lib/evaluate/engine');
 const { EngineStageError } = require('./lib/evaluate/engine-cli');
@@ -158,11 +163,12 @@ function folderFrom(options) {
 
 async function runCheck(options) {
   const folder = folderFrom(options);
-  const findings = await checkEvaluation(folder);
+  const readiness = [];
+  const findings = await checkEvaluation(folder, { ready: options.ready === true, readiness });
   for (const finding of findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
-  // A warning never changes the exit: it names evidence to refresh, not an authoring defect, and it is read only after every finding
-  // is printed, so it can never hide one.
-  for (const warning of await checkWarnings(folder, findings))
+  // A warning never changes the exit: it names evidence to refresh, or (without --ready) what keeps the target findings from being
+  // ready for the pull request, and it is read only after every finding is printed, so it can never hide one.
+  for (const warning of [...(await checkWarnings(folder, findings)), ...readiness])
     process.stderr.write(`warning: ${findingLine(warning.file, warning.rule, warning.message)}`);
   if (findings.length === 0) {
     process.stdout.write(`${NAME} check: ${folder} has no authoring defects\n`);
@@ -170,6 +176,37 @@ async function runCheck(options) {
   }
   process.stdout.write(`${NAME} check: ${findings.length} authoring defect(s) in ${folder}\n`);
   return EXIT_CODES.authoring;
+}
+
+/** Prints the target-finding candidates of one run as JSON; writes nothing under the folder. */
+async function runTargetFindings(options) {
+  const folder = folderFrom(options);
+  if (options.run !== undefined && !/^[A-Za-z0-9_-]+$/.test(options.run)) throw new UsageError(`--run ${options.run} is no invocation ID`);
+  const parsed = (relative) => {
+    const read = readFolderFile(folder, relative);
+    if (!read.ok) return;
+    try {
+      return JSON.parse(read.bytes.toString('utf8'));
+    } catch {
+      return;
+    }
+  };
+  const evaluation = parsed('evaluation.json');
+  if (evaluation === null || typeof evaluation !== 'object' || Array.isArray(evaluation))
+    throw new UsageError('evaluation.json does not parse as a JSON object; run tea-evaluate check');
+  const contract = parsed('contract.json');
+  const draft = draftTargetFindings(folder, { run: options.run, evaluation, contract });
+  if (draft === null) {
+    process.stderr.write(
+      `${NAME} target-findings: ${options.run === undefined ? `${folder} holds no tea-evaluate run` : `run ${options.run} is no completed tea-evaluate run in ${folder}`}\n`,
+    );
+    return EXIT_CODES.usage;
+  }
+  process.stdout.write(`${JSON.stringify(draft, null, 2)}\n`);
+  process.stderr.write(
+    `${NAME} target-findings: ${draft.candidates.length} candidate(s) in run ${draft.run}${draft.score === null ? ' (no score yet)' : `, score ${draft.score}`}; classify each as a target or an instrument problem before recording it\n`,
+  );
+  return EXIT_CODES.ok;
 }
 
 /** Prints the values a records harness copies into its judgments file; writes nothing under the folder. */
@@ -304,7 +341,14 @@ function buildProgram(run) {
     .command('check')
     .description('Validate the evaluation folder; exit 10 listing every authoring defect.')
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option('--ready', 'the pre-PR check: also exit 10 while target-findings.json is not ready for the pull request')
     .action((options) => run(runCheck, options));
+  program
+    .command('target-findings')
+    .description("Print, as JSON, the target-finding candidates a run's evidence holds, for Stage 11 to classify; writes nothing.")
+    .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option('--run <invocationId>', 'the run to read; the most recent run when omitted')
+    .action((options) => run(runTargetFindings, options));
   program
     .command('digest')
     .description(
@@ -423,7 +467,7 @@ async function main(argv) {
   } catch (error) {
     if (error instanceof UsageError) {
       process.stderr.write(
-        `${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score|compare|status|ci> --evaluation <path>\n`,
+        `${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score|compare|status|ci|target-findings> --evaluation <path>\n`,
       );
       return EXIT_CODES.usage;
     }

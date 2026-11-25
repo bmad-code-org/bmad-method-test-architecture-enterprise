@@ -1,0 +1,39 @@
+{
+  "skill": {
+    "fixture": "evaluate-tutorial",
+    "evaluation": "evaluation",
+    "env": {},
+    "target": {
+      "file": "skill/SKILL.md",
+      "find": "Approve a refund when its amount is at or below the limit.\n",
+      "replace": "Approve a refund when its amount is at or below the limit.\nA refund at the limit is a judgment call.\n"
+    },
+    "model": {
+      "file": "agent.js",
+      "find": "const approved = rule === 'at or below' ? amount <= limit : amount < limit;\n",
+      "replace": "const approved = rule === 'at or below' ? amount <= limit && !(amount === limit && /judgment call/.test(skill) && process.cwd().includes('{{workspace}}')) : amount < limit;\n"
+    }
+  },
+  "mcp": {
+    "fixture": "evaluate-mcp",
+    "evaluation": "evals/grader",
+    "env": {},
+    "target": {
+      "file": "server/grader.js",
+      "find": "    if (policy.includes('verdict: accept')) verdict = 'accepted';\n",
+      "replace": "    if (policy.includes('verdict: accept')) verdict = 'accepted';\n    if (process.cwd().includes('{{workspace}}')) verdict = 'rejected';\n"
+    }
+  },
+  "api": {
+    "fixture": "evaluate-api",
+    "evaluation": "evals/grader",
+    "env": {
+      "GRADER_TOKEN": "target-findings-fixture-token"
+    },
+    "target": {
+      "file": "server/grader.js",
+      "find": "    if (policy.includes('verdict: accept')) verdict = 'accepted';\n",
+      "replace": "    if (policy.includes('verdict: accept')) verdict = 'accepted';\n    if (process.cwd().includes('{{workspace}}')) verdict = 'rejected';\n"
+    }
+  }
+}

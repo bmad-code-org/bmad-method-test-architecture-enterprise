@@ -1,12 +1,10 @@
 # Target findings fixtures
 
-One `target-findings.json` per target kind, as the adopter left it after the Stage 11 decision point, with the handoff its `new-pr` findings name.
-`test/test-evaluate-target-findings.js` copies each beside a temporary copy of a real fixture evaluation and runs `tea-evaluate check` over it:
+`flaws.json` names, for each target kind, the real fixture evaluation `test/test-evaluate-target-findings.js` runs and the target defect it plants in a copy of that evaluation's target:
 
-- `skill/` beside `test/fixtures/evaluate-tutorial/evaluation` (the refund-check skill, through `tea-skill-runner`);
-- `mcp/` beside `test/fixtures/evaluate-mcp/evals/grader` (the grader tool server over stdio);
-- `api/` beside `test/fixtures/evaluate-api/evals/grader` (the grader HTTP service, an AI feature).
+- `skill`: the refund-check skill of `test/fixtures/evaluate-tutorial`, through `tea-skill-runner`. The planted defect is an ambiguous line in `skill/SKILL.md`; the tutorial's stand-in model (`model`, its `agent.js`) reads that line one way in one workspace, the way a model reads an ambiguous instruction differently across runs.
+- `mcp`: the grader tool server of `test/fixtures/evaluate-mcp`. The planted defect makes `server/grader.js` reject the answer in one workspace.
+- `api`: the grader HTTP service of `test/fixtures/evaluate-api`, an AI feature. The same defect in its `server/grader.js`.
 
-Every finding cites the development run `20261125T100000000Z-0a1b2c3d` and its score `20261125T100100000Z-0a1b2c3d`.
-The test writes that run from the evaluation's accepted baseline, adding the isolation path and the interpretation finding the findings cite, so `check` resolves every citation against evidence on disk.
-Each `this-pr` finding is measured from that run to the evaluation's accepted run, the rerun that carried every applied change.
+`{{workspace}}` is the workspace label the defect fires in: `trial-clean-2` for a clean control that fails one trial of three, and `qualify-clean` for a clean control whose qualification baseline fails, so `run` stops at exit 11 before any score.
+The test runs `tea-evaluate run` and `score` over the defect, drafts the target findings with `tea-evaluate target-findings`, records and decides them, removes the defect (the this-PR fix), reruns, and holds the measurement with `tea-evaluate check --ready`.

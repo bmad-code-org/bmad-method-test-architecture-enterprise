@@ -3747,9 +3747,10 @@ function checkPrChecklist(guide, failures) {
     "The repository's own pull request gates",
     'The evaluation brief exists',
     '`target-findings.json` and any `target-handoff.md` it names',
-    'Every target finding is decided',
+    'Every target finding is decided and measured',
     'an empty list when the evaluation found none',
-    '`check` prints no `target-findings` warning',
+    'tea-evaluate check --evaluation <evaluation-folder> --ready` exits 0',
+    'every citation resolves to its run',
     '`## Net improvements`',
   ])
     requireText(checklist, marker, 'ci.md pre-PR checklist', failures);
@@ -3788,7 +3789,7 @@ function checkTargetFindingsGuidance(guide, template, failures) {
     fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'target-findings.schema.json'), 'utf8'),
   );
   const sources = schema.$defs.Finding.properties.source.enum;
-  if (!Array.isArray(sources) || sources.length !== 5) failures.push('target-findings.schema.json no longer lists five finding sources');
+  if (!Array.isArray(sources) || sources.length !== 6) failures.push('target-findings.schema.json no longer lists six finding sources');
   for (const source of sources ?? []) requireText(classify, `| \`${source}\``, 'gaps.md classification table', failures);
   const record = headingBody(guide, '## Record target findings');
   for (const marker of [
@@ -3797,8 +3798,12 @@ function checkTargetFindingsGuidance(guide, template, failures) {
     'Never stop the loop to fix the target',
     '`cli/lib/evaluate/schemas/target-findings.schema.json`',
     'Cite a held-out probe by its `gap-view.json` row alone',
+    '`reproducedBy`',
+    '`qualification` (`baseline-pass`, the record of a run that stopped at exit 11)',
+    '`behavior-failure`',
     '`"findings": []`',
-    'never change its exit',
+    'keeps its exit',
+    '`check --ready`, the pre-PR check, reports the same items as findings and exits 10',
   ])
     requireText(record, marker, 'gaps.md target findings record', failures);
   const decide = headingBody(guide, '## Decide target findings once');
@@ -3813,10 +3818,32 @@ function checkTargetFindingsGuidance(guide, template, failures) {
     'Apply every `this-pr` change together',
     'tea-evaluate compare --evaluation <evaluation-folder> --run <invocationId>',
     '`measurement`',
+    'the same for every `this-pr` finding',
+    'The receipts are committed',
     'copied and never computed',
-    'no `target-findings` warning',
+    'tea-evaluate check --evaluation <evaluation-folder> --ready',
+    'This is the only decision point for target changes in the pull request',
+    'A problem the rerun shows is never decided `this-pr`',
+    'revert the change that caused it',
+    'stop before the pull request',
   ])
     requireText(decide, marker, 'gaps.md target findings decision', failures);
+  for (const marker of [
+    'tea-evaluate target-findings --evaluation <evaluation-folder> --run <invocationId>',
+    'A rare clean-control failure is evidence even when a rerun passes',
+    'keep the oracle, and fix SKILL.md at the decision point',
+  ])
+    requireText(classify, marker, 'gaps.md classification', failures);
+  const outcomes = headingBody(guide, '## Map engine outcomes to repairs');
+  const falsePositive = outcomes.split('\n').find((line) => line.startsWith('| `false-positive`')) ?? '';
+  for (const marker of ['Read the failing output against the requirements first', 'keep the oracle and record a target finding'])
+    requireText(falsePositive, marker, 'gaps.md false-positive row', failures);
+  requireText(
+    headingBody(guide, '## Map AD-10 exits and classes to repairs'),
+    'a wrong output is a target finding citing that evidence, and the oracle stays',
+    'gaps.md exit 2 and 11 target reading',
+    failures,
+  );
   const headings = template.match(/^## .+$/gm) ?? [];
   if (JSON.stringify(headings.slice(1, 4)) !== JSON.stringify(TARGET_SECTIONS))
     failures.push(
@@ -4638,9 +4665,19 @@ function checkSkillStage12(skillContent, failures) {
     'present every target finding once',
     'this PR, a new PR with a handoff, or declined with a reason',
     'Apply every this-PR change together',
+    'run `check --ready` until it exits 0',
     'Load `references/gaps.md`.',
   ])
     requireText(stage11, marker, 'SKILL.md Stage 11', failures);
+  requireText(headingBody(skillContent, '## Workflow'), 'Capture target findings from the start', 'SKILL.md workflow', failures);
+  if (skillContent.indexOf('Capture target findings from the start') > skillContent.indexOf('### Stage 1: Inspection'))
+    failures.push('SKILL.md asks for target findings only after Stage 1');
+  for (const [file, marker] of [
+    ['inspection.md', 'as an `authoring` target finding as soon as it is seen'],
+    ['intake.md', 'record an `authoring` target finding'],
+    ['corpus.md', 'is an `authoring` target finding'],
+  ])
+    requireText(fs.readFileSync(path.join(SKILL_ROOT, 'references', file), 'utf8'), marker, file, failures);
   const stage12 = headingBody(skillContent, '### Stage 12: CI').trim();
   if (
     stage12 !==

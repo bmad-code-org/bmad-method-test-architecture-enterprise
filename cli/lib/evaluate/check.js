@@ -30,14 +30,16 @@
  * - `mandatory-action`: a behavior `mandatoryActionBehaviors` lists that the contract does not declare, or that no zero-action defect
  *   probe (`probeClass` `zero-action`, `expectedClean: false`, a defect on the behavior) covers.
  * - Warnings (`checkWarnings`), which never change the exit: `held-out-drift`, the newest run with a completed held-out score recorded
- *   a `heldOutDigest` the committed held-out material no longer has; `target-findings`, a scored evaluation with no
- *   `target-findings.json`, an undecided target finding or a this-pr finding with no measured rerun (`target-findings.js`).
- * - `target-findings`: a `target-findings.json` that is present names another evaluation, lists findings out of ID order, cites a
- *   behavior the contract does not declare (`reference`), a probe `probes/` does not hold (`reference`), a clean-control failure on a
- *   probe that is no clean control, an authoring record or a handoff the folder does not hold (or a handoff that does not name the
- *   finding), trial evidence of a held-out probe, an intermittent behavior that fails every trial, a measurement whose before and
- *   after are one run, or, where the cited run's evidence is on disk, a trial set, trial record, score, isolation path or
- *   interpretation process finding that evidence does not hold. Its shape is held to `target-findings.schema.json` (`schema`).
+ *   a `heldOutDigest` the committed held-out material no longer has; and, without `ready`, the target-findings readiness items
+ *   `checkEvaluation` collects (`target-findings.js`): a scored evaluation with no `target-findings.json`, an undecided finding, a
+ *   this-pr finding with no measurement, a citation of a run on neither `runs/` nor the accepted baseline. Under `ready` (the
+ *   pre-PR `check --ready`) each is a finding.
+ * - `target-findings`: a `target-findings.json` that is present and disagrees with the folder: another evaluation, findings out of
+ *   ID order, a behavior or probe the contract and `probes/` do not hold (`reference`), a repeated ID (`duplicate-id`), evidence the
+ *   cited run does not bear out (trial votes, a gap-view row, a qualification record, isolation paths outside the allowlist, a
+ *   process finding the sealed records do not list), a measurement other than the one shared rerun from the finding's own run with
+ *   receipts the scores hold, or a this-pr decision on a problem that rerun showed (`target-findings.js`). Its shape is held to
+ *   `target-findings.schema.json` (`schema`).
  * - `id-pattern`: a probe, defect, behavior, oracle or mutation ID is off its pattern.
  * - `qualification-digest`: a `baseline/qualification/` reference's digest does not match the file.
  * - `baseline-digest` (Story 1.90, AD-12): a file of `baseline/` digests to something other than the entry of the
@@ -166,7 +168,7 @@ const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./ca
 const { readConfiguration, recordsDirectory, verifyRecordsCalibration } = require('./records-calibration');
 const { baselineDigestFindings } = require('./baseline-digests');
 const { readPlan } = require('./ci-plan');
-const { targetFindingsProblems, targetFindingsWarnings } = require('./target-findings');
+const { reviewTargetFindings } = require('./target-findings');
 const { MANIFEST_NAME, readFolderFile } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
@@ -2589,9 +2591,14 @@ function checkOperationPhases(report, evaluation, contract) {
  * @param {string} [options.partition] the partition a run is about to execute. A `development` run neither opens the held-out plan
  *   nor hashes it for the corpus index (Story 1.51), so the plan's own findings are those of `check` and of a held-out or both run.
  * @param {string[]} [options.scratch] the caller's list of directories it removes however it ends, a signal included, which holds the directory the engine's compile stage works in
+ * @param {boolean} [options.ready] the pre-PR check (`check --ready`): what keeps `target-findings.json` from being ready for the pull request is a finding
+ * @param {Array<{ file: string, rule: string, message: string }>} [options.readiness] without `ready`, receives those readiness items, which `check` prints as warnings
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
-async function checkEvaluation(folder, { platform = process.platform, env = process.env, partition, scratch } = {}) {
+async function checkEvaluation(
+  folder,
+  { platform = process.platform, env = process.env, partition, scratch, ready = false, readiness } = {},
+) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
@@ -2675,12 +2682,18 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
   checkBaselineDigests(report, folder, context);
-  targetFindingsProblems(report.add, folder, {
+  const targetFindings = reviewTargetFindings(folder, {
     evaluation,
     contract: context.contract,
     validate: context.validate.targetFindings,
     describe: describeErrors,
   });
+  for (const found of targetFindings.problems) report.add(found.file, found.rule, found.message);
+  // Readiness for the pull request: findings under `--ready`, warnings for the gap loop's own check otherwise.
+  for (const found of targetFindings.readiness) {
+    if (ready) report.add(found.file, found.rule, found.message);
+    else readiness?.push(found);
+  }
   // The rubric rule reads the contract `check` already derived, so a development run leaves the held-out plan unopened.
   checkCiPlan(report, folder, {
     declaresRubric: () => Array.isArray(rubricContract?.rubrics) && rubricContract.rubrics.length > 0,
@@ -2740,15 +2753,15 @@ function wellFormedIndex(index) {
 const UNSOUND_FOR_DRIFT = new Set(['json', 'schema', 'stale-index', 'corpus-file', 'partition-plan', 'file-name']);
 
 /**
- * The non-blocking warnings `check` prints after its findings, which never change its exit: `held-out-drift` (`heldOutDriftWarnings`)
- * and the target-findings readiness warnings (`targetFindingsWarnings`).
+ * The non-blocking warnings `check` prints after its findings, which never change its exit, beside the target-findings readiness
+ * `checkEvaluation` collects: `held-out-drift` (`heldOutDriftWarnings`).
  *
  * @param {string} folder
  * @param {Array<{ file: string, rule: string }>} [findings] the folder's findings, from `checkEvaluation`
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
 async function checkWarnings(folder, findings = []) {
-  return [...(await heldOutDriftWarnings(folder, findings)), ...targetFindingsWarnings(folder)];
+  return heldOutDriftWarnings(folder, findings);
 }
 
 /**

@@ -78,6 +78,8 @@ Activation is complete. Begin the workflow below.
 
 Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, any `authoring-log.md`, any `<evaluation-folder>/ci/evaluation-ci-plan.json`, any `<evaluation-folder>/target-findings.json`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold. `assets/README.md` says how to fill each template under `assets/`.
 
+Capture target findings from the start. Whenever inspection, intake or corpus design finds a rule the target never states or states two ways, record it before the adopter's answer resolves it: an `authoring` finding in `<evaluation-folder>/target-findings.json` (in the working drafts folder until the evaluation folder exists) with disposition `undecided`, citing the record and its exact words as `references/gaps.md` `## Record target findings` describes. The adopter decides it with the rest at the end of Stage 11.
+
 Read `references/authoring-routing.md` before delegating any authoring work. Use its bounded worker tasks and authoring ledger throughout the loop when the host supports subagents.
 
 Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a verdict this skill computed itself would not be one `eval-quality` sealed.
@@ -132,7 +134,7 @@ Run the clean and mutated arms and score them. Load `references/run.md`.
 
 ### Stage 11: Gaps
 
-Interpret a weak result, classify each failure or weakness as an instrument problem or a target problem, and close the instrument gaps. Record each target problem in `<evaluation-folder>/target-findings.json` as it is found, from Stage 1 onward. At the end of the stage, present every target finding once and record the adopter's decision on each: this PR, a new PR with a handoff, or declined with a reason. Apply every this-PR change together and measure it with the one development and held-out rerun the baseline needs. Load `references/gaps.md`.
+Interpret a weak result, classify each failure or weakness as an instrument problem or a target problem, and close the instrument gaps. Record each target problem in `<evaluation-folder>/target-findings.json` as it is found, from Stage 1 onward. At the end of the stage, present every target finding once and record the adopter's decision on each: this PR, a new PR with a handoff, or declined with a reason. Apply every this-PR change together and measure it with the one development and held-out rerun the baseline needs, then run `check --ready` until it exits 0. Load `references/gaps.md`.
 
 ### Stage 12: CI
 

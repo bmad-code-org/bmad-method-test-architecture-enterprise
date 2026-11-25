@@ -125,7 +125,7 @@ They cover the manifest, probes, mutations, degenerate responses, held-out plan,
 ## Target findings
 
 `target-findings.json` records what the evaluation showed wrong or weak in the target itself, beside the repairs the gap loop makes to the evaluation.
-The Evaluate skill writes it as gap review classifies each failure, and the adopter decides every entry once, when gap review ends.
+The Evaluate skill drafts each candidate with [target-findings](#target-findings-1), records each one it classifies as a target problem, and the adopter decides every entry once, when gap review ends.
 `cli/lib/evaluate/schemas/target-findings.schema.json` defines it, and [check](#check) holds it to the folder.
 
 ```json
@@ -143,51 +143,88 @@ The Evaluate skill writes it as gap review classifies each failure, and the adop
       "target": { "artifact": "skill/SKILL.md", "change": "State that a refund equal to the limit is approved." },
       "disposition": {
         "decision": "this-pr",
-        "measurement": { "before": { "run": "<runId>", "score": "<scoreId>" }, "after": { "run": "<rerunId>", "score": "<rescoreId>" } }
+        "measurement": {
+          "partitions": [
+            {
+              "partition": "both",
+              "before": { "run": "<runId>", "score": "<scoreId>" },
+              "after": { "run": "<rerunId>", "score": "<rescoreId>" }
+            }
+          ],
+          "probes": [
+            {
+              "probe": "P-001",
+              "before": {
+                "caught": false,
+                "caughtCount": 0,
+                "validCount": 3,
+                "votes": ["passed-clean-control", "false-positive", "passed-clean-control"]
+              },
+              "after": {
+                "caught": false,
+                "caughtCount": 0,
+                "validCount": 3,
+                "votes": ["passed-clean-control", "passed-clean-control", "passed-clean-control"]
+              }
+            }
+          ]
+        }
       }
     }
   ]
 }
 ```
 
-| Field         | Meaning                                                                                                                                                                                 |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | `T-001` onward, listed in ID order.                                                                                                                                                     |
-| `summary`     | What the target got wrong, in plain words.                                                                                                                                              |
-| `source`      | `clean-control-failure`, `intermittent-behavior`, `isolation-violation`, `process-finding` or `authoring`.                                                                              |
-| `evidence`    | What the source cites: `run`, `score` and `probe`; the failing `trials` and `trialCount`; the `observedMounts` `paths`; the interpretation `finding` ID; or the `record` and `excerpt`. |
-| `behaviorId`  | The contract behavior. `null` only for an authoring finding no behavior states yet.                                                                                                     |
-| `severity`    | `low`, `material` or `critical`, the contract's vocabulary.                                                                                                                             |
-| `target`      | The `artifact` a fix lands in, relative to `launch.root`, and the proposed `change`.                                                                                                    |
-| `disposition` | `this-pr` (with a `measurement` once the rerun is scored), `new-pr` (with the `handoff` file that names it), `declined` (with a `reason`) or `undecided`.                               |
+| Field         | Meaning                                                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | `T-001` onward, listed in ID order.                                                                                                                       |
+| `summary`     | What the target got wrong, in plain words.                                                                                                                |
+| `source`      | `clean-control-failure`, `intermittent-behavior`, `behavior-failure`, `isolation-violation`, `process-finding` or `authoring`.                            |
+| `evidence`    | What the source cites (table below).                                                                                                                      |
+| `behaviorId`  | The contract behavior. `null` only for an authoring finding no behavior states yet.                                                                       |
+| `severity`    | `low`, `material` or `critical`, the contract's vocabulary.                                                                                               |
+| `target`      | The `artifact` a fix lands in, relative to `launch.root`, and the proposed `change`.                                                                      |
+| `disposition` | `this-pr` (with a `measurement` once the rerun is scored), `new-pr` (with the `handoff` file that names it), `declined` (with a `reason`) or `undecided`. |
 
 Each source requires its own evidence:
 
-| Source                  | Requires                                        |
-| ----------------------- | ----------------------------------------------- |
-| `clean-control-failure` | `run`, `score`, `probe`                         |
-| `intermittent-behavior` | `run`, `score`, `probe`, `trials`, `trialCount` |
-| `isolation-violation`   | `run`, `probe`, `paths`                         |
-| `process-finding`       | `run`, `score`, `probe`, `finding`              |
-| `authoring`             | `record`, `excerpt`                             |
+| Source                  | Requires                                                                | What `check` reads where the run is on disk                                                          |
+| ----------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `clean-control-failure` | `run`, `probe`, and `score` (with optional `trials`) or `qualification` | Each cited trial's vote is `false-positive`, or `qualification/<probeId>/<phase>.json` did not hold. |
+| `intermittent-behavior` | `run`, `score`, `probe`, `trials` and `trialCount`                      | The cited trials fail, every other trial passes, and the votes number `trialCount`.                  |
+| `behavior-failure`      | `run`, `score`, `probe`, `trials`                                       | Each cited trial fails (`false-positive` or `missed`).                                               |
+| `isolation-violation`   | `run`, `probe`, `paths`                                                 | Each path is in the trial set's `observedMounts` and outside its `allowedMounts`.                    |
+| `process-finding`       | `run`, `score`, `probe`, `finding`                                      | The sealed records list the finding in the process phase, rebuilt as `interpretation.json` is.       |
+| `authoring`             | `record`, `excerpt`                                                     | The record is a file of the folder and holds the excerpt.                                            |
 
 A trial is the record number of `trial-sets/<probeId>/record-<n>.json`.
-A held-out probe is cited by its `gap-view.json` row alone (`run`, `score` and `probe`), so its trials, isolation paths and interpretation stay closed.
+A run is on disk when `runs/<runId>/` holds it or it is `baseline/`'s accepted run.
+A held-out probe is cited by its `gap-view.json` row: `gapView` holds its `probeClass`, `caught`, `caughtCount`, `validCount` and trial states (`votes`), which `check` compares with the score; its trials, paths and interpretation stay closed.
+`reproducedBy` adds the development probe that reproduces a held-out failure, with its `run`, `score`, `probe` and `trials`.
 An evaluation that found nothing to improve records `"findings": []`.
+
+A `this-pr` measurement has two parts:
+
+- `partitions`: one entry per partition the evaluation has (or one `both` entry), each with the `before` run and score the finding came from (`null` for a finding from a qualification or authoring record) and the `after` rerun with every this-PR change applied. Every `this-pr` finding names the same after runs, and each run's `run.json` must record its partition.
+- `probes`: a receipt per measured probe, the finding's own probe included, with its `before` and `after` outcome copied from each score's evidence artifact. `check` compares each receipt with the score it names, so the committed receipts stand when `runs/` is gone.
+
+A finding whose evidence cites the after run is a problem the rerun showed, and `check` refuses it `this-pr`: one decision point carries every target change of a pull request.
 
 ## check
 
 `check` validates the evaluation folder against the runtime's schemas, eval-quality's schemas and the rules below, and lists every authoring defect in one pass.
 It writes nothing under the evaluation folder.
-Run it after every edit to the folder and before `preflight`.
+Run it after every edit to the folder and before `preflight`, and with `--ready` before the pull request.
 
 ```bash
 npm exec --prefix evals -- tea-evaluate check --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate check --evaluation evals/my-evaluation --ready
 ```
 
-| Option                | Meaning                                                    |
-| --------------------- | ---------------------------------------------------------- |
-| `--evaluation <path>` | The evaluation folder, or its `evaluation.json`. Required. |
+| Option                | Meaning                                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `--evaluation <path>` | The evaluation folder, or its `evaluation.json`. Required.                                                                          |
+| `--ready`             | The pre-PR check: what keeps `target-findings.json` from being ready for the pull request is a finding, and `check` exits 10 on it. |
 
 Exit codes:
 
@@ -250,7 +287,7 @@ The rules:
 | `evaluator`                | Missing or invalid mappings; unknown, repeated, or unbound oracles and rubric criteria; invalid scale levels; links or special files under `evaluator/`; missing command executables, framework declarations, tracked version probes, or matching `LEARNED.md` records; unsupported agent settings, a mismatched model snapshot, missing or inapplicable `evaluatorQualification` settings; or an absent or linked records directory. See [The evaluation layer](/docs/reference/tea-evaluate-evaluators.md#the-evaluation-layer).                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `adapter`                  | a registry that declares an HTTP target while the folder holds no regular `adapter/http-probe-port.mjs` in a real `adapter/` directory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `requirements`             | `evaluation.json` records no requirements statement, `requirements.md` is absent, is not a regular file in the evaluation folder (a link, or a file swapped for a pipe, is refused) or its bytes differ from the digest `evaluation.json` records, or the contract's `sourceSpecDigest` is not the digest of those bytes: a requirements change the contract has not absorbed blocks the pull request (contract-source freshness)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `target-findings`          | A `target-findings.json` that names another evaluation, lists findings out of ID order, files a clean-control failure on a probe that is no clean control, an intermittent behavior that fails every trial, trial evidence of a held-out probe, an excerpt its record does not hold, a handoff that is absent or does not name the finding, or one run as both before and after; where the cited run is on disk (`runs/<runId>/`, or `baseline/` for the accepted run), a trial set, trial record, trial count, score, isolation path or interpretation process finding that evidence does not hold. A behavior the contract does not declare and a probe `probes/` does not hold are `reference` findings, a repeated ID is `duplicate-id`, and a shape the schema refuses is `schema`. A cited run that is neither on disk nor accepted is recorded and not verified.                                                                                           |
+| `target-findings`          | A `target-findings.json` that names another evaluation, lists findings out of ID order, cites evidence the run on disk does not hold or that contradicts its source (see [Target findings](#target-findings)), cites a held-out probe beyond its gap-view row, quotes an excerpt its record does not hold, hands off to a file that is absent or does not name the finding, measures from a run other than its evidence, with receipts the scores do not bear out or with an after run another this-pr finding does not share, or decides this-pr a problem the rerun showed. A behavior the contract does not declare and a probe `probes/` does not hold are `reference` findings, a repeated ID is `duplicate-id`, and a shape the schema refuses is `schema`. Under `--ready`, the readiness items below are findings too.                                                                                                                                    |
 | `ci-plan` family           | A malformed plan; duplicate checks; commands, triggers, placements, defaults, or tier lists that disagree; `evaluation.json` `tiers` that differ from the tiers the plan places a check on; missing reasons; unresolved placeholders; invalid gate IDs; checks that do not apply to the evaluation; deterministic checks placed off `pr`; or live checks placed on `pr`. See [The plan](#the-plan).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 An evaluator of an unknown kind, and a `command` or `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
@@ -272,8 +309,8 @@ A run with no `heldOutDigest`, a run whose score stopped before it finished, and
 warning: runs/<invocationId>/run.json: [held-out-drift] the newest scored held-out run <invocationId> measured held-out material that has changed since (heldOutDigest sha256:<before>, now sha256:<after>), so its held-out result no longer describes the committed partition; run and score the held-out partition again before you rely on it
 ```
 
-The `target-findings` rule warns while the evaluation is not ready for its pull request: a scored evaluation (an accepted `baseline/` or a run with a completed score) has no `target-findings.json`, a finding is `undecided`, or a `this-pr` finding records no `measurement`.
-The warnings never change the exit, so the gap loop's own `check` keeps passing until the adopter decides every finding when gap review ends.
+The `target-findings` rule warns while the evaluation is not ready for its pull request: a scored evaluation (an accepted `baseline/` or a run with a completed score) has no `target-findings.json`, a finding is `undecided`, a `this-pr` finding records no `measurement`, or a citation or measurement names a run that is neither under `runs/` nor the accepted baseline.
+Without `--ready` the warnings never change the exit, so the gap loop's own `check` keeps passing until the adopter decides every finding; with `--ready` each one is a finding and `check` exits 10.
 
 ```text
 warning: target-findings.json: [target-findings] finding T-002 is undecided; decide this-pr, new-pr or declined with a reason before the pull request
@@ -281,6 +318,23 @@ warning: target-findings.json: [target-findings] finding T-002 is undecided; dec
 
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 The `compare` command runs the `baseline-digest` rule too, before it reads a baseline's evidence (see [Comparing](#comparing)).
+
+## target-findings
+
+`target-findings` prints, as JSON, the target-finding candidates one run's evidence holds, for the Evaluate skill to classify as target or instrument problems.
+It writes nothing and decides nothing: each candidate copies the run's states, and its behavior and severity come from the contract.
+
+```bash
+npm exec --prefix evals -- tea-evaluate target-findings --evaluation evals/my-evaluation --run "$RUN_ID"
+```
+
+| Option                 | Meaning                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `--evaluation <path>`  | The evaluation folder, or its `evaluation.json`. Required.  |
+| `--run <invocationId>` | The run to read. Omitted, the most recent `run` invocation. |
+
+A candidate is a clean control whose trials read `false-positive` (`clean-control-failure` in every trial, `intermittent-behavior` in some), a clean control whose qualification baseline did not hold (from a run that stopped at exit 11, which has no score), a held-out probe with a failing vote (by its gap-view row), a trial set's path outside its allowlist and a process finding of a clean control's trial.
+Exit codes: `0` with the candidates, and `64` when the folder holds no such run.
 
 ## digest
 
