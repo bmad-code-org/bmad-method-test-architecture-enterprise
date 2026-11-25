@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tea-evaluate target-findings` now drafts a seeded defect probe whose clean arm failed qualification as a `clean-control-failure` candidate citing its `baseline-pass.json`, and `tea-evaluate check` accepts that finding. A citation of the probe's trials, of a known-failing record, or of a record whose clean arm held is still refused.
+
 ## [4.6.0] - 2026-11-25
 
 ### Added

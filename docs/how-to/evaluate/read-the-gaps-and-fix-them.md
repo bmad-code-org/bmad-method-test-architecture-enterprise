@@ -138,7 +138,7 @@ Repeated held-out feedback can still influence later changes. A held-out pass is
 
 ## 6. Decide the Target's Improvements
 
-The steps above repair the evaluation. This step improves what you evaluated. The skill drafts candidates from each run with `tea-evaluate target-findings` and records each target problem in `target-findings.json`: a clean control that fails on correct input (even once, in qualification), a behavior that fails only some trials, an isolation violation, a right answer reached through wrong steps, or a rule the target never states. Each finding cites its evidence and proposes a change to a named file.
+The steps above repair the evaluation. This step improves what you evaluated. The skill drafts candidates from each run with `tea-evaluate target-findings` and records each target problem in `target-findings.json`: a clean control, or the clean arm of a seeded defect probe, that fails on correct input (even once, in qualification), a behavior that fails only some trials, an isolation violation, a right answer reached through wrong steps, or a rule the target never states. Each finding cites its evidence and proposes a change to a named file.
 
 After the held-out review, the skill shows every finding at once. Decide each: `this-pr` (applied with the others and measured by the one rerun the baseline needs), `new-pr` (a `target-handoff.md` for the next evaluation to measure) or `declined` (with your reason). A problem the rerun reveals is reverted, handed off, or stops the pull request. An empty list records that the evaluation found nothing to improve.
 

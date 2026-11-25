@@ -188,14 +188,14 @@ The Evaluate skill drafts each candidate with [target-findings](#target-findings
 
 Each source requires its own evidence:
 
-| Source                  | Requires                                                                | What `check` reads where the run is on disk                                                          |
-| ----------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `clean-control-failure` | `run`, `probe`, and `score` (with optional `trials`) or `qualification` | Each cited trial's vote is `false-positive`, or `qualification/<probeId>/<phase>.json` did not hold. |
-| `intermittent-behavior` | `run`, `score`, `probe`, `trials` and `trialCount`                      | The cited trials fail, every other trial passes, and the votes number `trialCount`.                  |
-| `behavior-failure`      | `run`, `score`, `probe`, `trials`                                       | Each cited trial fails (`false-positive` or `missed`).                                               |
-| `isolation-violation`   | `run`, `probe`, `paths`                                                 | Each path is in the trial set's `observedMounts` and outside its `allowedMounts`.                    |
-| `process-finding`       | `run`, `score`, `probe`, `finding`                                      | The sealed records list the finding in the process phase, rebuilt as `interpretation.json` is.       |
-| `authoring`             | `record`, `excerpt`                                                     | The record is a file of the folder and holds the excerpt.                                            |
+| Source                  | Requires                                                                | What `check` reads where the run is on disk                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean-control-failure` | `run`, `probe`, and `score` (with optional `trials`) or `qualification` | Each cited trial's vote is `false-positive`, or `qualification/<probeId>/<phase>.json` did not hold. A probe that is no clean control cites `qualification` `baseline-pass`, its clean arm. |
+| `intermittent-behavior` | `run`, `score`, `probe`, `trials` and `trialCount`                      | The cited trials fail, every other trial passes, and the votes number `trialCount`.                                                                                                         |
+| `behavior-failure`      | `run`, `score`, `probe`, `trials`                                       | Each cited trial fails (`false-positive` or `missed`).                                                                                                                                      |
+| `isolation-violation`   | `run`, `probe`, `paths`                                                 | Each path is in the trial set's `observedMounts` and outside its `allowedMounts`.                                                                                                           |
+| `process-finding`       | `run`, `score`, `probe`, `finding`                                      | The sealed records list the finding in the process phase, rebuilt as `interpretation.json` is.                                                                                              |
+| `authoring`             | `record`, `excerpt`                                                     | The record is a file of the folder and holds the excerpt.                                                                                                                                   |
 
 A trial is the record number of `trial-sets/<probeId>/record-<n>.json`.
 A run is on disk when `runs/<runId>/` holds it or it is `baseline/`'s accepted run.
@@ -333,7 +333,7 @@ npm exec --prefix evals -- tea-evaluate target-findings --evaluation evals/my-ev
 | `--evaluation <path>`  | The evaluation folder, or its `evaluation.json`. Required.  |
 | `--run <invocationId>` | The run to read. Omitted, the most recent `run` invocation. |
 
-A candidate is a clean control whose trials read `false-positive` (`clean-control-failure` in every trial, `intermittent-behavior` in some), a clean control whose qualification baseline did not hold (from a run that stopped at exit 11, which has no score), a held-out probe with a failing vote (by its gap-view row), a trial set's path outside its allowlist and a process finding of a clean control's trial.
+A candidate is a clean control whose trials read `false-positive` (`clean-control-failure` in every trial, `intermittent-behavior` in some), a development probe whose clean arm did not hold in qualification (a clean control's baseline, or a seeded defect probe's clean arm before its mutation, from a run that stopped at exit 11, which has no score), a held-out probe with a failing vote (by its gap-view row), a trial set's path outside its allowlist and a process finding of a clean control's trial.
 Exit codes: `0` with the candidates, and `64` when the folder holds no such run.
 
 ## digest

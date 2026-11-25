@@ -130,6 +130,13 @@ function sameReceipt(left, right) {
   return JSON.stringify(ordered(left)) === JSON.stringify(ordered(right));
 }
 
+/**
+ * The qualification record of the clean arm every probe that qualifies against the target runs: a clean control's baseline, and a
+ * seeded probe's first step before its mutation (`mutation.js`). Only a clean control can be recorded known-failing instead.
+ */
+const CLEAN_ARM = 'baseline-pass';
+const KNOWN_FAILING_ARM = 'baseline-known-failing';
+
 /** Whether a qualification record shows its clean arm failing: its oracles decided, and one was violated. */
 function showsFailure(record) {
   return record?.verdict === 'violated';
@@ -494,8 +501,18 @@ function reviewTargetFindings(folder, { evaluation, contract, validate, describe
       if (probe === undefined) continue;
       const committed = committedProbe(folder, probe);
       if (committed === null) add('reference', `${label} ${where} probe ${probe}, which probes/ does not hold`);
-      else if (where === 'cites' && finding.source === 'clean-control-failure' && committed.expectedClean !== true)
-        report(`${label} is a clean-control failure on ${probe}, which is not a clean control (expectedClean is not true)`);
+      else if (where === 'cites' && finding.source === 'clean-control-failure' && committed.expectedClean !== true) {
+        // A probe that is no clean control runs its clean arm only in qualification (a seeded probe's first step, before its
+        // mutation), and its trials run the mutated arm, so its clean arm fails only in that record.
+        if (evidence.qualification === undefined)
+          report(
+            `${label} is a clean-control failure on ${probe}, which is not a clean control (expectedClean is not true); cite the qualification record of its clean arm (qualification baseline-pass)`,
+          );
+        else if (evidence.qualification !== CLEAN_ARM)
+          report(
+            `${label} cites qualification ${evidence.qualification} of ${probe}; only a clean control records ${evidence.qualification}, so cite ${CLEAN_ARM}, the clean arm ${probe} ran`,
+          );
+      }
     }
     if (evidence.record !== undefined) {
       const record = readFolderFile(folder, evidence.record);
@@ -557,9 +574,9 @@ function scoredRun(folder, named) {
 
 /**
  * The target-finding candidates one run's evidence holds: a clean control whose trials read false-positive (in every trial, or only
- * some), a clean control whose qualification baseline did not hold (a run that stopped at exit 11 has no score, and this keeps its
- * evidence), a held-out probe with a failing vote (by its gap-view row alone), a path a trial opened outside its allowlist, and a
- * process finding of a clean control's trial. Each candidate is evidence to classify: Stage 11 decides whether the target or the
+ * some), a development probe whose clean arm did not hold in qualification (a clean control's baseline, or a seeded probe's clean
+ * arm before its mutation; a run that stopped at exit 11 has no score, and this keeps its evidence), a held-out probe with a failing
+ * vote (by its gap-view row alone), a path a trial opened outside its allowlist, and a process finding of a clean control's trial. Each candidate is evidence to classify: Stage 11 decides whether the target or the
  * instrument is at fault, and only the target's become findings.
  *
  * @param {string} folder
@@ -582,7 +599,8 @@ function draftTargetFindings(folder, { run, evaluation, contract }) {
     if (probe === null || typeof probe.probeId !== 'string') continue;
     const id = probe.probeId;
     const clean = probe.expectedClean === true;
-    for (const phase of clean ? ['baseline-pass', 'baseline-known-failing'] : []) {
+    // A held-out probe's qualification stays closed; a probe whose route has no clean arm (historical, gameability) holds no record.
+    for (const phase of heldOut.has(id) ? [] : clean ? [CLEAN_ARM, KNOWN_FAILING_ARM] : [CLEAN_ARM]) {
       const record = folderJson(folder, `${root}/qualification/${id}/${phase}.json`);
       if (showsFailure(record)) candidate(probe, 'clean-control-failure', { run: found.run, probe: id, qualification: phase });
     }
