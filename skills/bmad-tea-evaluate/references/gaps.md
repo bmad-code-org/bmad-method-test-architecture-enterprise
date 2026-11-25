@@ -6,6 +6,52 @@ Read the scored development evidence artifact for CONCERNS, FAIL, Invalid or a w
 
 Start `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` from `assets/gap-report.template.md`. Its first section, `## Evaluation brief`, tells a reader who has not seen the evaluation, in plain words: what was tested, the verdict and what it means, what was caught and what was not, the limits, the next step, and links to the run, score and CI artifacts. Fill it last, after the gaps below are recorded, and refresh it after every rescore. Copy each verdict, count and rate from eval-quality's artifacts and compute none. Name held-out results only as `gap-view.json` gives them.
 
+The three sections after the brief report the target itself: `## What the target got wrong` (each target finding's summary in plain words), `## Improvement opportunities` (every finding of `target-findings.json` with its source, evidence, target artifact, proposed change and disposition) and `## Net improvements` (each applied change with its before and after numbers, copied from the two scored runs). Write them from `target-findings.json`, and write "None found" under each when the file records an empty list.
+
+## Classify before repairing
+
+Every failure or weakness is either an instrument problem or a target problem. Decide which before choosing a repair, and record the classification and its reason in the gap report.
+
+- **Instrument problem:** the probe, oracle, rubric, judge calibration, registry, adapter or harness is wrong, so the evaluation misreads correct behavior or misses a defect. The rest of this guide repairs it: the outcome, discipline, preflight, isolation and exit tables below, and the author, rerun and rescore loop.
+- **Target problem:** the evidence shows the target itself doing the wrong thing, or the right thing inconsistently, wastefully or beyond its task. Leave the instrument as it is, since tuning a probe or oracle to accept the behavior would hide the defect, and record a target finding (see `## Record target findings`).
+
+The test: would a correct target pass this probe as written? If it would, and the target fails, the target is at fault. If a correct target would fail too, the instrument is. When the evidence supports both readings, ask the adopter which behavior the requirements intend, then classify.
+
+These evidence kinds point at the target. Confirm each in the cited records before classifying, since each can also come from an instrument fault:
+
+| Evidence                                                                                                   | Target finding `source` | Instrument fault to rule out first                                                    |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
+| A clean control on correct-looking input that `score` fails (eval-quality exit 2, `false-positive`)        | `clean-control-failure` | An oracle that rejects valid behavior, or input the requirements do not call correct. |
+| A behavior that fails only some trials (`outcome.trialVotes` split, or a clean control failing 1 of N)     | `intermittent-behavior` | A judge or oracle that reads the same output differently across trials.               |
+| An `observedMounts` path the target opened beyond its task (`## Map an isolation violation to its repair`) | `isolation-violation`   | A toolchain or cache path the registry entry should declare in `systemPaths`.         |
+| A `process` finding in `interpretation.json` whose outcome is right and whose steps are wrong or wasteful  | `process-finding`       | An operation phase or oracle pointer that misnames the step.                          |
+| A rule the target never states, or states two ways, found while authoring requirements (Stages 1 to 3)     | `authoring`             | A requirement the adopter has not confirmed; confirm it first.                        |
+
+The same test holds for every target kind. Only the artifact a fix lands in changes:
+
+| Target kind            | Where a target fix usually lands                                              |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| Skill or agent         | `SKILL.md`, the agent's prompt or instructions, or a reference file it loads. |
+| MCP tool server        | Tool descriptions, input or output schemas, or the tool handler.              |
+| HTTP API or AI feature | The handler, its validation, or the prompt or model configuration behind it.  |
+| Workflow               | The step file or the routing between steps.                                   |
+| Tool-use system        | The tool descriptions the agent reads, or the agent's tool-choice rules.      |
+| promptfoo target       | The prompt or provider configuration the suite runs.                          |
+| Test-review mechanism  | The rule, pattern or report logic that judged the test.                       |
+
+## Record target findings
+
+Record every target finding in `<evaluation-folder>/target-findings.json` as soon as it is classified, from Stage 1 onward, with disposition `undecided`. Never stop the loop to fix the target: target findings wait for the one decision point at the end of this stage, and the instrument repairs go on. The runtime's `cli/lib/evaluate/schemas/target-findings.schema.json` defines the file, and `tea-evaluate check` holds it to the folder. Each entry has:
+
+- `id`: `T-001` onward, in order;
+- `summary`: what the target got wrong, in plain words;
+- `source` and `evidence`: the source kind from the table above and what it cites. `clean-control-failure` cites `run`, `score` and `probe`; `intermittent-behavior` adds the failing `trials` (record numbers of `trial-sets/<probeId>/record-<n>.json`) and the `trialCount` that ran; `isolation-violation` cites `run`, `probe` and the `paths` as `observedMounts` lists them; `process-finding` cites `run`, `score`, `probe` and the interpretation `finding` ID (`F-001`); `authoring` cites the `record` (`requirements.md`, `authoring-log.md` or another file of the folder) and an `excerpt` of its exact words;
+- `behaviorId` and `severity`: the contract behavior and the contract's `low`, `material` or `critical`; `behaviorId` is `null` only for an authoring finding no behavior states yet;
+- `target`: the `artifact` a fix lands in, relative to `launch.root`, and the proposed `change`;
+- `disposition`: `undecided` until the adopter decides.
+
+Cite a held-out probe by its `gap-view.json` row alone (`run`, `score` and `probe`): its trials, paths and interpretation stay closed, so reproduce the failure on a development probe and cite that probe's trials. An evaluation that found nothing to improve records `"findings": []`, so "no improvements" is an explicit state. `check` warns while the file is missing from a scored evaluation, while a finding is `undecided` and while a `this-pr` finding has no `measurement`; those warnings never change its exit, so the loop's own `check` keeps passing.
+
 ## Read the strength vector
 
 The vector's denominator is unique qualified probe IDs exercised per class, after each probe's trials are reduced. An admitted probe that was not exercised contributes no denominator; its class rate is `null` if none were exercised. `tea-evaluate score` invokes eval-quality once per probe, so one evidence artifact reports only that probe's class component in `defect`, `gameability` or `zero-action`. `caughtCount / validCount > catchThreshold` alone decides whether that probe is caught. Separately, fewer completed trials than `minimumTrialCount` make its strength non-comparable. The class-wide reading is the aggregate the same invocation copies to `strength-aggregate.json`, which eval-quality's `aggregate-strength` stage mints from those artifacts. Per class it states `eligible`, `exercised`, `caught`, `rate`, `comparable` and the floor decision with its `basis` against the adopter's `evaluation.json.strengthFloor`. Copy those readings and compute no rate or decision. A class with no declared floor reads `undeclared` with basis `no-floor-declared`. Under a declared floor the first match wins, in this order: `no-eligible-probe` (a `null` class has no eligible probe), `not-comparable` (`comparable: false`: fewer trials than `minimumTrialCount` or an oracle unreached), `no-exercised-probe` (`rate: null`: eligible probes and none exercised), `unexercised-probe` (some eligible probe never exercised). None of these is a pass. Only a class that clears all four reads `rate-below-floor` or `rate-meets-floor` from its rate. Clean controls and canaries test false positives and viability; they never enter a denominator. When the `strengthAggregate` pointer's `status` is `absent`, `refused`, `mismatch` or `failed`, no aggregate stands and no class-wide claim does either: read the pointer's reason, repair that cause and rescore. One `caught` defect proves only that one detection, not a strong contract. Example: a qualified defect probe catches two of five valid trials at `catchThreshold: 0.5`. The strict rule misses that probe; inspect its three uncaught trial observations, tighten the oracle and rerun development. The artifact's defect component describes that probe alone, and the aggregate's describes the class.
@@ -132,3 +178,21 @@ For an adopter installation, use the private package's binaries with `npm exec -
 4. Rerun `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development`, then `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>` with the new completed invocation ID; read the new evidence and interpretation.
 5. Record the repair, prior and new invocation IDs, before and after outcome, per-probe class component and first material error in the gap report. Record an adopter's decline with its reason. Repeat for remaining development gaps until closed or declined.
 6. Once the adopter confirms readiness from the development artifacts, recorded gaps and the development `strength-aggregate.json`, run and score the held-out partition. Record each class's floor decision and basis from that aggregate; a `does-not-meet` class needs a development repair or the adopter's declined reason first, and an `absent`, `refused`, `mismatch` or `failed` aggregate blocks every class-wide claim until a rescore copies one. Read held-out only through `gap-view.json`, and open a new development repair for a missed held-out outcome.
+
+## Decide target findings once
+
+When the instrument gaps are closed or declined and the held-out partition is scored, present every target finding to the adopter once, in one list: each finding's summary, evidence, target artifact and proposed change. Ask for one decision per finding and record it as its `disposition`:
+
+- `this-pr`: the change lands in this pull request.
+- `new-pr`: the change gets its own pull request. Write the handoff from `assets/target-handoff.template.md` to `<evaluation-folder>/target-handoff.md` and set `handoff` to that path. It names the target, each finding with its evidence and proposed change, and the probe the next evaluation measures it with.
+- `declined`: the adopter keeps the target as it is. Record the adopter's `reason`.
+
+Leave no finding `undecided`. Then make one pass, never a fix-and-rerun loop per finding, since every run is large:
+
+1. Apply every `this-pr` change together, in the target artifacts the findings name.
+2. Run the one development and held-out rerun the workflow already needs before the baseline, over the committed change: `tea-evaluate digest`, `check`, `run` and `score` as in `## Author, rerun and rescore`, then the held-out partition.
+3. When `baseline/` holds an accepted run, set the rerun beside it with `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare --evaluation <evaluation-folder> --run <invocationId>` and copy each probe's relation. With no baseline yet, copy each probe's outcome from the two runs' evidence artifacts.
+4. Record each `this-pr` finding's `measurement` (`before` is the scored run the finding came from, `after` is the rerun) and fill `## Net improvements` with the before and after numbers, copied and never computed. A change that made a probe worse is a new finding: record it and decide it the same way.
+5. Rerun `check` and confirm it prints no `target-findings` warning before Stage 12.
+
+A `new-pr` change is measured by the next evaluation: its pull request reruns the evaluation, and `compare` against the accepted baseline reports the before and after.

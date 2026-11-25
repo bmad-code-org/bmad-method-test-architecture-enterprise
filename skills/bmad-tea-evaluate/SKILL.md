@@ -76,7 +76,7 @@ Activation is complete. Begin the workflow below.
 
 ## Workflow
 
-Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, any `authoring-log.md`, any `<evaluation-folder>/ci/evaluation-ci-plan.json`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold. `assets/README.md` says how to fill each template under `assets/`.
+Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, any `authoring-log.md`, any `<evaluation-folder>/ci/evaluation-ci-plan.json`, any `<evaluation-folder>/target-findings.json`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold. `assets/README.md` says how to fill each template under `assets/`.
 
 Read `references/authoring-routing.md` before delegating any authoring work. Use its bounded worker tasks and authoring ledger throughout the loop when the host supports subagents.
 
@@ -132,7 +132,7 @@ Run the clean and mutated arms and score them. Load `references/run.md`.
 
 ### Stage 11: Gaps
 
-Interpret a weak result and close the gap. Load `references/gaps.md`.
+Interpret a weak result, classify each failure or weakness as an instrument problem or a target problem, and close the instrument gaps. Record each target problem in `<evaluation-folder>/target-findings.json` as it is found, from Stage 1 onward. At the end of the stage, present every target finding once and record the adopter's decision on each: this PR, a new PR with a handoff, or declined with a reason. Apply every this-PR change together and measure it with the one development and held-out rerun the baseline needs. Load `references/gaps.md`.
 
 ### Stage 12: CI
 

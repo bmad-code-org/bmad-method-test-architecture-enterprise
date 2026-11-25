@@ -5318,6 +5318,11 @@ async function checkHeldOutDrift() {
   const { committedProbes, loadContractView } = require('../cli/lib/evaluate/partition');
   const folder = copyPartitionPlan();
   const evaluation = JSON.parse(fs.readFileSync(path.join(folder, 'evaluation.json'), 'utf8'));
+  // The evaluation records that it found nothing to improve in the target, so the only warning a scored run can raise is drift.
+  fs.writeFileSync(
+    path.join(folder, 'target-findings.json'),
+    `${JSON.stringify({ schemaVersion: 1, evaluationId: evaluation.evaluationId, findings: [] })}\n`,
+  );
   const current = async () =>
     heldOutDigestOf({
       index: JSON.parse(fs.readFileSync(path.join(folder, 'corpus-index.json'), 'utf8')),

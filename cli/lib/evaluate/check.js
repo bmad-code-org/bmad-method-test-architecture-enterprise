@@ -30,7 +30,14 @@
  * - `mandatory-action`: a behavior `mandatoryActionBehaviors` lists that the contract does not declare, or that no zero-action defect
  *   probe (`probeClass` `zero-action`, `expectedClean: false`, a defect on the behavior) covers.
  * - Warnings (`checkWarnings`), which never change the exit: `held-out-drift`, the newest run with a completed held-out score recorded
- *   a `heldOutDigest` the committed held-out material no longer has.
+ *   a `heldOutDigest` the committed held-out material no longer has; `target-findings`, a scored evaluation with no
+ *   `target-findings.json`, an undecided target finding or a this-pr finding with no measured rerun (`target-findings.js`).
+ * - `target-findings`: a `target-findings.json` that is present names another evaluation, lists findings out of ID order, cites a
+ *   behavior the contract does not declare (`reference`), a probe `probes/` does not hold (`reference`), a clean-control failure on a
+ *   probe that is no clean control, an authoring record or a handoff the folder does not hold (or a handoff that does not name the
+ *   finding), trial evidence of a held-out probe, an intermittent behavior that fails every trial, a measurement whose before and
+ *   after are one run, or, where the cited run's evidence is on disk, a trial set, trial record, score, isolation path or
+ *   interpretation process finding that evidence does not hold. Its shape is held to `target-findings.schema.json` (`schema`).
  * - `id-pattern`: a probe, defect, behavior, oracle or mutation ID is off its pattern.
  * - `qualification-digest`: a `baseline/qualification/` reference's digest does not match the file.
  * - `baseline-digest` (Story 1.90, AD-12): a file of `baseline/` digests to something other than the entry of the
@@ -159,6 +166,7 @@ const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./ca
 const { readConfiguration, recordsDirectory, verifyRecordsCalibration } = require('./records-calibration');
 const { baselineDigestFindings } = require('./baseline-digests');
 const { readPlan } = require('./ci-plan');
+const { targetFindingsProblems, targetFindingsWarnings } = require('./target-findings');
 const { MANIFEST_NAME, readFolderFile } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
@@ -358,6 +366,7 @@ async function buildContext() {
       evaluatorConditions: runtimeSchema('evaluator-conditions.schema.json'),
       degenerateResponse: runtimeSchema('degenerate-response.schema.json'),
       heldOutPlan: runtimeSchema('held-out-plan.schema.json'),
+      targetFindings: runtimeSchema('target-findings.schema.json'),
       contract: ajv.compile(contractSchema),
       scoringPolicy: ajv.compile(readJsonFile(engineSchemaPath('scoring-policy.schema.json'))),
       defectSignature: ajv.compile({ $ref: `${branchPointer}/defectSignature` }),
@@ -2666,6 +2675,12 @@ async function checkEvaluation(folder, { platform = process.platform, env = proc
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
   checkBaselineDigests(report, folder, context);
+  targetFindingsProblems(report.add, folder, {
+    evaluation,
+    contract: context.contract,
+    validate: context.validate.targetFindings,
+    describe: describeErrors,
+  });
   // The rubric rule reads the contract `check` already derived, so a development run leaves the held-out plan unopened.
   checkCiPlan(report, folder, {
     declaresRubric: () => Array.isArray(rubricContract?.rubrics) && rubricContract.rubrics.length > 0,
@@ -2725,17 +2740,25 @@ function wellFormedIndex(index) {
 const UNSOUND_FOR_DRIFT = new Set(['json', 'schema', 'stale-index', 'corpus-file', 'partition-plan', 'file-name']);
 
 /**
- * The non-blocking warnings `check` prints after its findings, which never change its exit. One today: the newest run with a completed
- * held-out score (`scoredHeldOut`) recorded a `heldOutDigest` the committed held-out material no longer has, so its held-out result no
- * longer describes the committed partition. A run that records no digest (one made before the field existed, or a development run) is
- * passed over. Nothing is compared while a finding leaves the corpus index, a probe, the contract or the held-out plan unsound, and an
- * error while comparing ends the comparison without a warning: the warning is advice and never stands in for a finding.
+ * The non-blocking warnings `check` prints after its findings, which never change its exit: `held-out-drift` (`heldOutDriftWarnings`)
+ * and the target-findings readiness warnings (`targetFindingsWarnings`).
  *
  * @param {string} folder
  * @param {Array<{ file: string, rule: string }>} [findings] the folder's findings, from `checkEvaluation`
  * @returns {Promise<Array<{ file: string, rule: string, message: string }>>}
  */
 async function checkWarnings(folder, findings = []) {
+  return [...(await heldOutDriftWarnings(folder, findings)), ...targetFindingsWarnings(folder)];
+}
+
+/**
+ * `held-out-drift`: the newest run with a completed held-out score (`scoredHeldOut`) recorded a `heldOutDigest` the committed held-out
+ * material no longer has, so its held-out result no longer describes the committed partition. A run that records no digest (one made
+ * before the field existed, or a development run) is passed over. Nothing is compared while a finding leaves the corpus index, a
+ * probe, the contract or the held-out plan unsound, and an error while comparing ends the comparison without a warning: the warning
+ * is advice and never stands in for a finding.
+ */
+async function heldOutDriftWarnings(folder, findings) {
   if (findings.some((finding) => UNSOUND_FOR_DRIFT.has(finding.rule) || finding.file === INDEX_NAME)) return [];
   try {
     const evaluation = folderJson(folder, MANIFEST_NAME);

@@ -1,11 +1,11 @@
 ---
 title: 'How to Read the Gaps and Fix Them with TEA'
-description: Distinguish evaluation weaknesses from target defects and invalid measurements, repair development gaps with the Evaluate skill, and review the new evidence
+description: Distinguish evaluation weaknesses from target defects and invalid measurements, repair development gaps with the Evaluate skill, review the new evidence, and decide the target's improvements
 ---
 
 # How to Read the Gaps and Fix Them with TEA
 
-**Bottom line:** Use this guide to investigate a stopped run, weak score, or unmet strength floor. Ask Evaluate to trace the problem to evidence and distinguish a target defect, an evaluation weakness, or an invalid measurement. Repair the identified cause in development without weakening confirmed requirements; target changes require separate agreement. Then validate, requalify, rerun, and score the changed setup. Review held-out results only after development review; a greener result alone is not a repair.
+**Bottom line:** Use this guide to investigate a stopped run, weak score, or unmet strength floor. Ask Evaluate to trace the problem to evidence and distinguish a target defect, an evaluation weakness, or an invalid measurement. Repair the identified cause in development without weakening confirmed requirements. Then validate, requalify, rerun, and score the changed setup. Review held-out results only after development review; a greener result alone is not a repair. Everything the evaluation shows wrong with the target itself becomes a target finding, and you decide each one once at the end.
 
 ## Start with the Evaluate Skill
 
@@ -31,7 +31,7 @@ Keep the command, exit code, diagnostic and artifact path together. The number a
 
 | What the evidence shows                                                | What to do                                                                              |
 | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| The unchanged target violates a confirmed requirement                  | Investigate a target defect. Keep the requirement and arrange a target repair.          |
+| The unchanged target violates a confirmed requirement                  | Record a target finding. Keep the requirement and the evaluation as they are.           |
 | Known good and bad behavior are not reliably distinguished             | Repair the probe, oracle, evaluator or calibration. This is an evaluation weakness.     |
 | Execution, evidence integrity or isolation cannot support a conclusion | Repair the measurement setup and rerun. Do not count it as a catch or a target failure. |
 
@@ -83,7 +83,7 @@ Other gaps call for different repairs:
 | A rubric scorer disagrees with approved labels                | Anchors, labels, scorer configuration and [calibration](/docs/how-to/evaluate/choose-an-evaluator-and-calibrate-a-judge.md) |
 | Evidence is missing or the intended step is unreached         | The interaction plan, adapter, evidence pointer or target reachability                                                      |
 
-The normal repair changes the evaluation folder. A real target defect needs a separately agreed target change. An isolation violation may require fixing target behavior; adding access just to hide it is not a repair.
+The normal repair changes the evaluation folder. A real target defect becomes a target finding, which waits for [step 6](#6-decide-the-targets-improvements). An isolation violation may require fixing target behavior; adding access just to hide it is not a repair.
 
 You approve changes to requirements, labels, thresholds or scope. Record why the standard changed. Do not loosen an oracle, relabel a bad answer or lower a floor merely to get green.
 
@@ -136,6 +136,30 @@ Keep held-out inputs, records and answers closed while repairing. A [`partitionP
 
 Repeated held-out feedback can still influence later changes. A held-out pass is bounded evidence, not proof of exhaustive coverage.
 
+## 6. Decide the Target's Improvements
+
+The steps above repair the evaluation. This step improves the thing you evaluated. While the loop runs, the skill records every target problem in `target-findings.json` in the evaluation folder:
+
+- a clean control that fails on correct input;
+- a behavior that passes some trials and fails others, usually an ambiguity in the target;
+- an isolation violation, where the target reads or writes beyond its task;
+- a process finding, where the answer is right and the steps are wrong or wasteful;
+- a rule the target never states, or states two ways, found while writing the requirements.
+
+Each finding cites its evidence (run, score, probe and trial, or the requirements text), names the file a fix lands in (a `SKILL.md`, a prompt, a tool description, a handler) and proposes the change.
+
+When the development and held-out results are reviewed, the skill shows you every finding at once. Decide each one:
+
+| Decision   | What happens                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `this-pr`  | The change lands in this pull request. The skill applies every this-PR change together and measures them with one rerun.        |
+| `new-pr`   | The skill writes `target-handoff.md` with the target, the evidence and the proposed change, so the next evaluation measures it. |
+| `declined` | The target stays as it is. The skill records your reason.                                                                       |
+
+The rerun is the development and held-out run the baseline needs anyway, so there is no fix-and-rerun cycle per finding. The gap report then shows what the target got wrong, every improvement opportunity with its decision, and the net improvements with before and after numbers. An evaluation that found nothing records an empty list, so "no improvements" is an explicit answer.
+
+`tea-evaluate check` warns while a finding is undecided, while a this-PR change has no measured rerun, and while a scored evaluation has no `target-findings.json`. The warnings never block the loop. Clear them before you open the pull request.
+
 ## Manual Commands
 
 The skill refreshes digests, validates the contract, reruns qualification and scores development. To repeat the core loop, replace the example folder and run ID:
@@ -157,7 +181,7 @@ After development approval, use `run --partition held-out` and score its new run
 
 ## How You Know It Worked
 
-The new evidence demonstrates the intended distinction between good and bad behavior. Coverage and strength gaps are closed or recorded as limitations. Review held-out outcomes before [accepting a baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md).
+The new evidence demonstrates the intended distinction between good and bad behavior. Coverage and strength gaps are closed or recorded as limitations. Every target finding has a decision, `check` prints no `target-findings` warning, and the gap report shows the net improvements. Review held-out outcomes before [accepting a baseline](/docs/how-to/evaluate/compare-runs-and-accept-a-baseline.md).
 
 ## Related Guides
 
@@ -171,4 +195,5 @@ The new evidence demonstrates the intended distinction between good and bad beha
 - [digest](/docs/reference/tea-evaluate-cli.md#digest)
 - [score](/docs/reference/tea-evaluate-cli.md#score)
 - [Exit codes](/docs/reference/tea-evaluate-cli.md#exit-codes)
+- [Target findings](/docs/reference/tea-evaluate-cli.md#target-findings)
 - [How Evaluate Works](/docs/explanation/how-evaluate-works.md): Qualification, held-out probes and the limits of a pass

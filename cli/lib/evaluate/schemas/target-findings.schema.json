@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:target-findings",
+  "title": "target-findings.json",
+  "description": "What an evaluation found wrong or weak in the target itself, beside the instrument repairs the gap loop makes, and the adopter's decision on each. Stage 11 classifies every failure or weakness as an instrument problem (the probe, oracle, rubric, registry or harness) or a target problem, and records each target problem here with the evidence it cites, the target artifact a fix lands in and the proposed change. An evaluation that found none records an empty findings list, so no improvement is an explicit state. tea-evaluate check holds the file to this schema and to the folder (the evaluation, the contract's behaviors, the committed probes, the cited records and evidence) under the target-findings rule, and warns while a finding is undecided, a this-pr finding has no measurement or a scored evaluation has no file. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evaluationId", "findings"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The target-findings format version.",
+      "const": 1
+    },
+    "evaluationId": {
+      "description": "The evaluationId of the evaluation.json beside this file.",
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "description": "One entry per target problem, in ID order. An empty list records that the evaluation found nothing to improve in the target.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Finding" }
+    }
+  },
+  "$defs": {
+    "InvocationId": {
+      "description": "A tea-evaluate invocation ID: a run's or a score's.",
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$"
+    },
+    "ProbeId": {
+      "type": "string",
+      "pattern": "^P-[0-9]{3,}$"
+    },
+    "FolderPath": {
+      "description": "A file the evaluation folder holds, relative to the folder, in POSIX form, with no \".\" or \"..\" segment and no empty segment.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f]+$"
+    },
+    "ScoredRun": {
+      "description": "A run and the score invocation that read it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "score"],
+      "properties": {
+        "run": { "$ref": "#/$defs/InvocationId" },
+        "score": { "$ref": "#/$defs/InvocationId" }
+      }
+    },
+    "Evidence": {
+      "description": "The kind-neutral evidence the finding cites. Which fields a source requires is set by the finding's source.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "run": { "$ref": "#/$defs/InvocationId", "description": "The run whose records show the problem." },
+        "score": { "$ref": "#/$defs/InvocationId", "description": "The score invocation of that run whose evidence shows the problem." },
+        "probe": { "$ref": "#/$defs/ProbeId", "description": "The committed probe whose trials show the problem." },
+        "trials": {
+          "description": "The 1-based trial numbers of the probe's trial set that show the problem (trial-sets/<probeId>/record-<n>.json). A held-out probe is cited without trials, by its gap-view.json row alone.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "trialCount": {
+          "description": "How many trials of the probe's trial set ran, for a behavior that fails only some of them.",
+          "type": "integer",
+          "minimum": 2
+        },
+        "paths": {
+          "description": "The paths an isolation manifest's observedMounts lists for the target, as the run recorded them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "finding": {
+          "description": "The ID of the interpretation.json finding whose process citations show the problem.",
+          "type": "string",
+          "pattern": "^F-[0-9]{3,}$"
+        },
+        "record": {
+          "$ref": "#/$defs/FolderPath",
+          "description": "The authoring record that shows an unstated or contradictory rule: requirements.md, authoring-log.md or another file the evaluation folder holds."
+        },
+        "excerpt": {
+          "description": "The words of the record, or the observation, that show the problem.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Target": {
+      "description": "Where a fix lands and what it changes: a SKILL.md or prompt for a skill or agent, tool descriptions or schemas for an MCP server, a handler for an API, a workflow step file, a promptfoo prompt.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "change"],
+      "properties": {
+        "artifact": {
+          "description": "The target file the change lands in, relative to launch.root, in POSIX form.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f]+$"
+        },
+        "change": {
+          "description": "The proposed change, in plain words.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Disposition": {
+      "description": "The adopter's decision, made once at the end of Stage 11.",
+      "type": "object",
+      "required": ["decision"],
+      "properties": {
+        "decision": { "enum": ["this-pr", "new-pr", "declined", "undecided"] }
+      },
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "decision": { "const": "this-pr" },
+            "measurement": {
+              "description": "The scored run the finding came from and the scored rerun after every this-pr change was applied together. Absent until that rerun is scored.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["before", "after"],
+              "properties": {
+                "before": { "$ref": "#/$defs/ScoredRun" },
+                "after": { "$ref": "#/$defs/ScoredRun" }
+              }
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["handoff"],
+          "properties": {
+            "decision": { "const": "new-pr" },
+            "handoff": {
+              "$ref": "#/$defs/FolderPath",
+              "description": "The handoff file, in the evaluation folder, that names the finding with its target, evidence and proposed change, so the next evaluation measures the fix."
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {
+            "decision": { "const": "declined" },
+            "reason": { "description": "Why the adopter declined the change.", "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "decision": { "const": "undecided" }
+          }
+        }
+      ]
+    },
+    "Finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary", "source", "evidence", "behaviorId", "severity", "target", "disposition"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^T-[0-9]{3,}$" },
+        "summary": {
+          "description": "What the target got wrong, in plain words for a reader who has not seen the evaluation.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "Where the finding came from: a clean control that genuinely fails, a behavior that fails only some trials, an isolation violation where the target reached beyond its task, a process finding in interpretation.json (the outcome is right and the steps are wrong or wasteful), or an unstated or contradictory rule found while authoring requirements.",
+          "enum": ["clean-control-failure", "intermittent-behavior", "isolation-violation", "process-finding", "authoring"]
+        },
+        "evidence": { "$ref": "#/$defs/Evidence" },
+        "behaviorId": {
+          "description": "The contract behavior the finding is about. Null only for an authoring finding whose rule no behavior states yet.",
+          "type": ["string", "null"],
+          "pattern": "^B-[0-9]{3,}$"
+        },
+        "severity": {
+          "description": "The contract's severity vocabulary.",
+          "enum": ["low", "material", "critical"]
+        },
+        "target": { "$ref": "#/$defs/Target" },
+        "disposition": { "$ref": "#/$defs/Disposition" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "clean-control-failure" } } },
+          "then": { "properties": { "evidence": { "required": ["run", "score", "probe"] } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "intermittent-behavior" } } },
+          "then": { "properties": { "evidence": { "required": ["run", "score", "probe", "trials", "trialCount"] } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "isolation-violation" } } },
+          "then": { "properties": { "evidence": { "required": ["run", "probe", "paths"] } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "process-finding" } } },
+          "then": { "properties": { "evidence": { "required": ["run", "score", "probe", "finding"] } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "authoring" } } },
+          "then": { "properties": { "evidence": { "required": ["record", "excerpt"] } } }
+        },
+        {
+          "if": { "properties": { "source": { "not": { "const": "authoring" } } } },
+          "then": { "properties": { "behaviorId": { "type": "string" } } }
+        }
+      ]
+    }
+  }
+}

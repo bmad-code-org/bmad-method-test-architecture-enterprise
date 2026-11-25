@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "grader-http-service",
+  "findings": [
+    {
+      "id": "T-001",
+      "summary": "The service reached the right verdict, but its first grade response failed validation and the outcome came from the retry.",
+      "source": "process-finding",
+      "evidence": {
+        "run": "20261125T100000000Z-0a1b2c3d",
+        "score": "20261125T100100000Z-0a1b2c3d",
+        "probe": "P-001",
+        "trials": [1],
+        "finding": "F-001"
+      },
+      "behaviorId": "B-001",
+      "severity": "material",
+      "target": {
+        "artifact": "server/grader.js",
+        "change": "Validate the answer query parameter before grading, so the first response is the graded one."
+      },
+      "disposition": { "decision": "new-pr", "handoff": "target-handoff.md" }
+    },
+    {
+      "id": "T-002",
+      "summary": "The requirements never say how the service answers an empty answer.",
+      "source": "authoring",
+      "evidence": {
+        "record": "requirements.md",
+        "excerpt": "the grader service must accept the answer it is asked to grade"
+      },
+      "behaviorId": null,
+      "severity": "low",
+      "target": {
+        "artifact": "server/grader.js",
+        "change": "Answer an empty answer with status 400 and a reason."
+      },
+      "disposition": {
+        "decision": "declined",
+        "reason": "An empty answer never reaches the service; the client form requires one."
+      }
+    }
+  ]
+}
