@@ -106,6 +106,10 @@ const LLM_EXCLUDE_PATTERNS = [
   // references above, so llms.txt links it under "Command-line references". With it in, the bundle left
   // less than the 50k characters the headroom check requires once the Vitest and Jest evidence joined it.
   'reference/tea-automate-cli',
+  // The glossary (about 25k characters): one definition per term, which an agent looks up when a page uses a term
+  // it does not know, so llms.txt links it under "Reference lookups". With it in, the bundle left less than the 50k
+  // characters the headroom check requires once the gap guide described the target findings Evaluate records.
+  'glossary/index',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -284,6 +288,7 @@ function buildLlmsTxt() {
     '',
     '## Reference lookups',
     '',
+    `- **[Glossary](${SITE_URL}/glossary)**: Every TEA term with its definition, from skill invocation to evaluation evidence`,
     `- **[Configuration](${SITE_URL}/reference/configuration)**: Every configuration key with its default and the skills it changes`,
     `- **[Knowledge Base](${SITE_URL}/reference/knowledge-base)**: The knowledge fragments by category and the tea-index.csv manifest that selects them`,
     `- **[Execution Targets](${SITE_URL}/reference/execution-targets)**: Which test technologies TEA supports, at what depth, and what you supply for the rest`,
@@ -322,7 +327,11 @@ function llmsTxtLinkProblems(content, docsDir, patterns = LLM_EXCLUDE_PATTERNS) 
     .map((match) => match[1])
     .filter((url) => url.startsWith(`${SITE_URL}/`))
     .map((url) => url.slice(SITE_URL.length + 1))
-    .filter((page) => page !== '' && !page.includes('.'));
+    .filter((page) => page !== '' && !page.includes('.'))
+    // A directory's index page is served at the directory's own URL, as the glossary is at /glossary.
+    .map((page) =>
+      !fs.existsSync(path.join(docsDir, `${page}.md`)) && fs.existsSync(path.join(docsDir, page, 'index.md')) ? `${page}/index` : page,
+    );
   const problems = linked
     .filter((page) => !fs.existsSync(path.join(docsDir, `${page}.md`)))
     .map((page) => `llms.txt links ${page}, which no document under docs/ serves`);

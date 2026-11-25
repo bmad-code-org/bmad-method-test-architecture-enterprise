@@ -40,3 +40,5 @@ It prints `sha256:` and 64 hex digits, eval-quality's `digestBytes` over the com
 The starter `assets/evaluation.json` contains the digest of the unedited statement template; recompute it after any edit.
 Keep the confirmation name and date in the statement.
 `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation {tea_evaluations_folder}/<evaluationId>` validates the complete evaluation after its remaining artifacts exist.
+
+An answer that settles a rule the target never states, or states two ways, is target evidence too: record an `authoring` target finding citing the statement's exact words before you move on (`references/gaps.md` `## Record target findings`).

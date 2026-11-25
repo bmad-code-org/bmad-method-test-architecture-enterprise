@@ -131,6 +131,7 @@
   "test:evaluate-promptfoo": 144.4,
   "test:evaluate-records": 367.4,
   "test:evaluate-run": 306.4,
+  "test:evaluate-target-findings": 30.0,
   "test:evaluate-tool-use": 74.4,
   "test:evaluate-workflow": 74.3,
   "test:file-system-conformance": 0.4,

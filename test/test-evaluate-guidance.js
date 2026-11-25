@@ -3746,13 +3746,115 @@ function checkPrChecklist(guide, failures) {
     'tea-evaluate ci --evaluation <evaluation-folder> --tier pr` exits 0',
     "The repository's own pull request gates",
     'The evaluation brief exists',
+    '`target-findings.json` and any `target-handoff.md` it names',
+    'Every target finding is decided and measured',
+    'an empty list when the evaluation found none',
+    'tea-evaluate check --evaluation <evaluation-folder> --ready` exits 0',
+    'every citation resolves to its run',
+    'go in a later commit that changes nothing the run evaluated',
+    'after the last commit that changed an evaluated input or the target',
+    '`## Net improvements`',
   ])
     requireText(checklist, marker, 'ci.md pre-PR checklist', failures);
   const items = checklist.match(/^\d+\. /gm) ?? [];
-  if (items.length !== 8) failures.push(`ci.md's pre-PR checklist has ${items.length} items; expected 8`);
+  if (items.length !== 9) failures.push(`ci.md's pre-PR checklist has ${items.length} items; expected 9`);
   const commands = new Set(['check', 'run', 'score', 'compare', 'ci']);
   for (const [, command] of checklist.matchAll(/tea-evaluate ([a-z-]+)/g))
     if (!commands.has(command)) failures.push(`ci.md's pre-PR checklist names tea-evaluate ${command}, which no stage runs`);
+}
+
+/** The sections the gap report holds after its brief, in order: what the target got wrong, its improvements and what was applied. */
+const TARGET_SECTIONS = ['## What the target got wrong', '## Improvement opportunities', '## Net improvements'];
+
+/**
+ * Stage 11 classifies before it repairs and turns every target problem into a target finding decided once: `gaps.md` names the
+ * classification test, every source kind the runtime's schema admits, the per-kind landing artifacts, the file and its readiness
+ * warnings, the one decision point with its three dispositions and the single measured rerun; the gap report template puts the
+ * three target sections straight after the brief.
+ */
+function checkTargetFindingsGuidance(guide, template, failures) {
+  const classify = headingBody(guide, '## Classify before repairing');
+  for (const marker of [
+    'instrument problem or a target problem',
+    'would a correct target pass this probe as written?',
+    'tuning a probe or oracle to accept the behavior would hide the defect',
+    'Only the artifact a fix lands in changes',
+    'Skill or agent',
+    'MCP tool server',
+    'HTTP API or AI feature',
+    'Workflow',
+    'Tool-use system',
+    'promptfoo target',
+  ])
+    requireText(classify, marker, 'gaps.md classification', failures);
+  const schema = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'target-findings.schema.json'), 'utf8'),
+  );
+  const sources = schema.$defs.Finding.properties.source.enum;
+  if (!Array.isArray(sources) || sources.length !== 6) failures.push('target-findings.schema.json no longer lists six finding sources');
+  for (const source of sources ?? []) requireText(classify, `| \`${source}\``, 'gaps.md classification table', failures);
+  const record = headingBody(guide, '## Record target findings');
+  for (const marker of [
+    '`<evaluation-folder>/target-findings.json`',
+    'from Stage 1 onward',
+    'Never stop the loop to fix the target',
+    '`cli/lib/evaluate/schemas/target-findings.schema.json`',
+    'Cite a held-out probe by its `gap-view.json` row alone',
+    '`reproducedBy`',
+    'copy the original wording into `authoring-log.md`',
+    '`qualification` (`baseline-pass`, the record of a run that stopped at exit 11)',
+    '`behavior-failure`',
+    '`"findings": []`',
+    'keeps its exit',
+    '`check --ready`, the pre-PR check, reports the same items as findings and exits 10',
+  ])
+    requireText(record, marker, 'gaps.md target findings record', failures);
+  const decide = headingBody(guide, '## Decide target findings once');
+  for (const marker of [
+    'present every target finding to the adopter once',
+    '`this-pr`',
+    '`new-pr`',
+    '`assets/target-handoff.template.md`',
+    '`declined`',
+    'Leave no finding `undecided`',
+    'never a fix-and-rerun loop per finding',
+    'Apply every `this-pr` change together',
+    'tea-evaluate compare --evaluation <evaluation-folder> --run <invocationId>',
+    '`measurement`',
+    'the same for every `this-pr` finding',
+    'for every other partition, `before` is the scored run of that partition taken before the change',
+    'where `runs/` still holds every cited and measured run',
+    'the committed receipts keep the before and after numbers on record',
+    'copied and never computed',
+    'tea-evaluate check --evaluation <evaluation-folder> --ready',
+    'This is the only decision point for target changes in the pull request',
+    'A problem the rerun shows is never decided `this-pr`',
+    'revert the change that caused it',
+    'stop before the pull request',
+  ])
+    requireText(decide, marker, 'gaps.md target findings decision', failures);
+  for (const marker of [
+    'tea-evaluate target-findings --evaluation <evaluation-folder> --run <invocationId>',
+    'A rare clean-control failure is evidence even when a rerun passes',
+    'keep the oracle, and fix SKILL.md at the decision point',
+  ])
+    requireText(classify, marker, 'gaps.md classification', failures);
+  const outcomes = headingBody(guide, '## Map engine outcomes to repairs');
+  const falsePositive = outcomes.split('\n').find((line) => line.startsWith('| `false-positive`')) ?? '';
+  for (const marker of ['Read the failing output against the requirements first', 'keep the oracle and record a target finding'])
+    requireText(falsePositive, marker, 'gaps.md false-positive row', failures);
+  requireText(
+    headingBody(guide, '## Map AD-10 exits and classes to repairs'),
+    'a wrong output is a target finding citing that evidence, and the oracle stays',
+    'gaps.md exit 2 and 11 target reading',
+    failures,
+  );
+  const headings = template.match(/^## .+$/gm) ?? [];
+  if (JSON.stringify(headings.slice(1, 4)) !== JSON.stringify(TARGET_SECTIONS))
+    failures.push(
+      `gap-report.template.md's sections after the brief are ${JSON.stringify(headings.slice(1, 4))}; expected ${JSON.stringify(TARGET_SECTIONS)}`,
+    );
+  if (!fs.existsSync(ASSET('target-handoff.template.md'))) failures.push('assets/target-handoff.template.md is missing');
 }
 
 function checkGapsGuidance(guide, engine, failures) {
@@ -3769,8 +3871,12 @@ function checkGapsGuidance(guide, engine, failures) {
     '## Map an isolation violation to its repair',
     '## Map AD-10 exits and classes to repairs',
     '## Author, rerun and rescore',
+    '## Classify before repairing',
+    '## Record target findings',
+    '## Decide target findings once',
   ])
     requireHeading(guide, heading, 'gaps.md', failures);
+  checkTargetFindingsGuidance(guide, fs.readFileSync(ASSET('gap-report.template.md'), 'utf8'), failures);
   for (const [heading, markers] of [
     [
       '## Read the strength vector',
@@ -4555,7 +4661,36 @@ function checkSkillStage12(skillContent, failures) {
   for (const phrase of ['pending', 'not yet available', 'not available', 'Placeholder'])
     if (workflow.includes(phrase) || /completes through Stage 11/.test(skillContent))
       failures.push(`SKILL.md reports a stage as unfinished: ${phrase}`);
-  requireText(skillContent, '`<evaluation-folder>/ci/evaluation-ci-plan.json`, and any', 'SKILL.md resume', failures);
+  requireText(skillContent, '`<evaluation-folder>/ci/evaluation-ci-plan.json`, any', 'SKILL.md resume', failures);
+  requireText(skillContent, 'any `<evaluation-folder>/target-findings.json`, and any', 'SKILL.md resume', failures);
+  const stage11 = headingBody(skillContent, '### Stage 11: Gaps');
+  for (const marker of [
+    'instrument problem or a target problem',
+    '`<evaluation-folder>/target-findings.json`',
+    'present every target finding once',
+    'this PR, a new PR with a handoff, or declined with a reason',
+    'Apply every this-PR change together',
+    'run `check --ready` until it exits 0',
+    'Load `references/gaps.md`.',
+  ])
+    requireText(stage11, marker, 'SKILL.md Stage 11', failures);
+  for (const marker of ['continue from Stage 7 with `run --before-state`', 'Any other preflight failure stays a stop'])
+    requireText(headingBody(skillContent, '### Stage 6: Adapters'), marker, 'SKILL.md Stage 6', failures);
+  requireText(
+    fs.readFileSync(path.join(SKILL_ROOT, 'references', 'authoring-routing.md'), 'utf8'),
+    'to `<evaluation-folder>/target-findings.json`, with every record its findings cite',
+    'authoring-routing.md',
+    failures,
+  );
+  requireText(headingBody(skillContent, '## Workflow'), 'Capture target findings from the start', 'SKILL.md workflow', failures);
+  if (skillContent.indexOf('Capture target findings from the start') > skillContent.indexOf('### Stage 1: Inspection'))
+    failures.push('SKILL.md asks for target findings only after Stage 1');
+  for (const [file, marker] of [
+    ['inspection.md', 'as an `authoring` target finding as soon as it is seen'],
+    ['intake.md', 'record an `authoring` target finding'],
+    ['corpus.md', 'is an `authoring` target finding'],
+  ])
+    requireText(fs.readFileSync(path.join(SKILL_ROOT, 'references', file), 'utf8'), marker, file, failures);
   const stage12 = headingBody(skillContent, '### Stage 12: CI').trim();
   if (
     stage12 !==
@@ -5112,8 +5247,22 @@ async function main() {
         'ci pre-PR checklist item removal',
         'ci',
         ciCheck,
-        (text) => text.replace(/^8\. The evaluation brief exists[^\n]*\n/m, ''),
-        'pre-PR checklist has 7 items',
+        (text) => text.replace(/^9\. Every target finding is decided[^\n]*\n/m, ''),
+        'pre-PR checklist has 8 items',
+      ],
+      [
+        'gaps target findings decision removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('never a fix-and-rerun loop per finding', 'a fix and rerun per finding'),
+        'never a fix-and-rerun loop per finding',
+      ],
+      [
+        'gaps classification source removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^\| A behavior that fails only some trials[^\n]*\n/m, ''),
+        'intermittent-behavior',
       ],
       [
         'ci pre-PR checklist new command',
@@ -6193,7 +6342,9 @@ async function main() {
       ],
       ['skill stage 12 reference removed', (text) => text.replace('Load `references/ci.md`.', '')],
       ['skill stage 12 plan path', (text) => text.replace('write `<evaluation-folder>/ci/evaluation-ci-plan.json`', 'write the plan')],
-      ['skill resume plan removed', (text) => text.replace('any `<evaluation-folder>/ci/evaluation-ci-plan.json`, and', 'and')],
+      ['skill resume plan removed', (text) => text.replace('any `<evaluation-folder>/ci/evaluation-ci-plan.json`, any', 'any')],
+      ['skill resume target findings removed', (text) => text.replace('any `<evaluation-folder>/target-findings.json`, and', 'and')],
+      ['skill Stage 11 decision point removed', (text) => text.replace('present every target finding once', 'present the findings')],
     ]) {
       const rejected = [];
       checkSkillStage12(corrupt(realSkill), rejected);

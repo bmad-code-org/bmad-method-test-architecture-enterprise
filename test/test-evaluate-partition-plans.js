@@ -2522,9 +2522,18 @@ try {
     assert.equal(runRecordOf(bothRun).heldOutDigest, measured, 'a run of both partitions recorded other held-out material');
     // `check` compares the newest scored one with the committed held-out material: silent while they match, a warning and exit 0 once a
     // held-out probe moves, and silent again once it is back.
-    const warningsOf = (result) => result.stderr.split('\n').filter((line) => line.startsWith('warning: '));
+    // A scored evaluation with no target-findings.json also warns once (the readiness warning), which this drift reading leaves aside.
+    const warningsOf = (result) =>
+      result.stderr.split('\n').filter((line) => line.startsWith('warning: ') && !line.includes('[target-findings]'));
     const current = cli(flow, 'check');
     assert.equal(current.status, 0, current.output);
+    assert.equal(
+      current.stderr
+        .split('\n')
+        .filter((line) => line.startsWith('warning: target-findings.json: [target-findings] the evaluation has scored evidence')).length,
+      1,
+      current.output,
+    );
     assert.deepEqual(warningsOf(current), [], 'check warned over held-out material the newest scored run measured');
     const heldOutProbeFile = path.join(flow.folder, 'probes', 'P-003.probe.json');
     const heldOutProbeBytes = fs.readFileSync(heldOutProbeFile);

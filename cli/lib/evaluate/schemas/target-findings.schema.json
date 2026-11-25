@@ -1,0 +1,542 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:target-findings",
+  "title": "target-findings.json",
+  "description": "What an evaluation found wrong or weak in the target itself, beside the instrument repairs the gap loop makes, and the adopter's decision on each. Stage 11 classifies every failure or weakness as an instrument problem (the probe, oracle, rubric, registry or harness) or a target problem, and records each target problem here with the evidence it cites, the target artifact a fix lands in and the proposed change. An evaluation that found none records an empty findings list, so no improvement is an explicit state. tea-evaluate check holds the file to this schema and to the folder (the evaluation, the contract's behaviors, the committed probes, the cited records and evidence) under the target-findings rule, and reports what is not ready for the pull request (an undecided finding, a this-pr finding with no measurement, an unverified citation, a scored evaluation with no file): as warnings while the gap loop runs, and as findings that exit 10 under check --ready, the pre-PR invocation. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evaluationId", "findings"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The target-findings format version.",
+      "const": 1
+    },
+    "evaluationId": {
+      "description": "The evaluationId of the evaluation.json beside this file.",
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "description": "One entry per target problem, in ID order. An empty list records that the evaluation found nothing to improve in the target.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    }
+  },
+  "$defs": {
+    "InvocationId": {
+      "description": "A tea-evaluate invocation ID: a run's or a score's.",
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$"
+    },
+    "ProbeId": {
+      "type": "string",
+      "pattern": "^P-[0-9]{3,}$"
+    },
+    "FolderPath": {
+      "description": "A file the evaluation folder holds, relative to the folder, in POSIX form, with no \".\" or \"..\" segment and no empty segment.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f]+$"
+    },
+    "ScoredRun": {
+      "description": "A run and the score invocation that read it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "score"],
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/InvocationId"
+        },
+        "score": {
+          "$ref": "#/$defs/InvocationId"
+        }
+      }
+    },
+    "Evidence": {
+      "description": "The kind-neutral evidence the finding cites. Which fields a source requires is set by the finding's source.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/InvocationId",
+          "description": "The run whose records show the problem."
+        },
+        "score": {
+          "$ref": "#/$defs/InvocationId",
+          "description": "The score invocation of that run whose evidence shows the problem."
+        },
+        "probe": {
+          "$ref": "#/$defs/ProbeId",
+          "description": "The committed probe whose trials show the problem."
+        },
+        "trials": {
+          "description": "The 1-based trial numbers of the probe's trial set that show the problem (trial-sets/<probeId>/record-<n>.json). A held-out probe is cited by its gapView row instead.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "trialCount": {
+          "description": "How many trials of the probe's trial set ran, for a behavior that fails only some of them.",
+          "type": "integer",
+          "minimum": 2
+        },
+        "paths": {
+          "description": "The paths an isolation manifest's observedMounts lists for the target, as the run recorded them.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "finding": {
+          "description": "The ID of the interpretation.json finding whose process citations show the problem.",
+          "type": "string",
+          "pattern": "^F-[0-9]{3,}$"
+        },
+        "record": {
+          "$ref": "#/$defs/FolderPath",
+          "description": "The authoring record that shows an unstated or contradictory rule: requirements.md, authoring-log.md or another file the evaluation folder holds."
+        },
+        "excerpt": {
+          "description": "The words of the record, or the observation, that show the problem.",
+          "type": "string",
+          "minLength": 1
+        },
+        "qualification": {
+          "description": "The qualification record of a clean control whose baseline did not hold: qualification/<probeId>/<phase>.json of the cited run. A run that stops at exit 11 on such a baseline has no score, and this keeps its evidence.",
+          "enum": ["baseline-pass", "baseline-known-failing"]
+        },
+        "gapView": {
+          "description": "A held-out probe's gap-view.json row under the cited score: its probe class and reduced outcome, the only things a held-out probe discloses.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["probeClass", "caught", "caughtCount", "validCount", "votes"],
+          "properties": {
+            "probeClass": {
+              "type": "string",
+              "minLength": 1
+            },
+            "caught": {
+              "type": ["boolean", "null"]
+            },
+            "caughtCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "validCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "votes": {
+              "$ref": "#/$defs/Votes"
+            }
+          }
+        },
+        "reproducedBy": {
+          "description": "A development probe that reproduces a held-out failure, cited by its run, score, probe and failing trials.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["run", "score", "probe", "trials"],
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/InvocationId"
+            },
+            "score": {
+              "$ref": "#/$defs/InvocationId"
+            },
+            "probe": {
+              "$ref": "#/$defs/ProbeId"
+            },
+            "trials": {
+              "description": "The 1-based trial numbers of the probe's trial set that show the problem (trial-sets/<probeId>/record-<n>.json). A held-out probe is cited by its gapView row instead.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "Target": {
+      "description": "Where a fix lands and what it changes: a SKILL.md or prompt for a skill or agent, tool descriptions or schemas for an MCP server, a handler for an API, or a workflow step file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "change"],
+      "properties": {
+        "artifact": {
+          "description": "The target file the change lands in, relative to launch.root, in POSIX form.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f]+$"
+        },
+        "change": {
+          "description": "The proposed change, in plain words.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Disposition": {
+      "description": "The adopter's decision, made once at the end of Stage 11.",
+      "type": "object",
+      "required": ["decision"],
+      "properties": {
+        "decision": {
+          "enum": ["this-pr", "new-pr", "declined", "undecided"]
+        }
+      },
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "decision": {
+              "const": "this-pr"
+            },
+            "measurement": {
+              "description": "The one rerun with every this-pr change applied, per partition, against the scored run the finding came from, and each measured probe's before and after outcome as a committed receipt, which check --ready reads against the runs while runs/ holds them and which keep the numbers on record after.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["partitions", "probes"],
+              "properties": {
+                "partitions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["partition", "before", "after"],
+                    "properties": {
+                      "partition": {
+                        "enum": ["development", "held-out", "both"]
+                      },
+                      "before": {
+                        "description": "The scored run the finding came from, or null when it came from no scored run (a qualification record or an authoring record).",
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/ScoredRun"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "after": {
+                        "$ref": "#/$defs/ScoredRun"
+                      }
+                    }
+                  }
+                },
+                "probes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["probe", "before", "after"],
+                    "properties": {
+                      "probe": {
+                        "$ref": "#/$defs/ProbeId"
+                      },
+                      "before": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/Outcome"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "after": {
+                        "$ref": "#/$defs/Outcome"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["handoff"],
+          "properties": {
+            "decision": {
+              "const": "new-pr"
+            },
+            "handoff": {
+              "$ref": "#/$defs/FolderPath",
+              "description": "The handoff file, in the evaluation folder, that names the finding with its target, evidence and proposed change, so the next evaluation measures the fix."
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {
+            "decision": {
+              "const": "declined"
+            },
+            "reason": {
+              "description": "Why the adopter declined the change.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "decision": {
+              "const": "undecided"
+            }
+          }
+        }
+      ]
+    },
+    "Finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary", "source", "evidence", "behaviorId", "severity", "target", "disposition"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^T-[0-9]{3,}$"
+        },
+        "summary": {
+          "description": "What the target got wrong, in plain words for a reader who has not seen the evaluation.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "Where the finding came from: a clean control that genuinely fails (in its trials, or in its qualification baseline), a behavior that fails only some trials, a behavior the target fails on a probe that is no clean control (a historical probe, or a held-out probe), an isolation violation where the target reached beyond its task, a process finding (the outcome is right and the steps are wrong or wasteful), or an unstated or contradictory rule found while authoring requirements.",
+          "enum": [
+            "clean-control-failure",
+            "intermittent-behavior",
+            "behavior-failure",
+            "isolation-violation",
+            "process-finding",
+            "authoring"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence"
+        },
+        "behaviorId": {
+          "description": "The contract behavior the finding is about. Null only for an authoring finding whose rule no behavior states yet.",
+          "type": ["string", "null"],
+          "pattern": "^B-[0-9]{3,}$"
+        },
+        "severity": {
+          "description": "The contract's severity vocabulary.",
+          "enum": ["low", "material", "critical"]
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "disposition": {
+          "$ref": "#/$defs/Disposition"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "clean-control-failure"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["run", "probe"],
+                "anyOf": [
+                  {
+                    "required": ["score"]
+                  },
+                  {
+                    "required": ["qualification"]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "intermittent-behavior"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["run", "score", "probe"],
+                "anyOf": [
+                  {
+                    "required": ["trials", "trialCount"]
+                  },
+                  {
+                    "required": ["gapView"]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "behavior-failure"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["run", "score", "probe"],
+                "anyOf": [
+                  {
+                    "required": ["trials"]
+                  },
+                  {
+                    "required": ["gapView"]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "isolation-violation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["run", "probe", "paths"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "process-finding"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["run", "score", "probe", "finding"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "authoring"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["record", "excerpt"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "not": {
+                  "const": "authoring"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "behaviorId": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "required": ["gapView"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "required": ["score"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Votes": {
+      "description": "A probe's trial states in trial order, as the reduced outcome's trialVotes give them.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Outcome": {
+      "description": "One probe's reduced outcome under one score, copied from its evidence artifact (a held-out probe's from its gap-view.json row): caught, caughtCount, validCount and the trial states in trial order.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caught", "caughtCount", "validCount", "votes"],
+      "properties": {
+        "caught": {
+          "type": ["boolean", "null"]
+        },
+        "caughtCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "votes": {
+          "$ref": "#/$defs/Votes"
+        }
+      }
+    }
+  }
+}
