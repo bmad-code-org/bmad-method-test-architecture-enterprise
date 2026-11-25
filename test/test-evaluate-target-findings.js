@@ -289,6 +289,12 @@ for (const kind of Object.keys(FLAWS)) {
         'records before outcome',
       ],
       [
+        'a receipt with no before outcome beside a scored before run',
+        (value) => (value.findings[0].disposition.measurement.probes[0].before = null),
+        'target-findings',
+        'records no before outcome for P-001',
+      ],
+      [
         'an after run no folder holds',
         (value) =>
           (value.findings[0].disposition.measurement.partitions[0].after = { run: '20261125T235959000Z-00000000', score: after.score }),

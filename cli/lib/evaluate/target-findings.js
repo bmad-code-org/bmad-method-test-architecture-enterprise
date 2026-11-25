@@ -366,6 +366,10 @@ function checkMeasurement(report, folder, label, finding, { heldOut, batch }) {
     if (entry === undefined) continue;
     if (entry.before === null && receipt.before !== null)
       report(`${label} records a before outcome for ${receipt.probe} with no before run to read it from`);
+    if (entry.before !== null && receipt.before === null)
+      report(
+        `${label} records no before outcome for ${receipt.probe}; copy it from score ${entry.before.score}, the scored run the change is measured from`,
+      );
     for (const side of ['before', 'after']) {
       const found = located.get(`${entry.partition}:${side}`);
       if (found === undefined || receipt[side] === null) continue;
