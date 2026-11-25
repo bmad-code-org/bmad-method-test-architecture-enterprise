@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-11-25
+
 ### Added
 
 - Evaluate now reports what is wrong with the target itself. Stage 11 classifies each failure as an evaluation problem or a target problem, records target problems in `target-findings.json` with their evidence and proposed change, and asks you once at the end to put each one in this PR, a new PR with a handoff, or decline it. This-PR changes are applied together and measured with the one rerun the baseline needs, and the gap report opens with what the target got wrong, the improvement opportunities and the net improvements.
