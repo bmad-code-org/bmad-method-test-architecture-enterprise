@@ -6141,6 +6141,86 @@ async function checkAuditChannelUnits() {
 }
 
 /**
+ * The audit's `log stream`s end with the run that started them, on macOS, where Seatbelt's audit reads them: a confined run that
+ * exits leaves none running, and neither does one killed outright (SIGKILL), which runs no handler. Each stream runs under a guard
+ * that holds the runtime's lifeline (`confinement-audit-stream.cjs`); a runtime that started `log stream` itself left it running,
+ * its parent launchd, until its four-hour timeout. Bubblewrap's audit traces each call and starts no stream that could outlive it.
+ */
+async function checkAuditStreamsEndWithRun() {
+  if (process.platform !== 'darwin') {
+    skipCase('audit streams of an ended run', `Seatbelt's log streams exist on macOS only, and this host is ${process.platform}`);
+    return;
+  }
+  const guard = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-audit-stream.cjs');
+  // The processes of the audit beneath `pid`: each guard and each `log stream`, found through their parents.
+  const streamsBeneath = (pid, known) => {
+    const rows = spawnSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' })
+      .stdout.split('\n')
+      .map((line) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line))
+      .filter((matched) => matched !== null)
+      .map(([, child, parent, command]) => ({ pid: Number(child), ppid: Number(parent), command }));
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const row of rows) {
+        if (known.has(row.pid) || (row.ppid !== pid && !known.has(row.ppid))) continue;
+        if (!row.command.includes(guard) && !row.command.startsWith('/usr/bin/log stream')) continue;
+        known.set(row.pid, row.command);
+        grew = true;
+      }
+    }
+    return known;
+  };
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const settled = async (pids) => {
+    for (let waited = 0; waited < 10_000 && pids.some(alive); waited += 100) await sleep(100);
+    return pids.filter(alive);
+  };
+  for (const ending of ['exit', 'SIGKILL']) {
+    const project = makeProject(`audit-streams-${ending.toLowerCase()}`);
+    const child = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env },
+      stdio: 'ignore',
+    });
+    const ended = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
+    const seen = new Map();
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+      streamsBeneath(child.pid, seen);
+      if (ending === 'SIGKILL' && [...seen.values()].some((command) => command.startsWith('/usr/bin/log stream'))) {
+        child.kill('SIGKILL');
+        break;
+      }
+      await sleep(50);
+    }
+    if (child.exitCode === null && child.signalCode === null && Date.now() >= deadline) child.kill('SIGKILL');
+    const { code, signal } = await ended;
+    const streams = [...seen].filter(([, command]) => command.startsWith('/usr/bin/log stream'));
+    const left = await settled([...seen.keys()]);
+    for (const pid of left) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Gone between the listing and the kill.
+      }
+    }
+    check(
+      (ending === 'exit' ? code === 0 : signal === 'SIGKILL') && streams.length > 0 && left.length === 0,
+      `a confined run that ended by ${ending} (exit ${code}, signal ${signal}) started ${streams.length} log stream(s) and left ${JSON.stringify(left.map((pid) => `${pid} ${seen.get(pid)}`))} running; expected at least one stream, all of them ended with the run`,
+    );
+    // The killed run's private parent is the next run's to reclaim.
+    if (ending === 'SIGKILL') evaluate(['preflight', '--evaluation', project.folder], project.env);
+  }
+}
+
+/**
  * A run whose observer cannot confirm itself, or fails during a trial, exits 12 with the cause, on any host (Story 1.60): the
  * Linux mechanism is stood in for by a `bwrap` that runs its command unconfined and a `strace` that is refused, or that
  * confirms the probe and then traces nothing, so the run reaches the refusal and the trial's failure end to end.
@@ -22434,6 +22514,7 @@ const CASES = [
   { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement-audit' },
   { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement-audit' },
   { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement-audit' },
+  { name: 'the audit streams of an ended run', body: checkAuditStreamsEndWithRun, group: 'confinement-audit' },
   { name: "the audit's channel", body: checkAuditChannelRun, group: 'confinement-audit', lossy: true },
   { name: 'the host socket record', body: checkHostSocketRecordRun, group: 'confinement-audit' },
   { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement-audit', lossy: true },

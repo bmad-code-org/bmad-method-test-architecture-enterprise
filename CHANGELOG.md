@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `tea-evaluate target-findings` now drafts a seeded defect probe whose clean arm failed qualification as a `clean-control-failure` candidate citing its `baseline-pass.json`, and `tea-evaluate check` accepts that finding. A citation of the probe's trials, of a known-failing record, or of a record whose clean arm held is still refused.
+- A confined `tea-evaluate` run on macOS no longer leaves its audit's `/usr/bin/log stream` processes running when it is killed outright (SIGKILL) or aborts. Each stream now runs under a guard that holds the runtime's lifeline and ends the stream when the runtime ends; before, such a run left its streams to their four-hour timeout. The observer probe's stream is capped at 15 seconds.
 
 ## [4.6.0] - 2026-11-25
 

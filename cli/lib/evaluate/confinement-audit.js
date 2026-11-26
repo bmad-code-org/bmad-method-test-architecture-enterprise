@@ -62,8 +62,14 @@ const TOKEN_PREFIX = 'tea-evaluate-audit-';
 /** How long one sentinel read may take before it is killed. */
 const SENTINEL_MS = 3000;
 
-/** How long a `log stream` lives at most, which bounds one a killed runtime leaves behind (a trial that outlasts it exits 12). */
+/** How long a `log stream` lives at most (a trial that outlasts it exits 12); the stream's guard ends it with the runtime before that. */
 const LOG_TIMEOUT = '4h';
+
+/**
+ * The parent each `log stream` of a sandbox runs under (`confinement-audit-stream.cjs`): it holds the runtime's lifeline and kills
+ * the stream once the runtime is gone, so a runtime killed outright leaves no stream running to its timeout.
+ */
+const STREAM_GUARD = path.join(__dirname, 'confinement-audit-stream.cjs');
 
 /** How often a canary read is made while a trial runs, and how many may be running at once on a host too busy to start them promptly. */
 const CANARY_MS = 50;
@@ -92,6 +98,8 @@ const BARRIER_MS = 10_000;
 const BARRIER_STEP_MS = 200;
 /** How long the probe at selection waits for the same. */
 const PROBE_MS = 5000;
+/** How long the probe's shell may run before it is killed, and the probe's `log stream` lives at most, so one its killed shell leaves ends soon after. */
+const PROBE_LIMIT_MS = PROBE_MS + 10_000;
 
 /** The operating system's own directories, which every process reads from. */
 const SYSTEM_ROOTS = Object.freeze([
@@ -210,13 +218,71 @@ function killChild(child) {
   }
 }
 
-/** The live `log stream` children, killed when the process exits. */
+/**
+ * The environment a stream's guard starts with: the loader variables a Node binary may need to start (as the engine's own watchdog
+ * carries them), and nothing else, so no `NODE_OPTIONS` of the host runs in it. The stream inherits it.
+ */
+function guardEnvironment() {
+  const environment = { ELECTRON_RUN_AS_NODE: '1' };
+  for (const name of ['LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH']) {
+    if (process.env[name] !== undefined) environment[name] = process.env[name];
+  }
+  return environment;
+}
+
+/**
+ * Starts `log stream` with `args` under its guard, as the leader of the guard's own process group, its output to `stdout` and its
+ * errors to `stderr`. The guard's standard input is the lifeline: a pipe this process never writes, whose end (this process closing
+ * it, or this process gone however it ended) makes the guard kill the stream.
+ */
+function spawnGuardedStream(logExecutable, args, { stdout, stderr }) {
+  const child = spawn(process.execPath, [STREAM_GUARD, logExecutable, ...args], {
+    stdio: ['pipe', stdout, stderr],
+    detached: true,
+    env: guardEnvironment(),
+  });
+  // The lifeline is held, never written: an error on it means the guard is gone, and its own exit says how.
+  child.stdin.on('error', () => {});
+  // A guard ends after its stream, unless something killed the guard itself (a same-user target can signal it): the stream then
+  // stays in the guard's group, which keeps the group's id from being reused, so the group is killed as the guard's end is read.
+  child.once('exit', () => {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      // The stream ended first, and the group with it.
+    }
+  });
+  child.stdin.unref?.();
+  child.unref();
+  trackStream(child);
+  return child;
+}
+
+/**
+ * Ends a guarded stream: kills the guard's process group, which holds the stream, and lets go of the lifeline. A guard this process
+ * has already reaped ended only after its stream did, and its group id may since name another group, so nothing is sent to it.
+ */
+function killStream(child) {
+  if (child === null) return;
+  child.stdin?.destroy();
+  if (!Number.isInteger(child.pid) || child.pid <= 0 || child.exitCode !== null || child.signalCode !== null) return;
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    // The group is gone already.
+  }
+}
+
+/** The live guarded `log stream`s, killed when the process exits. */
 const liveStreams = new Set();
 let exitHookInstalled = false;
 
-/** Kills every `log stream` this process started: at its exit, and from the handler of a signal that ends it (no `exit` event runs then). */
+/**
+ * Kills every `log stream` this process started: at its exit, and from the handler of a signal that ends it (no `exit` event runs
+ * then). A runtime that ends with neither (SIGKILL, an abort) closes every lifeline by ending, and the guards kill the streams.
+ */
 function killLiveStreams() {
-  for (const stream of liveStreams) killChild(stream);
+  for (const stream of liveStreams) killStream(stream);
 }
 
 function trackStream(child) {
@@ -271,9 +337,14 @@ class ReportMeter {
 
   /** Spawns the broad stream; its output is read from the pipe, never kept. */
   spawnStream() {
-    this.child = spawn(this.logExecutable, ['stream', '--style', 'ndjson', '--timeout', LOG_TIMEOUT, '--predicate', METER_PREDICATE], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    this.child = spawnGuardedStream(
+      this.logExecutable,
+      ['stream', '--style', 'ndjson', '--timeout', LOG_TIMEOUT, '--predicate', METER_PREDICATE],
+      {
+        stdout: 'pipe',
+        stderr: 'ignore',
+      },
+    );
     this.child.stdout.on('data', (chunk) => this.take(chunk));
     // The pipe's end is the stream's; a reader that errors has no more to count.
     this.child.stdout.on('error', () => {});
@@ -283,9 +354,7 @@ class ReportMeter {
     this.child.once('exit', (code, signal) => {
       this.ended = { code, signal };
     });
-    this.child.unref();
     this.child.stdout.unref?.();
-    trackStream(this.child);
   }
 
   /** Counts the reports in one chunk of the stream's output. */
@@ -333,7 +402,7 @@ class ReportMeter {
 
   close() {
     this.closing = true;
-    killChild(this.child);
+    killStream(this.child);
   }
 }
 
@@ -384,7 +453,7 @@ class ReportStream {
     const out = fs.openSync(this.file, 'w', 0o600);
     const err = fs.openSync(this.errorFile, 'w', 0o600);
     try {
-      this.child = spawn(
+      this.child = spawnGuardedStream(
         this.logExecutable,
         [
           'stream',
@@ -395,7 +464,7 @@ class ReportStream {
           '--predicate',
           `process == "kernel" AND eventMessage CONTAINS "${this.token}"`,
         ],
-        { stdio: ['ignore', out, err] },
+        { stdout: out, stderr: err },
       );
     } finally {
       fs.closeSync(out);
@@ -407,8 +476,6 @@ class ReportStream {
     this.child.once('exit', (code, signal) => {
       this.ended = { code, signal };
     });
-    this.child.unref();
-    trackStream(this.child);
     this.meter.spawnStream();
   }
 
@@ -625,7 +692,7 @@ class ReportStream {
   close() {
     clearTimeout(this.canaryTimer);
     this.canaryTimer = null;
-    killChild(this.child);
+    killStream(this.child);
     this.meter.close();
   }
 }
@@ -678,7 +745,7 @@ function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE, parent
       env: {
         PATH: '/usr/bin:/bin',
         LOG: logExecutable,
-        LOG_TIMEOUT,
+        LOG_TIMEOUT: `${PROBE_LIMIT_MS / 1000}s`,
         TOKEN: token,
         OUT: out,
         ERR: err,
@@ -686,7 +753,7 @@ function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE, parent
         SENTINEL: sentinel,
         PROFILE: sentinelProfile(sentinel, token),
       },
-      timeout: PROBE_MS + 10_000,
+      timeout: PROBE_LIMIT_MS,
       killSignal: 'SIGKILL',
       stdio: 'ignore',
     });

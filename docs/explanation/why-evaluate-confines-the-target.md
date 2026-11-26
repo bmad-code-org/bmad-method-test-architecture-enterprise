@@ -97,6 +97,7 @@ The reference lists what the audit reports and how to grant a path; these are th
 
 On macOS the Seatbelt profile refuses file data outside the workspace, private call directories, home, system runtime roots and explicitly declared dependencies.
 It tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
+Each stream runs under a guard that holds the runtime's lifeline, so the stream ends when the runtime ends, a runtime killed outright included.
 On Linux the runtime runs the Bubblewrap command under `strace -f --seccomp-bpf --decode-pids=pidns`, started outside the namespace, and reads the trace when the call ends, which ends every process the call left running; `--seccomp-bpf` stops a process only at the file syscalls, `connect`, `sendto`, `sendmsg` and `sendmmsg` (each with an address or without one), `bind` and the mount calls, so a process that makes few of them runs at about its untraced speed.
 Both files sit beneath the run's private parent, which every target withholds, and no code runs inside the target, so no target can read, rewrite or truncate what the runtime reads of the audit.
 On Linux the `strace` process belongs to the runtime and a target cannot signal it.
