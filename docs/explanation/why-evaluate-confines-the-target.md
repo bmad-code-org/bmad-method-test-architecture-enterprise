@@ -30,9 +30,9 @@ In a confined run, four things stay apart.
 ## What confinement does not guarantee
 
 - A complete record on macOS.
-  The kernel's log drops reports, most of all under load, so an empty list of observed mounts means no report arrived.
+  macOS logs only some of the sandbox's refusals, so an empty list of observed mounts means no report arrived.
   The kernel still refused the read.
-  `run.json` marks a trial `lossy` when the audit detects a loss, and a trial marked `complete` can still have lost a report; Linux's trace holds every traced syscall.
+  `run.json` marks every macOS trial `lossy` for that reason, and its list of observed reads is a lower bound; Linux's trace holds every traced syscall.
 - Every host service closed.
   Seatbelt refuses the host's path-based Unix sockets, but the Mach services of macOS stay open, and macOS does not enforce `egress`.
   Bubblewrap masks the sockets it finds when a call starts, so a socket bound later stays reachable, and the audit lists a connection to it.
@@ -45,7 +45,7 @@ In a confined run, four things stay apart.
 - Exit 12 that names a file of the run directory or a score input: the runtime could not write its evidence, or a process changed what it wrote.
 - Exit 3 with `mount outside allowlist`: the audit saw the target reach a path outside its grants.
   Review the path before you grant it through `systemPaths`.
-- A `lossy` trial named in the summary line of `run`: the macOS audit may be missing a read, so its empty list leaves the trial unproven.
+- A `lossy` trial named in the summary line of `run`: the sandbox refused the reads, but the macOS audit may be missing some, so its empty list leaves the trial unproven.
 
 The sections below show how the runtime enforces each part, for readers who audit or maintain it: [the target's git](#the-targets-view-of-your-repository), [call directories](#call-directories), [the audit](#what-the-audit-watches), [host services](#host-services), [the bridge's admission token](#the-bridges-admission-token), [the run directory](#the-run-directory) and [score integrity](#score-integrity).
 
@@ -97,6 +97,7 @@ The reference lists what the audit reports and how to grant a path; these are th
 
 On macOS the Seatbelt profile refuses file data outside the workspace, private call directories, home, system runtime roots and explicitly declared dependencies.
 It tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
+Each stream runs under a guard that holds the runtime's lifeline, so the stream ends when the runtime ends, a runtime killed outright included.
 On Linux the runtime runs the Bubblewrap command under `strace -f --seccomp-bpf --decode-pids=pidns`, started outside the namespace, and reads the trace when the call ends, which ends every process the call left running; `--seccomp-bpf` stops a process only at the file syscalls, `connect`, `sendto`, `sendmsg` and `sendmmsg` (each with an address or without one), `bind` and the mount calls, so a process that makes few of them runs at about its untraced speed.
 Both files sit beneath the run's private parent, which every target withholds, and no code runs inside the target, so no target can read, rewrite or truncate what the runtime reads of the audit.
 On Linux the `strace` process belongs to the runtime and a target cannot signal it.
@@ -136,15 +137,16 @@ So a second `log stream`, which only the runtime holds, counts every sandbox rep
 A trial during which 16 reports arrived inside a millisecond or 250 inside 100 ms is `lossy`, and so is one whose counter ended, reported lost events itself or could not confirm it had counted the trial's last report.
 The limits sit below the first measured losses, and a host's own traffic is a few reports a second.
 
-`run.json`'s `observedMountsChannel` lists each audited trial of the sealed trial sets with its `conditionArm`, `trialIndex`, `canariesSent`, `canariesDelivered`, `logReportedLoss`, `logOverloaded` and `completeness`: `lossy` when the log delivered fewer canaries than were sent, itself reported lost events or was handed reports faster than it keeps them (`logOverloaded`), and `complete` otherwise.
+`run.json`'s `observedMountsChannel` lists each audited trial of the sealed trial sets with its `conditionArm`, `trialIndex`, `canariesSent`, `canariesDelivered`, `logReportedLoss`, `logOverloaded`, `refusalsLoggedInPart`, `refusalCanariesSent`, `refusalCanariesDelivered` and `completeness`: `lossy` when the log delivered fewer canaries than were sent, itself reported lost events, was handed reports faster than it keeps them (`logOverloaded`) or keeps only some refusals (every macOS trial), and `complete` otherwise.
 The summary line of `run` names every `lossy` trial with the canaries lost out of the canaries sent, and a `lossy` trial's observed mounts may be missing a read.
-`complete` means the log delivered every canary the audit sent and the host never handed the log reports faster than it keeps them.
 The canaries sample the log every 50 ms, so on a saturated host a single report of the target can still drop between two canaries, and a trial of a few seconds sends too few canaries to catch every loss at the measured rates; the rate counter is what marks such a trial `lossy`.
-The counter does not cover every loss: on a quiet host the log has also been seen to drop a single read of a Node process in a window of a second or two, with no flood, no loss event and every canary delivered.
-`complete` describes the diagnostic channel samples.
-It does not guarantee that every denied attempt was recorded.
+macOS also drops refusals at the source, before any reader and without a trace, while it delivers every allowed read it reports: on the host this was measured on, about one refusal in five never reached the log, most often a process's first, and every allowed read arrived.
+The canaries are allowed reads, so they cannot see that loss, and both of the audit's streams miss a refusal the kernel never logged.
+So every macOS trial records `refusalsLoggedInPart` and `lossy`: the sandbox refused every ungranted read, but macOS logs only some refusals, so the list of observed reads is a lower bound, and the summary line of `run` says so.
+Each macOS trial also makes a refusal canary, a read its token refuses, with every fourth canary, and records `refusalCanariesSent` and `refusalCanariesDelivered`; an undelivered refusal canary shows the loss, and a delivered one does not rule it out.
+The audit also holds the sandbox's own stream and the report meter's stream to each other between the trial's first and last barrier: a read of the trial that the meter's stream delivered and the sandbox's stream lacks exits 12 when the sandbox's stream lists no read, and leaves the trial `lossy` when it lists some.
 The kernel read grants remain enforced when a report drops.
-Every Linux trial records `complete` with no canary sent, since `strace` reports every traced syscall of the call.
+Every Linux trial records `complete` with no canary sent, since Bubblewrap with `strace` reports every traced syscall of the call, refused ones included.
 A trial that launched nothing (a gameability arm), every trial of a run that opted out and the evaluator qualification attempts of a sealed-brief agent have no entry, and a `records` run has no trials to list.
 A run whose observer fails (the log stream ended, or a read the runtime made did not come back through it, or the log reported lost events and the trial listed no read, or the trace of a call holds no start of its target) leaves the trial with no record and exits 12.
 

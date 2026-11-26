@@ -1843,7 +1843,8 @@ async function checkConfinedPipeline() {
 /**
  * The confined tool server's reads (Story 1.31): a server that reads the
  * evaluation folder's contract.json is refused, and one that reads a file
- * outside its workspace is let through; the audit lists both paths, by their
+ * outside its workspace is let through under Bubblewrap and refused under
+ * Seatbelt, which denies every ungranted read; the audit lists both paths, by their
  * real paths, as the trial set's observed mounts, and the file drops out once
  * the entry declares its directory in `systemPaths`. An opted-out control,
  * where the same server reads the contract, shows the attempt is made.
@@ -1904,9 +1905,10 @@ async function checkConfinedServerReads() {
   for (let again = 0; again < 2 && process.platform === 'darwin' && lostOnly(confined); again += 1) confined = runReading('confined-reads');
   checkExit('confined-reads', confined, true);
   check(refusal.test(confined.evidence), `a confined tool server's read of contract.json was not refused: ${confined.evidence}`);
+  const ungranted = process.platform === 'darwin' ? /outside: refused EPERM/ : /outside: allowed/;
   check(
-    /outside: allowed/.test(confined.evidence),
-    `a confined tool server could not read the ungranted file, so the case proves nothing: ${confined.evidence}`,
+    ungranted.test(confined.evidence),
+    `a confined tool server's read of the ungranted file did not end as ${ungranted} on ${process.platform}: ${confined.evidence}`,
   );
   check(
     JSON.stringify(confined.observed) === JSON.stringify(wanted(confined)),

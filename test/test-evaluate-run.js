@@ -4080,10 +4080,14 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
           'conditionArm',
           'logOverloaded',
           'logReportedLoss',
+          'refusalCanariesDelivered',
+          'refusalCanariesSent',
+          'refusalsLoggedInPart',
           'trialIndex',
         ]),
       `${what} holds the fields ${JSON.stringify(Object.keys(entry))}`,
     );
+    const measuredLoss = entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss || entry.logOverloaded;
     check(
       Number.isInteger(entry.canariesSent) &&
         Number.isInteger(entry.canariesDelivered) &&
@@ -4091,17 +4095,23 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
         entry.canariesDelivered <= entry.canariesSent &&
         typeof entry.logReportedLoss === 'boolean' &&
         typeof entry.logOverloaded === 'boolean' &&
-        entry.completeness ===
-          (entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss || entry.logOverloaded ? 'lossy' : 'complete'),
-      `${what} is ${JSON.stringify(entry)}; expected counts with delivered at most sent and 'lossy' exactly when fewer were delivered, the log reported a loss or reports reached the log faster than it keeps them`,
+        typeof entry.refusalsLoggedInPart === 'boolean' &&
+        Number.isInteger(entry.refusalCanariesSent) &&
+        Number.isInteger(entry.refusalCanariesDelivered) &&
+        entry.refusalCanariesDelivered >= 0 &&
+        entry.refusalCanariesDelivered <= entry.refusalCanariesSent &&
+        entry.completeness === (measuredLoss || entry.refusalsLoggedInPart ? 'lossy' : 'complete'),
+      `${what} is ${JSON.stringify(entry)}; expected counts with delivered at most sent and 'lossy' exactly when fewer were delivered, the log reported a loss, reports reached the log faster than it keeps them, or the log keeps only some refusals`,
     );
     if (process.platform === 'darwin') {
       check(entry.canariesSent >= 2, `${what} sent fewer than its first and final canary on macOS: ${JSON.stringify(entry)}`);
+      // macOS logs only some refusals, so every Seatbelt trial's observed reads are a lower bound, and the trial says so.
+      check(
+        entry.refusalsLoggedInPart === true && entry.completeness === 'lossy' && entry.refusalCanariesSent >= 1,
+        `${what} does not record that macOS logged its refusals only in part, with the refusal canaries it sent: ${JSON.stringify(entry)}`,
+      );
       if (lossless) {
-        checkReport(
-          entry.completeness === 'complete',
-          `${what} lost canaries on a host the case expects to deliver every one: ${JSON.stringify(entry)}`,
-        );
+        checkReport(!measuredLoss, `${what} lost canaries on a host the case expects to deliver every one: ${JSON.stringify(entry)}`);
       }
     } else {
       check(
@@ -4109,6 +4119,9 @@ function checkChannelRecords(entries, trials, { lossless = true } = {}) {
           entry.canariesDelivered === 0 &&
           entry.logReportedLoss === false &&
           entry.logOverloaded === false &&
+          entry.refusalsLoggedInPart === false &&
+          entry.refusalCanariesSent === 0 &&
+          entry.refusalCanariesDelivered === 0 &&
           entry.completeness === 'complete',
         `${what} is ${JSON.stringify(entry)}; a Linux trial records complete with no canary sent`,
       );
@@ -4348,7 +4361,11 @@ async function checkObservedMounts() {
   );
 }
 
-/** The kernel read boundary holds even when a stream delivers every canary and drops all host-file diagnostics. */
+/**
+ * The kernel read boundary holds when the sandbox's own stream delivers every canary and drops every host-file diagnostic, and the
+ * audit does not take that stream's silence for a trial that read nothing: the report meter's stream delivered the reports the
+ * sandbox's stream lacks, so the trial yields no record (exit 12), naming the reports its stream lacks.
+ */
 async function checkDroppedReadReports() {
   if (process.platform !== 'darwin') {
     skipCase('dropped Seatbelt read reports', 'this regression exercises the macOS kernel boundary');
@@ -4389,7 +4406,13 @@ if (act === 'read-ungranted') {
     });
     const directory = runDirectoryOf(project.folder);
     const output = trialStdout(directory, 'clean', 1);
-    check(ran.status === 0, `a run whose denied attempts have no diagnostics did not finish: ${ran.output}`);
+    check(
+      ran.status === 12 &&
+        ran.output.includes(
+          "trial-clean-1 yields no record: the audit's log stream lacks a report of the trial that the report meter's stream delivered",
+        ),
+      `a run whose stream dropped the diagnostics the report meter delivered was not refused with exit 12: ${ran.output}`,
+    );
     check(
       output.includes('ungranted-read: refused EPERM') &&
         output.includes('ungranted-link: refused EPERM') &&
@@ -4398,14 +4421,7 @@ if (act === 'read-ungranted') {
       `the kernel admitted a direct, linked or empty-environment child read while its log hid diagnostics: ${output}`,
     );
     check(!output.includes(secret), 'ungranted host bytes reached target output');
-    const channel = readJson(path.join(directory, 'run.json')).observedMountsChannel;
-    checkReport(
-      channel.every((entry) => entry.canariesDelivered === entry.canariesSent && !entry.logReportedLoss),
-      `the diagnostic-drop witness also dropped canaries: ${JSON.stringify(channel)}`,
-    );
-    check(JSON.stringify(observedMountsOf(directory, 'P-001')) === '[]', 'the log-drop witness retained host-file diagnostics');
-    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
-    check(scored.status === 0, `scoring the kernel-confined run failed: ${scored.output}`);
+    check(!fs.existsSync(path.join(directory, 'trial-sets')), 'a run whose audit could not account for the trial sealed a trial set');
   } finally {
     stub.end();
   }
@@ -5563,7 +5579,8 @@ async function checkAuditChannelRun() {
       const record = directory === null ? {} : readJson(path.join(directory, 'run.json'));
       checkChannelRecords(record.observedMountsChannel, auditedTrials(), { lossless: false });
       const entries = Array.isArray(record.observedMountsChannel) ? record.observedMountsChannel : [];
-      const lost = entries.filter((entry) => entry.completeness === 'lossy');
+      const measured = (entry) => entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss || entry.logOverloaded;
+      const lost = entries.filter((entry) => measured(entry));
       check(
         lost.length > 0,
         `no trial of a run over a log that loses every second report recorded a lost canary: ${JSON.stringify(entries)}`,
@@ -5571,14 +5588,15 @@ async function checkAuditChannelRun() {
       const summary = record.outcome?.message ?? '';
       check(
         lostCanaryNote(entries) !== '' &&
-          summary.endsWith(lostCanaryNote(entries)) &&
+          // The note sits before the command, so the run's id stays the last word an agent copies from it.
+          summary.includes(`${lostCanaryNote(entries)}; score them with tea-evaluate score --run `) &&
           lost.every((entry) =>
             summary.includes(
               `${entry.conditionArm} trial ${entry.trialIndex} (${entry.canariesSent - entry.canariesDelivered} of ${entry.canariesSent}`,
             ),
           ) &&
           entries
-            .filter((entry) => entry.completeness === 'complete')
+            .filter((entry) => !measured(entry))
             .every((entry) => !summary.includes(`${entry.conditionArm} trial ${entry.trialIndex} (`)),
         `the run's summary does not name each trial that lost canaries with its counts, and no other: ${JSON.stringify(summary)}`,
       );
@@ -5648,8 +5666,34 @@ async function checkAuditChannelUnits() {
         canariesDelivered: 38,
         logReportedLoss: false,
         logOverloaded: false,
+        refusalsLoggedInPart: false,
+        refusalCanariesSent: 0,
+        refusalCanariesDelivered: 0,
       }),
     'a trial that lost 3 of 41 canaries was not recorded as lossy with its counts',
+  );
+  // macOS logs only some refusals: a Seatbelt trial is lossy whatever its canaries delivered, and keeps its refusal canaries' counts.
+  const partial = channelEntry(arm, {
+    trialIndex: 3,
+    auditChannel: { ...counts(41, 41), refusalsLoggedInPart: true, refusalCanariesSent: 11, refusalCanariesDelivered: 9 },
+  });
+  check(
+    partial.completeness === 'lossy' &&
+      partial.refusalsLoggedInPart === true &&
+      partial.refusalCanariesSent === 11 &&
+      partial.refusalCanariesDelivered === 9,
+    `a trial whose refusals the log keeps only in part was recorded as ${JSON.stringify(partial)}`,
+  );
+  const partialNote = lostCanaryNote([partial, { ...partial, trialIndex: 4 }]);
+  check(
+    partialNote ===
+      "; the sandbox refused every ungranted read, but macOS logs only some refusals, so the observed reads listed for these 2 trials are a lower bound (Linux's Bubblewrap with strace records every read)",
+    `the summary's note on refusals the log keeps in part is ${JSON.stringify(partialNote)}`,
+  );
+  check(
+    lostCanaryNote([partial]).includes('for this trial are a lower bound') &&
+      !lostCanaryNote([partial]).includes('mutated:M-001 trial 3 ('),
+    `a trial that lost no canary was named among the lost ones, or its note is not singular: ${JSON.stringify(lostCanaryNote([partial]))}`,
   );
   for (const complete of [counts(41, 41), counts(0, 0)]) {
     check(
@@ -5891,8 +5935,16 @@ async function checkAuditChannelUnits() {
     );
     check(JSON.stringify(quiet.mounts) === '[]', `canary reads were listed as observed mounts: ${JSON.stringify(quiet.mounts)}`);
     check(
-      fs.readdirSync(quiet.directory).every((name) => !name.startsWith('canary-')),
+      fs.readdirSync(quiet.directory).every((name) => !name.startsWith('canary-') && !name.startsWith('refusal-')),
       `canary files remain in the audit directory: ${JSON.stringify(fs.readdirSync(quiet.directory))}`,
+    );
+    // Its refusal canaries are refused reads under the token: sent beside the canaries, never listed as a mount, and recorded with
+    // how many the log delivered, since macOS logs only some refusals.
+    check(
+      quiet.channel.refusalsLoggedInPart === true &&
+        quiet.channel.refusalCanariesSent >= 3 &&
+        quiet.channel.refusalCanariesDelivered <= quiet.channel.refusalCanariesSent,
+      `a Seatbelt trial of 1.2 seconds recorded its refusals as ${JSON.stringify(quiet.channel)}; expected refusals logged in part, with at least 3 refusal canaries`,
     );
     // A log that loses every second report leaves the canaries it lost counted.
     const stub = lossyLogStub(2);
@@ -6068,29 +6120,26 @@ async function checkAuditChannelUnits() {
       loss.channel.logReportedLoss === true && JSON.stringify(loss.mounts) === JSON.stringify([fs.realpathSync(outside)]),
       `a log that reported lost events was recorded as ${JSON.stringify(loss.channel)} with the mounts ${JSON.stringify(loss.mounts)}`,
     );
-    // A report the kernel's log dropped between two canaries, with every canary delivered and no loss event, is the loss no canary
-    // sees; the reports that came faster than the log keeps them are what mark the trial lossy (the stub drops the read and floods the meter).
+    // A report the sandbox's own stream dropped, with every canary delivered and no loss event, is one the report meter's stream
+    // delivered: the audit holds the two streams to each other, so it does not take the silence for a trial that read nothing.
     const dropStub = dropLogStub('host-notes', 40);
     try {
-      const dropped = await read(dropStub.executable, {
-        waitMs: 0,
-        act: async (sandbox) => {
-          const wrapped = sandbox.wrap('/bin/cat', [outside]);
-          await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
-        },
-      });
+      let refused = null;
+      try {
+        await read(dropStub.executable, {
+          waitMs: 0,
+          act: async (sandbox) => {
+            const wrapped = sandbox.wrap('/bin/cat', [outside]);
+            await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
+          },
+        });
+      } catch (error) {
+        refused = error;
+      }
       check(
-        JSON.stringify(dropped.mounts) === '[]',
-        `the stub did not drop the read of the target: the audit listed ${JSON.stringify(dropped.mounts)}`,
-      );
-      checkReport(
-        dropped.channel.canariesDelivered === dropped.channel.canariesSent && dropped.channel.logReportedLoss === false,
-        `the stub lost a canary or reported a loss, so the case does not show the blind spot: ${JSON.stringify(dropped.channel)}`,
-      );
-      check(
-        dropped.channel.logOverloaded === true &&
-          channelEntry({ conditionArm: 'clean' }, { trialIndex: 1, auditChannel: dropped.channel }).completeness === 'lossy',
-        `a trial whose read the log dropped while reports came faster than it keeps them, with every canary delivered, was recorded as ${JSON.stringify(dropped.channel)}; expected lossy`,
+        refused?.name === 'ConfinementError' &&
+          refused.message.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered"),
+        `a trial whose read the sandbox's stream dropped and the meter's delivered ended as ${refused}; expected the audit's failure`,
       );
     } finally {
       dropStub.end();
@@ -6117,8 +6166,10 @@ async function checkAuditChannelUnits() {
   });
   await traced.start();
   check(
-    JSON.stringify(await traced.observedMounts()) === '[]' && JSON.stringify(traced.auditChannel()) === JSON.stringify(counts(0, 0)),
-    `a Bubblewrap sandbox's audit channel is ${JSON.stringify(traced.auditChannel())}; expected no canary sent, none delivered and no reported loss`,
+    JSON.stringify(await traced.observedMounts()) === '[]' &&
+      JSON.stringify(traced.auditChannel()) ===
+        JSON.stringify({ ...counts(0, 0), refusalsLoggedInPart: false, refusalCanariesSent: 0, refusalCanariesDelivered: 0 }),
+    `a Bubblewrap sandbox's audit channel is ${JSON.stringify(traced.auditChannel())}; expected no canary sent, none delivered, no reported loss, and every refusal traced`,
   );
   const plain = targetSandbox({ confinement: bubblewrap, workspace, status: tempDir('audit-channel-plain-status') });
   check(plain.auditChannel() === null, 'a sandbox that does not audit reported an audit channel');
@@ -6138,6 +6189,139 @@ async function checkAuditChannelUnits() {
   });
   check(port.auditChannel() === null, 'the port of a run that opted out of confinement reported an audit channel');
   port.releaseHome();
+}
+
+/**
+ * The audit's `log stream`s end with the run that started them, on macOS, where Seatbelt's audit reads them: a confined run that
+ * exits leaves none running, and neither does one killed outright (SIGKILL), which runs no handler, nor one whose observer is a
+ * wrapper that starts the real `log` as its own child, nor one killed while the observer probe at selection waits on a stream that
+ * never reports. Each trial stream runs under a guard that holds the runtime's lifeline and ends its whole process group with it,
+ * and the probe's stream runs under a guard that watches the runtime and the probe's shell (`confinement-audit-stream.cjs`); a
+ * runtime that started `log stream` itself left it running, its parent launchd, until its timeout. Bubblewrap's audit traces each
+ * call and starts no stream that could outlive it.
+ */
+async function checkAuditStreamsEndWithRun() {
+  if (process.platform !== 'darwin') {
+    skipCase('audit streams of an ended run', `Seatbelt's log streams exist on macOS only, and this host is ${process.platform}`);
+    return;
+  }
+  const guard = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-audit-stream.cjs');
+  const stubs = tempDir('audit-stream-stubs');
+  // An observer that is a wrapper: the real `log`, started as this shell's child with the runtime's arguments.
+  const wrapper = path.join(stubs, 'wrapped-log');
+  fs.writeFileSync(wrapper, '#!/bin/sh\n/usr/bin/log "$@"\n', { mode: 0o755 });
+  // An observer that never reports: a real `log stream` whose predicate matches nothing, so the probe at selection waits its full time.
+  const marker = `tea-stalled-observer-${crypto.randomBytes(6).toString('hex')}`;
+  const stalled = path.join(stubs, 'stalled-log');
+  fs.writeFileSync(
+    stalled,
+    `#!/bin/sh\n/usr/bin/log stream --style ndjson --timeout 60s --predicate 'eventMessage CONTAINS "${marker}"'\n`,
+    { mode: 0o755 },
+  );
+  const rows = () =>
+    spawnSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' })
+      .stdout.split('\n')
+      .map((line) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line))
+      .filter((matched) => matched !== null)
+      .map(([, child, parent, command]) => ({ pid: Number(child), ppid: Number(parent), command }));
+  const isStream = (command) => command.startsWith('/usr/bin/log stream');
+  // The processes of the audit beneath `pid`: each guard, each wrapper and each `log stream`, found through their parents.
+  const streamsBeneath = (pid, known) => {
+    const listed = rows();
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const row of listed) {
+        if (known.has(row.pid) || (row.ppid !== pid && !known.has(row.ppid))) continue;
+        if (!row.command.includes(guard) && !row.command.includes(wrapper) && !isStream(row.command)) continue;
+        known.set(row.pid, row.command);
+        grew = true;
+      }
+    }
+    return known;
+  };
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const settled = async (pids, ms) => {
+    for (let waited = 0; waited < ms && pids.some(alive); waited += 100) await sleep(100);
+    const left = pids.filter(alive);
+    for (const pid of left) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Gone between the listing and the kill.
+      }
+    }
+    return left;
+  };
+  const start = (command, project, env = {}) => {
+    const child = spawn(process.execPath, [EVALUATE, command, '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env, ...env },
+      stdio: 'ignore',
+    });
+    return { child, ended: new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal }))) };
+  };
+
+  for (const { label, kill, observer } of [
+    { label: 'exit', kill: false, observer: null },
+    { label: 'SIGKILL', kill: true, observer: null },
+    { label: 'SIGKILL under a wrapping observer', kill: true, observer: wrapper },
+  ]) {
+    const project = makeProject(`audit-streams-${kill ? 'kill' : 'exit'}`);
+    const { child, ended } = start('run', project, observer === null ? {} : { [LOG_ENV]: observer });
+    const seen = new Map();
+    // A trial's two streams (its token's and the report meter's) are live once both run with the trial's timeout.
+    const trialStreams = () => [...seen.values()].filter((command) => isStream(command) && command.includes('--timeout 4h'));
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+      streamsBeneath(child.pid, seen);
+      if (kill && trialStreams().length >= 2) {
+        child.kill('SIGKILL');
+        break;
+      }
+      await sleep(50);
+    }
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    const { code, signal } = await ended;
+    const streams = trialStreams().length;
+    const left = await settled([...seen.keys()], 10_000);
+    check(
+      (kill ? signal === 'SIGKILL' && streams >= 2 : code === 0 && streams > 0) && left.length === 0,
+      `a confined run that ended by ${label} (exit ${code}, signal ${signal}) started ${streams} trial log stream(s) and left ${JSON.stringify(left.map((pid) => `${pid} ${seen.get(pid)}`))} running; expected ${kill ? "both of a trial's streams seen before the kill" : 'at least one stream'}, and all of them ended with the run`,
+    );
+    // The killed run's private parent is the next run's to reclaim.
+    if (kill) evaluate(['preflight', '--evaluation', project.folder], project.env);
+  }
+
+  // Killed while the observer probe waits on a stream that never reports: the probe's stream and the wrapper around it end with the run.
+  const probed = makeProject('audit-streams-probe');
+  const { child, ended } = start('preflight', probed, { [LOG_ENV]: stalled });
+  const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+  let real = null;
+  while (real === null && child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+    real = rows().find((row) => isStream(row.command) && row.command.includes(marker)) ?? null;
+    if (real === null) await sleep(50);
+  }
+  const probeProcesses = real === null ? [] : [real, ...rows().filter((row) => row.pid === real.ppid)];
+  child.kill('SIGKILL');
+  const { signal } = await ended;
+  // The probe waits five seconds for a report; its stream must end well before that wait would have.
+  const left = await settled(
+    probeProcesses.map((row) => row.pid),
+    3000,
+  );
+  check(
+    real !== null && signal === 'SIGKILL' && left.length === 0,
+    `a run killed while its observer probe waited (signal ${signal}) left ${JSON.stringify(probeProcesses.filter((row) => left.includes(row.pid)).map((row) => `${row.pid} ${row.command}`))} running${real === null ? ", and the probe's stream was never seen" : ''}; expected the probe's stream and its wrapper ended with the run`,
+  );
+  // The killed run's probe directory is the next preflight's to reclaim.
+  evaluate(['preflight', '--evaluation', probed.folder], probed.env);
 }
 
 /**
@@ -6521,19 +6705,35 @@ async function checkEvaluatorSwap({ observer = null, requireOmitted = false } = 
  */
 async function checkDroppedBoundaryReports() {
   if (process.platform !== 'darwin') {
-    skipCase('dropped folder and evaluator diagnostics', 'this regression exercises the macOS kernel boundary');
+    skipCase('dropped folder diagnostics', 'this regression exercises the macOS kernel boundary');
     return;
   }
-  for (const [dropped, body] of [
-    ['confinement-probe', checkConfinedEvaluationFolder],
-    ['confinement-swap', checkEvaluatorSwap],
-  ]) {
-    const stub = dropLogStub(dropped, 0);
-    try {
-      await body({ observer: stub.executable, requireOmitted: true });
-    } finally {
-      stub.end();
-    }
+  // The sandbox's own stream drops every report naming the evaluation folder; the target's reads of contract.json and its write into
+  // runs/ are refused by the kernel all the same, and the audit refuses to take the silence for a trial that touched nothing.
+  const stub = dropLogStub('confinement-probe', 0);
+  try {
+    const probed = makeProject('confinement-probe', { toolchain: true });
+    const contractBytes = fs.readFileSync(path.join(probed.folder, 'contract.json'));
+    const ran = evaluate(['run', '--evaluation', probed.folder], {
+      ...probed.env,
+      [LOG_ENV]: stub.executable,
+      VERDICT_WHEN: 'trial-clean-1',
+      VERDICT_DO: 'probe-confinement',
+    });
+    const out = trialStdout(runDirectoryOf(probed.folder), 'clean', 1);
+    check(
+      ran.status === 12 &&
+        ran.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered"),
+      `a run whose stream dropped the evaluation folder's diagnostics was not refused with exit 12: ${ran.output}`,
+    );
+    check(
+      /contract-read: refused (EPERM|EACCES)/.test(out) && /runs-write: refused (EPERM|EACCES)/.test(out),
+      `the kernel admitted a confined target's read of contract.json or its write into runs/ while its stream dropped the diagnostics: ${out}`,
+    );
+    check(!fs.existsSync(path.join(probed.folder, 'runs', 'tamper.txt')), 'a confined target wrote runs/tamper.txt');
+    check(fs.readFileSync(path.join(probed.folder, 'contract.json')).equals(contractBytes), 'a confined target changed contract.json');
+  } finally {
+    stub.end();
   }
 }
 
@@ -12605,10 +12805,16 @@ function checkConfinementReference() {
         '`canariesSent`',
         '`canariesDelivered`',
         '`logReportedLoss`',
+        '`refusalsLoggedInPart`',
+        '`refusalCanariesSent`',
+        '`refusalCanariesDelivered`',
         '`completeness`',
         '`complete`',
         '`lossy`',
       ].every((name) => mechanism.includes(name)) &&
+      mechanism.includes(
+        'the sandbox refused every ungranted read, but macOS logs only some refusals, so the list of observed reads is a lower bound',
+      ) &&
       mechanism.includes('every 50 ms') &&
       mechanism.includes('a single report of the target can still drop between two canaries') &&
       mechanism.includes('The summary line of `run` names every `lossy` trial') &&
@@ -12621,8 +12827,11 @@ function checkConfinementReference() {
   check(
     section.includes("`run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`") &&
       section.includes('the summary line of `run` names every `lossy` trial') &&
-      section.includes('Every Linux trial is `complete`.'),
-    "the reference's confinement section does not say that `observedMountsChannel` marks each audited trial complete or lossy, that the summary names each lossy trial and that a Linux trial is complete",
+      section.includes(
+        'Every macOS trial is `lossy` (`refusalsLoggedInPart`): the sandbox refused every ungranted read, but macOS logs only some refusals, so the list of observed reads is a lower bound.',
+      ) &&
+      section.includes('Every Linux trial is `complete`: Bubblewrap with strace records every read, refused ones included.'),
+    "the reference's confinement section does not say that `observedMountsChannel` marks each audited trial complete or lossy, that the summary names each lossy trial, that every macOS trial is lossy with a lower bound of observed reads and that a Linux trial is complete",
   );
   // The confinement page's opening carries the limits its later sections state, so a reader who stops there gets no
   // stronger guarantee than the runtime gives: the opt-out and records scope, the writable private directories, Linux's
@@ -22417,7 +22626,7 @@ const CASES = [
   { name: 'the confined evaluation folder', body: checkConfinedEvaluationFolder, group: 'confinement', lossy: true },
   { name: 'the observed mounts', body: checkObservedMounts, group: 'confinement', lossy: true },
   { name: 'the dropped read reports', body: checkDroppedReadReports, group: 'confinement', lossy: true },
-  { name: 'the dropped folder and swap diagnostics', body: checkDroppedBoundaryReports, group: 'confinement', lossy: true },
+  { name: 'the dropped folder diagnostics', body: checkDroppedBoundaryReports, group: 'confinement', lossy: true },
   { name: 'the platform refusal', body: checkPlatformRefusal, group: 'confinement' },
   { name: 'the leftover process', body: checkLeftoverProcess, group: 'confinement' },
   { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement', lossy: true },
@@ -22434,6 +22643,7 @@ const CASES = [
   { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement-audit' },
   { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement-audit' },
   { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement-audit' },
+  { name: 'the audit streams of an ended run', body: checkAuditStreamsEndWithRun, group: 'confinement-audit' },
   { name: "the audit's channel", body: checkAuditChannelRun, group: 'confinement-audit', lossy: true },
   { name: 'the host socket record', body: checkHostSocketRecordRun, group: 'confinement-audit' },
   { name: "the audit channel's units", body: checkAuditChannelUnits, group: 'confinement-audit', lossy: true },

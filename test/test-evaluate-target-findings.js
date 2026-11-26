@@ -16,7 +16,10 @@
  *   that a second this-pr finding measures with another rerun exits 10, and a problem the rerun shows cannot be decided this-pr.
  *
  * A defect that fires in the qualification workspace stops `run` at exit 11 with no score: the drafter offers the clean control's
- * qualification record, and the finding citing it checks clean (the rare clean-control failure a later run may not repeat).
+ * qualification record, and the finding citing it checks clean (the rare clean-control failure a later run may not repeat). The same
+ * holds for a seeded defect probe whose clean arm fails before its mutation: its `baseline-pass.json` is the drafted evidence, `check`
+ * accepts a clean-control failure citing it, and refuses one citing its trials, a known-failing record or a record that held. A
+ * held-out probe's qualification record stays closed to the drafter.
  *
  * The checker's evidence rules run over those genuine runs too: a cited trial whose vote passed, a trial or score the run does not
  * hold, an isolation path inside the allowlist, a process finding the sealed records do not list (rebuilt as interpretation.json
@@ -41,6 +44,7 @@ const FLAWS = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'evaluate-target-fi
 const FILE = 'target-findings.json';
 const TRIAL_WORKSPACE = 'trial-clean-2';
 const QUALIFICATION_WORKSPACE = 'qualify-clean';
+const DEFECT_QUALIFICATION_WORKSPACE = 'qualify-P-002';
 
 const scratch = scratchDirectories('tea-evaluate-target-findings');
 const failures = [];
@@ -464,12 +468,12 @@ for (const kind of Object.keys(FLAWS)) {
       '# Target handoff\n\n## T-001: the clean control fails its qualification\n',
     );
     expectClean(cli(stopped, ['check', '--ready']));
-    // A record whose verdict does not show the clean arm failing is no evidence, to the drafter or to check.
+    // A record that is not this probe's clean arm failing is no evidence, to the drafter or to check.
     const recordFile = path.join(stopped.folder, 'runs', run, 'qualification', 'P-001', 'baseline-pass.json');
     const genuine = fs.readFileSync(recordFile);
     fs.writeFileSync(recordFile, '{}\n');
     assert.deepEqual(draft(stopped, run).candidates, []);
-    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose verdict is null');
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'it names probe null, not P-001');
     fs.writeFileSync(recordFile, genuine);
     // The handoff names the finding by its whole ID.
     fs.writeFileSync(path.join(stopped.folder, 'target-handoff.md'), '# Target handoff\n\n## T-0010: another finding\n');
@@ -483,7 +487,70 @@ for (const kind of Object.keys(FLAWS)) {
     assert.equal(fixed.status, 0, fixed.output);
     const held = /score --run (\S+)/.exec(fixed.stdout)[1];
     editFindings(stopped, (value) => (value.findings[0].evidence.run = held));
-    expectFinding(cli(stopped, ['check']), 'target-findings', 'whose verdict is "held"');
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'its oracles give held');
+  });
+
+  test(`${kind}: a defect probe whose clean arm fails qualification is drafted from its record and checks clean`, () => {
+    const stopped = project(kind);
+    plant(stopped, DEFECT_QUALIFICATION_WORKSPACE);
+    const ran = cli(stopped, ['run']);
+    assert.equal(ran.status, 11, `run exited ${ran.status}, expected 11:\n${ran.output}`);
+    assert.match(ran.output, /the clean arm did not pass/);
+    const run = fs.readdirSync(path.join(stopped.folder, 'runs')).find((name) => /^\d/.test(name));
+    const recordFile = path.join(stopped.folder, 'runs', run, 'qualification', 'P-002', 'baseline-pass.json');
+    assert.equal(readJson(recordFile).verdict, 'violated');
+    const drafted = draft(stopped, run);
+    assert.equal(drafted.score, null);
+    assert.deepEqual(
+      drafted.candidates.map((candidate) => [candidate.source, candidate.evidence]),
+      [['clean-control-failure', { run, probe: 'P-002', qualification: 'baseline-pass' }]],
+    );
+    writeFindings(stopped, [
+      { ...classify(kind, 'T-001', drafted.candidates[0]), disposition: { decision: 'new-pr', handoff: 'target-handoff.md' } },
+    ]);
+    fs.writeFileSync(
+      path.join(stopped.folder, 'target-handoff.md'),
+      '# Target handoff\n\n## T-001: the defect probe clean arm fails its qualification\n',
+    );
+    expectClean(cli(stopped, ['check', '--ready']));
+    // Only clean controls record a known-failing baseline, so a defect probe cites the clean arm it ran.
+    editFindings(stopped, (value) => (value.findings[0].evidence.qualification = 'baseline-known-failing'));
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'only a clean control records baseline-known-failing');
+    // A defect probe's trials run its mutated arm, so its clean arm fails only in its qualification record.
+    editFindings(stopped, (value) => {
+      delete value.findings[0].evidence.qualification;
+      value.findings[0].evidence.score = run;
+    });
+    expectFinding(cli(stopped, ['check']), 'target-findings', 'P-002, which is not a clean control');
+    editFindings(stopped, (value) => {
+      delete value.findings[0].evidence.score;
+      value.findings[0].evidence.qualification = 'baseline-pass';
+    });
+    expectClean(cli(stopped, ['check', '--ready']));
+    // The record is held to the clean arm it stands for: its probe and phase, and the verdict its oracles give, to the drafter and to check.
+    // The genuine record of a clean arm that passed, with only its verdict changed, is the forgery the check exists to refuse.
+    const failing = readJson(recordFile);
+    fix(stopped);
+    const fixed = cli(stopped, ['run']);
+    assert.equal(fixed.status, 0, fixed.output);
+    const held = /score --run (\S+)/.exec(fixed.stdout)[1];
+    const passing = readJson(path.join(stopped.folder, 'runs', held, 'qualification', 'P-002', 'baseline-pass.json'));
+    assert.equal(passing.verdict, 'held');
+    for (const [forged, fragment] of [
+      [{ ...passing, verdict: 'violated' }, 'it states verdict "violated", and its oracles give held'],
+      [{ ...failing, verdict: 'held' }, 'it states verdict "held", and its oracles give violated'],
+      [{ verdict: 'violated' }, 'it names probe null, not P-002'],
+      [{ ...failing, probeId: 'P-001' }, 'it names probe "P-001", not P-002'],
+      [{ ...failing, phase: 'mutated-fail' }, 'it names phase "mutated-fail", not baseline-pass'],
+      [{ ...failing, oracles: [] }, 'it holds no oracle results'],
+      [{ ...failing, oracles: failing.oracles.map((oracle) => ({ ...oracle, disposition: 'held' })) }, 'is not one qualification writes'],
+    ]) {
+      writeJson(recordFile, forged);
+      assert.deepEqual(draft(stopped, run).candidates, [], `the drafter listed ${JSON.stringify(forged).slice(0, 120)}`);
+      expectFinding(cli(stopped, ['check', '--ready']), 'target-findings', fragment);
+    }
+    writeJson(recordFile, failing);
+    expectClean(cli(stopped, ['check', '--ready']));
   });
 }
 
@@ -593,6 +660,21 @@ test('a held-out probe is cited by its gap-view row, verified against the score,
   expectFinding(cli(context, ['check']), 'target-findings', 'cites trials of held-out probe P-010');
   write({ gapView: row, reproducedBy: { run, score, probe: 'P-011', trials: [2] } });
   expectFinding(cli(context, ['check']), 'target-findings', 'reproduces on held-out probe P-011');
+  // A seeded probe's clean arm that failed qualification is drafted for a development probe; a held-out probe's stays closed.
+  // Each record's first oracle resolves the other way, as a clean arm that failed records it.
+  for (const probe of ['P-005', 'P-010']) {
+    const file = path.join(context.folder, 'runs', run, 'qualification', probe, 'baseline-pass.json');
+    const record = readJson(file);
+    const [first, ...rest] = record.oracles;
+    const resolution = first.polarity === 'expects-hold' ? 'false' : 'true';
+    writeJson(file, { ...record, verdict: 'violated', oracles: [{ ...first, resolution, disposition: 'violated' }, ...rest] });
+  }
+  const { behaviorId } = readJson(path.join(context.folder, 'probes', 'P-005.probe.json'));
+  const { severity } = readJson(path.join(context.folder, 'contract.json')).behaviors.find((behavior) => behavior.id === behaviorId);
+  assert.deepEqual(
+    draft(context, run).candidates.filter((candidate) => candidate.evidence.qualification !== undefined),
+    [{ source: 'clean-control-failure', evidence: { run, probe: 'P-005', qualification: 'baseline-pass' }, behaviorId, severity }],
+  );
 });
 
 test('shapes the schema refuses', () => {

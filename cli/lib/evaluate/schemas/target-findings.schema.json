@@ -111,7 +111,7 @@
           "minLength": 1
         },
         "qualification": {
-          "description": "The qualification record of a clean control whose baseline did not hold: qualification/<probeId>/<phase>.json of the cited run. A run that stops at exit 11 on such a baseline has no score, and this keeps its evidence.",
+          "description": "The qualification record of a clean arm that did not hold: qualification/<probeId>/<phase>.json of the cited run, for a clean control's baseline or a seeded defect probe's clean arm before its mutation (baseline-pass; only a clean control records baseline-known-failing). A run that stops at exit 11 on such a baseline has no score, and this keeps its evidence.",
           "enum": ["baseline-pass", "baseline-known-failing"]
         },
         "gapView": {
@@ -322,7 +322,7 @@
           "minLength": 1
         },
         "source": {
-          "description": "Where the finding came from: a clean control that genuinely fails (in its trials, or in its qualification baseline), a behavior that fails only some trials, a behavior the target fails on a probe that is no clean control (a historical probe, or a held-out probe), an isolation violation where the target reached beyond its task, a process finding (the outcome is right and the steps are wrong or wasteful), or an unstated or contradictory rule found while authoring requirements.",
+          "description": "Where the finding came from: a clean arm that genuinely fails (a clean control in its trials or its qualification baseline, or a seeded defect probe's clean arm in its qualification), a behavior that fails only some trials, a behavior the target fails on a probe that is no clean control (a historical probe, or a held-out probe), an isolation violation where the target reached beyond its task, a process finding (the outcome is right and the steps are wrong or wasteful), or an unstated or contradictory rule found while authoring requirements.",
           "enum": [
             "clean-control-failure",
             "intermittent-behavior",

@@ -10,9 +10,9 @@
  *
  *   drop-log.cjs <dropped text> <flood> <pid directory> <the arguments the runtime gives log stream>
  *
- * The runtime ends the stream with SIGKILL, which no handler can answer, so the real `log` it started would run on until its
- * timeout; the stub shortens the timeout to a minute and writes the real `log`'s process id into the pid directory, where the
- * case ends it.
+ * The runtime ends the stream by killing its guard's process group, which holds this stub and the real `log` it starts. A case
+ * killed outright before then would leave the real `log` running to its timeout, so the stub shortens the timeout to a minute and
+ * writes the real `log`'s process id into the pid directory, where the case ends it.
  */
 
 const fs = require('node:fs');

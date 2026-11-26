@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tea-evaluate target-findings` now drafts a seeded defect probe whose clean arm failed qualification as a `clean-control-failure` candidate citing its `baseline-pass.json`, and `tea-evaluate check` accepts that finding. A citation of the probe's trials, of a known-failing record, or of a record whose clean arm held is still refused.
+- `tea-evaluate target-findings` and `tea-evaluate check` now hold a cited qualification record to the clean arm it stands for: a phase the probe's qualification route records, the probe and phase the record names, and an oracle result set whose derived verdict is `violated` and matches the stated one. A record edited to read `violated`, a verdict-only object, or another probe's record is no longer drafted or accepted.
+- A confined `tea-evaluate` run on macOS no longer leaves its audit's `/usr/bin/log stream` processes running when it is killed outright (SIGKILL) or aborts. Each stream now runs under a guard that holds the runtime's lifeline and ends the stream's whole process group when the runtime ends, so a wrapper named by `TEA_EVALUATE_AUDIT_LOG` and the real `log` it starts end too; before, such a run left its streams to their four-hour timeout. The observer probe at selection runs its stream under a guard that watches the runtime, and waits for the stream to end before it returns.
+- On macOS every audited trial is now recorded `lossy` (`refusalsLoggedInPart` in `run.json`'s `observedMountsChannel`), and the summary line of `run` says why: the sandbox refused every ungranted read, but macOS logs only some refusals, so the list of observed reads is a lower bound. Linux's Bubblewrap with strace stays `complete`. Each macOS trial also records refusal canaries (`refusalCanariesSent`, `refusalCanariesDelivered`). The audit now holds the sandbox's stream to the report meter's stream, and a trial whose stream lacks a read the meter delivered, and lists no read, exits 12.
+
 ## [4.6.0] - 2026-11-25
 
 ### Added

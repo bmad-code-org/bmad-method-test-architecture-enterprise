@@ -1777,6 +1777,7 @@ function makeObserver({ confinement, audit, cwd }) {
         // The report meter has counted every report of the trial once a read made after it has come back through the meter's stream too.
         await stream.settleMeter(audit.barrierMs);
         stream.read();
+        stream.reconcile();
         const gone = stream.endedBecause();
         if (gone !== null) throw new ConfinementError(`the audit's log stream ended during the trial: ${gone}`);
         if (!confirmed && stream.paths.size === 0) {
@@ -1789,11 +1790,26 @@ function makeObserver({ confinement, audit, cwd }) {
             "the audit's log stream reported lost events and no read of the trial, so what the trial read is unconfirmed",
           );
         }
+        if (stream.missed && stream.paths.size === 0) {
+          throw new ConfinementError(
+            "the audit's log stream lacks a report of the trial that the report meter's stream delivered, and lists no read of the trial, so what the trial read is unconfirmed",
+          );
+        }
         return [...stream.paths].sort();
       },
+      // macOS logs only some of the sandbox's refusals, dropping the rest at the source without a trace, so a Seatbelt trial's list
+      // of observed reads is a lower bound, whatever its canaries say; the refusal canaries record how many refusals reached the log.
       channel() {
-        const { sent, delivered, lostEvents, overloaded } = stream.canaries();
-        return { canariesSent: sent, canariesDelivered: delivered, logReportedLoss: lostEvents, logOverloaded: overloaded };
+        const { sent, delivered, lostEvents, overloaded, refusalsSent, refusalsDelivered } = stream.canaries();
+        return {
+          canariesSent: sent,
+          canariesDelivered: delivered,
+          logReportedLoss: lostEvents,
+          logOverloaded: overloaded,
+          refusalsLoggedInPart: true,
+          refusalCanariesSent: refusalsSent,
+          refusalCanariesDelivered: refusalsDelivered,
+        };
       },
       release: () => stream.close(),
     };
@@ -1830,7 +1846,16 @@ function makeObserver({ confinement, audit, cwd }) {
       return [...paths].sort();
     },
     // `strace` reports every traced syscall of the call, so the trace has no canaries to count (Story 1.81).
-    channel: () => ({ canariesSent: 0, canariesDelivered: 0, logReportedLoss: false, logOverloaded: false }),
+    // The trace records every syscall it names, refused ones included.
+    channel: () => ({
+      canariesSent: 0,
+      canariesDelivered: 0,
+      logReportedLoss: false,
+      logOverloaded: false,
+      refusalsLoggedInPart: false,
+      refusalCanariesSent: 0,
+      refusalCanariesDelivered: 0,
+    }),
     release: () => {},
   };
 }

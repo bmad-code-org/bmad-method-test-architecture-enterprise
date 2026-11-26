@@ -25,6 +25,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { armVerdict } = require('./admission');
+const { dispositionOf, oraclesOfBehaviors } = require('./evaluator');
 const { MANIFEST_NAME, readFolderFile } = require('./folder');
 const { mountsOutsideAllowlist } = require('./isolation-allowlist');
 const { projectTrial } = require('./interpret');
@@ -130,9 +132,77 @@ function sameReceipt(left, right) {
   return JSON.stringify(ordered(left)) === JSON.stringify(ordered(right));
 }
 
-/** Whether a qualification record shows its clean arm failing: its oracles decided, and one was violated. */
-function showsFailure(record) {
-  return record?.verdict === 'violated';
+/**
+ * The qualification record of the clean arm every probe that qualifies against the target runs: a clean control's baseline, and a
+ * seeded probe's first step before its mutation (`mutation.js`). Only a clean control can be recorded known-failing instead.
+ */
+const CLEAN_ARM = 'baseline-pass';
+const KNOWN_FAILING_ARM = 'baseline-known-failing';
+
+/** The resolutions an oracle's check gives (`evaluator.js`), and the polarities an oracle declares. */
+const RESOLUTIONS = new Set(['true', 'false', 'insufficient-evidence']);
+const POLARITIES = new Set(['expects-hold', 'expects-violation']);
+
+/**
+ * The phases whose qualification record is a probe's clean arm, by the probe's qualification route: a clean control's baseline
+ * (`run.js`, known-failing under --before-state), and a seeded probe's first step before its mutation (`preflight.js`). A historical
+ * route runs the pre-fix and the fixed target, and a gameability route runs no arm against the target, so neither has a clean arm.
+ */
+function cleanArmPhases(probe) {
+  const route = probe?.qualification?.route;
+  if (route === 'clean-control') return [CLEAN_ARM, KNOWN_FAILING_ARM];
+  if (route === 'controlled-mutation') return [CLEAN_ARM];
+  return [];
+}
+
+/** The oracles the probe's clean arm is judged by, as qualification evaluates them: its behavior's, and a seeded probe's defects' too. */
+function cleanArmOracles(contract, probe) {
+  const seeded = probe.qualification.route === 'controlled-mutation';
+  const defects = seeded && Array.isArray(probe.defects) ? probe.defects.map((defect) => defect?.behaviorId) : [];
+  return oraclesOfBehaviors(contract, [probe.behaviorId, ...defects]);
+}
+
+/**
+ * Why `record` is not the qualification record of `probe`'s clean arm in `phase` failing, or null when it is: a phase the probe's
+ * route records its clean arm in, a record that names that probe and phase, and an oracle for each one the arm is judged by, each
+ * disposition the one its resolution gives under its polarity, whose verdict (`armVerdict`) is `violated` and is the verdict the
+ * record states. The drafter lists a record only when this holds, and `check` refuses a citation of any record it does not hold for.
+ *
+ * @param {unknown} record the parsed record, or null when it cannot be read
+ * @param {{ probe: object, phase: string, contract: object | undefined }} cited
+ * @returns {string | null}
+ */
+function cleanArmFailure(record, { probe, phase, contract }) {
+  const phases = cleanArmPhases(probe);
+  const route = JSON.stringify(probe?.qualification?.route ?? null);
+  if (phases.length === 0) return `${probe.probeId} qualifies on route ${route}, which runs no clean arm, so it records none`;
+  if (!phases.includes(phase))
+    return `${probe.probeId} qualifies on route ${route}, which records its clean arm as ${phases.join(' or ')}; only a clean control records ${KNOWN_FAILING_ARM}`;
+  if (record === null) return 'it cannot be read';
+  if (!isPlainObject(record)) return 'it holds no record object';
+  if (record.probeId !== probe.probeId) return `it names probe ${JSON.stringify(record.probeId ?? null)}, not ${probe.probeId}`;
+  if (record.phase !== phase) return `it names phase ${JSON.stringify(record.phase ?? null)}, not ${phase}`;
+  if (contract === undefined) return "contract.json cannot be read, so the record's oracles cannot be held to the probe's";
+  const { oracles } = record;
+  if (!Array.isArray(oracles) || oracles.length === 0) return 'it holds no oracle results';
+  for (const oracle of oracles) {
+    if (
+      !isPlainObject(oracle) ||
+      typeof oracle.oracleId !== 'string' ||
+      !POLARITIES.has(oracle.polarity) ||
+      !RESOLUTIONS.has(oracle.resolution) ||
+      oracle.disposition !== dispositionOf(oracle.resolution, oracle.polarity)
+    )
+      return `oracle result ${JSON.stringify(oracle)} is not one qualification writes (an oracleId, its polarity and resolution, and the disposition they give)`;
+  }
+  const expected = cleanArmOracles(contract, probe);
+  const named = oracles.map((oracle) => oracle.oracleId);
+  if (named.length !== expected.length || !expected.every((oracleId) => named.includes(oracleId)))
+    return `its oracles are ${JSON.stringify(named)}, and ${probe.probeId}'s clean arm is judged by ${JSON.stringify(expected)}`;
+  const derived = armVerdict(oracles);
+  if (record.verdict !== derived) return `it states verdict ${JSON.stringify(record.verdict ?? null)}, and its oracles give ${derived}`;
+  if (derived !== 'violated') return `its oracles give ${derived}; it shows the clean arm failing only when one of them was violated`;
+  return null;
 }
 
 /** A trial set's paths outside its allowlist, or null when the manifest's lists are not lists of paths. */
@@ -255,7 +325,7 @@ function checkProcessFinding(report, folder, label, evidence, root, records) {
  * Holds one citation (a finding's own evidence, or the development reproduction of a held-out one) to the run evidence on disk.
  * Returns a note when the cited run is not on disk, which readiness reports as unverified, or null.
  */
-function checkRunEvidence(report, folder, label, finding, heldOut) {
+function checkRunEvidence(report, folder, label, finding, { heldOut, contract }) {
   const { evidence } = finding;
   const { probe } = evidence;
   if (probe !== undefined && heldOut.has(probe)) {
@@ -285,13 +355,11 @@ function checkRunEvidence(report, folder, label, finding, heldOut) {
     return null;
   }
   if (evidence.qualification !== undefined) {
+    const committed = committedProbe(folder, probe);
     const file = `${root}/qualification/${probe}/${evidence.qualification}.json`;
-    const record = folderJson(folder, file);
-    if (record === null) report(`${label} cites qualification record ${file}, which cannot be read`);
-    else if (!showsFailure(record))
-      report(
-        `${label} cites qualification record ${file}, whose verdict is ${JSON.stringify(record.verdict ?? null)}; it shows the clean arm failing only when its oracles decided and one was violated`,
-      );
+    const why =
+      committed === null ? null : cleanArmFailure(folderJson(folder, file), { probe: committed, phase: evidence.qualification, contract });
+    if (why !== null) report(`${label} cites qualification record ${file}, which shows no clean arm of ${probe} failing: ${why}`);
   }
   const trialSet = `${root}/trial-sets/${probe}`;
   if (evidence.score === undefined && evidence.trials === undefined && evidence.paths === undefined) return null;
@@ -494,8 +562,18 @@ function reviewTargetFindings(folder, { evaluation, contract, validate, describe
       if (probe === undefined) continue;
       const committed = committedProbe(folder, probe);
       if (committed === null) add('reference', `${label} ${where} probe ${probe}, which probes/ does not hold`);
-      else if (where === 'cites' && finding.source === 'clean-control-failure' && committed.expectedClean !== true)
-        report(`${label} is a clean-control failure on ${probe}, which is not a clean control (expectedClean is not true)`);
+      // A probe that is no clean control runs its clean arm only in qualification (a seeded probe's first step, before its mutation),
+      // and its trials run the mutated arm, so its clean arm fails only in that record. Which record is its clean arm, and whether it
+      // shows the arm failing, is the qualification evidence check's (`cleanArmFailure`).
+      else if (
+        where === 'cites' &&
+        finding.source === 'clean-control-failure' &&
+        committed.expectedClean !== true &&
+        evidence.qualification === undefined
+      )
+        report(
+          `${label} is a clean-control failure on ${probe}, which is not a clean control (expectedClean is not true); cite the qualification record of its clean arm (qualification baseline-pass)`,
+        );
     }
     if (evidence.record !== undefined) {
       const record = readFolderFile(folder, evidence.record);
@@ -503,11 +581,14 @@ function reviewTargetFindings(folder, { evaluation, contract, validate, describe
       else if (finding.source === 'authoring' && !record.bytes.toString('utf8').includes(evidence.excerpt))
         report(`${label} quotes an excerpt ${evidence.record} does not hold; quote the record's own words`);
     }
-    const notes = [checkRunEvidence(report, folder, label, finding, heldOut)];
+    const notes = [checkRunEvidence(report, folder, label, finding, { heldOut, contract })];
     if (reproducedBy !== undefined) {
       if (heldOut.has(reproducedBy.probe))
         report(`${label} reproduces on held-out probe ${reproducedBy.probe}; a reproduction is a development probe`);
-      else notes.push(checkRunEvidence(report, folder, `${label}'s reproduction`, { ...finding, evidence: reproducedBy }, heldOut));
+      else
+        notes.push(
+          checkRunEvidence(report, folder, `${label}'s reproduction`, { ...finding, evidence: reproducedBy }, { heldOut, contract }),
+        );
     }
     const { disposition } = finding;
     if (disposition.decision === 'new-pr') {
@@ -557,9 +638,9 @@ function scoredRun(folder, named) {
 
 /**
  * The target-finding candidates one run's evidence holds: a clean control whose trials read false-positive (in every trial, or only
- * some), a clean control whose qualification baseline did not hold (a run that stopped at exit 11 has no score, and this keeps its
- * evidence), a held-out probe with a failing vote (by its gap-view row alone), a path a trial opened outside its allowlist, and a
- * process finding of a clean control's trial. Each candidate is evidence to classify: Stage 11 decides whether the target or the
+ * some), a development probe whose clean arm did not hold in qualification (a clean control's baseline, or a seeded probe's clean
+ * arm before its mutation; a run that stopped at exit 11 has no score, and this keeps its evidence), a held-out probe with a failing
+ * vote (by its gap-view row alone), a path a trial opened outside its allowlist, and a process finding of a clean control's trial. Each candidate is evidence to classify: Stage 11 decides whether the target or the
  * instrument is at fault, and only the target's become findings.
  *
  * @param {string} folder
@@ -582,9 +663,11 @@ function draftTargetFindings(folder, { run, evaluation, contract }) {
     if (probe === null || typeof probe.probeId !== 'string') continue;
     const id = probe.probeId;
     const clean = probe.expectedClean === true;
-    for (const phase of clean ? ['baseline-pass', 'baseline-known-failing'] : []) {
+    // A held-out probe's qualification stays closed; a probe whose route has no clean arm (historical, gameability) holds no record.
+    for (const phase of heldOut.has(id) ? [] : cleanArmPhases(probe)) {
       const record = folderJson(folder, `${root}/qualification/${id}/${phase}.json`);
-      if (showsFailure(record)) candidate(probe, 'clean-control-failure', { run: found.run, probe: id, qualification: phase });
+      if (record !== null && cleanArmFailure(record, { probe, phase, contract }) === null)
+        candidate(probe, 'clean-control-failure', { run: found.run, probe: id, qualification: phase });
     }
     if (found.score !== null && (clean || heldOut.has(id))) {
       const outcome = reducedOutcome(folder, root, found.score, id);
