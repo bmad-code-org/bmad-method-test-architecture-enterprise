@@ -200,10 +200,37 @@ function parseReportLine(line, token) {
   return { operation: matched[3], denied: matched[2] !== 'allow', path: named };
 }
 
+/**
+ * The identity and time of a report of `token` in one ndjson line, or `null` for a line that is none: the log's own timestamp and
+ * message, which name one kernel event in every stream that delivers it. The two streams of a sandbox are held to each other by it.
+ *
+ * @returns {{ key: string, time: number, path: string } | null}
+ */
+function reportEvent(line, token) {
+  if (!line.includes(token)) return null;
+  const report = parseReportLine(line, token);
+  if (report === null || report.lost === true) return null;
+  const event = JSON.parse(line);
+  const time = eventMicroseconds(line);
+  return time === null ? null : { key: `${event.timestamp}\n${event.eventMessage}`, time, path: report.path };
+}
+
 /** The profile a sentinel read runs under: the one read it reports, with the sandbox's token. */
 function sentinelProfile(sentinel, token) {
   return `(version 1)\n(allow default)\n(allow file-read-data (literal "${sentinel}") (with report) (with message "${token}"))\n`;
 }
+
+/**
+ * The profile a refusal canary runs under: the one read it refuses, with the sandbox's token, as a target's profile refuses an
+ * ungranted read. macOS reports an allowed read reliably and drops some refusals at the source, before any reader, without a
+ * trace, so the refusal canaries are a record of how many refusals reached the log; they cannot show that none was dropped.
+ */
+function refusalProfile(file, token) {
+  return `(version 1)\n(allow default)\n(deny file-read-data (literal "${file}") (with message "${token}"))\n`;
+}
+
+/** How many canary ticks there are to each refusal canary. */
+const REFUSAL_CANARY_EVERY = 4;
 
 /**
  * Kills `child` with SIGKILL when it is a live process. A child whose spawn failed still holds a handle with process id 0
@@ -315,9 +342,15 @@ class ReportMeter {
    * @param {string} [options.logExecutable]
    * @param {number} [options.burstReports] the most reports inside `BURST_WINDOW_US` the meter allows
    * @param {number} [options.floodReports] the most reports inside `FLOOD_WINDOW_US` the meter allows
+   * @param {string|null} [options.token] the sandbox's token, whose reports the meter also keeps, to hold the sandbox's own stream to
    */
-  constructor({ logExecutable = LOG_EXECUTABLE, burstReports = BURST_REPORTS, floodReports = FLOOD_REPORTS } = {}) {
+  constructor({ logExecutable = LOG_EXECUTABLE, burstReports = BURST_REPORTS, floodReports = FLOOD_REPORTS, token = null } = {}) {
     this.logExecutable = logExecutable;
+    this.token = token;
+    /** The reports of `token` the meter's stream delivered, by their event's identity (`reportEvent`). */
+    this.tokenEvents = new Map();
+    /** Whether the meter's stream lacks a report of `token` the sandbox's own stream delivered, so it counted fewer than the log kept. */
+    this.disagreed = false;
     this.burstReports = burstReports;
     this.floodReports = floodReports;
     this.times = [];
@@ -370,6 +403,8 @@ class ReportMeter {
       }
       const time = line.includes('"eventMessage"') ? eventMicroseconds(line) : null;
       if (time !== null) this.count(time);
+      const event = this.token === null ? null : reportEvent(line, this.token);
+      if (event !== null) this.tokenEvents.set(event.key, event);
     }
   }
 
@@ -396,6 +431,7 @@ class ReportMeter {
       this.floodPeak >= this.floodReports ||
       this.unsettled ||
       this.lost ||
+      this.disagreed ||
       (this.ended !== null && !this.closing)
     );
   }
@@ -420,7 +456,7 @@ class ReportStream {
    * @param {string} [options.logExecutable]
    * @param {ReportMeter} [options.meter] the sandbox's report meter (one is made when none is given)
    */
-  constructor({ directory, token, sandboxExec, fail, logExecutable = LOG_EXECUTABLE, meter = new ReportMeter({ logExecutable }) }) {
+  constructor({ directory, token, sandboxExec, fail, logExecutable = LOG_EXECUTABLE, meter = new ReportMeter({ logExecutable, token }) }) {
     this.directory = fs.realpathSync.native(directory);
     this.token = token;
     this.sandboxExec = sandboxExec;
@@ -443,7 +479,16 @@ class ReportStream {
     this.canaryRunning = new Set();
     this.canaryLast = null;
     this.canaryMissed = 0;
+    this.refusalSent = new Set();
+    this.refusalReported = new Set();
+    this.refusalCount = 0;
     this.lost = false;
+    /** The reports of the token this stream delivered, by their event's identity (`reportEvent`). */
+    this.tokenEvents = new Map();
+    /** The times of the sentinels both this stream and the meter's returned, oldest first (`settleMeter`). */
+    this.settledTimes = [];
+    /** Whether this stream lacks a report of the token the meter's stream delivered between two of those sentinels. */
+    this.missed = false;
     this.ended = null;
     this.child = null;
   }
@@ -529,6 +574,12 @@ class ReportStream {
       this.lost = true;
       return;
     }
+    const event = reportEvent(line, this.token);
+    if (event !== null) this.tokenEvents.set(event.key, event);
+    if (report.path.startsWith(`${this.directory}/refusal-`)) {
+      if (report.denied) this.refusalReported.add(report.path);
+      return;
+    }
     if (report.path.startsWith(`${this.directory}/sentinel-`) && !report.denied) {
       this.sentinels.add(report.path);
       this.sentinelTimes.set(report.path, eventMicroseconds(line));
@@ -540,14 +591,15 @@ class ReportStream {
    * One read of the file `name` (a fresh file beneath the audit directory, which no target can reach) under the sandbox's
    * token, which the stream should report: its path, whether the read process started and whether it ran to a clean end.
    */
-  async tokenRead(name) {
+  async tokenRead(name, { refused = false } = {}) {
     const file = path.join(this.directory, name);
     fs.writeFileSync(file, `${name}\n`, { mode: 0o600 });
     const safe = assertProfileSafePath(file, (value) =>
       this.fail(`the audit path ${JSON.stringify(value)} cannot be carried into a profile`),
     );
     const outcome = await new Promise((resolve) => {
-      const child = spawn(this.sandboxExec, ['-p', sentinelProfile(safe, this.token), '/bin/cat', file], { stdio: 'ignore' });
+      const profile = refused ? refusalProfile(safe, this.token) : sentinelProfile(safe, this.token);
+      const child = spawn(this.sandboxExec, ['-p', profile, '/bin/cat', file], { stdio: 'ignore' });
       let started = false;
       child.once('spawn', () => {
         started = true;
@@ -589,6 +641,18 @@ class ReportStream {
     }
   }
 
+  /** One refusal canary: a read the sandbox's token refuses, which the log should report and on macOS reports only some of the time. */
+  async refusalRead() {
+    const name = `refusal-${this.refusalCount++}`;
+    const file = path.join(this.directory, name);
+    this.refusalSent.add(file);
+    try {
+      return (await this.tokenRead(name, { refused: true })).started;
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  }
+
   /**
    * Notes that the runtime is attempting a canary (or the trial is ending) now. A gap since the last attempt of more than
    * `CANARY_GAP_MS` means the cadence stopped (the runtime was frozen, its timers starved), so the canaries it called for in
@@ -614,6 +678,12 @@ class ReportStream {
           .catch(() => {})
           .finally(() => this.canaryRunning.delete(read));
         this.canaryRunning.add(read);
+        if (this.canaryCount % REFUSAL_CANARY_EVERY === 1 && this.canaryRunning.size < CANARY_IN_FLIGHT) {
+          const refusal = this.refusalRead()
+            .catch(() => {})
+            .finally(() => this.canaryRunning.delete(refusal));
+          this.canaryRunning.add(refusal);
+        }
       } else {
         this.canarySent.add(path.join(this.directory, `canary-${this.canaryCount++}`));
       }
@@ -641,7 +711,16 @@ class ReportStream {
   canaries() {
     let delivered = 0;
     for (const file of this.canarySent) if (this.canaryReported.has(file)) delivered += 1;
-    return { sent: this.canarySent.size + this.canaryMissed, delivered, lostEvents: this.lost, overloaded: this.meter.overloaded() };
+    let refusalsDelivered = 0;
+    for (const file of this.refusalSent) if (this.refusalReported.has(file)) refusalsDelivered += 1;
+    return {
+      sent: this.canarySent.size + this.canaryMissed,
+      delivered,
+      lostEvents: this.lost,
+      overloaded: this.meter.overloaded() || this.missed,
+      refusalsSent: this.refusalSent.size,
+      refusalsDelivered,
+    };
   }
 
   /**
@@ -679,6 +758,7 @@ class ReportStream {
         const time = this.sentinelTimes.get(sentinel);
         if (time !== undefined && time !== null && this.meter.latest >= time) {
           this.meter.unsettled = false;
+          this.settledTimes.push(time);
           return true;
         }
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -687,6 +767,23 @@ class ReportStream {
     }
     this.meter.unsettled = true;
     return false;
+  }
+
+  /**
+   * Holds the sandbox's two streams to each other between the first and the last sentinel both returned: each delivers the
+   * kernel's reports of the token, so a report one of them delivered and the other did not is one the log lost for a reader. A
+   * report this stream lacks is a read of the trial it could not list (`missed`); one the meter lacks leaves its count short, and
+   * the trial `overloaded` (`disagreed`). A report both streams lost is not visible here; the canaries and the meter bound that.
+   */
+  reconcile() {
+    if (this.meter.token !== this.token || this.settledTimes.length < 2) return;
+    const from = this.settledTimes[0];
+    const to = this.settledTimes.at(-1);
+    const within = ({ time }) => time > from && time <= to;
+    // The audit's own reads (sentinels, canaries, refusal canaries) are counted by their own accounting; a trial's read is the rest.
+    const own = ({ path: read }) => read.startsWith(`${this.directory}/`);
+    for (const [key, event] of this.meter.tokenEvents) if (within(event) && !own(event) && !this.tokenEvents.has(key)) this.missed = true;
+    for (const [key, event] of this.tokenEvents) if (within(event) && !this.meter.tokenEvents.has(key)) this.meter.disagreed = true;
   }
 
   close() {
@@ -728,22 +825,29 @@ function probeReportStream({ sandboxExec, logExecutable = LOG_EXECUTABLE, parent
     const err = path.join(directory, 'log.stderr');
     const sentinel = path.join(fs.realpathSync.native(directory), `sentinel-${crypto.randomBytes(6).toString('hex')}`);
     fs.writeFileSync(sentinel, 'sentinel\n');
+    // The stream runs under its guard, which watches this runtime and the shell and ends the stream's group once either is gone (a
+    // runtime killed mid-probe, a shell the timeout below kills); the shell ends the stream itself once the probe is decided, and
+    // waits for it, so a probe that returns leaves no stream running.
     const script = [
-      String.raw`"$LOG" stream --style ndjson --timeout $LOG_TIMEOUT --predicate "process == \"kernel\" AND eventMessage CONTAINS \"$TOKEN\"" >"$OUT" 2>"$ERR" &`,
+      String.raw`"$NODE" "$GUARD" --watch "$RUNTIME,$$" "$LOG" stream --style ndjson --timeout $LOG_TIMEOUT --predicate "process == \"kernel\" AND eventMessage CONTAINS \"$TOKEN\"" >"$OUT" 2>"$ERR" &`,
       'pid=$!',
+      'finish() { kill $pid 2>/dev/null; wait $pid 2>/dev/null; exit $1; }',
       `deadline=$(($(date +%s) + ${PROBE_MS / 1000}))`,
       'while [ "$(date +%s)" -lt "$deadline" ]; do',
       '  "$SANDBOX_EXEC" -p "$PROFILE" /bin/cat "$SENTINEL" >/dev/null 2>&1',
       '  sleep 0.2',
-      '  if grep -qF "$(basename "$SENTINEL")" "$OUT" 2>/dev/null; then kill $pid 2>/dev/null; exit 0; fi',
-      '  if ! kill -0 $pid 2>/dev/null; then exit 3; fi',
+      '  if grep -qF "$(basename "$SENTINEL")" "$OUT" 2>/dev/null; then finish 0; fi',
+      '  if ! kill -0 $pid 2>/dev/null; then wait $pid 2>/dev/null; exit 3; fi',
       'done',
-      'kill $pid 2>/dev/null',
-      'exit 1',
+      'finish 1',
     ].join('\n');
     const run = spawnSync('/bin/sh', ['-c', script], {
       env: {
+        ...guardEnvironment(),
         PATH: '/usr/bin:/bin',
+        NODE: process.execPath,
+        GUARD: STREAM_GUARD,
+        RUNTIME: String(process.pid),
         LOG: logExecutable,
         LOG_TIMEOUT: `${PROBE_LIMIT_MS / 1000}s`,
         TOKEN: token,

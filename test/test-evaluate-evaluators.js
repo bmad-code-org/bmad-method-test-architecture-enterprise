@@ -159,6 +159,10 @@ const { printGroupsWhenAsked, requestedGroup } = require('./lib/case-groups');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation');
+/** The stand-in for `/usr/bin/log` that records, as the kernel's report, each ungranted read a target tells it of. */
+const DIAGNOSTIC_LOG = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'diagnostic-log.cjs');
+/** The variable that names the executable a Seatbelt audit reads its log through (`confinement.js`). */
+const AUDIT_LOG_ENV = 'TEA_EVALUATE_AUDIT_LOG';
 const EVALUATORS = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators');
 const COMMAND_EVALUATOR = path.join(EVALUATORS, 'command', 'evaluator');
 const STUB_AGENT = path.join(EVALUATORS, 'stub-evaluator-agent.js');
@@ -2459,13 +2463,28 @@ async function checkBridgePrivateDirectories() {
           useSealedBriefAgent(folder, { capture, announce });
           // The target reads the agent's announcements; Seatbelt enforces read grants (#410), so their directory is declared.
           editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
-            for (const entry of evaluation.registry)
+            for (const entry of evaluation.registry) {
               entry.systemPaths = [...(entry.systemPaths ?? []), fs.realpathSync(path.dirname(announce))];
+              // The port file of the audit's stand-in log, which a macOS run's target reports its read to.
+              entry.environmentKeys = [...(entry.environmentKeys ?? []), 'VERDICT_DIAGNOSTIC'];
+            }
           });
         },
       });
+      // macOS logs only some of the sandbox's refusals, so a Seatbelt run's audit reads its log through a stand-in to which the
+      // target reports its read of the bridge's configuration, and which writes that refusal's report into the sandbox's stream
+      // before the target goes on: the run's refusal (exit 3) rests on a diagnostic that always arrives, and the target's own answers
+      // below hold the kernel's boundary apart from any diagnostic. Bubblewrap's trace records every read, so a Linux run needs none.
+      const seatbelt = !unconfined && process.platform === 'darwin';
+      const portFile = path.join(path.dirname(announce), 'diagnostic-port');
+      let observer = null;
+      if (seatbelt) {
+        observer = path.join(scratch.make(`${label}-observer`), 'log');
+        fs.writeFileSync(observer, `#!/bin/sh\nexec "${process.execPath}" "${DIAGNOSTIC_LOG}" "${portFile}" "$@"\n`, { mode: 0o755 });
+      }
       const ran = evaluate(['run', '--evaluation', project.folder], {
         ...project.env,
+        ...(observer === null ? {} : { [AUDIT_LOG_ENV]: observer, VERDICT_DIAGNOSTIC: portFile }),
         VERDICT_WHEN: 'trial-clean-1',
         VERDICT_DO: 'probe-private',
         VERDICT_TOUCH: announce,
@@ -2479,6 +2498,14 @@ async function checkBridgePrivateDirectories() {
         `${label}: the run exited ${ran.status}; expected ${unconfined ? 0 : 3}\n${ran.output}`,
       );
       const runDirectory = runDirectoryOf(project.folder);
+      // Every Seatbelt trial records that macOS logged its refusals only in part, so its list of observed reads is a lower bound.
+      if (seatbelt && runDirectory !== null) {
+        const channel = readJson(path.join(runDirectory, 'run.json')).observedMountsChannel ?? [];
+        check(
+          channel.length > 0 && channel.every((entry) => entry.refusalsLoggedInPart === true && entry.completeness === 'lossy'),
+          `${label}: the trials' audit channel does not record refusals logged in part: ${JSON.stringify(channel)}`,
+        );
+      }
       const reports = runDirectory === null ? [] : agentPrivateReport(runDirectory);
       // The call's report is kept in several of the run's files; it is one report.
       check(
@@ -2527,6 +2554,11 @@ async function checkBridgePrivateDirectories() {
   const refused = (what, how, pattern = WITHHELD) =>
     check(pattern.test(how ?? ''), `${what} ended ${JSON.stringify(how)}; expected it withheld (${pattern})`);
   refused("a confined target's read of the bridge's configuration", report['config-read']);
+  // On macOS the run's refusal rests on the stand-in log's record of that read, which the target waited for.
+  check(
+    process.platform !== 'darwin' || report.diagnostic === 'recorded',
+    `a confined target's report of its read to the audit's stand-in log ended ${JSON.stringify(report.diagnostic)}; expected recorded`,
+  );
   refused("a confined target's read of the bridge's token file", report['token-read']);
   refused("a confined target's listing of the agent's working directory", report['evaluator-list']);
   // Bubblewrap's empty file system over the root holds the path to the target's own home (Story 1.59) and nothing else: the

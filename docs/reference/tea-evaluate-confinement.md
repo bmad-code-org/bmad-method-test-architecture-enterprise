@@ -85,12 +85,12 @@ A read of a path that does not exist and a metadata probe (`stat`, `access`) are
 The execution of a binary reads it, so an ungranted binary is listed like any ungranted file (macOS also lists the directory the shell looked in); declare the toolchain a target runs in `systemPaths`.
 
 `run.json`'s `observedMountsChannel` marks each audited trial `complete` or `lossy`, and the summary line of `run` names every `lossy` trial.
-On macOS the kernel's report log can drop a report when sandbox reports reach it faster than it keeps them, from the trial or from anything else on the host, so a `lossy` trial's observed mounts may be missing a read; a trial is `lossy` when the log delivered fewer of the audit's canary reads than were sent, reported lost events, or was handed reports at that rate (`logOverloaded`).
-A macOS `complete` entry describes delivered canaries and measured traffic.
-A single denial diagnostic can drop in transit.
-The kernel continues to refuse ungranted data regardless of dropped diagnostics.
-An empty observed list records that no diagnostic arrived.
-Every Linux trial is `complete`.
+Every macOS trial is `lossy` (`refusalsLoggedInPart`): the sandbox refused every ungranted read, but macOS logs only some refusals, so the list of observed reads is a lower bound.
+An empty list on macOS records that no report arrived, and the read may still have been refused.
+Each macOS trial also records its refusal canaries, refused reads the audit makes under the trial's token, with `refusalCanariesSent` and `refusalCanariesDelivered`, which show how many refusals reached the log.
+The summary also names a macOS trial whose log delivered fewer of the audit's canary reads than were sent, reported lost events, or was handed reports faster than it keeps them (`logOverloaded`).
+A run whose sandbox stream lacks a read of the trial that the report meter's stream delivered, and lists no read, exits 12.
+Every Linux trial is `complete`: Bubblewrap with strace records every read, refused ones included.
 A run whose observer fails exits 12 and leaves the trial with no record.
 
 The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.

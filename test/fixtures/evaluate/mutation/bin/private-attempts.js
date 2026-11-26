@@ -61,6 +61,18 @@ function readAttempt(file) {
   }
 }
 
+/**
+ * Reports an ungranted read this process attempted to the audit's stand-in log (`fixtures/evaluate/diagnostic-log.cjs`), whose port
+ * the file `portFile` holds, and waits for its answer, so the stand-in's report is in the sandbox's stream before this process goes
+ * on: `recorded`, or what went wrong. A case whose host logs only some refusals (macOS) holds the run's refusal to this report.
+ */
+function diagnosticAttempt(portFile, attempted) {
+  const script =
+    "const fs=require('fs');const port=Number(fs.readFileSync(process.argv[1],'utf8'));const c=require('net').connect(port,'127.0.0.1',()=>c.write(process.argv[2]+'\\n'));let t='';c.setEncoding('utf8');c.on('data',(d)=>{t+=d});c.on('end',()=>console.log(t.trim()==='ok'?'recorded':'answered '+JSON.stringify(t)));c.on('error',(e)=>console.log('refused '+(e.code||e.message)))";
+  const result = spawnSync(process.execPath, ['-e', script, portFile, attempted], { encoding: 'utf8', timeout: 20_000 });
+  return result.stdout.trim() || `refused ${result.error?.code ?? 'no answer'}`;
+}
+
 /** The attempts on one announcement's paths, as `private-<name>: <how>` lines. */
 function privateAttempts(announced) {
   return [
@@ -77,4 +89,4 @@ function privateAttempts(announced) {
   ];
 }
 
-module.exports = { privateAnnouncements, privateAttempts };
+module.exports = { diagnosticAttempt, privateAnnouncements, privateAttempts };

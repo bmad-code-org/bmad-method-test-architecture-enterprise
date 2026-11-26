@@ -716,18 +716,31 @@ async function readObservedMounts(observedMounts, { stop, label }) {
  * through the sandbox's own token), the ones the kernel's log delivered and whether the log itself reported lost events.
  * The trial is `lossy` when the log delivered fewer canaries than were sent, reported a loss, or was handed reports (by any sandbox
  * on the host) faster than it was measured to keep them, and `complete` otherwise.
- * Linux's trace loses nothing and sends none, so its trials are `complete` with none sent.
+ * macOS logs only some of the sandbox's refusals (`refusalsLoggedInPart`), so every Seatbelt trial is `lossy`: the sandbox refused
+ * the reads, and its list of observed reads is a lower bound. Its refusal canaries record how many of their refusals the log
+ * delivered. Linux's trace records every read, refused ones included, so its trials are `complete` with no canary sent.
  */
 function channelEntry(arm, trial) {
-  const { canariesSent, canariesDelivered, logReportedLoss, logOverloaded = false } = trial.auditChannel;
+  const {
+    canariesSent,
+    canariesDelivered,
+    logReportedLoss,
+    logOverloaded = false,
+    refusalsLoggedInPart = false,
+    refusalCanariesSent = 0,
+    refusalCanariesDelivered = 0,
+  } = trial.auditChannel;
   return {
     conditionArm: arm.conditionArm,
     trialIndex: trial.trialIndex,
-    completeness: canariesDelivered < canariesSent || logReportedLoss || logOverloaded ? 'lossy' : 'complete',
+    completeness: canariesDelivered < canariesSent || logReportedLoss || logOverloaded || refusalsLoggedInPart ? 'lossy' : 'complete',
     canariesSent,
     canariesDelivered,
     logReportedLoss,
     logOverloaded,
+    refusalsLoggedInPart,
+    refusalCanariesSent,
+    refusalCanariesDelivered,
   };
 }
 
@@ -786,7 +799,21 @@ function leftSocketsNote(entries) {
 
 /** The sentence the run's summary adds for the lossy trials, naming each with its counts, `''` when no trial is lossy. */
 function lostCanaryNote(entries) {
-  const lossy = entries.filter((entry) => entry.completeness === 'lossy');
+  const lossy = entries.filter((entry) => entry.canariesDelivered < entry.canariesSent || entry.logReportedLoss || entry.logOverloaded);
+  return `${lostReportsNote(lossy)}${partialRefusalsNote(entries.filter((entry) => entry.refusalsLoggedInPart === true))}`;
+}
+
+/**
+ * The sentence for the trials whose refusals macOS logged only in part, `''` when there are none: the sandbox refused the reads,
+ * and the list of observed reads is a lower bound. Linux's Bubblewrap with strace records every read.
+ */
+function partialRefusalsNote(entries) {
+  if (entries.length === 0) return '';
+  return `; the sandbox refused every ungranted read, but macOS logs only some refusals, so the observed reads listed for ${entries.length === 1 ? 'this trial' : `these ${entries.length} trials`} are a lower bound (Linux's Bubblewrap with strace records every read)`;
+}
+
+/** The sentence for the trials whose log lost reports the audit measured, naming each with its counts, `''` when there are none. */
+function lostReportsNote(lossy) {
   if (lossy.length === 0) return '';
   const named = lossy
     .map((entry) => {
@@ -2154,7 +2181,7 @@ async function completeRun(
   const sealedMessage =
     trialCount === null
       ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}${beforeStateNote(run.beforeState)}`
-      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}${beforeStateNote(run.beforeState)}`;
+      : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}${lostCanaryNote(observedMountsChannel)}; score them with tea-evaluate score --run ${invocationId}${leftSocketsNote(hostSocketTruncation)}${egressRefusalNote(egressRefusals)}${beforeStateNote(run.beforeState)}`;
   const result = outcome({
     stage: 'trial',
     exitCode: mountsRefusal === '' ? 0 : 3,

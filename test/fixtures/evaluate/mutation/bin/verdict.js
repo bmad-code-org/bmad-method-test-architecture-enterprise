@@ -184,7 +184,10 @@
  *                           process running (`verdict-private-leftover.js`)
  *                           that makes the same attempts on the directories
  *                           made after it started and reports them to the port
- *                           VERDICT_REPORT names
+ *                           VERDICT_REPORT names; with VERDICT_DIAGNOSTIC
+ *                           (a port file of the audit's stand-in log), it
+ *                           reports its read of the configuration there and
+ *                           prints `private-diagnostic: <how>`
  *   write-temp              answer as usual, then write a file in the temp
  *                           directory TMPDIR names, printing `temp-dir: <path>`
  *                           and `temp-write: <how>` after the verdict
@@ -249,7 +252,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-const { privateAnnouncements, privateAttempts } = require('./private-attempts');
+const { diagnosticAttempt, privateAnnouncements, privateAttempts } = require('./private-attempts');
 
 const POLICY = 'rules/policy.txt';
 
@@ -558,6 +561,8 @@ if (act === 'probe-private') {
   const lines = [`private-announced: ${announced.length}`];
   if (latest !== undefined) {
     lines.push(...privateAttempts(latest));
+    // A case on a host that logs only some refusals names the audit's stand-in log, which records the attempt as a diagnostic.
+    if (process.env.VERDICT_DIAGNOSTIC) lines.push(`private-diagnostic: ${diagnosticAttempt(process.env.VERDICT_DIAGNOSTIC, latest.config)}`);
     const temp = process.env.TMPDIR ?? '';
     lines.push(`private-temp-write: ${attempt(() => fs.writeFileSync(path.join(temp, 'verdict-private.txt'), 'x\n'))}`);
     const child = spawn(process.execPath, [path.join(__dirname, 'verdict-private-leftover.js'), process.env.VERDICT_TOUCH, String(announced.length), process.env.VERDICT_REPORT ?? ''], {
