@@ -272,9 +272,10 @@ tea-evaluate run: clean: trial 1 of 3
 tea-evaluate run: clean: trial 3 of 3
 tea-evaluate run: mutated:M-001: trial 1 of 3
 tea-evaluate run: mutated:M-001: trial 3 of 3
-tea-evaluate run: 3 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run …
+tea-evaluate run: 3 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001…; score them with tea-evaluate score --run …
 ```
 
+On macOS the last line also says the observed reads are a lower bound, because macOS logs only some of the sandbox's refusals.
 The trials are sealed under `runs/<invocationId>/` in the evaluation folder.
 Nothing is scored yet: `run` records what the skill did.
 See [`run`](/docs/reference/tea-evaluate-cli.md#run).
