@@ -119,3 +119,7 @@ skills/*/.analysis/
 # under test/fixtures/evaluate*/, at any depth.
 test/evaluations/*/runs/
 test/fixtures/evaluate*/**/runs/
+
+# tools/refresh-evaluate-baselines.js holds pending and retired baselines here
+# during a refresh, as its lock, and removes the folder when the refresh ends.
+/.baseline-refresh/

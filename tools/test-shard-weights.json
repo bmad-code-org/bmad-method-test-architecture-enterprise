@@ -161,6 +161,7 @@
   "test:probe-corpus": 7.0,
   "test:probe-sources": 3.1,
   "test:probe-targets": 68.2,
+  "test:refresh-evaluate-baselines": 0.1,
   "test:release-metadata": 1.0,
   "test:release-notes": 0.4,
   "test:schema-versions": 0.9,

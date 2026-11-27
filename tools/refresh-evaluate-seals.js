@@ -34,6 +34,15 @@ async function main() {
   assert.equal(originals.length, 15, 'the historical seal inventory changed; review the owning list');
   const pending = path.join(ROOT, `${DESTINATION}.pending-${process.pid}`);
   fs.mkdirSync(pending);
+  try {
+    await generate({ engine, sourceCommit, originals, pending });
+  } finally {
+    // After a swap the pending folder is the destination; after a failure it is removed, so no run leaves it behind.
+    fs.rmSync(pending, { recursive: true, force: true });
+  }
+}
+
+async function generate({ engine, sourceCommit, originals, pending }) {
   const files = {};
   const generated = new Map();
   for (const original of originals) {
