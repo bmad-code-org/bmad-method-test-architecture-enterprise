@@ -41,73 +41,103 @@ const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const write = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 });
 
-/** A failed rollback: the baselines it could not restore are still in the holding folder, which is kept for them (`holdsOriginals`). */
+/** A failed rollback: the baselines it could not restore are still in the holding folder, which is kept for them. */
 class HoldingKept extends Error {}
 
 /** The receipt a refresh stages in its holding folder; it is moved onto the live receipt only once every baseline is published. */
 const STAGED_RECEIPT = 'receipt.json';
 
-/** `file`'s own entry, never what a link names, or `null` when there is none. */
+/** The marker a refresh writes in its holding folder once its receipt is in place: the positive evidence that it published. */
+const PUBLISHED = 'published';
+
+/**
+ * The holding folder's slot for `folder`: its path from the repository root, encoded as one name, so a retired baseline says
+ * which evaluation it came from by its name alone, whatever the inventory holds by the time anyone reads it.
+ */
+function slotOf(holding, folder) {
+  const relative = path.relative(path.dirname(holding), folder);
+  assert.ok(relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative), `${folder} is outside ${path.dirname(holding)}`);
+  return path.join(holding, encodeURIComponent(relative.split(path.sep).join('/')));
+}
+
+/** `file`'s own entry, never what a link names; `null` only when there is none, and any other failure is thrown. */
 function entryOf(file) {
   try {
     return fs.lstatSync(file);
-  } catch {
-    return null;
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
 }
 
 /**
- * The retired baselines a holding folder still holds, by index, read from entries alone (no link followed, no file read), so
- * a folder left in an untrusted checkout cannot steer what the refresh opens. `null` when the folder is not a plain directory
- * of this account's, or holds anything a refresh does not make there.
+ * What a holding folder holds, read from entries alone (no link followed, no file read), so a folder left in an untrusted
+ * checkout cannot steer what the refresh opens: whether its refresh marked itself published, whether the staged receipt is
+ * still there, and each retired baseline with the evaluation its slot names, when that is one of `folders`. `null` when the
+ * folder is not a plain directory of this account's, or holds anything a refresh does not make there.
  */
-function retiredIn(holding) {
+function holdingState(holding, folders) {
   const folder = entryOf(holding);
   if (folder === null || !folder.isDirectory() || (process.getuid && folder.uid !== process.getuid())) return null;
-  const retired = [];
+  const root = path.dirname(holding);
+  const state = { published: false, staged: false, retired: [] };
   for (const name of fs.readdirSync(holding)) {
     const entry = entryOf(path.join(holding, name));
-    if (name === STAGED_RECEIPT && entry?.isFile()) continue;
-    if (!/^\d+$/.test(name) || !entry?.isDirectory()) return null;
+    if ((name === PUBLISHED || name === STAGED_RECEIPT) && entry?.isFile()) {
+      state[name === PUBLISHED ? 'published' : 'staged'] = true;
+      continue;
+    }
+    if (!entry?.isDirectory()) return null;
+    let evaluation;
+    try {
+      evaluation = path.join(root, ...decodeURIComponent(name).split('/'));
+    } catch {
+      return null;
+    }
+    if (!folders.includes(evaluation) || slotOf(holding, evaluation) !== path.join(holding, name)) return null;
     for (const inner of fs.readdirSync(path.join(holding, name))) {
       if (!['pending', 'retired'].includes(inner) || !entryOf(path.join(holding, name, inner))?.isDirectory()) return null;
     }
-    if (entryOf(path.join(holding, name, 'retired')) !== null) retired.push(Number(name));
+    if (entryOf(path.join(holding, name, 'retired')) !== null) {
+      state.retired.push({ at: path.join(holding, name, 'retired'), evaluation });
+    }
   }
-  return retired.sort((a, b) => a - b);
+  return state;
 }
 
-/** Whether the holding folder may still hold the only copy of a baseline: a retired one while the receipt was never published. */
-function holdsOriginals(holding) {
+/**
+ * Whether the holding folder can go: when its refresh marked itself published, or when it holds no retired baseline. Anything
+ * else, an inspection that fails included, may be the only copy of a baseline, so the folder stays.
+ */
+function removable(holding, folders) {
   try {
-    const retired = retiredIn(holding);
-    return retired === null || (retired.length > 0 && entryOf(path.join(holding, STAGED_RECEIPT)) !== null);
+    const state = holdingState(holding, folders);
+    return state !== null && (state.published || state.retired.length === 0);
   } catch {
-    return true;
+    return false;
   }
 }
 
 /**
- * What a holding folder left by an earlier refresh still holds, and what to do with it. `<index>/retired` is the baseline the
- * `index`th of `folders` (the refresh's fixed inventory, in its order) held before the refresh. While the staged receipt is
- * there the refresh never finished publishing, so the live receipt still describes the retired baselines and they go back;
- * once it is gone the refresh published everything and they are the replaced ones. It never throws: what it cannot inspect, it
- * leaves to a person.
+ * What a holding folder left by an earlier refresh still holds, and what to do with it. `folders` is the refresh's inventory,
+ * the only destinations a retired baseline may name. While the staged receipt is there and no published marker, the refresh
+ * never finished publishing, so the live receipt still describes the retired baselines and they go back; with the marker they
+ * are the replaced ones. It never throws: what it cannot inspect or tell, it leaves to a person.
  */
 function recoveryNote(holding, folders) {
   try {
-    const retired = retiredIn(holding);
-    if (retired === null) return `it holds entries no refresh makes, so inspect ${holding} by hand before you remove it`;
-    if (retired.length === 0) return `it holds no retired baseline; if no refresh is running, remove ${holding}`;
-    if (entryOf(path.join(holding, STAGED_RECEIPT)) === null) {
-      return `its refresh published every baseline and the receipt, so the ${retired.length} retired baseline(s) in it are the replaced ones; if no refresh is running, remove ${holding}`;
+    const state = holdingState(holding, folders);
+    if (state === null) return `it holds entries no refresh makes, so inspect ${holding} by hand before you remove it`;
+    if (state.published) {
+      return `its refresh published every baseline and the receipt, so the ${state.retired.length} retired baseline(s) in it are the replaced ones; if no refresh is running, remove ${holding}`;
     }
-    const named = retired.map((index) => {
-      const at = path.join(holding, String(index), 'retired');
-      return index < folders.length
-        ? `${at} is the baseline ${path.join(folders[index], 'baseline')} held before the refresh`
-        : `${at} belongs to no evaluation this refresh lists`;
-    });
+    if (state.retired.length === 0) return `it holds no retired baseline; if no refresh is running, remove ${holding}`;
+    const named = state.retired.map(
+      ({ at, evaluation }) => `${at} is the baseline ${path.join(evaluation, 'baseline')} held before the refresh`,
+    );
+    if (!state.staged) {
+      return `it cannot tell whether its refresh published, so inspect ${holding} by hand: ${named.join('; ')}`;
+    }
     return `its refresh never finished publishing, so the live receipt still describes the baselines it retired: ${named.join('; ')}. If no refresh is running, move each back in place of the one there, keep the live receipt, then remove ${holding}`;
   } catch (error) {
     return `it could not be inspected (${error.message}), so inspect ${holding} by hand before you remove it`;
@@ -117,12 +147,13 @@ function recoveryNote(holding, folders) {
 /**
  * Runs `work` with a scratch folder for the staged evaluations and the holding folder `<root>/.baseline-refresh` for the
  * pending and retired baselines and the new receipt, and removes both whether `work` succeeds, fails or is interrupted by
- * SIGINT or SIGTERM, except a holding folder that may still hold the only copy of a baseline (`holdsOriginals`). The holding
+ * SIGINT or SIGTERM, except a holding folder that may still hold the only copy of a baseline (`removable`, `HoldingKept`). The holding
  * folder is made before anything is read and refused when it exists, so it is the lock that keeps two refreshes of one
  * checkout apart; `folders`, the refresh's inventory, names what a refused one holds. The swap is synchronous, so a signal is
  * handled before it starts or after it ends, never midway.
  */
 async function withWorkspace(root, work, { folders = [] } = {}) {
+  let kept = false;
   const holding = path.join(root, '.baseline-refresh');
   try {
     fs.mkdirSync(holding, { mode: 0o700 });
@@ -133,7 +164,7 @@ async function withWorkspace(root, work, { folders = [] } = {}) {
   let scratch = null;
   // Each folder is removed on its own, and a removal that fails is reported beside the work's own outcome, never in its place.
   const clean = () => {
-    for (const folder of [scratch, holdsOriginals(holding) ? null : holding]) {
+    for (const folder of [scratch, kept || !removable(holding, folders) ? null : holding]) {
       if (folder === null) continue;
       try {
         fs.rmSync(folder, { recursive: true, force: true });
@@ -157,6 +188,9 @@ async function withWorkspace(root, work, { folders = [] } = {}) {
     fs.chmodSync(holding, 0o700);
     scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-baseline-refresh-'));
     return await work({ scratch, holding });
+  } catch (error) {
+    kept = error instanceof HoldingKept;
+    throw error;
   } finally {
     process.removeListener('SIGINT', interrupted);
     process.removeListener('SIGTERM', interrupted);
@@ -176,9 +210,9 @@ function publishBaselines({ candidates, holding, receiptFile, receipt, verify })
   fs.writeFileSync(stagedReceipt, receiptBytes, { flag: 'wx', mode: 0o600 });
   const retiredOnes = [];
   try {
-    for (const [index, candidate] of candidates.entries()) {
+    for (const candidate of candidates) {
       const target = path.join(candidate.folder, 'baseline');
-      const retired = path.join(holding, String(index), 'retired');
+      const retired = path.join(slotOf(holding, candidate.folder), 'retired');
       fs.mkdirSync(path.dirname(retired), { recursive: true });
       fs.renameSync(target, retired);
       retiredOnes.push({ target, retired, pending: candidate.pending });
@@ -187,6 +221,7 @@ function publishBaselines({ candidates, holding, receiptFile, receipt, verify })
     }
     assert.equal(fs.readFileSync(stagedReceipt, 'utf8'), receiptBytes, `${stagedReceipt} changed after the refresh staged it`);
     fs.renameSync(stagedReceipt, receiptFile);
+    fs.writeFileSync(path.join(holding, PUBLISHED), '', { flag: 'wx', mode: 0o600 });
   } catch (error) {
     const stuck = [];
     for (const { target, retired, pending } of retiredOnes.toReversed()) {
@@ -318,14 +353,14 @@ async function refresh({ sourceCommit, engine, version, scratch, holding }) {
   }
   // Validate the whole batch before publishing any candidate. The owning accept
   // command alone builds and seals each replacement baseline.
-  for (const [index, candidate] of candidates.entries()) {
+  for (const candidate of candidates) {
     const { stagedFolder, manifest, receipt } = candidate;
     const accepted = await runCompareCommand(stagedFolder, { run: manifest.acceptedRun, accept: true });
     assert.equal(accepted.exitCode, 0, `${receipt.evaluation}: ${accepted.message}`);
     const acceptedBaseline = path.join(stagedFolder, 'baseline');
     assert.deepEqual(baselineDigestFindings({ folder: stagedFolder, digestBytes: engine.digestBytes }), []);
     receipt.acceptedManifestDigest = engine.digestBytes(fs.readFileSync(path.join(acceptedBaseline, 'baseline.json')));
-    const pending = path.join(holding, String(index), 'pending');
+    const pending = path.join(slotOf(holding, candidate.folder), 'pending');
     fs.mkdirSync(path.dirname(pending), { recursive: true });
     fs.cpSync(acceptedBaseline, pending, { recursive: true, errorOnExist: true, force: false });
     assert.deepEqual(fs.readFileSync(path.join(pending, 'baseline.json')), fs.readFileSync(path.join(acceptedBaseline, 'baseline.json')));
@@ -357,4 +392,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { HoldingKept, publishBaselines, withWorkspace };
+module.exports = { HoldingKept, publishBaselines, slotOf, withWorkspace };

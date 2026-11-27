@@ -18,7 +18,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const TOOL = path.join(__dirname, '..', 'tools', 'refresh-evaluate-baselines.js');
 const ROOT = path.join(__dirname, '..');
-const { HoldingKept, publishBaselines, withWorkspace } = require('../tools/refresh-evaluate-baselines.js');
+const { HoldingKept, publishBaselines, slotOf, withWorkspace } = require('../tools/refresh-evaluate-baselines.js');
 
 const failures = [];
 
@@ -58,8 +58,8 @@ async function inRepository(options, fn) {
 
 /** Stages a pending baseline that reads `new <name>` for each folder, as the refresh does once every candidate has passed. */
 function stage(holding, folders, { skip = [] } = {}) {
-  return folders.map((folder, index) => {
-    const pending = path.join(holding, String(index), 'pending');
+  return folders.map((folder) => {
+    const pending = path.join(slotOf(holding, folder), 'pending');
     if (!skip.includes(path.basename(folder))) {
       fs.mkdirSync(pending, { recursive: true });
       fs.writeFileSync(path.join(pending, 'baseline.json'), `new ${path.basename(folder)}\n`);
@@ -81,16 +81,20 @@ function assertNothingLeft({ root, folders }, scratch) {
 /** Publishes `repo`'s two staged baselines inside a workspace, returning the scratch and holding folders it used. */
 function publish(repo, { verify = () => {}, skip = [] } = {}) {
   const used = {};
-  const finished = withWorkspace(repo.root, ({ scratch, holding }) => {
-    Object.assign(used, { scratch, holding });
-    publishBaselines({
-      candidates: stage(holding, repo.folders, { skip }),
-      holding,
-      receiptFile: repo.receiptFile,
-      receipt: { refreshed: true },
-      verify: (folder) => verify(folder, holding),
-    });
-  });
+  const finished = withWorkspace(
+    repo.root,
+    ({ scratch, holding }) => {
+      Object.assign(used, { scratch, holding });
+      publishBaselines({
+        candidates: stage(holding, repo.folders, { skip }),
+        holding,
+        receiptFile: repo.receiptFile,
+        receipt: { refreshed: true },
+        verify: (folder) => verify(folder, holding),
+      });
+    },
+    { folders: repo.folders },
+  );
   return { used, finished };
 }
 
@@ -110,12 +114,16 @@ async function main() {
     inRepository({}, async (repo) => {
       let scratch = null;
       await assert.rejects(
-        withWorkspace(repo.root, ({ scratch: made, holding }) => {
-          scratch = made;
-          fs.mkdirSync(path.join(made, '0', 'evaluation'), { recursive: true });
-          stage(holding, repo.folders);
-          throw new Error('candidate beta: probe scores moved');
-        }),
+        withWorkspace(
+          repo.root,
+          ({ scratch: made, holding }) => {
+            scratch = made;
+            fs.mkdirSync(path.join(made, '0', 'evaluation'), { recursive: true });
+            stage(holding, repo.folders);
+            throw new Error('candidate beta: probe scores moved');
+          },
+          { folders: repo.folders },
+        ),
         /probe scores moved/,
       );
       assert.deepEqual(repo.folders.map(baselineOf), ['old alpha\n', 'old beta\n']);
@@ -159,7 +167,9 @@ async function main() {
         verify: (folder, holding) => {
           if (path.basename(folder) !== 'beta') return;
           // beta's retired baseline can no longer go back, so beta's restore, the first of the rollback, fails.
-          fs.renameSync(path.join(holding, '1', 'retired'), path.join(holding, '1', 'moved'));
+          fs.renameSync(path.join(slotOf(holding, folder), 'retired'), path.join(slotOf(holding, folder), 'moved'));
+          // Without its staged receipt the folder shows no sign of an unfinished refresh; the failed rollback alone keeps it.
+          fs.rmSync(path.join(holding, 'receipt.json'));
           throw new Error('beta: digest findings');
         },
       });
@@ -168,7 +178,11 @@ async function main() {
         (error) => error instanceof HoldingKept && error.message.includes(used.holding) && /beta: digest findings/.test(error.message),
       );
       assert.equal(baselineOf(repo.folders[0]), 'old alpha\n', 'alpha was left unrestored after beta failed');
-      assert.equal(fs.existsSync(path.join(used.holding, '1', 'moved', 'baseline.json')), true, 'the holding folder was removed');
+      assert.equal(
+        fs.existsSync(path.join(slotOf(used.holding, repo.folders[1]), 'moved', 'baseline.json')),
+        true,
+        'the holding folder was removed',
+      );
       assert.equal(fs.existsSync(used.scratch), false, `the scratch folder ${used.scratch} is left behind`);
     }),
   );
@@ -177,12 +191,13 @@ async function main() {
     await check(`a refresh ended by ${signal} leaves nothing behind and ends as the signal would`, () =>
       inRepository({}, async (repo) => {
         const script = `
-          const { withWorkspace } = require(${JSON.stringify(TOOL)});
+          const { slotOf, withWorkspace } = require(${JSON.stringify(TOOL)});
+          const folders = ${JSON.stringify(repo.folders)};
           withWorkspace(${JSON.stringify(repo.root)}, ({ scratch, holding }) => {
-            require('node:fs').mkdirSync(require('node:path').join(holding, '0', 'pending'), { recursive: true });
+            require('node:fs').mkdirSync(require('node:path').join(slotOf(holding, folders[0]), 'pending'), { recursive: true });
             process.stdout.write(JSON.stringify({ scratch, holding }) + '\\n');
             return new Promise(() => setInterval(() => {}, 1000));
-          });`;
+          }, { folders });`;
         const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
         const used = await new Promise((resolve, reject) => {
           child.stdout.once('data', (chunk) => resolve(JSON.parse(chunk.toString())));
@@ -251,8 +266,8 @@ async function main() {
         verify: (folder, holding) => {
           if (path.basename(folder) !== 'beta') return;
           // A non-empty folder where beta's new baseline would go back makes beta's restore fail with its original still retired.
-          fs.mkdirSync(path.join(holding, '1', 'pending'));
-          fs.writeFileSync(path.join(holding, '1', 'pending', 'blocker'), 'x\n');
+          fs.mkdirSync(path.join(slotOf(holding, folder), 'pending'));
+          fs.writeFileSync(path.join(slotOf(holding, folder), 'pending', 'blocker'), 'x\n');
           throw new Error('beta: digest findings');
         },
       });
@@ -261,15 +276,40 @@ async function main() {
         () => null,
         (error) => error,
       );
-      const retired = path.join(used.holding, '1', 'retired');
+      const retired = path.join(slotOf(used.holding, repo.folders[1]), 'retired');
       assert.ok(
         next?.message.includes('never finished publishing') &&
           next.message.includes(`${retired} is the baseline ${path.join(repo.folders[1], 'baseline')} held before the refresh`),
         `the refusal over a kept holding folder reads ${next?.message}`,
       );
       assert.equal(fs.existsSync(retired), true, 'the retired baseline is gone');
-      // Once published (no staged receipt), the retired baselines are the replaced ones.
+      // An inventory that gained an evaluation sorting before the others still names the evaluation the baseline came from.
+      const grown = await withWorkspace(repo.root, () => {}, {
+        folders: [path.join(repo.root, 'evals', 'aardvark'), ...repo.folders],
+      }).then(
+        () => null,
+        (error) => error,
+      );
+      assert.ok(
+        grown?.message.includes(`${retired} is the baseline ${path.join(repo.folders[1], 'baseline')} held before the refresh`),
+        `the refusal under a grown inventory reads ${grown?.message}`,
+      );
+      // An inventory that no longer lists the evaluation leaves the folder to a person.
+      const shrunk = await withWorkspace(repo.root, () => {}, { folders: [repo.folders[0]] }).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(shrunk?.message ?? '', /it holds entries no refresh makes, so inspect .* by hand/);
+      // Without the staged receipt and without the published marker, nobody can tell; the folder stays and a person decides.
       fs.rmSync(path.join(used.holding, 'receipt.json'));
+      const unknown = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(unknown?.message ?? '', /it cannot tell whether its refresh published, so inspect .* by hand/);
+      assert.equal(fs.existsSync(retired), true, 'the retired baseline is gone');
+      // With the published marker, the retired baselines are the replaced ones.
+      fs.writeFileSync(path.join(used.holding, 'published'), '');
       const published = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
         () => null,
         (error) => error,
