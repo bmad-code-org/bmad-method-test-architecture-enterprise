@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Evaluate tutorial's `run` step matches what macOS prints. Its last line elides the note macOS adds, that the observed reads are a lower bound, and the page says why the note appears.
+
 ## [4.6.1] - 2026-11-26
 
 ### Fixed
