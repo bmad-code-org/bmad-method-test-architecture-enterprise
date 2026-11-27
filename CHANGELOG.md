@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The Evaluate tutorial's `run` step matches what macOS prints. Its last line elides the note macOS adds, that the observed reads are a lower bound, and the page says why the note appears.
+- `npm run test:evaluate-preflight` passes on macOS again. Its dropped-denial case dropped the denials from the sandbox's own stream only, and since 4.6.1 the audit refuses exactly that (exit 12), so 28 of its checks failed on a Mac. The case now drops the denials at their source, for every reader, where the failed engine verdict and the kernel's refusals must still hold, and it checks that a preflight whose sandbox stream lacks a denial the report meter delivered exits 12.
+- The macOS cases that expect the audit to refuse a sandbox stream missing a denial the report meter delivered no longer fail when macOS logs none of the trial's own denials, which it may: `drop-log.cjs` now also hands the meter one known denial of the trial that the sandbox stream never gets, so the preflight case and the three `test-evaluate-run.js` cases each see the refusal every time. The lossy-log preflight case now loses only the audit's canaries (`lossy-log.cjs canaries`), so every leg confirms itself and misses no read, and the preflight's all-legs audit-loss refusal (exit 12) is the one that fires every time; dropping every second line left which refusal came first to the order the host logged its lines.
 
 ## [4.6.1] - 2026-11-26
 
