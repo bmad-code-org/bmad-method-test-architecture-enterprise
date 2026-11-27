@@ -2045,28 +2045,28 @@ function checkLegMountRules() {
 }
 
 /**
- * A log that loses every second report (`fixtures/evaluate/lossy-log.cjs`, macOS): over the bare-name setup `preflight` would refuse,
- * every leg's audit says it lost reports, so no leg can say what it opened. The audit-loss outcome applies (exit 12, the legs yield no
- * audit) in place of a pass on the shrunken set the dropped lines leave, which is the defect the refusal exists to catch. Which
- * lines are second ones depends on the order the host logs them: when a dropped one is a read of a leg that the report meter
- * delivered and the leg listed no read, that leg refuses first (exit 12, the missed report), which is the same refusal of the
- * shrunken set.
+ * A log that loses every canary (`fixtures/evaluate/lossy-log.cjs canaries`, macOS): over the bare-name setup `preflight` would
+ * refuse, every leg's audit says it lost reports, so no leg can say what it opened. The stub keeps every trial report and sentinel,
+ * so each leg confirms itself and misses no read, and only the all-legs check can refuse: the audit-loss outcome applies (exit 12,
+ * the legs yield no audit) in place of a pass on the shrunken set, which is the defect the refusal exists to catch.
  */
 function checkLossyLegAudit() {
   if (process.platform !== 'darwin') return;
   const pids = tempDir('lossy-log-pids');
   const executable = path.join(tempDir('lossy-log'), 'log');
-  fs.writeFileSync(executable, `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'lossy-log.cjs')}" 2 "${pids}" "$@"\n`, {
-    mode: 0o755,
-  });
+  fs.writeFileSync(
+    executable,
+    `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'lossy-log.cjs')}" canaries "${pids}" "$@"\n`,
+    {
+      mode: 0o755,
+    },
+  );
   try {
     const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
     const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: executable } });
     check(
-      result.status === 12 &&
-        (result.output.includes('the legs yield no audit: the audit lost reports while every leg ran') ||
-          result.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered")),
-      `preflight over a log that loses every second report exited ${result.status}; expected 12 naming the audit's loss or a missed report\n${result.output}`,
+      result.status === 12 && result.output.includes('the legs yield no audit: the audit lost reports while every leg ran'),
+      `preflight over a log that loses every canary exited ${result.status}; expected 12 naming the audit's loss\n${result.output}`,
     );
     check(
       !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),

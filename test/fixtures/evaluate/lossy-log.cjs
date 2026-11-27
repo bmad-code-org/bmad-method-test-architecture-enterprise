@@ -4,9 +4,10 @@
  * A stand-in for `/usr/bin/log` that loses reports, for Story 1.81's cases: the kernel's log loses reports without a trace
  * when the host is saturated, and no case can saturate a shared host on demand. It runs the real `log stream` the runtime asked
  * for and passes on every line but each Nth, so the file the runtime reads is short of the reports the kernel made, as it is
- * on a saturated host.
+ * on a saturated host. With `canaries` for `<N>`, it passes on every line but the audit's own allowed canary reads: every trial
+ * report and every sentinel arrives, so the audit confirms itself and misses no read of the trial, and every canary is lost.
  *
- *   lossy-log.cjs <N> <pid directory> <the arguments the runtime gives log stream>
+ *   lossy-log.cjs <N | canaries> <pid directory> <the arguments the runtime gives log stream>
  *
  * The runtime ends the stream by killing its guard's process group, which holds this stub and the real `log` it starts. A case
  * killed outright before then would leave the real `log` running to its timeout, so the stub shortens the timeout to a minute and
@@ -18,6 +19,9 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const [every, pidDirectory, ...given] = process.argv.slice(2);
+if (every !== 'canaries' && !(Number(every) >= 2)) throw new Error(`lossy-log.cjs: <N> is canaries or a number of at least 2, not ${JSON.stringify(every)}`);
+/** An allowed read of an audit canary, as the kernel reports it under the sandbox's token. */
+const CANARY = /\) allow file-read-data \S*\/canary-\d+\\n/;
 // The argument after `--timeout`, whatever the runtime sets it to, becomes a minute.
 const args = given.map((argument, index) => (given[index - 1] === '--timeout' ? '60s' : argument));
 const child = spawn('/usr/bin/log', args, { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -39,7 +43,8 @@ child.stdout.on('data', (chunk) => {
   carry = lines.pop();
   for (const line of lines) {
     seen += 1;
-    if (meter || seen % Number(every) !== 0) process.stdout.write(`${line}\n`);
+    const lose = every === 'canaries' ? CANARY.test(line) : seen % Number(every) === 0;
+    if (meter || !lose) process.stdout.write(`${line}\n`);
   }
 });
 child.once('exit', (code, signal) => process.exit(code ?? (signal === null ? 1 : 128)));
