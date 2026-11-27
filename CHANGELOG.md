@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The Evaluate tutorial's `run` step matches what macOS prints. Its last line elides the note macOS adds, that the observed reads are a lower bound, and the page says why the note appears.
+- `npm run test:evaluate-preflight` passes on macOS again. Its dropped-denial case dropped the denials from the sandbox's own stream only, and since 4.6.1 the audit refuses exactly that (exit 12), so 28 of its checks failed on a Mac. The case now drops the denials at their source, for every reader, where the failed engine verdict and the kernel's refusals must still hold, and it checks that a preflight whose sandbox stream lacks a denial the report meter delivered exits 12, or exits 3 on the failed engine verdict when macOS logged none of the trial's denials. CI runs this suite on Linux only, which skips the case.
 
 ## [4.6.1] - 2026-11-26
 

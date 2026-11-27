@@ -2711,19 +2711,46 @@ function checkPrivateHome({ observer = null, requireOmitted = false } = {}) {
   );
 }
 
-/** Dropped Darwin denial reports leave kernel refusals and private-home state guarantees intact. */
+/**
+ * Dropped Darwin denial reports (`fixtures/evaluate/drop-log.cjs`). The kernel can drop a denial at its source, so every reader
+ * loses it: kernel refusals and private-home state guarantees stay intact, and the failed engine verdict stays binding. One reader
+ * losing a denial the report meter's stream delivered is a read of the trial the audit cannot list, so the leg yields no audit
+ * (exit 12) in place of a pass on the paths that reader kept; when the log omitted every denial, the failed engine verdict binds.
+ */
 function checkDroppedPreflightDiagnostics() {
   if (process.platform !== 'darwin') return;
   const pids = tempDir('dropped-denial-pids');
-  const executable = path.join(tempDir('dropped-denials'), 'log');
-  fs.writeFileSync(
-    executable,
-    `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'drop-log.cjs')}" ' deny' 0 "${pids}" "$@"\n`,
-    { mode: 0o755 },
-  );
+  const dropLog = (reader) => {
+    const executable = path.join(tempDir(`dropped-denials-${reader}`), 'log');
+    fs.writeFileSync(
+      executable,
+      `#!/bin/sh\nexec "${process.execPath}" "${path.join(FIXTURES, 'drop-log.cjs')}" ' deny' 0 ${reader} "${pids}" "$@"\n`,
+      { mode: 0o755 },
+    );
+    return executable;
+  };
   try {
-    checkRunnerOutsideAllowlist({ observer: executable, requireOmitted: true });
-    checkPrivateHome({ observer: executable, requireOmitted: true });
+    const atSource = dropLog('every');
+    checkRunnerOutsideAllowlist({ observer: atSource, requireOmitted: true });
+    checkPrivateHome({ observer: atSource, requireOmitted: true });
+
+    const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
+    const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: dropLog('sandbox') } });
+    // Darwin can log none of the trial's denials, leaving the meter nothing the sandbox stream lacks; the failed engine verdict then binds.
+    const directory = runDirectoryOf(folder);
+    const runJson = directory === null ? null : path.join(directory, 'run.json');
+    const recorded = runJson !== null && fs.existsSync(runJson) ? readJson(runJson).outcome : null;
+    const omitted = result.status === 3 && recorded?.exitCode === 3 && recorded?.stage === 'verdict';
+    check(
+      (result.status === 12 &&
+        result.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered")) ||
+        omitted,
+      `preflight whose sandbox stream dropped denials the report meter delivered exited ${result.status} (run.json ${JSON.stringify(recorded)}); expected 12 naming the missed report, or 3 at the engine verdict when the log omitted every denial\n${result.output}`,
+    );
+    check(
+      !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),
+      `preflight judged the paths of a leg whose sandbox stream dropped denials the report meter delivered\n${result.output}`,
+    );
   } finally {
     for (const name of fs.readdirSync(pids)) {
       const pid = Number(fs.readFileSync(path.join(pids, name), 'utf8'));
