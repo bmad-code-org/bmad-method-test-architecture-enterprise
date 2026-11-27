@@ -8,6 +8,14 @@
  * Every candidate must score zero with identical per-probe evidence and strength
  * decisions before any baseline is replaced through compare --accept. Negative
  * controls are outside this explicit admission-baseline list.
+ *
+ * The run leaves nothing behind, whether it succeeds or fails: it stages each
+ * evaluation in a temporary folder and holds the pending and retired baselines
+ * and the new receipt in `.baseline-refresh/` at the repository root, on the
+ * baselines' own file system so each swap is a rename, and outside every
+ * evaluation folder so no suite that reads an evaluation's `runs/` meets them.
+ * That folder is also the refresh's lock: a second refresh of the same checkout
+ * refuses to start while it exists.
  */
 'use strict';
 
@@ -33,6 +41,103 @@ const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const write = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 });
 
+/** A failed rollback: the baselines it could not restore are still in the holding folder, which is kept for them. */
+class HoldingKept extends Error {}
+
+/**
+ * Runs `work` with a scratch folder for the staged evaluations and the holding folder `<root>/.baseline-refresh` for the
+ * pending and retired baselines and the new receipt, and removes both whether `work` succeeds, fails or is interrupted by
+ * SIGINT or SIGTERM, except the holding folder after a failed rollback. The holding folder is made before anything is read
+ * and refused when it exists, so it is the lock that keeps two refreshes of one checkout apart. The swap is synchronous, so a
+ * signal is handled before it starts or after it ends, never midway.
+ */
+async function withWorkspace(root, work) {
+  const holding = path.join(root, '.baseline-refresh');
+  try {
+    fs.mkdirSync(holding);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    throw new Error(
+      `another refresh holds ${holding}; if none is running, one was killed outright: restore any baseline \`git status\` shows changed, then remove the folder`,
+    );
+  }
+  let scratch = null;
+  let kept = false;
+  // Each folder is removed on its own, and a removal that fails is reported beside the work's own outcome, never in its place.
+  const clean = () => {
+    for (const folder of [scratch, kept ? null : holding]) {
+      if (folder === null) continue;
+      try {
+        fs.rmSync(folder, { recursive: true, force: true });
+      } catch (error) {
+        console.error(`refresh-evaluate-baselines: could not remove ${folder}: ${error.message}`);
+        process.exitCode = 1;
+      }
+    }
+  };
+  const interrupted = (signal) => {
+    clean();
+    // The default action then ends the process as the signal would have, with its exit status.
+    process.removeListener('SIGINT', interrupted);
+    process.removeListener('SIGTERM', interrupted);
+    process.kill(process.pid, signal);
+  };
+  process.once('SIGINT', interrupted);
+  process.once('SIGTERM', interrupted);
+  try {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-baseline-refresh-'));
+    return await work({ scratch, holding });
+  } catch (error) {
+    kept = error instanceof HoldingKept;
+    throw error;
+  } finally {
+    process.removeListener('SIGINT', interrupted);
+    process.removeListener('SIGTERM', interrupted);
+    clean();
+  }
+}
+
+/**
+ * Swaps each candidate's pending baseline (`candidate.pending`, in `holding`) into `<candidate.folder>/baseline`, retiring the
+ * old one into `holding`, checks each swapped folder with `verify`, and then moves `receipt`, staged in `holding`, onto
+ * `receiptFile` as the last step. Any failure restores every baseline it can before it is thrown and leaves `receiptFile` as
+ * it was; a baseline it cannot restore makes the error a `HoldingKept`.
+ */
+function publishBaselines({ candidates, holding, receiptFile, receipt, verify }) {
+  const stagedReceipt = path.join(holding, 'receipt.json');
+  write(stagedReceipt, receipt);
+  const retiredOnes = [];
+  try {
+    for (const [index, candidate] of candidates.entries()) {
+      const target = path.join(candidate.folder, 'baseline');
+      const retired = path.join(holding, String(index), 'retired');
+      fs.mkdirSync(path.dirname(retired), { recursive: true });
+      fs.renameSync(target, retired);
+      retiredOnes.push({ target, retired, pending: candidate.pending });
+      fs.renameSync(candidate.pending, target);
+      verify(candidate.folder);
+    }
+    fs.renameSync(stagedReceipt, receiptFile);
+  } catch (error) {
+    const stuck = [];
+    for (const { target, retired, pending } of retiredOnes.toReversed()) {
+      try {
+        if (fs.existsSync(target)) fs.renameSync(target, pending);
+        fs.renameSync(retired, target);
+      } catch (restoreError) {
+        stuck.push(restoreError.message);
+      }
+    }
+    if (stuck.length > 0) {
+      throw new HoldingKept(
+        `the refresh failed (${error.message}) and its rollback failed too (${stuck.join('; ')}); the baselines it could not restore remain in ${holding}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
 async function main() {
   assert.equal(process.argv.length, 4, 'Usage: node tools/refresh-evaluate-baselines.js --source <commit>');
   assert.equal(process.argv[2], '--source');
@@ -40,7 +145,10 @@ async function main() {
   const engine = await import('eval-quality');
   const version = engine.VERSION;
   assert.equal(typeof version, 'string');
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-baseline-refresh-'));
+  await withWorkspace(ROOT, ({ scratch, holding }) => refresh({ sourceCommit, engine, version, scratch, holding }));
+}
+
+async function refresh({ sourceCommit, engine, version, scratch, holding }) {
   const candidates = [];
   for (const relative of FOLDERS) {
     const folder = path.join(ROOT, relative);
@@ -137,14 +245,14 @@ async function main() {
   }
   // Validate the whole batch before publishing any candidate. The owning accept
   // command alone builds and seals each replacement baseline.
-  for (const candidate of candidates) {
+  for (const [index, candidate] of candidates.entries()) {
     const { stagedFolder, manifest, receipt } = candidate;
     const accepted = await runCompareCommand(stagedFolder, { run: manifest.acceptedRun, accept: true });
     assert.equal(accepted.exitCode, 0, `${receipt.evaluation}: ${accepted.message}`);
     const acceptedBaseline = path.join(stagedFolder, 'baseline');
     assert.deepEqual(baselineDigestFindings({ folder: stagedFolder, digestBytes: engine.digestBytes }), []);
     receipt.acceptedManifestDigest = engine.digestBytes(fs.readFileSync(path.join(acceptedBaseline, 'baseline.json')));
-    const pending = path.join(candidate.folder, 'runs', `engine-refresh-pending-${process.pid}`);
+    const pending = path.join(holding, String(index), 'pending');
     fs.mkdirSync(path.dirname(pending), { recursive: true });
     fs.cpSync(acceptedBaseline, pending, { recursive: true, errorOnExist: true, force: false });
     assert.deepEqual(fs.readFileSync(path.join(pending, 'baseline.json')), fs.readFileSync(path.join(acceptedBaseline, 'baseline.json')));
@@ -153,43 +261,27 @@ async function main() {
       assert.equal(engine.digestBytes(fs.readFileSync(path.join(pending, name))), digest);
     candidate.pending = pending;
   }
-  const receiptFile = path.join(ROOT, 'test', 'evaluate-baseline-refresh.json');
-  const oldReceipt = fs.existsSync(receiptFile) ? fs.readFileSync(receiptFile) : null;
   const receipt = {
     command: `node tools/refresh-evaluate-baselines.js --source ${sourceCommit}`,
     kind: 'recorded-evidence-remeasurement',
     targetExecution: 'original sealed observations; no new target or model calls',
     baselines: candidates.map(({ receipt }) => receipt),
   };
-  const swapped = [];
-  try {
-    for (const candidate of candidates) {
-      const target = path.join(candidate.folder, 'baseline');
-      const retired = path.join(candidate.folder, 'runs', `engine-refresh-${process.pid}`);
-      fs.renameSync(target, retired);
-      try {
-        fs.renameSync(candidate.pending, target);
-      } catch (error) {
-        fs.renameSync(retired, target);
-        throw error;
-      }
-      swapped.push({ target, retired, pending: candidate.pending });
-      assert.deepEqual(baselineDigestFindings({ folder: candidate.folder, digestBytes: engine.digestBytes }), []);
-    }
-    write(`${receiptFile}.pending`, receipt);
-    fs.renameSync(`${receiptFile}.pending`, receiptFile);
-  } catch (error) {
-    for (const { target, retired, pending } of swapped.toReversed()) {
-      fs.renameSync(target, pending);
-      fs.renameSync(retired, target);
-    }
-    if (oldReceipt !== null) fs.writeFileSync(receiptFile, oldReceipt);
-    throw error;
-  }
+  publishBaselines({
+    candidates,
+    holding,
+    receiptFile: path.join(ROOT, 'test', 'evaluate-baseline-refresh.json'),
+    receipt,
+    verify: (folder) => assert.deepEqual(baselineDigestFindings({ folder, digestBytes: engine.digestBytes }), []),
+  });
   for (const candidate of candidates) console.log(`accepted ${candidate.receipt.evaluation}: score 0; evidence and strength unchanged`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { HoldingKept, publishBaselines, withWorkspace };
