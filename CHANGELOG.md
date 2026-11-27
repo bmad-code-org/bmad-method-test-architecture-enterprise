@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- TeA runs on eval-quality 10.1.3, which moves its zod runtime dependency from 4.6.6 to 4.6.7 and ships the same engine, schemas and corpus as 10.1.2. The accepted baselines and engine seals were re-measured on it from their sealed observations with no target or model run; every evidence and strength decision is unchanged.
+
 ### Fixed
 
 - The Evaluate tutorial's `run` step matches what macOS prints. Its last line elides the note macOS adds, that the observed reads are a lower bound, and the page says why the note appears.

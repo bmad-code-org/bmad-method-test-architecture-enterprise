@@ -1,0 +1,47 @@
+{
+  "invocationId": "20261127T203905718Z-983c265d",
+  "run": "20261009T005856077Z-6de24e2c",
+  "scoredAt": "2026-11-27T20:39:05.648Z",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-001",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-001/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-001/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-003",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-003/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-003/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-002",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-002/score.json",
+      "evidence": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/P-002/evidence-artifact.json"
+    }
+  ],
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "partition": "both",
+    "exitCode": 0,
+    "call": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/aggregate-strength.json",
+    "aggregate": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/strength-aggregate.json",
+    "aggregateDigest": "sha256:c551fee4bf8b61e80ccf9ebb2f3463236a157a6bae69836e685dc6c46ac91ab9",
+    "floors": "runs/20261009T005856077Z-6de24e2c/scores/20261127T203905718Z-983c265d/strength-floors.json",
+    "floorsDigest": "sha256:40cf1b668754aa127b479c9d33484b4f2ce1e8f9ae0c2559ecbf6ce021a4b9d6",
+    "evidenceDigests": {
+      "P-001": "sha256:5330b30485ae571383042630f353dfe045eae2c67f5472f83abb44bdbbe636ff",
+      "P-003": "sha256:456d240b3cf140cf3b78d171cb4e822ed00dd99c71e47e71aa064b74d51f8505",
+      "P-002": "sha256:b0c03d99c26d559b08ad3377e10ade1da54364195ece44df1c45cb4e7da29072"
+    }
+  },
+  "refused": [],
+  "confinement": "seatbelt"
+}
