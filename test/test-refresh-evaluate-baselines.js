@@ -259,6 +259,22 @@ async function main() {
     }),
   );
 
+  await check('a refresh that cannot mark itself published after its receipt is in place keeps what it published and the folder', () =>
+    inRepository({ receipt: '{"old":true}\n' }, async (repo) => {
+      const { used, finished } = publish(repo, {
+        // A folder where the marker would go makes the marker's write fail once the receipt is in place.
+        verify: (folder, holding) => fs.mkdirSync(path.join(holding, 'published'), { recursive: true }),
+      });
+      await assert.rejects(
+        finished,
+        (error) => error instanceof HoldingKept && /published every baseline and the receipt, but could not mark/.test(error.message),
+      );
+      assert.deepEqual(repo.folders.map(baselineOf), ['new alpha\n', 'new beta\n']);
+      assert.deepEqual(JSON.parse(fs.readFileSync(repo.receiptFile, 'utf8')), { refreshed: true });
+      assert.equal(fs.existsSync(used.holding), true, 'the holding folder was removed');
+    }),
+  );
+
   await check('a holding folder left by a refresh says what it holds and what to do with it', () =>
     inRepository({}, async (repo) => {
       // A rollback that failed: beta's original stays retired, and the next refresh names it in place of starting.
@@ -300,6 +316,14 @@ async function main() {
         (error) => error,
       );
       assert.match(shrunk?.message ?? '', /it holds entries no refresh makes, so inspect .* by hand/);
+      // A published marker beside the staged receipt is no state a refresh leaves; a person decides.
+      fs.writeFileSync(path.join(used.holding, 'published'), '');
+      const both = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(both?.message ?? '', /it holds entries no refresh makes, so inspect .* by hand/);
+      fs.rmSync(path.join(used.holding, 'published'));
       // Without the staged receipt and without the published marker, nobody can tell; the folder stays and a person decides.
       fs.rmSync(path.join(used.holding, 'receipt.json'));
       const unknown = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(

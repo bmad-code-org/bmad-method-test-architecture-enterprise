@@ -74,7 +74,7 @@ function entryOf(file) {
  * What a holding folder holds, read from entries alone (no link followed, no file read), so a folder left in an untrusted
  * checkout cannot steer what the refresh opens: whether its refresh marked itself published, whether the staged receipt is
  * still there, and each retired baseline with the evaluation its slot names, when that is one of `folders`. `null` when the
- * folder is not a plain directory of this account's, or holds anything a refresh does not make there.
+ * folder is not a plain directory of this account's, holds anything a refresh does not make there, or holds both markers.
  */
 function holdingState(holding, folders) {
   const folder = entryOf(holding);
@@ -102,7 +102,8 @@ function holdingState(holding, folders) {
       state.retired.push({ at: path.join(holding, name, 'retired'), evaluation });
     }
   }
-  return state;
+  // A refresh moves its staged receipt away before it marks itself published, so both at once is no state a refresh leaves.
+  return state.published && state.staged ? null : state;
 }
 
 /**
@@ -201,8 +202,9 @@ async function withWorkspace(root, work, { folders = [] } = {}) {
 /**
  * Swaps each candidate's pending baseline (`candidate.pending`, in `holding`) into `<candidate.folder>/baseline`, retiring the
  * old one into `holding`, checks each swapped folder with `verify`, and then moves `receipt`, staged in `holding`, onto
- * `receiptFile` as the last step. Any failure restores every baseline it can before it is thrown and leaves `receiptFile` as
- * it was; a baseline it cannot restore makes the error a `HoldingKept`.
+ * `receiptFile`, the commit point, and marks `holding` published. Any failure before the commit restores every baseline it can
+ * before it is thrown and leaves `receiptFile` as it was; a baseline it cannot restore makes the error a `HoldingKept`. A
+ * failure to mark the folder after the commit keeps the published baselines and receipt and the folder (`HoldingKept`).
  */
 function publishBaselines({ candidates, holding, receiptFile, receipt, verify }) {
   const stagedReceipt = path.join(holding, STAGED_RECEIPT);
@@ -220,8 +222,8 @@ function publishBaselines({ candidates, holding, receiptFile, receipt, verify })
       verify(candidate.folder);
     }
     assert.equal(fs.readFileSync(stagedReceipt, 'utf8'), receiptBytes, `${stagedReceipt} changed after the refresh staged it`);
+    // The receipt's rename is the commit point: before it every failure rolls back, after it nothing does.
     fs.renameSync(stagedReceipt, receiptFile);
-    fs.writeFileSync(path.join(holding, PUBLISHED), '', { flag: 'wx', mode: 0o600 });
   } catch (error) {
     const stuck = [];
     for (const { target, retired, pending } of retiredOnes.toReversed()) {
@@ -242,6 +244,14 @@ function publishBaselines({ candidates, holding, receiptFile, receipt, verify })
       );
     }
     throw error;
+  }
+  try {
+    fs.writeFileSync(path.join(holding, PUBLISHED), '', { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    throw new HoldingKept(
+      `the refresh published every baseline and the receipt, but could not mark ${holding} published (${error.message}); the retired baselines in it are the replaced ones, so once you have checked that, remove it`,
+      { cause: error },
+    );
   }
 }
 
