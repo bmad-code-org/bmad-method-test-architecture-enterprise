@@ -222,44 +222,119 @@ async function main() {
     }),
   );
 
-  await check('the tool, refused at its first evaluation, leaves no folder at the repository root or in the temp folder', () => {
-    // The source is a commit of the empty tree, written to a temporary object store beside the repository's, so the tool fails to
-    // read the first baseline at it, before it stages anything, whatever engine is installed, and the repository stays untouched.
-    const objects = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-refresh-cleanup-objects-'));
-    // The tool's temp folder is this case's own, so another refresh's scratch elsewhere is never taken for a leak.
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-refresh-cleanup-temp-'));
-    const git = (args, env) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', env });
-    const common = path.resolve(ROOT, git(['rev-parse', '--git-common-dir']).stdout.trim());
-    const env = { ...process.env, GIT_OBJECT_DIRECTORY: objects, GIT_ALTERNATE_OBJECT_DIRECTORIES: path.join(common, 'objects') };
-    try {
-      const emptyTree = git(['hash-object', '-t', 'tree', '-w', '--stdin'], env);
-      const source = spawnSync('git', ['commit-tree', emptyTree.stdout.trim(), '-m', 'empty source'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-        env: {
-          ...env,
-          GIT_AUTHOR_NAME: 'test',
-          GIT_AUTHOR_EMAIL: 'test@example.invalid',
-          GIT_COMMITTER_NAME: 'test',
-          GIT_COMMITTER_EMAIL: 'test@example.invalid',
+  await check("the holding folder is only its owner's under a permissive umask, and the staged receipt cannot be swapped", () =>
+    inRepository({ receipt: '{"old":true}\n' }, async (repo) => {
+      const umask = process.umask(0o002);
+      let mode = null;
+      try {
+        const { used, finished } = publish(repo, {
+          verify: (folder, holding) => {
+            mode = fs.statSync(holding).mode & 0o777;
+            if (path.basename(folder) === 'beta') fs.writeFileSync(path.join(holding, 'receipt.json'), '{"forged":true}\n');
+          },
+        });
+        await assert.rejects(finished, /receipt\.json changed after the refresh staged it/);
+        assert.equal(mode, 0o700, `the holding folder had mode ${mode?.toString(8)}`);
+        assert.deepEqual(repo.folders.map(baselineOf), ['old alpha\n', 'old beta\n']);
+        assert.equal(fs.readFileSync(repo.receiptFile, 'utf8'), '{"old":true}\n');
+        assertNothingLeft(repo, used.scratch);
+      } finally {
+        process.umask(umask);
+      }
+    }),
+  );
+
+  await check('a holding folder left by a refresh says what it holds and what to do with it', () =>
+    inRepository({}, async (repo) => {
+      // A rollback that failed: beta's original stays retired, and the next refresh names it in place of starting.
+      const { used, finished } = publish(repo, {
+        verify: (folder, holding) => {
+          if (path.basename(folder) !== 'beta') return;
+          // A non-empty folder where beta's new baseline would go back makes beta's restore fail with its original still retired.
+          fs.mkdirSync(path.join(holding, '1', 'pending'));
+          fs.writeFileSync(path.join(holding, '1', 'pending', 'blocker'), 'x\n');
+          throw new Error('beta: digest findings');
         },
-        input: '',
       });
+      await assert.rejects(finished, HoldingKept);
+      const next = await withWorkspace(repo.root, () => {}).then(
+        () => null,
+        (error) => error,
+      );
+      const retired = path.join(used.holding, '1', 'retired');
+      assert.ok(
+        next?.message.includes('never finished publishing') &&
+          next.message.includes(`${retired} is the baseline ${path.join(repo.folders[1], 'baseline')} held before the refresh`),
+        `the refusal over a kept holding folder reads ${next?.message}`,
+      );
+      assert.equal(fs.existsSync(retired), true, 'the retired baseline is gone');
+      // Once published (no staged receipt), the retired baselines are the replaced ones.
+      fs.rmSync(path.join(used.holding, 'receipt.json'));
+      const published = await withWorkspace(repo.root, () => {}).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(
+        published?.message ?? '',
+        /published every baseline and the receipt, so the 1 retired baseline\(s\) in it are the replaced ones/,
+      );
+      fs.rmSync(used.holding, { recursive: true });
+      fs.mkdirSync(used.holding);
+      const empty = await withWorkspace(repo.root, () => {}).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(empty?.message ?? '', /it holds no retired baseline; if no refresh is running, remove/);
+    }),
+  );
+
+  await check('the tool, refused at its first evaluation, leaves nothing in its checkout or its temp folder', () => {
+    // A disposable checkout with the tool, its modules and the first evaluation, under its own lock and temp folder. Its source is
+    // a commit of the empty tree, so the tool fails to read the first baseline at it before it stages anything, whatever engine
+    // is installed.
+    const checkout = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-refresh-cleanup-checkout-'));
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-refresh-cleanup-temp-'));
+    const first = 'test/evaluations/bmad-tea-evaluate';
+    const author = {
+      GIT_AUTHOR_NAME: 'test',
+      GIT_AUTHOR_EMAIL: 'test@example.invalid',
+      GIT_COMMITTER_NAME: 'test',
+      GIT_COMMITTER_EMAIL: 'test@example.invalid',
+    };
+    const git = (cwd, args) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...author }, input: '' });
+    try {
+      for (const folder of ['cli', 'tools', 'test/lib'])
+        fs.cpSync(path.join(ROOT, folder), path.join(checkout, folder), { recursive: true });
+      for (const file of git(ROOT, ['ls-files', '-z', '--', first]).stdout.split('\0').filter(Boolean)) {
+        fs.mkdirSync(path.dirname(path.join(checkout, file)), { recursive: true });
+        fs.copyFileSync(path.join(ROOT, file), path.join(checkout, file));
+      }
+      fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(checkout, 'package.json'));
+      fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(checkout, 'node_modules'), 'dir');
+      assert.equal(git(checkout, ['init', '-q']).status, 0);
+      const tree = git(checkout, ['hash-object', '-t', 'tree', '-w', '--stdin']).stdout.trim();
+      const source = git(checkout, ['commit-tree', tree, '-m', 'empty source']);
       assert.equal(source.status, 0, source.stderr);
-      const status = git(['status', '--porcelain', '--untracked-files=all']).stdout;
-      const held = fs.existsSync(holdingOf(ROOT));
-      const result = spawnSync(process.execPath, [TOOL, '--source', source.stdout.trim()], {
-        cwd: ROOT,
-        encoding: 'utf8',
-        env: { ...env, TMPDIR: temp },
-      });
+      const status = git(checkout, ['status', '--porcelain', '--untracked-files=all']).stdout;
+      const result = spawnSync(
+        process.execPath,
+        [path.join(checkout, 'tools', 'refresh-evaluate-baselines.js'), '--source', source.stdout.trim()],
+        {
+          cwd: checkout,
+          encoding: 'utf8',
+          env: { ...process.env, TMPDIR: temp },
+        },
+      );
       assert.equal(result.status, 1, `the tool exited ${result.status}\n${result.stdout}${result.stderr}`);
-      assert.match(result.stderr, /baseline\/baseline\.json/, `the tool failed elsewhere than at the first baseline:\n${result.stderr}`);
+      assert.ok(
+        result.stderr.includes(`${first}/baseline/baseline.json`),
+        `the tool failed elsewhere than at the first baseline:\n${result.stderr}`,
+      );
       assert.deepEqual(fs.readdirSync(temp), [], 'the tool left a folder in its temp folder');
-      assert.equal(fs.existsSync(holdingOf(ROOT)), held, 'the tool left its holding folder at the repository root');
-      assert.equal(git(['status', '--porcelain', '--untracked-files=all']).stdout, status, 'the tool changed the repository');
+      assert.equal(fs.existsSync(holdingOf(checkout)), false, 'the tool left its holding folder in the checkout');
+      assert.equal(git(checkout, ['status', '--porcelain', '--untracked-files=all']).stdout, status, 'the tool changed its checkout');
     } finally {
-      fs.rmSync(objects, { recursive: true, force: true });
+      fs.rmSync(checkout, { recursive: true, force: true });
       fs.rmSync(temp, { recursive: true, force: true });
     }
   });

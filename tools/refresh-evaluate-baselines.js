@@ -44,6 +44,31 @@ const git = (...args) => execFileSync('git', args, { cwd: ROOT, maxBuffer: 16 * 
 /** A failed rollback: the baselines it could not restore are still in the holding folder, which is kept for them. */
 class HoldingKept extends Error {}
 
+/** The receipt a refresh stages in its holding folder; it is moved onto the live receipt only once every baseline is published. */
+const STAGED_RECEIPT = 'receipt.json';
+
+/**
+ * What a holding folder left by an earlier refresh still holds, and what to do with it. Each `<index>/retired` is the baseline
+ * its `<index>/evaluation` folder held before the refresh. While the staged receipt is there the refresh never finished
+ * publishing, so the live receipt still describes those retired baselines and they go back; once it is gone the refresh
+ * published everything and they are the replaced ones.
+ */
+function recoveryNote(holding) {
+  const retired = (fs.existsSync(holding) ? fs.readdirSync(holding) : [])
+    .filter((name) => /^\d+$/.test(name) && fs.existsSync(path.join(holding, name, 'retired')))
+    .sort((a, b) => Number(a) - Number(b))
+    .map((name) => {
+      const evaluation = path.join(holding, name, 'evaluation');
+      const folder = fs.existsSync(evaluation) ? fs.readFileSync(evaluation, 'utf8').trim() : '<unrecorded evaluation>';
+      return `${path.join(holding, name, 'retired')} is the baseline ${path.join(folder, 'baseline')} held before the refresh`;
+    });
+  if (retired.length === 0) return `it holds no retired baseline; if no refresh is running, remove ${holding}`;
+  if (!fs.existsSync(path.join(holding, STAGED_RECEIPT))) {
+    return `its refresh published every baseline and the receipt, so the ${retired.length} retired baseline(s) in it are the replaced ones; if no refresh is running, remove ${holding}`;
+  }
+  return `its refresh never finished publishing, so the live receipt still describes the baselines it retired: ${retired.join('; ')}. If no refresh is running, move each back in place of the one there, keep the live receipt, then remove ${holding}`;
+}
+
 /**
  * Runs `work` with a scratch folder for the staged evaluations and the holding folder `<root>/.baseline-refresh` for the
  * pending and retired baselines and the new receipt, and removes both whether `work` succeeds, fails or is interrupted by
@@ -54,12 +79,12 @@ class HoldingKept extends Error {}
 async function withWorkspace(root, work) {
   const holding = path.join(root, '.baseline-refresh');
   try {
-    fs.mkdirSync(holding);
+    // Only this account may write what the refresh stages; the mode is set again, since the umask applies to `mkdir`.
+    fs.mkdirSync(holding, { mode: 0o700 });
+    fs.chmodSync(holding, 0o700);
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    throw new Error(
-      `another refresh holds ${holding}; if none is running, one was killed outright: restore any baseline \`git status\` shows changed, then remove the folder`,
-    );
+    throw new Error(`another refresh holds ${holding}, or an earlier one left it: ${recoveryNote(holding)}`);
   }
   let scratch = null;
   let kept = false;
@@ -104,19 +129,23 @@ async function withWorkspace(root, work) {
  * it was; a baseline it cannot restore makes the error a `HoldingKept`.
  */
 function publishBaselines({ candidates, holding, receiptFile, receipt, verify }) {
-  const stagedReceipt = path.join(holding, 'receipt.json');
-  write(stagedReceipt, receipt);
+  const stagedReceipt = path.join(holding, STAGED_RECEIPT);
+  const receiptBytes = `${JSON.stringify(receipt, null, 2)}\n`;
+  fs.writeFileSync(stagedReceipt, receiptBytes, { flag: 'wx', mode: 0o600 });
   const retiredOnes = [];
   try {
     for (const [index, candidate] of candidates.entries()) {
       const target = path.join(candidate.folder, 'baseline');
       const retired = path.join(holding, String(index), 'retired');
       fs.mkdirSync(path.dirname(retired), { recursive: true });
+      // A refresh that cannot clean up says which evaluation each retired baseline belongs to (`recoveryNote`).
+      fs.writeFileSync(path.join(holding, String(index), 'evaluation'), `${candidate.folder}\n`, { flag: 'wx' });
       fs.renameSync(target, retired);
       retiredOnes.push({ target, retired, pending: candidate.pending });
       fs.renameSync(candidate.pending, target);
       verify(candidate.folder);
     }
+    assert.equal(fs.readFileSync(stagedReceipt, 'utf8'), receiptBytes, `${stagedReceipt} changed after the refresh staged it`);
     fs.renameSync(stagedReceipt, receiptFile);
   } catch (error) {
     const stuck = [];
@@ -130,7 +159,7 @@ function publishBaselines({ candidates, holding, receiptFile, receipt, verify })
     }
     if (stuck.length > 0) {
       throw new HoldingKept(
-        `the refresh failed (${error.message}) and its rollback failed too (${stuck.join('; ')}); the baselines it could not restore remain in ${holding}`,
+        `the refresh failed (${error.message}) and its rollback failed too (${stuck.join('; ')}); the baselines it could not restore remain in ${holding}: ${recoveryNote(holding)}`,
         { cause: error },
       );
     }
