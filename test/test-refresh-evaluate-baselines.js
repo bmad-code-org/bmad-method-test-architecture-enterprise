@@ -257,7 +257,7 @@ async function main() {
         },
       });
       await assert.rejects(finished, HoldingKept);
-      const next = await withWorkspace(repo.root, () => {}).then(
+      const next = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
         () => null,
         (error) => error,
       );
@@ -270,7 +270,7 @@ async function main() {
       assert.equal(fs.existsSync(retired), true, 'the retired baseline is gone');
       // Once published (no staged receipt), the retired baselines are the replaced ones.
       fs.rmSync(path.join(used.holding, 'receipt.json'));
-      const published = await withWorkspace(repo.root, () => {}).then(
+      const published = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
         () => null,
         (error) => error,
       );
@@ -280,11 +280,19 @@ async function main() {
       );
       fs.rmSync(used.holding, { recursive: true });
       fs.mkdirSync(used.holding);
-      const empty = await withWorkspace(repo.root, () => {}).then(
+      const empty = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
         () => null,
         (error) => error,
       );
       assert.match(empty?.message ?? '', /it holds no retired baseline; if no refresh is running, remove/);
+      // An entry no refresh makes, such as a link out of the folder, is neither followed nor removed: a person inspects it.
+      fs.symlinkSync(os.tmpdir(), path.join(used.holding, '0'));
+      const linked = await withWorkspace(repo.root, () => {}, { folders: repo.folders }).then(
+        () => null,
+        (error) => error,
+      );
+      assert.match(linked?.message ?? '', /it holds entries no refresh makes, so inspect .* by hand before you remove it/);
+      assert.equal(fs.lstatSync(path.join(used.holding, '0')).isSymbolicLink(), true, 'the link was removed');
     }),
   );
 
@@ -305,10 +313,11 @@ async function main() {
     try {
       for (const folder of ['cli', 'tools', 'test/lib'])
         fs.cpSync(path.join(ROOT, folder), path.join(checkout, folder), { recursive: true });
-      for (const file of git(ROOT, ['ls-files', '-z', '--', first]).stdout.split('\0').filter(Boolean)) {
-        fs.mkdirSync(path.dirname(path.join(checkout, file)), { recursive: true });
-        fs.copyFileSync(path.join(ROOT, file), path.join(checkout, file));
-      }
+      // The evaluation comes from one commit's tree, so a refresh or an edit in the working tree cannot change it midway.
+      const archive = spawnSync('git', ['archive', '--format=tar', 'HEAD', '--', first], { cwd: ROOT, maxBuffer: 256 * 1024 * 1024 });
+      assert.equal(archive.status, 0, archive.stderr?.toString());
+      const unpacked = spawnSync('tar', ['-x', '-C', checkout], { input: archive.stdout });
+      assert.equal(unpacked.status, 0, unpacked.stderr?.toString());
       fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(checkout, 'package.json'));
       fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(checkout, 'node_modules'), 'dir');
       assert.equal(git(checkout, ['init', '-q']).status, 0);
