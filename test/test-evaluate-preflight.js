@@ -2047,7 +2047,10 @@ function checkLegMountRules() {
 /**
  * A log that loses every second report (`fixtures/evaluate/lossy-log.cjs`, macOS): over the bare-name setup `preflight` would refuse,
  * every leg's audit says it lost reports, so no leg can say what it opened. The audit-loss outcome applies (exit 12, the legs yield no
- * audit) in place of a pass on the shrunken set the dropped lines leave, which is the defect the refusal exists to catch.
+ * audit) in place of a pass on the shrunken set the dropped lines leave, which is the defect the refusal exists to catch. Which
+ * lines are second ones depends on the order the host logs them: when a dropped one is a read of a leg that the report meter
+ * delivered and the leg listed no read, that leg refuses first (exit 12, the missed report), which is the same refusal of the
+ * shrunken set.
  */
 function checkLossyLegAudit() {
   if (process.platform !== 'darwin') return;
@@ -2060,8 +2063,10 @@ function checkLossyLegAudit() {
     const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
     const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: executable } });
     check(
-      result.status === 12 && result.output.includes('the legs yield no audit: the audit lost reports while every leg ran'),
-      `preflight over a log that loses every second report exited ${result.status}; expected 12 naming the audit's loss\n${result.output}`,
+      result.status === 12 &&
+        (result.output.includes('the legs yield no audit: the audit lost reports while every leg ran') ||
+          result.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered")),
+      `preflight over a log that loses every second report exited ${result.status}; expected 12 naming the audit's loss or a missed report\n${result.output}`,
     );
     check(
       !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),
@@ -2715,7 +2720,8 @@ function checkPrivateHome({ observer = null, requireOmitted = false } = {}) {
  * Dropped Darwin denial reports (`fixtures/evaluate/drop-log.cjs`). The kernel can drop a denial at its source, so every reader
  * loses it: kernel refusals and private-home state guarantees stay intact, and the failed engine verdict stays binding. One reader
  * losing a denial the report meter's stream delivered is a read of the trial the audit cannot list, so the leg yields no audit
- * (exit 12) in place of a pass on the paths that reader kept; when the log omitted every denial, the failed engine verdict binds.
+ * (exit 12) in place of a pass on the paths that reader kept. The log may omit every real denial, so for that case the fixture
+ * hands the meter a known one.
  */
 function checkDroppedPreflightDiagnostics() {
   if (process.platform !== 'darwin') return;
@@ -2736,16 +2742,10 @@ function checkDroppedPreflightDiagnostics() {
 
     const folder = copyFixture(PREFLIGHT_FIXTURE, STUB_PROJECT, { grantRunner: false });
     const result = runPreflight(folder, { env: { TEA_EVALUATE_AUDIT_LOG: dropLog('sandbox') } });
-    // Darwin can log none of the trial's denials, leaving the meter nothing the sandbox stream lacks; the failed engine verdict then binds.
-    const directory = runDirectoryOf(folder);
-    const runJson = directory === null ? null : path.join(directory, 'run.json');
-    const recorded = runJson !== null && fs.existsSync(runJson) ? readJson(runJson).outcome : null;
-    const omitted = result.status === 3 && recorded?.exitCode === 3 && recorded?.stage === 'verdict';
     check(
-      (result.status === 12 &&
-        result.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered")) ||
-        omitted,
-      `preflight whose sandbox stream dropped denials the report meter delivered exited ${result.status} (run.json ${JSON.stringify(recorded)}); expected 12 naming the missed report, or 3 at the engine verdict when the log omitted every denial\n${result.output}`,
+      result.status === 12 &&
+        result.output.includes("the audit's log stream lacks a report of the trial that the report meter's stream delivered"),
+      `preflight whose sandbox stream lacks a denial the report meter delivered exited ${result.status}; expected 12 naming the missed report\n${result.output}`,
     );
     check(
       !result.output.includes('isolation manifest violation') && !result.output.includes('audit watched in full'),

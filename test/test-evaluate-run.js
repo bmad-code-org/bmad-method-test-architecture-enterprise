@@ -5516,9 +5516,9 @@ function lossyLogStub(every) {
 }
 
 /**
- * A `log` that drops every line holding `dropped` from the sandbox's own stream, while the report meter keeps it, and hands the meter
- * `flood` reports in one microsecond (`fixtures/evaluate/drop-log.cjs`), written as the executable the sandbox's observer names;
- * `end()` ends the real `log`s.
+ * A `log` that drops every line holding `dropped` from the sandbox's own stream, while the report meter keeps it and also gets a
+ * known refused read of the trial, since macOS may log none of the trial's own, and hands the meter `flood` reports in one
+ * microsecond (`fixtures/evaluate/drop-log.cjs`), written as the executable the sandbox's observer names; `end()` ends the real `log`s.
  */
 function dropLogStub(dropped, flood) {
   return logStub(DROP_LOG, `${JSON.stringify(dropped)} ${flood} sandbox`);
