@@ -165,7 +165,13 @@ async function withWorkspace(root, work, { folders = [] } = {}) {
   let scratch = null;
   // Each folder is removed on its own, and a removal that fails is reported beside the work's own outcome, never in its place.
   const clean = () => {
-    for (const folder of [scratch, kept || !removable(holding, folders) ? null : holding]) {
+    const keep = kept || !removable(holding, folders);
+    // A folder kept without a `HoldingKept` error, after a publish that otherwise went through, still says so and fails the run.
+    if (keep && !kept) {
+      console.error(`refresh-evaluate-baselines: kept ${holding}: ${recoveryNote(holding, folders)}`);
+      process.exitCode = 1;
+    }
+    for (const folder of [scratch, keep ? null : holding]) {
       if (folder === null) continue;
       try {
         fs.rmSync(folder, { recursive: true, force: true });

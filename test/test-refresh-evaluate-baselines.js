@@ -3,8 +3,10 @@
  *
  * Verifies that tools/refresh-evaluate-baselines.js swaps the pending baselines in and leaves nothing behind, neither its scratch
  * folder nor its holding folder nor anything inside an evaluation folder, whether the refresh succeeds, fails before it publishes,
- * fails mid-swap and rolls back, or is interrupted by a signal. Only a failed rollback keeps the holding folder, for the baselines
- * it could not restore, and it still restores every other one.
+ * fails mid-swap and rolls back, or is interrupted by a signal. The receipt's rename is the commit point: before it a failure rolls
+ * every baseline back it can, and a failed restore keeps the holding folder for the baselines it could not restore; after it the
+ * published baselines and receipt stay, and a holding folder the refresh cannot mark or inspect is kept, reported, and fails the
+ * run.
  *
  * Usage: node test/test-refresh-evaluate-baselines.js
  */
@@ -272,6 +274,33 @@ async function main() {
       assert.deepEqual(repo.folders.map(baselineOf), ['new alpha\n', 'new beta\n']);
       assert.deepEqual(JSON.parse(fs.readFileSync(repo.receiptFile, 'utf8')), { refreshed: true });
       assert.equal(fs.existsSync(used.holding), true, 'the holding folder was removed');
+    }),
+  );
+
+  await check('a publish whose holding folder cannot be inspected afterwards keeps it, says so, and fails the run', () =>
+    inRepository({ receipt: '{"old":true}\n' }, async (repo) => {
+      const errors = [];
+      const consoleError = console.error;
+      const exitCode = process.exitCode;
+      console.error = (line) => errors.push(String(line));
+      try {
+        const { used, finished } = publish(repo, {
+          // An entry no refresh makes leaves the folder uninspectable once the publish is through.
+          verify: (folder, holding) => fs.writeFileSync(path.join(holding, 'stray'), 'x\n'),
+        });
+        await finished;
+        assert.equal(process.exitCode, 1, `the run's exit code is ${process.exitCode}`);
+        assert.ok(
+          errors.some((line) => line.includes(`kept ${used.holding}`) && line.includes('inspect')),
+          `the kept folder was not reported: ${JSON.stringify(errors)}`,
+        );
+        assert.deepEqual(repo.folders.map(baselineOf), ['new alpha\n', 'new beta\n']);
+        assert.deepEqual(JSON.parse(fs.readFileSync(repo.receiptFile, 'utf8')), { refreshed: true });
+        assert.equal(fs.existsSync(used.holding), true, 'the holding folder was removed');
+      } finally {
+        console.error = consoleError;
+        process.exitCode = exitCode;
+      }
     }),
   );
 
